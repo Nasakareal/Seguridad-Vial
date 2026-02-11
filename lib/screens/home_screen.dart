@@ -5,6 +5,7 @@ import '../services/auth_service.dart';
 import '../services/tracking_service.dart';
 import '../services/app_version_service.dart';
 import '../services/feed_service.dart';
+import '../services/location_flag_service.dart';
 
 import '../models/feed_item.dart';
 
@@ -30,16 +31,15 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   final ScrollController _scrollController = ScrollController();
 
-  // Feed state
-  bool _loadingFeed = false; // carga inicial / refresh
-  bool _loadingMore = false; // carga por scroll
-  bool _hasMore = true; // si aún hay más por “simular”
+  bool _loadingFeed = false;
+  bool _loadingMore = false;
+  bool _hasMore = true;
   String? _feedError;
 
   final List<FeedItem> _feed = [];
 
-  static const int _pageSize = 3; // 🔥 lo que pediste: cargar 3
-  int _page = 1; // página simulada (1 => limit=3, 2=>6...)
+  static const int _pageSize = 10;
+  int _page = 1;
 
   @override
   void initState() {
@@ -50,7 +50,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       await AppVersionService.enforceUpdateIfNeeded(context);
-      await _bootstrapTracking();
+      await _bootstrapOnce();
+      await _syncTrackingFromCommanderFlag();
       await _loadFeed(reset: true);
     });
   }
@@ -65,9 +66,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   void _onScroll() {
     if (!_scrollController.hasClients) return;
-
     final pos = _scrollController.position;
-    // Cuando estés cerca del final, carga más
     if (pos.pixels >= (pos.maxScrollExtent - 350)) {
       _loadMoreFeed();
     }
@@ -75,21 +74,34 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   DateTime _onlyDate(DateTime d) => DateTime(d.year, d.month, d.day);
 
-  Future<void> _bootstrapTracking() async {
+  Future<void> _bootstrapOnce() async {
     if (_bootstrapped) return;
     _bootstrapped = true;
+  }
+
+  Future<void> _syncTrackingFromCommanderFlag() async {
+    final enabledByCommander = await LocationFlagService.isEnabledForMe();
+    if (!mounted) return;
 
     final running = await FlutterForegroundTask.isRunningService;
     if (!mounted) return;
 
-    if (running) {
-      setState(() => _trackingOn = true);
+    if (!enabledByCommander) {
+      if (running) {
+        await TrackingService.stop();
+      }
+      if (!mounted) return;
+      setState(() => _trackingOn = false);
       return;
     }
 
-    final started = await TrackingService.start();
-    if (!mounted) return;
-    setState(() => _trackingOn = started);
+    if (!running) {
+      final started = await TrackingService.startWithDisclosure(context);
+      if (!mounted) return;
+      setState(() => _trackingOn = started);
+    } else {
+      setState(() => _trackingOn = true);
+    }
   }
 
   Future<void> _loadFeed({required bool reset}) async {
@@ -116,7 +128,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
       if (!mounted) return;
 
-      // Importante: dedupe por id por si el backend cambia orden o repite
       final existingIds = _feed.map((e) => e.id).toSet();
       final newOnes = <FeedItem>[];
 
@@ -127,20 +138,15 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       }
 
       setState(() {
-        // Si reset, simplemente toma items (pero dedupe no estorba)
-        if (_feed.isEmpty && items.isNotEmpty) {
+        if (reset) {
           _feed.addAll(items);
         } else {
-          // Solo agrega los nuevos
           _feed.addAll(newOnes);
         }
 
-        // Si el endpoint ya no devuelve más que lo que ya tenías, ya no hay más
-        // (o si llegó menos que el límite máximo posible)
         if (items.length < limit) {
           _hasMore = false;
         } else {
-          // Si pedimos más y no apareció nada nuevo -> ya topamos
           if (newOnes.isEmpty && _feed.isNotEmpty) {
             _hasMore = false;
           } else {
@@ -166,7 +172,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     setState(() => _loadingMore = true);
 
     try {
-      // “Siguiente página” simulada
       final nextPage = _page + 1;
       final nextLimit = (_pageSize * nextPage).clamp(1, 50);
 
@@ -192,12 +197,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           _page = nextPage;
         }
 
-        // Si no hubo nuevos, ya no hay más
         if (newOnes.isEmpty) {
           _hasMore = false;
         }
 
-        // Si el backend regresó menos del límite que pedimos, ya no hay más
         if (items.length < nextLimit) {
           _hasMore = false;
         }
@@ -214,9 +217,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) async {
     if (state == AppLifecycleState.resumed) {
-      final running = await FlutterForegroundTask.isRunningService;
-      if (!mounted) return;
-      setState(() => _trackingOn = running);
+      await _syncTrackingFromCommanderFlag();
     }
   }
 
@@ -287,6 +288,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     }
   }
 
+  Future<void> _refreshAll() async {
+    await _syncTrackingFromCommanderFlag();
+    await _loadFeed(reset: true);
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -311,12 +317,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       ),
       body: SafeArea(
         child: RefreshIndicator(
-          onRefresh: () async {
-            final running = await FlutterForegroundTask.isRunningService;
-            if (!mounted) return;
-            setState(() => _trackingOn = running);
-            await _loadFeed(reset: true);
-          },
+          onRefresh: _refreshAll,
           child: CustomScrollView(
             controller: _scrollController,
             slivers: [
@@ -328,7 +329,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                     children: [
                       HeaderCard(trackingOn: _trackingOn),
                       const SizedBox(height: 16),
-
                       Text(
                         'Accesos rápidos',
                         style: theme.textTheme.titleMedium?.copyWith(
@@ -345,7 +345,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                         onBuscar: () => _go(context, AppRoutes.hechosBuscar),
                       ),
                       const SizedBox(height: 14),
-
                       Container(
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
@@ -356,18 +355,18 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                           ),
                         ),
                         child: Text(
-                          'La ubicación se gestiona desde el mapa de patrullas.',
+                          _trackingOn
+                              ? 'Ubicación activa (enviando ubicación en segundo plano).'
+                              : 'Ubicación inactiva (puede activarse desde el mapa de patrullas).',
                           style: TextStyle(color: Colors.blue.shade900),
                         ),
                       ),
-
                       const SizedBox(height: 18),
-
                       Row(
                         children: [
                           Expanded(
                             child: Text(
-                              'Feed del día',
+                              'Feed',
                               style: theme.textTheme.titleMedium?.copyWith(
                                 fontWeight: FontWeight.w900,
                                 color: const Color(0xFF0F172A),
@@ -402,12 +401,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                               ),
                             ),
                           ),
-                          const SizedBox(width: 6),
-                          IconButton(
-                            tooltip: 'Actualizar feed',
-                            icon: const Icon(Icons.refresh),
-                            onPressed: () => _loadFeed(reset: true),
-                          ),
                         ],
                       ),
                       const SizedBox(height: 10),
@@ -415,7 +408,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   ),
                 ),
               ),
-
               SliverPadding(
                 padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
                 sliver: _buildFeedSliver(),
@@ -449,7 +441,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
     return SliverList(
       delegate: SliverChildBuilderDelegate((context, index) {
-        // Footer (loader / fin / error)
         if (index == _feed.length) {
           if (_feedError != null) {
             return Padding(
@@ -481,8 +472,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     );
   }
 }
-
-/* ====== Feed UI (post tipo Facebook / meme grande) ====== */
 
 class _FeedPostCard extends StatelessWidget {
   final FeedItem item;
@@ -536,7 +525,6 @@ class _FeedPostCard extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Header + texto
               Padding(
                 padding: const EdgeInsets.fromLTRB(14, 12, 14, 10),
                 child: Row(
@@ -608,8 +596,6 @@ class _FeedPostCard extends StatelessWidget {
                   ],
                 ),
               ),
-
-              // Imagen grande (meme completo)
               if (fotoUrl != null) ...[
                 Divider(height: 1, color: Colors.grey.shade200),
                 ClipRRect(
@@ -638,10 +624,10 @@ class _BigFeedImage extends StatelessWidget {
       width: double.infinity,
       color: Colors.grey.shade100,
       child: AspectRatio(
-        aspectRatio: 1, // estilo post; si quieres más alto pon 4/5
+        aspectRatio: 1,
         child: Image.network(
           url,
-          fit: BoxFit.contain, // 🔥 para que el meme se vea COMPLETO
+          fit: BoxFit.contain,
           alignment: Alignment.center,
           filterQuality: FilterQuality.medium,
           loadingBuilder: (context, child, progress) {
@@ -660,8 +646,6 @@ class _BigFeedImage extends StatelessWidget {
     );
   }
 }
-
-/* ====== Estados ====== */
 
 class _EmptyCard extends StatelessWidget {
   const _EmptyCard();
@@ -773,8 +757,6 @@ class _ErrorInline extends StatelessWidget {
     );
   }
 }
-
-/* ====== Quick Actions UI (igual al tuyo) ====== */
 
 class _QuickActionsGrid extends StatelessWidget {
   final VoidCallback onAccidentes;
