@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "846104355430",
+    "project_id": "seguridad-64036",
+    "storage_bucket": "seguridad-64036.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:846104355430:android:955a6b1a7500589fb8c3a7",
+        "android_client_info": {
+          "package_name": "com.nasaka.seguridad_vial_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyALeOS9ql1gjtNWBgrnx4sZ1kIT0GrIRog"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -1,0 +1,100 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>$(DEVELOPMENT_LANGUAGE)</string>
+
+	<key>CFBundleDisplayName</key>
+	<string>Seguridad Vial Michoacán</string>
+
+	<key>CFBundleExecutable</key>
+	<string>$(EXECUTABLE_NAME)</string>
+
+	<key>CFBundleIdentifier</key>
+	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+
+	<key>CFBundleName</key>
+	<string>seguridad_vial_app</string>
+
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+
+	<key>CFBundleShortVersionString</key>
+	<string>$(FLUTTER_BUILD_NAME)</string>
+
+	<key>CFBundleSignature</key>
+	<string>????</string>
+
+	<key>CFBundleVersion</key>
+	<string>$(FLUTTER_BUILD_NUMBER)</string>
+
+	<key>LSRequiresIPhoneOS</key>
+	<true/>
+
+	<key>UILaunchStoryboardName</key>
+	<string>LaunchScreen</string>
+
+	<key>UIMainStoryboardFile</key>
+	<string>Main</string>
+
+	<key>UISupportedInterfaceOrientations</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationLandscapeLeft</string>
+		<string>UIInterfaceOrientationLandscapeRight</string>
+	</array>
+
+	<key>UISupportedInterfaceOrientations~ipad</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationPortraitUpsideDown</string>
+		<string>UIInterfaceOrientationLandscapeLeft</string>
+		<string>UIInterfaceOrientationLandscapeRight</string>
+	</array>
+
+	<key>CADisableMinimumFrameDurationOnPhone</key>
+	<true/>
+
+	<key>UIApplicationSupportsIndirectInputEvents</key>
+	<true/>
+
+	<!-- ========================= -->
+	<!-- PRIVACIDAD / PERMISOS iOS -->
+	<!-- ========================= -->
+
+	<!-- Ubicación (mapa / captura de hechos) -->
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Usamos tu ubicación para mostrar tu posición en el mapa y registrar hechos con coordenadas.</string>
+
+	<!-- Ubicación en segundo plano (monitoreo de patrullas / servicio activo) -->
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>Usamos tu ubicación en segundo plano para mantener el monitoreo de patrullas y el estado de servicio cuando está habilitado.</string>
+
+	<!-- Necesario si realmente usas ubicación en background -->
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>location</string>
+	</array>
+
+	<!-- Notificaciones (Firebase / alertas) -->
+	<key>NSUserNotificationsUsageDescription</key>
+	<string>Usamos notificaciones para enviarte alertas y avisos operativos dentro del sistema.</string>
+
+	<!-- Cámara (image_picker) -->
+	<key>NSCameraUsageDescription</key>
+	<string>Usamos la cámara para capturar evidencia y adjuntarla a los reportes.</string>
+
+	<!-- Fotos/Galería (image_picker) -->
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Usamos tu galería para seleccionar evidencia y adjuntarla a los reportes.</string>
+
+	<!-- Guardar/Compartir archivos (open_filex / file_saver / share_plus) -->
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Usamos esta función para guardar evidencias o archivos generados por la aplicación en tu dispositivo.</string>
+
+</dict>
+</plist>
