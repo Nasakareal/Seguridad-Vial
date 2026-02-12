@@ -1,4 +1,3 @@
-// lib/services/tracking_task.dart
 import 'dart:convert';
 import 'dart:isolate';
 
@@ -16,21 +15,13 @@ class TrackingTaskHandler extends TaskHandler {
   bool _sending = false;
   DateTime? _lastSentAt;
 
-  /// Límites (ajústalos si quieres):
-  /// - mínimo: nunca mandes más rápido que esto (evita spam)
   static const Duration kMinInterval = Duration(seconds: 12);
-
-  /// - si está parado: manda cada 45s
   static const Duration kStillInterval = Duration(seconds: 45);
-
-  /// - si va lento: manda cada 25s
   static const Duration kSlowInterval = Duration(seconds: 25);
-
-  /// - si va en movimiento: manda cada 15s
   static const Duration kMoveInterval = Duration(seconds: 15);
 
   Duration _intervalForSpeed(double speedMps) {
-    if (speedMps.isFinite == false || speedMps < 0) return kSlowInterval;
+    if (!speedMps.isFinite || speedMps < 0) return kSlowInterval;
     if (speedMps <= 0.5) return kStillInterval;
     if (speedMps <= 2.0) return kSlowInterval;
     return kMoveInterval;
@@ -41,9 +32,7 @@ class TrackingTaskHandler extends TaskHandler {
     if (last == null) return true;
 
     final elapsed = DateTime.now().difference(last);
-
     if (elapsed < kMinInterval) return false;
-
     if (elapsed < wanted) return false;
 
     return true;
@@ -55,10 +44,7 @@ class TrackingTaskHandler extends TaskHandler {
 
     try {
       final token = await AuthService.getToken();
-      if (token == null || token.isEmpty) {
-        print('TRACKING: sin token (no envio)');
-        return;
-      }
+      if (token == null || token.isEmpty) return;
 
       final pos = await Geolocator.getCurrentPosition(
         desiredAccuracy: LocationAccuracy.high,
@@ -68,7 +54,6 @@ class TrackingTaskHandler extends TaskHandler {
       final wantedInterval = _intervalForSpeed(pos.speed);
 
       if (!_shouldSendNow(wantedInterval)) {
-        print('TRACKING: throttle (skip). speed=${pos.speed}');
         return;
       }
 
@@ -92,11 +77,10 @@ class TrackingTaskHandler extends TaskHandler {
           )
           .timeout(const Duration(seconds: 12));
 
-      _lastSentAt = DateTime.now();
-
-      print('TRACKING: ${res.statusCode} ${res.body}');
-    } catch (e) {
-      print('TRACKING EXCEPTION: $e');
+      if (res.statusCode >= 200 && res.statusCode < 300) {
+        _lastSentAt = DateTime.now();
+      }
+    } catch (_) {
     } finally {
       _sending = false;
     }
@@ -104,30 +88,24 @@ class TrackingTaskHandler extends TaskHandler {
 
   @override
   void onStart(DateTime timestamp, SendPort? sendPort) {
-    print('TRACKING onStart: $timestamp');
     _sendLocationOnce();
   }
 
   @override
   void onRepeatEvent(DateTime timestamp, SendPort? sendPort) {
-    print('TRACKING onRepeatEvent: $timestamp');
     _sendLocationOnce();
   }
 
   @override
-  void onDestroy(DateTime timestamp, SendPort? sendPort) {
-    print('TRACKING onDestroy: $timestamp');
-  }
+  void onDestroy(DateTime timestamp, SendPort? sendPort) {}
 
   @override
-  void onNotificationPressed() {
-    print('TRACKING onNotificationPressed');
-  }
+  void onNotificationPressed() {}
 }
 
 @pragma('vm:entry-point')
 void startCallback() {
   FlutterForegroundTask.setTaskHandler(
-    TrackingTaskHandler('https://seguridadvial-mich.com/api'),
+    TrackingTaskHandler(AuthService.baseUrl),
   );
 }

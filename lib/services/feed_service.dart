@@ -5,8 +5,6 @@ import '../models/feed_item.dart';
 import 'auth_service.dart';
 
 class FeedService {
-  static const String _baseUrl = 'https://seguridadvial-mich.com/api';
-
   static Future<List<FeedItem>> fetchFeed({
     required int limit,
     DateTime? date,
@@ -26,7 +24,9 @@ class FeedService {
       query['date'] = ymd;
     }
 
-    final uri = Uri.parse('$_baseUrl/feed').replace(queryParameters: query);
+    final uri = Uri.parse(
+      '${AuthService.baseUrl}/feed',
+    ).replace(queryParameters: query);
 
     final resp = await http.get(
       uri,

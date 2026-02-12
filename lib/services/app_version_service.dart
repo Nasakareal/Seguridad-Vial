@@ -1,4 +1,3 @@
-// lib/services/app_version_service.dart
 import 'dart:convert';
 import 'dart:io';
 
@@ -13,7 +12,7 @@ class AppVersionService {
   static Future<void> enforceUpdateIfNeeded(BuildContext context) async {
     try {
       final info = await PackageInfo.fromPlatform();
-      final current = info.version; // ej: 1.2.0
+      final current = info.version;
 
       final data = await _fetchPolicy();
 
@@ -30,7 +29,6 @@ class AppVersionService {
       final belowLatest =
           latestV.isNotEmpty && _compareSemver(current, latestV) < 0;
 
-      // 🔒 UPDATE FORZADO
       if (force && belowMin) {
         final msg =
             (data['message'] ?? 'Debes actualizar para continuar.') as String;
@@ -44,7 +42,6 @@ class AppVersionService {
         return;
       }
 
-      // ℹ️ UPDATE OPCIONAL (no bloquea)
       if (!force && belowLatest && context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -60,9 +57,7 @@ class AppVersionService {
           ),
         );
       }
-    } catch (_) {
-      // Si falla el check, no rompas la app
-    }
+    } catch (_) {}
   }
 
   static Future<Map<String, dynamic>> _fetchPolicy() async {
@@ -130,7 +125,6 @@ class AppVersionService {
     }
   }
 
-  /// -1 si a < b | 0 si igual | 1 si a > b
   static int _compareSemver(String a, String b) {
     final pa = _parseSemver(a);
     final pb = _parseSemver(b);

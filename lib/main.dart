@@ -180,26 +180,15 @@ class _BootAppState extends State<_BootApp> {
       );
 
       setState(() => step = 'Permisos de notificaciones...');
-      final messaging = FirebaseMessaging.instance;
-
-      await messaging
-          .requestPermission(
-            alert: true,
-            badge: true,
-            sound: true,
-            provisional: false,
-          )
-          .timeout(
-            const Duration(seconds: 10),
-            onTimeout: () =>
-                throw Exception('TIMEOUT: requestPermission tardó demasiado.'),
-          );
-
-      await messaging.setForegroundNotificationPresentationOptions(
-        alert: true,
-        badge: true,
-        sound: true,
+      await PushService.ensurePermissions().timeout(
+        const Duration(seconds: 10),
+        onTimeout: () =>
+            throw Exception('TIMEOUT: ensurePermissions tardó demasiado.'),
       );
+
+      try {
+        PushService.listenTokenRefresh();
+      } catch (_) {}
 
       setState(() => step = 'Inicializando notificaciones locales...');
       await _initLocalNotifications().timeout(
@@ -219,14 +208,8 @@ class _BootAppState extends State<_BootApp> {
       );
 
       if (logged) {
-        setState(() => step = 'Registrando token push...');
-        await PushService.registerDeviceToken(reason: 'app_start').timeout(
-          const Duration(seconds: 12),
-          onTimeout: () =>
-              throw Exception('TIMEOUT: registerDeviceToken tardó demasiado.'),
-        );
         try {
-          PushService.listenTokenRefresh();
+          PushService.registerDeviceToken(reason: 'app_start');
         } catch (_) {}
       }
 

@@ -98,8 +98,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       PushService.listenTokenRefresh();
     } catch (_) {}
 
+    // ✅ IMPORTANTE: NO BLOQUEAR EL HOME CON PUSH (evita pantalla roja por timeout)
     try {
-      await PushService.registerDeviceToken(reason: 'home_bootstrap');
+      Future.delayed(const Duration(seconds: 1), () {
+        PushService.registerDeviceToken(reason: 'home_bootstrap');
+      });
     } catch (_) {}
   }
 
@@ -262,8 +265,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         await _syncTrackingFromCommanderFlag();
       } catch (_) {}
 
+      // ✅ NO BLOQUEAR EL RESUME
       try {
-        await PushService.registerDeviceToken(reason: 'app_resumed');
+        Future.delayed(const Duration(milliseconds: 300), () {
+          PushService.registerDeviceToken(reason: 'app_resumed');
+        });
       } catch (_) {}
     }
   }
@@ -346,8 +352,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     try {
       await _loadFeed(reset: true);
     } catch (_) {}
+
+    // ✅ NO BLOQUEAR EL PULL TO REFRESH
     try {
-      await PushService.registerDeviceToken(reason: 'pull_to_refresh');
+      Future.delayed(const Duration(milliseconds: 250), () {
+        PushService.registerDeviceToken(reason: 'pull_to_refresh');
+      });
     } catch (_) {}
   }
 
@@ -551,16 +561,14 @@ class _FeedPostCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final resumen = item.resumen.trim();
+    final resumen = (item.resumen ?? '').trim();
     final subtitle = resumen.isNotEmpty ? resumen : 'Publicación';
 
-    final user = item.userName.trim().isNotEmpty
-        ? item.userName.trim()
-        : 'Usuario';
+    final userName = (item.userName ?? '').trim();
+    final user = userName.isNotEmpty ? userName : 'Usuario';
 
-    final fotoUrl = (item.fotoUrl != null && item.fotoUrl!.trim().isNotEmpty)
-        ? item.fotoUrl!.trim()
-        : null;
+    final rawFoto = (item.fotoUrl ?? '').trim();
+    final fotoUrl = rawFoto.isNotEmpty ? rawFoto : null;
 
     return Material(
       color: Colors.white,
