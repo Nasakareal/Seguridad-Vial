@@ -6,6 +6,8 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
+import 'firebase_options.dart'; // ✅ AGREGAR
+
 import 'services/auth_service.dart';
 import 'services/push_service.dart';
 import 'widgets/alerts_listener.dart';
@@ -68,8 +70,8 @@ const AndroidNotificationChannel svAlertasChannel = AndroidNotificationChannel(
 
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
-  // Importante: initializeApp puede fallar si el plist está mal/ausente.
-  await Firebase.initializeApp();
+  // ✅ IMPORTANTE: en background también hay que inicializar con options
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 }
 
 class _AppLifecycleObserver with WidgetsBindingObserver {
@@ -137,7 +139,9 @@ Future<void> main() async {
 
   // 2) Firebase init protegido (si falla, mostramos el motivo en pantalla)
   try {
-    await Firebase.initializeApp();
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform, // ✅ CLAVE
+    );
   } catch (e) {
     runApp(
       MaterialApp(
