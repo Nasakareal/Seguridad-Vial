@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
@@ -6,7 +7,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
-import 'firebase_options.dart'; // ✅ AGREGAR
+import 'firebase_options.dart';
 
 import 'services/auth_service.dart';
 import 'services/push_service.dart';
@@ -70,7 +71,6 @@ const AndroidNotificationChannel svAlertasChannel = AndroidNotificationChannel(
 
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
-  // ✅ IMPORTANTE: en background también hay que inicializar con options
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 }
 
@@ -110,23 +110,8 @@ Future<void> _initLocalNotifications() async {
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // 1) Para que NO se quede blanco en release si truena algo:
-  ErrorWidget.builder = (FlutterErrorDetails details) {
-    return Material(
-      color: Colors.white,
-      child: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: SingleChildScrollView(
-            child: Text(
-              'ERROR:\n${details.exception}\n\n${details.stack}',
-              style: const TextStyle(fontSize: 12, color: Colors.red),
-            ),
-          ),
-        ),
-      ),
-    );
-  };
+  // Esto asegura que SIEMPRE se vea algo, aunque truene después
+  runApp(const _BootApp());
 
   FlutterError.onError = (FlutterErrorDetails details) {
     FlutterError.dumpErrorToConsole(details);
@@ -134,30 +119,167 @@ Future<void> main() async {
 
   PlatformDispatcher.instance.onError = (error, stack) {
     debugPrint('UNCAUGHT: $error\n$stack');
-    return true; // evita crash silencioso
+    return true;
   };
+}
 
-  // 2) Firebase init protegido (si falla, mostramos el motivo en pantalla)
-  try {
-    await Firebase.initializeApp(
-      options: DefaultFirebaseOptions.currentPlatform, // ✅ CLAVE
-    );
-  } catch (e) {
-    runApp(
-      MaterialApp(
-        debugShowCheckedModeBanner: false,
-        home: Scaffold(
-          backgroundColor: Colors.white,
-          body: SafeArea(
-            child: Center(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: SingleChildScrollView(
-                  child: Text(
-                    'Firebase.initializeApp() falló:\n\n$e',
-                    style: const TextStyle(color: Colors.red),
-                    textAlign: TextAlign.center,
-                  ),
+/// Pantalla de arranque que nunca deja “blanco”.
+class _BootApp extends StatefulWidget {
+  const _BootApp();
+
+  @override
+  State<_BootApp> createState() => _BootAppState();
+}
+
+class _BootAppState extends State<_BootApp> {
+  String step = 'Iniciando...';
+  String? error;
+
+  @override
+  void initState() {
+    super.initState();
+    _bootstrap();
+  }
+
+  Future<void> _bootstrap() async {
+    try {
+      setState(() => step = 'Inicializando Firebase...');
+      await Firebase.initializeApp(
+        options: DefaultFirebaseOptions.currentPlatform,
+      ).timeout(
+        const Duration(seconds: 12),
+        onTimeout: () {
+          throw Exception('TIMEOUT: Firebase.initializeApp tardó demasiado.');
+        },
+      );
+
+      FirebaseMessaging.onBackgroundMessage(
+        _firebaseMessagingBackgroundHandler,
+      );
+
+      setState(() => step = 'Permisos de notificaciones...');
+      final messaging = FirebaseMessaging.instance;
+
+      await messaging
+          .requestPermission(
+            alert: true,
+            badge: true,
+            sound: true,
+            provisional: false,
+          )
+          .timeout(
+            const Duration(seconds: 8),
+            onTimeout: () {
+              throw Exception('TIMEOUT: requestPermission tardó demasiado.');
+            },
+          );
+
+      await messaging.setForegroundNotificationPresentationOptions(
+        alert: true,
+        badge: true,
+        sound: true,
+      );
+
+      setState(() => step = 'Inicializando notificaciones locales...');
+      await _initLocalNotifications().timeout(
+        const Duration(seconds: 8),
+        onTimeout: () {
+          throw Exception('TIMEOUT: _initLocalNotifications tardó demasiado.');
+        },
+      );
+
+      _AppLifecycleObserver.ensureInstalled();
+
+      setState(() => step = 'Validando sesión...');
+      final logged = await AuthService.isLoggedIn().timeout(
+        const Duration(seconds: 10),
+        onTimeout: () {
+          throw Exception('TIMEOUT: AuthService.isLoggedIn tardó demasiado.');
+        },
+      );
+
+      if (logged) {
+        setState(() => step = 'Registrando token push...');
+        await PushService.registerDeviceToken(reason: 'app_start').timeout(
+          const Duration(seconds: 10),
+          onTimeout: () {
+            throw Exception('TIMEOUT: registerDeviceToken tardó demasiado.');
+          },
+        );
+        PushService.listenTokenRefresh();
+      }
+
+      FlutterForegroundTask.init(
+        androidNotificationOptions: AndroidNotificationOptions(
+          channelId: 'seguridad_vial_tracking',
+          channelName: 'Seguimiento de patrullas',
+          channelDescription:
+              'Envía la ubicación de la patrulla mientras el servicio esté activo',
+          channelImportance: NotificationChannelImportance.LOW,
+          priority: NotificationPriority.LOW,
+        ),
+        iosNotificationOptions: const IOSNotificationOptions(
+          showNotification: true,
+          playSound: false,
+        ),
+        foregroundTaskOptions: const ForegroundTaskOptions(
+          interval: 10000,
+          isOnceEvent: false,
+          autoRunOnBoot: false,
+          allowWakeLock: true,
+          allowWifiLock: true,
+        ),
+      );
+
+      // ✅ Arranque correcto: ahora sí levantamos la app real
+      if (!mounted) return;
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => const SeguridadVialApp()),
+      );
+    } catch (e, st) {
+      debugPrint('BOOT ERROR: $e\n$st');
+      setState(() {
+        error = '$e';
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      debugShowCheckedModeBanner: false,
+      home: Scaffold(
+        backgroundColor: Colors.white,
+        body: SafeArea(
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.all(18),
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text(
+                      'Seguridad Vial',
+                      style: TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      error == null ? step : 'FALLÓ EN:\n$step',
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 16),
+                    if (error == null)
+                      const CircularProgressIndicator()
+                    else
+                      Text(
+                        error!,
+                        style: const TextStyle(color: Colors.red),
+                        textAlign: TextAlign.center,
+                      ),
+                  ],
                 ),
               ),
             ),
@@ -165,61 +287,7 @@ Future<void> main() async {
         ),
       ),
     );
-    return;
   }
-
-  FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
-
-  final messaging = FirebaseMessaging.instance;
-
-  await messaging.requestPermission(
-    alert: true,
-    badge: true,
-    sound: true,
-    provisional: false,
-  );
-
-  await messaging.setForegroundNotificationPresentationOptions(
-    alert: true,
-    badge: true,
-    sound: true,
-  );
-
-  await _initLocalNotifications();
-
-  _AppLifecycleObserver.ensureInstalled();
-
-  try {
-    final logged = await AuthService.isLoggedIn();
-    if (logged) {
-      await PushService.registerDeviceToken(reason: 'app_start');
-      PushService.listenTokenRefresh();
-    }
-  } catch (_) {}
-
-  FlutterForegroundTask.init(
-    androidNotificationOptions: AndroidNotificationOptions(
-      channelId: 'seguridad_vial_tracking',
-      channelName: 'Seguimiento de patrullas',
-      channelDescription:
-          'Envía la ubicación de la patrulla mientras el servicio esté activo',
-      channelImportance: NotificationChannelImportance.LOW,
-      priority: NotificationPriority.LOW,
-    ),
-    iosNotificationOptions: const IOSNotificationOptions(
-      showNotification: true,
-      playSound: false,
-    ),
-    foregroundTaskOptions: const ForegroundTaskOptions(
-      interval: 10000,
-      isOnceEvent: false,
-      autoRunOnBoot: false,
-      allowWakeLock: true,
-      allowWifiLock: true,
-    ),
-  );
-
-  runApp(const SeguridadVialApp());
 }
 
 class AppRoutes {
