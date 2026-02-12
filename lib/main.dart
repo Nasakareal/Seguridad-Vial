@@ -71,6 +71,7 @@ const AndroidNotificationChannel svAlertasChannel = AndroidNotificationChannel(
 
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  // Importante: en background necesitas options también.
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 }
 
@@ -86,17 +87,34 @@ class _AppLifecycleObserver with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
-      PushService.registerDeviceToken(reason: 'app_resumed');
+      // No dejar que explote por cualquier cosa del token
+      try {
+        PushService.registerDeviceToken(reason: 'app_resumed');
+      } catch (_) {}
     }
   }
 }
 
 Future<void> _initLocalNotifications() async {
+  // Android
   const androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
-  const initSettings = InitializationSettings(android: androidInit);
+
+  // iOS (Darwin) -> ESTO evita el error:
+  // "iOS settings must be set when targeting iOS platform."
+  const iosInit = DarwinInitializationSettings(
+    requestAlertPermission: true,
+    requestBadgePermission: true,
+    requestSoundPermission: true,
+  );
+
+  const initSettings = InitializationSettings(
+    android: androidInit,
+    iOS: iosInit,
+  );
 
   await localNotifications.initialize(initSettings);
 
+  // Canal SOLO Android
   final androidPlugin = localNotifications
       .resolvePlatformSpecificImplementation<
         AndroidFlutterLocalNotificationsPlugin
@@ -110,7 +128,7 @@ Future<void> _initLocalNotifications() async {
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Esto asegura que SIEMPRE se vea algo, aunque truene después
+  // Arranca una app mínima inmediatamente para evitar blanco por cualquier crash.
   runApp(const _BootApp());
 
   FlutterError.onError = (FlutterErrorDetails details) {
@@ -143,20 +161,21 @@ class _BootAppState extends State<_BootApp> {
 
   Future<void> _bootstrap() async {
     try {
+      // 1) Firebase
       setState(() => step = 'Inicializando Firebase...');
       await Firebase.initializeApp(
         options: DefaultFirebaseOptions.currentPlatform,
       ).timeout(
-        const Duration(seconds: 12),
-        onTimeout: () {
-          throw Exception('TIMEOUT: Firebase.initializeApp tardó demasiado.');
-        },
+        const Duration(seconds: 15),
+        onTimeout: () =>
+            throw Exception('TIMEOUT: Firebase.initializeApp tardó demasiado.'),
       );
 
       FirebaseMessaging.onBackgroundMessage(
         _firebaseMessagingBackgroundHandler,
       );
 
+      // 2) Permisos FCM
       setState(() => step = 'Permisos de notificaciones...');
       final messaging = FirebaseMessaging.instance;
 
@@ -168,47 +187,52 @@ class _BootAppState extends State<_BootApp> {
             provisional: false,
           )
           .timeout(
-            const Duration(seconds: 8),
-            onTimeout: () {
-              throw Exception('TIMEOUT: requestPermission tardó demasiado.');
-            },
+            const Duration(seconds: 10),
+            onTimeout: () =>
+                throw Exception('TIMEOUT: requestPermission tardó demasiado.'),
           );
 
+      // iOS: cómo se presentan notificaciones en foreground
       await messaging.setForegroundNotificationPresentationOptions(
         alert: true,
         badge: true,
         sound: true,
       );
 
+      // 3) Notificaciones locales (Android+iOS)
       setState(() => step = 'Inicializando notificaciones locales...');
       await _initLocalNotifications().timeout(
-        const Duration(seconds: 8),
-        onTimeout: () {
-          throw Exception('TIMEOUT: _initLocalNotifications tardó demasiado.');
-        },
+        const Duration(seconds: 10),
+        onTimeout: () => throw Exception(
+          'TIMEOUT: _initLocalNotifications tardó demasiado.',
+        ),
       );
 
+      // 4) Observador lifecycle (token refresh al volver)
       _AppLifecycleObserver.ensureInstalled();
 
+      // 5) Sesión / token
       setState(() => step = 'Validando sesión...');
       final logged = await AuthService.isLoggedIn().timeout(
-        const Duration(seconds: 10),
-        onTimeout: () {
-          throw Exception('TIMEOUT: AuthService.isLoggedIn tardó demasiado.');
-        },
+        const Duration(seconds: 12),
+        onTimeout: () =>
+            throw Exception('TIMEOUT: AuthService.isLoggedIn tardó demasiado.'),
       );
 
       if (logged) {
         setState(() => step = 'Registrando token push...');
         await PushService.registerDeviceToken(reason: 'app_start').timeout(
-          const Duration(seconds: 10),
-          onTimeout: () {
-            throw Exception('TIMEOUT: registerDeviceToken tardó demasiado.');
-          },
+          const Duration(seconds: 12),
+          onTimeout: () =>
+              throw Exception('TIMEOUT: registerDeviceToken tardó demasiado.'),
         );
-        PushService.listenTokenRefresh();
+        try {
+          PushService.listenTokenRefresh();
+        } catch (_) {}
       }
 
+      // 6) Foreground service (solo config; no debe romper)
+      setState(() => step = 'Inicializando servicio de ubicación...');
       FlutterForegroundTask.init(
         androidNotificationOptions: AndroidNotificationOptions(
           channelId: 'seguridad_vial_tracking',
@@ -231,16 +255,15 @@ class _BootAppState extends State<_BootApp> {
         ),
       );
 
-      // ✅ Arranque correcto: ahora sí levantamos la app real
+      // ✅ Ya: levantamos la app real
       if (!mounted) return;
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(builder: (_) => const SeguridadVialApp()),
       );
     } catch (e, st) {
       debugPrint('BOOT ERROR: $e\n$st');
-      setState(() {
-        error = '$e';
-      });
+      if (!mounted) return;
+      setState(() => error = '$e');
     }
   }
 
@@ -312,7 +335,6 @@ class AppRoutes {
   static const String sustentoLegalBuscar = '/sustento-legal/buscar';
 
   static const String controlUbicacion = '/control-ubicacion';
-
   static const String gruas = '/gruas';
 
   static const String lesionados = '/lesionados';
@@ -347,44 +369,73 @@ class SeguridadVialApp extends StatefulWidget {
 }
 
 class _SeguridadVialAppState extends State<SeguridadVialApp> {
+  StreamSubscription<RemoteMessage>? _subOnMessage;
+  StreamSubscription<RemoteMessage>? _subOnOpen;
+
   @override
   void initState() {
     super.initState();
 
-    FirebaseMessaging.onMessage.listen((RemoteMessage message) async {
-      final n = message.notification;
-      if (n == null) return;
+    _subOnMessage = FirebaseMessaging.onMessage.listen((
+      RemoteMessage message,
+    ) async {
+      try {
+        final n = message.notification;
+        if (n == null) return;
 
-      await localNotifications.show(
-        DateTime.now().millisecondsSinceEpoch ~/ 1000,
-        n.title ?? 'Aviso',
-        n.body ?? '',
-        NotificationDetails(
-          android: AndroidNotificationDetails(
-            svAlertasChannel.id,
-            svAlertasChannel.name,
-            channelDescription: svAlertasChannel.description,
-            importance: Importance.high,
-            priority: Priority.high,
-            playSound: true,
-            enableVibration: true,
+        await localNotifications.show(
+          DateTime.now().millisecondsSinceEpoch ~/ 1000,
+          n.title ?? 'Aviso',
+          n.body ?? '',
+          const NotificationDetails(
+            android: AndroidNotificationDetails(
+              'SV_ALERTAS',
+              'Alertas de Hechos',
+              channelDescription: 'Notificaciones de 48h / 72h y recordatorios',
+              importance: Importance.high,
+              priority: Priority.high,
+              playSound: true,
+              enableVibration: true,
+            ),
+            iOS: DarwinNotificationDetails(
+              presentAlert: true,
+              presentBadge: true,
+              presentSound: true,
+            ),
           ),
-        ),
-      );
-    });
-
-    FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
-      final data = message.data;
-      final type = (data['type'] ?? '').toString();
-      final hechoId = (data['hecho_id'] ?? '').toString();
-
-      if (type == 'HECHO_48H' || type == 'HECHO_72H') {
-        navigatorKey.currentState?.pushNamed(
-          AppRoutes.accidentesShow,
-          arguments: {'id': hechoId},
         );
+      } catch (e, st) {
+        debugPrint('onMessage ERROR: $e\n$st');
       }
     });
+
+    _subOnOpen = FirebaseMessaging.onMessageOpenedApp.listen((
+      RemoteMessage message,
+    ) {
+      try {
+        final data = message.data;
+        final type = (data['type'] ?? '').toString();
+        final hechoId = (data['hecho_id'] ?? '').toString();
+
+        if (hechoId.isEmpty) return;
+
+        if (type == 'HECHO_48H' || type == 'HECHO_72H') {
+          navigatorKey.currentState?.pushNamed(
+            AppRoutes.accidentesShow,
+            arguments: {'id': hechoId},
+          );
+        }
+      } catch (e, st) {
+        debugPrint('onMessageOpenedApp ERROR: $e\n$st');
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _subOnMessage?.cancel();
+    _subOnOpen?.cancel();
+    super.dispose();
   }
 
   @override
@@ -402,15 +453,19 @@ class _SeguridadVialAppState extends State<SeguridadVialApp> {
       routes: {
         AppRoutes.login: (context) => const LoginScreen(),
         AppRoutes.home: (context) => const HomeScreen(),
+
         AppRoutes.accidentes: (context) => const AccidentesScreen(),
         AppRoutes.accidentesCreate: (context) => const CreateHechoScreen(),
         AppRoutes.accidentesShow: (context) => const HechoShowScreen(),
+
         AppRoutes.vehiculos: (context) => const VehiculosScreen(),
         AppRoutes.vehiculosCreate: (context) => const VehiculoCreateScreen(),
         AppRoutes.vehiculosEdit: (context) => const VehiculoEditScreen(),
         AppRoutes.vehiculoConductorCreate: (context) =>
             const VehiculoConductorCreateScreen(),
+
         AppRoutes.mapa: (context) => const MapaPatrullasScreen(),
+
         AppRoutes.sustentoLegal: (context) => const SustentoLegalHomeScreen(),
         AppRoutes.sustentoLegalCategoria: (context) =>
             const SustentoLegalCategoriaScreen(),
@@ -418,22 +473,28 @@ class _SeguridadVialAppState extends State<SeguridadVialApp> {
             const SustentoLegalDetalleScreen(),
         AppRoutes.sustentoLegalBuscar: (context) =>
             const SustentoLegalBusquedaScreen(),
+
         AppRoutes.controlUbicacion: (context) => const ControlUbicacionScreen(),
         AppRoutes.gruas: (context) => const GruasScreen(),
+
         AppRoutes.lesionados: (context) => const LesionadosScreen(),
         AppRoutes.lesionadoCreate: (context) => const LesionadoCreateScreen(),
         AppRoutes.lesionadoEdit: (context) => const LesionadoEditScreen(),
         AppRoutes.lesionadoShow: (context) => const LesionadoShowScreen(),
+
         AppRoutes.hechosBuscar: (context) => const HechosBusquedaScreen(),
+
         AppRoutes.estadisticasGlobales: (context) =>
             const EstadisticasGlobalesHomeScreen(),
         AppRoutes.estadisticasGlobalesHechos: (context) =>
             const EstadisticasGlobalesHechosScreen(),
+
         AppRoutes.dictamenes: (context) => const DictamenesScreen(),
         AppRoutes.dictamenesCreate: (context) => const DictamenCreateScreen(),
         AppRoutes.dictamenesShow: (context) => const DictamenShowScreen(),
         AppRoutes.dictamenesBuscar: (context) =>
             const DictamenesBusquedaScreen(),
+
         AppRoutes.actividades: (context) => const ActividadesScreen(),
         AppRoutes.actividadesCreate: (context) => const ActividadCreateScreen(),
         AppRoutes.actividadesShow: (context) => const ActividadShowScreen(),
