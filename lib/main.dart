@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io' show Platform;
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
@@ -71,7 +72,6 @@ const AndroidNotificationChannel svAlertasChannel = AndroidNotificationChannel(
 
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
-  // Importante: en background necesitas options también.
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 }
 
@@ -87,7 +87,6 @@ class _AppLifecycleObserver with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
-      // No dejar que explote por cualquier cosa del token
       try {
         PushService.registerDeviceToken(reason: 'app_resumed');
       } catch (_) {}
@@ -96,11 +95,8 @@ class _AppLifecycleObserver with WidgetsBindingObserver {
 }
 
 Future<void> _initLocalNotifications() async {
-  // Android
   const androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
 
-  // iOS (Darwin) -> ESTO evita el error:
-  // "iOS settings must be set when targeting iOS platform."
   const iosInit = DarwinInitializationSettings(
     requestAlertPermission: true,
     requestBadgePermission: true,
@@ -114,7 +110,6 @@ Future<void> _initLocalNotifications() async {
 
   await localNotifications.initialize(initSettings);
 
-  // Canal SOLO Android
   final androidPlugin = localNotifications
       .resolvePlatformSpecificImplementation<
         AndroidFlutterLocalNotificationsPlugin
@@ -128,7 +123,6 @@ Future<void> _initLocalNotifications() async {
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Arranca una app mínima inmediatamente para evitar blanco por cualquier crash.
   runApp(const _BootApp());
 
   FlutterError.onError = (FlutterErrorDetails details) {
@@ -141,7 +135,6 @@ Future<void> main() async {
   };
 }
 
-/// Pantalla de arranque que nunca deja “blanco”.
 class _BootApp extends StatefulWidget {
   const _BootApp();
 
@@ -161,7 +154,6 @@ class _BootAppState extends State<_BootApp> {
 
   Future<void> _bootstrap() async {
     try {
-      // 1) Firebase
       setState(() => step = 'Inicializando Firebase...');
       await Firebase.initializeApp(
         options: DefaultFirebaseOptions.currentPlatform,
@@ -175,7 +167,6 @@ class _BootAppState extends State<_BootApp> {
         _firebaseMessagingBackgroundHandler,
       );
 
-      // 2) Permisos FCM
       setState(() => step = 'Permisos de notificaciones...');
       final messaging = FirebaseMessaging.instance;
 
@@ -192,14 +183,12 @@ class _BootAppState extends State<_BootApp> {
                 throw Exception('TIMEOUT: requestPermission tardó demasiado.'),
           );
 
-      // iOS: cómo se presentan notificaciones en foreground
       await messaging.setForegroundNotificationPresentationOptions(
         alert: true,
         badge: true,
         sound: true,
       );
 
-      // 3) Notificaciones locales (Android+iOS)
       setState(() => step = 'Inicializando notificaciones locales...');
       await _initLocalNotifications().timeout(
         const Duration(seconds: 10),
@@ -208,10 +197,8 @@ class _BootAppState extends State<_BootApp> {
         ),
       );
 
-      // 4) Observador lifecycle (token refresh al volver)
       _AppLifecycleObserver.ensureInstalled();
 
-      // 5) Sesión / token
       setState(() => step = 'Validando sesión...');
       final logged = await AuthService.isLoggedIn().timeout(
         const Duration(seconds: 12),
@@ -231,31 +218,40 @@ class _BootAppState extends State<_BootApp> {
         } catch (_) {}
       }
 
-      // 6) Foreground service (solo config; no debe romper)
+      // ✅ FIX: Foreground task SOLO Android (en iOS revienta y NO aplica)
       setState(() => step = 'Inicializando servicio de ubicación...');
-      FlutterForegroundTask.init(
-        androidNotificationOptions: AndroidNotificationOptions(
-          channelId: 'seguridad_vial_tracking',
-          channelName: 'Seguimiento de patrullas',
-          channelDescription:
-              'Envía la ubicación de la patrulla mientras el servicio esté activo',
-          channelImportance: NotificationChannelImportance.LOW,
-          priority: NotificationPriority.LOW,
-        ),
-        iosNotificationOptions: const IOSNotificationOptions(
-          showNotification: true,
-          playSound: false,
-        ),
-        foregroundTaskOptions: const ForegroundTaskOptions(
-          interval: 10000,
-          isOnceEvent: false,
-          autoRunOnBoot: false,
-          allowWakeLock: true,
-          allowWifiLock: true,
-        ),
-      );
+      if (Platform.isAndroid) {
+        try {
+          FlutterForegroundTask.init(
+            androidNotificationOptions: AndroidNotificationOptions(
+              channelId: 'seguridad_vial_tracking',
+              channelName: 'Seguimiento de patrullas',
+              channelDescription:
+                  'Envía la ubicación de la patrulla mientras el servicio esté activo',
+              channelImportance: NotificationChannelImportance.LOW,
+              priority: NotificationPriority.LOW,
+            ),
+            iosNotificationOptions: const IOSNotificationOptions(
+              showNotification: true,
+              playSound: false,
+            ),
+            foregroundTaskOptions: const ForegroundTaskOptions(
+              interval: 10000,
+              isOnceEvent: false,
+              autoRunOnBoot: false,
+              allowWakeLock: true,
+              allowWifiLock: true,
+            ),
+          );
+        } catch (e, st) {
+          // OJO: aunque falle en Android, NO tiramos la app
+          debugPrint('ForegroundTask.init ERROR: $e\n$st');
+        }
+      } else {
+        // iOS: no aplica foreground service
+        debugPrint('iOS: ForegroundTask.init omitido (no aplica).');
+      }
 
-      // ✅ Ya: levantamos la app real
       if (!mounted) return;
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(builder: (_) => const SeguridadVialApp()),
