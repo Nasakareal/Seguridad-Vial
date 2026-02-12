@@ -1,3 +1,5 @@
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -66,6 +68,7 @@ const AndroidNotificationChannel svAlertasChannel = AndroidNotificationChannel(
 
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  // Importante: initializeApp puede fallar si el plist está mal/ausente.
   await Firebase.initializeApp();
 }
 
@@ -105,7 +108,61 @@ Future<void> _initLocalNotifications() async {
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  await Firebase.initializeApp();
+  // 1) Para que NO se quede blanco en release si truena algo:
+  ErrorWidget.builder = (FlutterErrorDetails details) {
+    return Material(
+      color: Colors.white,
+      child: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: SingleChildScrollView(
+            child: Text(
+              'ERROR:\n${details.exception}\n\n${details.stack}',
+              style: const TextStyle(fontSize: 12, color: Colors.red),
+            ),
+          ),
+        ),
+      ),
+    );
+  };
+
+  FlutterError.onError = (FlutterErrorDetails details) {
+    FlutterError.dumpErrorToConsole(details);
+  };
+
+  PlatformDispatcher.instance.onError = (error, stack) {
+    debugPrint('UNCAUGHT: $error\n$stack');
+    return true; // evita crash silencioso
+  };
+
+  // 2) Firebase init protegido (si falla, mostramos el motivo en pantalla)
+  try {
+    await Firebase.initializeApp();
+  } catch (e) {
+    runApp(
+      MaterialApp(
+        debugShowCheckedModeBanner: false,
+        home: Scaffold(
+          backgroundColor: Colors.white,
+          body: SafeArea(
+            child: Center(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: SingleChildScrollView(
+                  child: Text(
+                    'Firebase.initializeApp() falló:\n\n$e',
+                    style: const TextStyle(color: Colors.red),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    return;
+  }
 
   FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
 
