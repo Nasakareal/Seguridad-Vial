@@ -6,6 +6,7 @@ import '../services/tracking_service.dart';
 import '../services/app_version_service.dart';
 import '../services/feed_service.dart';
 import '../services/location_flag_service.dart';
+import '../services/push_service.dart';
 
 import '../models/feed_item.dart';
 
@@ -88,6 +89,18 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   Future<void> _bootstrapOnce() async {
     if (_bootstrapped) return;
     _bootstrapped = true;
+
+    try {
+      await PushService.ensurePermissions();
+    } catch (_) {}
+
+    try {
+      PushService.listenTokenRefresh();
+    } catch (_) {}
+
+    try {
+      await PushService.registerDeviceToken(reason: 'home_bootstrap');
+    } catch (_) {}
   }
 
   Future<void> _syncTrackingFromCommanderFlag() async {
@@ -248,6 +261,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       try {
         await _syncTrackingFromCommanderFlag();
       } catch (_) {}
+
+      try {
+        await PushService.registerDeviceToken(reason: 'app_resumed');
+      } catch (_) {}
     }
   }
 
@@ -328,6 +345,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     } catch (_) {}
     try {
       await _loadFeed(reset: true);
+    } catch (_) {}
+    try {
+      await PushService.registerDeviceToken(reason: 'pull_to_refresh');
     } catch (_) {}
   }
 
