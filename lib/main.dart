@@ -156,6 +156,7 @@ class _BootApp extends StatefulWidget {
 class _BootAppState extends State<_BootApp> {
   String step = 'Iniciando...';
   String? error;
+  bool ready = false;
 
   @override
   void initState() {
@@ -231,37 +232,31 @@ class _BootAppState extends State<_BootApp> {
 
       setState(() => step = 'Inicializando servicio de ubicación...');
       if (Platform.isAndroid) {
-        try {
-          FlutterForegroundTask.init(
-            androidNotificationOptions: AndroidNotificationOptions(
-              channelId: 'seguridad_vial_tracking',
-              channelName: 'Seguimiento de patrullas',
-              channelDescription:
-                  'Envía la ubicación de la patrulla mientras el servicio esté activo',
-              channelImportance: NotificationChannelImportance.LOW,
-              priority: NotificationPriority.LOW,
-            ),
-            iosNotificationOptions: const IOSNotificationOptions(
-              showNotification: true,
-              playSound: false,
-            ),
-            foregroundTaskOptions: const ForegroundTaskOptions(
-              interval: 10000,
-              isOnceEvent: false,
-              autoRunOnBoot: false,
-              allowWakeLock: true,
-              allowWifiLock: true,
-            ),
-          );
-        } catch (e, st) {
-          bootFatal.value = 'ForegroundTask.init ERROR: $e\n\n$st';
-        }
+        FlutterForegroundTask.init(
+          androidNotificationOptions: AndroidNotificationOptions(
+            channelId: 'seguridad_vial_tracking',
+            channelName: 'Seguimiento de patrullas',
+            channelDescription:
+                'Envía la ubicación de la patrulla mientras el servicio esté activo',
+            channelImportance: NotificationChannelImportance.LOW,
+            priority: NotificationPriority.LOW,
+          ),
+          iosNotificationOptions: const IOSNotificationOptions(
+            showNotification: true,
+            playSound: false,
+          ),
+          foregroundTaskOptions: const ForegroundTaskOptions(
+            interval: 10000,
+            isOnceEvent: false,
+            autoRunOnBoot: false,
+            allowWakeLock: true,
+            allowWifiLock: true,
+          ),
+        );
       }
 
       if (!mounted) return;
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => const SeguridadVialApp()),
-      );
+      setState(() => ready = true);
     } catch (e, st) {
       if (!mounted) return;
       setState(() => error = '$e\n\n$st');
@@ -274,6 +269,11 @@ class _BootAppState extends State<_BootApp> {
       valueListenable: bootFatal,
       builder: (context, fatal, _) {
         final showError = fatal ?? error;
+
+        if (showError == null && ready) {
+          return const SeguridadVialApp();
+        }
+
         return MaterialApp(
           debugShowCheckedModeBanner: false,
           home: Scaffold(
