@@ -70,6 +70,8 @@ const AndroidNotificationChannel svAlertasChannel = AndroidNotificationChannel(
   enableVibration: true,
 );
 
+final ValueNotifier<String?> bootFatal = ValueNotifier<String?>(null);
+
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
@@ -123,16 +125,25 @@ Future<void> _initLocalNotifications() async {
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  runApp(const _BootApp());
-
   FlutterError.onError = (FlutterErrorDetails details) {
-    FlutterError.dumpErrorToConsole(details);
+    final e = details.exception;
+    final st = details.stack ?? StackTrace.current;
+    bootFatal.value = 'FLUTTER ERROR: $e\n\n$st';
   };
 
   PlatformDispatcher.instance.onError = (error, stack) {
-    debugPrint('UNCAUGHT: $error\n$stack');
+    bootFatal.value = 'UNCAUGHT: $error\n\n$stack';
     return true;
   };
+
+  runZonedGuarded(
+    () {
+      runApp(const _BootApp());
+    },
+    (error, stack) {
+      bootFatal.value = 'ZONED: $error\n\n$stack';
+    },
+  );
 }
 
 class _BootApp extends StatefulWidget {
@@ -218,7 +229,6 @@ class _BootAppState extends State<_BootApp> {
         } catch (_) {}
       }
 
-      // ✅ FIX: Foreground task SOLO Android (en iOS revienta y NO aplica)
       setState(() => step = 'Inicializando servicio de ubicación...');
       if (Platform.isAndroid) {
         try {
@@ -244,12 +254,8 @@ class _BootAppState extends State<_BootApp> {
             ),
           );
         } catch (e, st) {
-          // OJO: aunque falle en Android, NO tiramos la app
-          debugPrint('ForegroundTask.init ERROR: $e\n$st');
+          bootFatal.value = 'ForegroundTask.init ERROR: $e\n\n$st';
         }
-      } else {
-        // iOS: no aplica foreground service
-        debugPrint('iOS: ForegroundTask.init omitido (no aplica).');
       }
 
       if (!mounted) return;
@@ -257,54 +263,59 @@ class _BootAppState extends State<_BootApp> {
         MaterialPageRoute(builder: (_) => const SeguridadVialApp()),
       );
     } catch (e, st) {
-      debugPrint('BOOT ERROR: $e\n$st');
       if (!mounted) return;
-      setState(() => error = '$e');
+      setState(() => error = '$e\n\n$st');
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      debugShowCheckedModeBanner: false,
-      home: Scaffold(
-        backgroundColor: Colors.white,
-        body: SafeArea(
-          child: Center(
-            child: Padding(
-              padding: const EdgeInsets.all(18),
-              child: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Text(
-                      'Seguridad Vial',
-                      style: TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.bold,
-                      ),
+    return ValueListenableBuilder<String?>(
+      valueListenable: bootFatal,
+      builder: (context, fatal, _) {
+        final showError = fatal ?? error;
+        return MaterialApp(
+          debugShowCheckedModeBanner: false,
+          home: Scaffold(
+            backgroundColor: Colors.white,
+            body: SafeArea(
+              child: Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(18),
+                  child: SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Text(
+                          'Seguridad Vial',
+                          style: TextStyle(
+                            fontSize: 22,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          showError == null ? step : 'FALLÓ EN:\n$step',
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 16),
+                        if (showError == null)
+                          const CircularProgressIndicator()
+                        else
+                          Text(
+                            showError,
+                            style: const TextStyle(color: Colors.red),
+                            textAlign: TextAlign.center,
+                          ),
+                      ],
                     ),
-                    const SizedBox(height: 16),
-                    Text(
-                      error == null ? step : 'FALLÓ EN:\n$step',
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 16),
-                    if (error == null)
-                      const CircularProgressIndicator()
-                    else
-                      Text(
-                        error!,
-                        style: const TextStyle(color: Colors.red),
-                        textAlign: TextAlign.center,
-                      ),
-                  ],
+                  ),
                 ),
               ),
             ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 }
@@ -401,7 +412,7 @@ class _SeguridadVialAppState extends State<SeguridadVialApp> {
           ),
         );
       } catch (e, st) {
-        debugPrint('onMessage ERROR: $e\n$st');
+        bootFatal.value = 'onMessage ERROR: $e\n\n$st';
       }
     });
 
@@ -422,7 +433,7 @@ class _SeguridadVialAppState extends State<SeguridadVialApp> {
           );
         }
       } catch (e, st) {
-        debugPrint('onMessageOpenedApp ERROR: $e\n$st');
+        bootFatal.value = 'onMessageOpenedApp ERROR: $e\n\n$st';
       }
     });
   }
@@ -449,19 +460,15 @@ class _SeguridadVialAppState extends State<SeguridadVialApp> {
       routes: {
         AppRoutes.login: (context) => const LoginScreen(),
         AppRoutes.home: (context) => const HomeScreen(),
-
         AppRoutes.accidentes: (context) => const AccidentesScreen(),
         AppRoutes.accidentesCreate: (context) => const CreateHechoScreen(),
         AppRoutes.accidentesShow: (context) => const HechoShowScreen(),
-
         AppRoutes.vehiculos: (context) => const VehiculosScreen(),
         AppRoutes.vehiculosCreate: (context) => const VehiculoCreateScreen(),
         AppRoutes.vehiculosEdit: (context) => const VehiculoEditScreen(),
         AppRoutes.vehiculoConductorCreate: (context) =>
             const VehiculoConductorCreateScreen(),
-
         AppRoutes.mapa: (context) => const MapaPatrullasScreen(),
-
         AppRoutes.sustentoLegal: (context) => const SustentoLegalHomeScreen(),
         AppRoutes.sustentoLegalCategoria: (context) =>
             const SustentoLegalCategoriaScreen(),
@@ -469,28 +476,22 @@ class _SeguridadVialAppState extends State<SeguridadVialApp> {
             const SustentoLegalDetalleScreen(),
         AppRoutes.sustentoLegalBuscar: (context) =>
             const SustentoLegalBusquedaScreen(),
-
         AppRoutes.controlUbicacion: (context) => const ControlUbicacionScreen(),
         AppRoutes.gruas: (context) => const GruasScreen(),
-
         AppRoutes.lesionados: (context) => const LesionadosScreen(),
         AppRoutes.lesionadoCreate: (context) => const LesionadoCreateScreen(),
         AppRoutes.lesionadoEdit: (context) => const LesionadoEditScreen(),
         AppRoutes.lesionadoShow: (context) => const LesionadoShowScreen(),
-
         AppRoutes.hechosBuscar: (context) => const HechosBusquedaScreen(),
-
         AppRoutes.estadisticasGlobales: (context) =>
             const EstadisticasGlobalesHomeScreen(),
         AppRoutes.estadisticasGlobalesHechos: (context) =>
             const EstadisticasGlobalesHechosScreen(),
-
         AppRoutes.dictamenes: (context) => const DictamenesScreen(),
         AppRoutes.dictamenesCreate: (context) => const DictamenCreateScreen(),
         AppRoutes.dictamenesShow: (context) => const DictamenShowScreen(),
         AppRoutes.dictamenesBuscar: (context) =>
             const DictamenesBusquedaScreen(),
-
         AppRoutes.actividades: (context) => const ActividadesScreen(),
         AppRoutes.actividadesCreate: (context) => const ActividadCreateScreen(),
         AppRoutes.actividadesShow: (context) => const ActividadShowScreen(),

@@ -1,4 +1,4 @@
-import 'dart:io';
+import 'dart:io' show Platform;
 import 'package:flutter/material.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:geolocator/geolocator.dart';
@@ -9,6 +9,8 @@ class TrackingService {
   static bool _starting = false;
 
   static Future<bool> startWithDisclosure(BuildContext context) async {
+    if (!Platform.isAndroid) return false;
+
     if (_starting) return true;
     _starting = true;
 
@@ -32,8 +34,7 @@ class TrackingService {
       );
 
       return true;
-    } catch (e) {
-      print('TRACKING startWithDisclosure EXCEPTION: $e');
+    } catch (_) {
       return false;
     } finally {
       _starting = false;
@@ -41,6 +42,8 @@ class TrackingService {
   }
 
   static Future<bool> start() async {
+    if (!Platform.isAndroid) return false;
+
     if (_starting) return true;
     _starting = true;
 
@@ -55,8 +58,7 @@ class TrackingService {
       );
 
       return true;
-    } catch (e) {
-      print('TRACKING start EXCEPTION: $e');
+    } catch (_) {
       return false;
     } finally {
       _starting = false;
@@ -64,20 +66,19 @@ class TrackingService {
   }
 
   static Future<void> stop() async {
+    if (!Platform.isAndroid) return;
+
     try {
       final running = await FlutterForegroundTask.isRunningService;
       if (!running) return;
       await FlutterForegroundTask.stopService();
-    } catch (e) {
-      print('TRACKING stop EXCEPTION: $e');
-    }
+    } catch (_) {}
   }
 
   static Future<bool> _ensurePermissionsAlways(BuildContext context) async {
     final enabled = await Geolocator.isLocationServiceEnabled();
     if (!enabled) return false;
 
-    // A) pedir "while in use" si hace falta
     var permission = await Geolocator.checkPermission();
     if (permission == LocationPermission.denied) {
       permission = await Geolocator.requestPermission();
@@ -95,8 +96,7 @@ class TrackingService {
         builder: (ctx) => AlertDialog(
           title: const Text('Permitir “todo el tiempo”'),
           content: const Text(
-            'Para enviar ubicación en segundo plano y ver patrullas en tiempo real, '
-            'activa: Permisos > Ubicación > Permitir todo el tiempo.',
+            'Para enviar ubicación en segundo plano y ver patrullas en tiempo real, activa: Permisos > Ubicación > Permitir todo el tiempo.',
           ),
           actions: [
             TextButton(
