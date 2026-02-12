@@ -49,10 +49,21 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     _scrollController.addListener(_onScroll);
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      await AppVersionService.enforceUpdateIfNeeded(context);
-      await _bootstrapOnce();
-      await _syncTrackingFromCommanderFlag();
-      await _loadFeed(reset: true);
+      try {
+        await AppVersionService.enforceUpdateIfNeeded(context);
+      } catch (_) {}
+
+      try {
+        await _bootstrapOnce();
+      } catch (_) {}
+
+      try {
+        await _syncTrackingFromCommanderFlag();
+      } catch (_) {}
+
+      try {
+        await _loadFeed(reset: true);
+      } catch (_) {}
     });
   }
 
@@ -80,43 +91,58 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   Future<void> _syncTrackingFromCommanderFlag() async {
-    final enabledByCommander = await LocationFlagService.isEnabledForMe();
-    if (!mounted) return;
+    try {
+      final enabledByCommander = await LocationFlagService.isEnabledForMe();
+      if (!mounted) return;
 
-    final running = await FlutterForegroundTask.isRunningService;
-    if (!mounted) return;
+      final running = await FlutterForegroundTask.isRunningService;
+      if (!mounted) return;
 
-    if (!enabledByCommander) {
-      if (running) {
-        await TrackingService.stop();
+      if (!enabledByCommander) {
+        if (running) {
+          try {
+            await TrackingService.stop();
+          } catch (_) {}
+        }
+        if (!mounted) return;
+        setState(() => _trackingOn = false);
+        return;
       }
+
+      if (!running) {
+        bool started = false;
+        try {
+          started = await TrackingService.startWithDisclosure(context);
+        } catch (_) {
+          started = false;
+        }
+        if (!mounted) return;
+        setState(() => _trackingOn = started);
+      } else {
+        if (!mounted) return;
+        setState(() => _trackingOn = true);
+      }
+    } catch (_) {
       if (!mounted) return;
       setState(() => _trackingOn = false);
-      return;
-    }
-
-    if (!running) {
-      final started = await TrackingService.startWithDisclosure(context);
-      if (!mounted) return;
-      setState(() => _trackingOn = started);
-    } else {
-      setState(() => _trackingOn = true);
     }
   }
 
   Future<void> _loadFeed({required bool reset}) async {
     if (_loadingFeed) return;
 
-    setState(() {
-      _loadingFeed = true;
-      _feedError = null;
+    if (mounted) {
+      setState(() {
+        _loadingFeed = true;
+        _feedError = null;
 
-      if (reset) {
-        _feed.clear();
-        _page = 1;
-        _hasMore = true;
-      }
-    });
+        if (reset) {
+          _feed.clear();
+          _page = 1;
+          _hasMore = true;
+        }
+      });
+    }
 
     try {
       final limit = (_pageSize * _page).clamp(1, 50);
@@ -154,7 +180,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           }
         }
       });
-    } catch (e) {
+    } catch (_) {
       if (!mounted) return;
       setState(() => _feedError = 'No se pudo cargar el feed.');
     } finally {
@@ -169,7 +195,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     if (!_hasMore) return;
     if (_feedError != null) return;
 
-    setState(() => _loadingMore = true);
+    if (mounted) {
+      setState(() => _loadingMore = true);
+    }
 
     try {
       final nextPage = _page + 1;
@@ -205,7 +233,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           _hasMore = false;
         }
       });
-    } catch (e) {
+    } catch (_) {
       if (!mounted) return;
       setState(() => _feedError = 'No se pudo cargar el feed.');
     } finally {
@@ -217,7 +245,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) async {
     if (state == AppLifecycleState.resumed) {
-      await _syncTrackingFromCommanderFlag();
+      try {
+        await _syncTrackingFromCommanderFlag();
+      } catch (_) {}
     }
   }
 
@@ -226,8 +256,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     _busy = true;
 
     try {
-      await TrackingService.stop();
-      await AuthService.logout();
+      try {
+        await TrackingService.stop();
+      } catch (_) {}
+      try {
+        await AuthService.logout();
+      } catch (_) {}
     } finally {
       _busy = false;
     }
@@ -289,8 +323,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   Future<void> _refreshAll() async {
-    await _syncTrackingFromCommanderFlag();
-    await _loadFeed(reset: true);
+    try {
+      await _syncTrackingFromCommanderFlag();
+    } catch (_) {}
+    try {
+      await _loadFeed(reset: true);
+    } catch (_) {}
   }
 
   @override

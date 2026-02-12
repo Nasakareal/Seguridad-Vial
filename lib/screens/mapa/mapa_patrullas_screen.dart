@@ -15,7 +15,8 @@ class MapaPatrullasScreen extends StatefulWidget {
   State<MapaPatrullasScreen> createState() => _MapaPatrullasScreenState();
 }
 
-class _MapaPatrullasScreenState extends State<MapaPatrullasScreen> {
+class _MapaPatrullasScreenState extends State<MapaPatrullasScreen>
+    with WidgetsBindingObserver {
   final MapController _mapController = MapController();
   final ScrollController _scrollController = ScrollController();
   final GlobalKey _mapKey = GlobalKey();
@@ -38,7 +39,6 @@ class _MapaPatrullasScreenState extends State<MapaPatrullasScreen> {
   static const LatLng _fallbackCenter = LatLng(19.70078, -101.18443);
   static const double _zoomDefault = 13.5;
   static const double _zoomFocus = 16.5;
-  static const String _baseUrl = 'https://seguridadvial-mich.com/api';
 
   bool _isSuperadmin = false;
   bool _roleLoaded = false;
@@ -46,28 +46,59 @@ class _MapaPatrullasScreenState extends State<MapaPatrullasScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+
     _bootstrap();
 
-    _timer = Timer.periodic(_refreshEvery, (_) {
-      _fetchMapOnly();
-    });
+    _startTimer();
 
     _searchController.addListener(() {
       final v = _searchController.text.trim().toLowerCase();
       if (v == _searchQuery) return;
+      if (!mounted) return;
       setState(() => _searchQuery = v);
     });
   }
 
   @override
   void dispose() {
-    _timer?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
+    _stopTimer();
     _scrollController.dispose();
     _searchController.dispose();
     super.dispose();
   }
 
+  void _startTimer() {
+    _stopTimer();
+    _timer = Timer.periodic(_refreshEvery, (_) {
+      _fetchMapOnly();
+    });
+  }
+
+  void _stopTimer() {
+    _timer?.cancel();
+    _timer = null;
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _startTimer();
+      _fetchMapOnly();
+      return;
+    }
+
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.detached) {
+      _stopTimer();
+    }
+  }
+
   Future<void> _bootstrap() async {
+    if (!mounted) return;
+
     setState(() {
       _loading = true;
       _error = null;
@@ -94,7 +125,9 @@ class _MapaPatrullasScreenState extends State<MapaPatrullasScreen> {
 
       if (mapData.isNotEmpty) {
         final first = mapData.first;
-        _mapController.move(LatLng(first.lat, first.lng), _zoomDefault);
+        try {
+          _mapController.move(LatLng(first.lat, first.lng), _zoomDefault);
+        } catch (_) {}
       }
     } catch (e) {
       if (!mounted) return;
@@ -161,12 +194,12 @@ class _MapaPatrullasScreenState extends State<MapaPatrullasScreen> {
   }) async {
     if (_saving) return;
 
-    setState(() => _saving = true);
+    if (mounted) setState(() => _saving = true);
 
     final idx = _personal.indexWhere((x) => x.userId == userId);
     final prev = idx >= 0 ? _personal[idx] : null;
 
-    if (idx >= 0) {
+    if (idx >= 0 && mounted) {
       final updated = List<_PersonalItem>.from(_personal);
       updated[idx] = updated[idx].copyWith(compartirUbicacion: enabled);
       setState(() => _personal = updated);
@@ -177,6 +210,7 @@ class _MapaPatrullasScreenState extends State<MapaPatrullasScreen> {
         userId: userId,
         enabled: enabled,
       );
+
       await _fetchMapOnly();
 
       if (!mounted) return;
@@ -205,15 +239,17 @@ class _MapaPatrullasScreenState extends State<MapaPatrullasScreen> {
   Future<void> _setUbicacionTodos({required bool enabled}) async {
     if (_saving) return;
 
-    setState(() => _saving = true);
+    if (mounted) setState(() => _saving = true);
 
     final prev = _personal;
 
-    setState(() {
-      _personal = _personal
-          .map((e) => e.copyWith(compartirUbicacion: enabled))
-          .toList();
-    });
+    if (mounted) {
+      setState(() {
+        _personal = _personal
+            .map((e) => e.copyWith(compartirUbicacion: enabled))
+            .toList();
+      });
+    }
 
     try {
       await _MapaService.toggleUbicacionTodos(enabled: enabled);
@@ -242,51 +278,52 @@ class _MapaPatrullasScreenState extends State<MapaPatrullasScreen> {
 
   Future<void> _scrollToMap() async {
     if (!mounted) return;
+    if (!_scrollController.hasClients) return;
 
     await Future.delayed(const Duration(milliseconds: 10));
     if (!mounted) return;
+    if (!_scrollController.hasClients) return;
 
-    final mapCtx = _mapKey.currentContext;
-    final scrollCtx = _scrollController.position.context.storageContext;
-
-    if (mapCtx == null) {
-      if (_scrollController.hasClients) {
+    try {
+      final mapCtx = _mapKey.currentContext;
+      if (mapCtx == null) {
         await _scrollController.animateTo(
           0,
           duration: const Duration(milliseconds: 420),
           curve: Curves.easeOutCubic,
         );
+        return;
       }
-      return;
-    }
 
-    final mapBox = mapCtx.findRenderObject() as RenderBox?;
-    final scrollBox = scrollCtx.findRenderObject() as RenderBox?;
+      final mapBox = mapCtx.findRenderObject() as RenderBox?;
+      final scrollCtx = _scrollController.position.context.storageContext;
+      final scrollBox = scrollCtx.findRenderObject() as RenderBox?;
 
-    if (mapBox == null || scrollBox == null || !_scrollController.hasClients) {
-      return;
-    }
+      if (mapBox == null || scrollBox == null) return;
 
-    final mapOffsetGlobal = mapBox.localToGlobal(Offset.zero);
-    final scrollOffsetGlobal = scrollBox.localToGlobal(Offset.zero);
+      final mapOffsetGlobal = mapBox.localToGlobal(Offset.zero);
+      final scrollOffsetGlobal = scrollBox.localToGlobal(Offset.zero);
 
-    final delta = mapOffsetGlobal.dy - scrollOffsetGlobal.dy;
-    final target = (_scrollController.offset + delta) - 8;
+      final delta = mapOffsetGlobal.dy - scrollOffsetGlobal.dy;
+      final target = (_scrollController.offset + delta) - 8;
 
-    final clamped = target.clamp(
-      _scrollController.position.minScrollExtent,
-      _scrollController.position.maxScrollExtent,
-    );
+      final clamped = target.clamp(
+        _scrollController.position.minScrollExtent,
+        _scrollController.position.maxScrollExtent,
+      );
 
-    await _scrollController.animateTo(
-      clamped.toDouble(),
-      duration: const Duration(milliseconds: 420),
-      curve: Curves.easeOutCubic,
-    );
+      await _scrollController.animateTo(
+        clamped.toDouble(),
+        duration: const Duration(milliseconds: 420),
+        curve: Curves.easeOutCubic,
+      );
+    } catch (_) {}
   }
 
   Future<void> _centerAndGoTopByCoords(double lat, double lng) async {
-    _mapController.move(LatLng(lat, lng), _zoomFocus);
+    try {
+      _mapController.move(LatLng(lat, lng), _zoomFocus);
+    } catch (_) {}
     await _scrollToMap();
   }
 
@@ -473,10 +510,9 @@ class _MapaPatrullasScreenState extends State<MapaPatrullasScreen> {
 
     final filteredPersonal = _searchQuery.isEmpty
         ? _personal
-        : _personal.where((p) {
-            final name = p.name.toLowerCase();
-            return name.contains(_searchQuery);
-          }).toList();
+        : _personal
+              .where((p) => p.name.toLowerCase().contains(_searchQuery))
+              .toList();
 
     return ListView(
       controller: _scrollController,
@@ -661,9 +697,7 @@ class _MapaPatrullasScreenState extends State<MapaPatrullasScreen> {
         ...filteredPersonal.map(
           (p) => _PatrullaTile(
             item: p,
-            onTap: () async {
-              await _centerAndGoTop(p);
-            },
+            onTap: () async => _centerAndGoTop(p),
             onMore: () => _showPatrullaSheet(p),
             onToggle: _saving
                 ? null
@@ -923,7 +957,7 @@ class _MapaPatrullasScreenState extends State<MapaPatrullasScreen> {
 }
 
 class _MapaService {
-  static const String baseUrl = _MapaPatrullasScreenState._baseUrl;
+  static const String baseUrl = 'https://seguridadvial-mich.com/api';
 
   static Future<Map<String, String>> _headers() async {
     final token = await AuthService.getToken();
