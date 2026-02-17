@@ -1,23 +1,29 @@
+import 'dart:async';
 import 'dart:io' show Platform;
 import 'package:flutter/material.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:geolocator/geolocator.dart';
+
 import '../widgets/location_disclosure_dialog.dart';
 import 'tracking_task.dart';
+import 'location_service.dart'; // <- asegúrate que exista
+// Si tu LocationService requiere apiBase, pásalo como lo uses en tu proyecto.
 
 class TrackingService {
   static bool _starting = false;
 
-  static Future<bool> startWithDisclosure(BuildContext context) async {
-    if (!Platform.isAndroid) return false;
+  // iOS: timer simple en foreground
+  static Timer? _iosTimer;
+  static bool _iosRunning = false;
 
+  // Ajusta esto a tu base URL real (o pásalo por constructor si ya lo tienes)
+  static const String _apiBase = 'https://seguridadvial-mich.com/api';
+
+  static Future<bool> startWithDisclosure(BuildContext context) async {
     if (_starting) return true;
     _starting = true;
 
     try {
-      final running = await FlutterForegroundTask.isRunningService;
-      if (running) return true;
-
       final accepted = await LocationDisclosure.isAccepted();
       if (!accepted) {
         final ok = await LocationDisclosure.show(context);
@@ -27,13 +33,21 @@ class TrackingService {
       final okPerms = await _ensurePermissionsAlways(context);
       if (!okPerms) return false;
 
-      await FlutterForegroundTask.startService(
-        notificationTitle: 'Seguridad Vial',
-        notificationText: 'Enviando ubicación…',
-        callback: startCallback,
-      );
+      // ANDROID -> servicio en segundo plano
+      if (Platform.isAndroid) {
+        final running = await FlutterForegroundTask.isRunningService;
+        if (running) return true;
 
-      return true;
+        await FlutterForegroundTask.startService(
+          notificationTitle: 'Seguridad Vial',
+          notificationText: 'Enviando ubicación…',
+          callback: startCallback,
+        );
+        return true;
+      }
+
+      // IOS -> loop en foreground (app abierta)
+      return await _startIosForegroundLoop();
     } catch (_) {
       return false;
     } finally {
@@ -42,22 +56,23 @@ class TrackingService {
   }
 
   static Future<bool> start() async {
-    if (!Platform.isAndroid) return false;
-
     if (_starting) return true;
     _starting = true;
 
     try {
-      final running = await FlutterForegroundTask.isRunningService;
-      if (running) return true;
+      if (Platform.isAndroid) {
+        final running = await FlutterForegroundTask.isRunningService;
+        if (running) return true;
 
-      await FlutterForegroundTask.startService(
-        notificationTitle: 'Seguridad Vial',
-        notificationText: 'Enviando ubicación…',
-        callback: startCallback,
-      );
+        await FlutterForegroundTask.startService(
+          notificationTitle: 'Seguridad Vial',
+          notificationText: 'Enviando ubicación…',
+          callback: startCallback,
+        );
+        return true;
+      }
 
-      return true;
+      return await _startIosForegroundLoop();
     } catch (_) {
       return false;
     } finally {
@@ -66,13 +81,37 @@ class TrackingService {
   }
 
   static Future<void> stop() async {
-    if (!Platform.isAndroid) return;
-
     try {
-      final running = await FlutterForegroundTask.isRunningService;
-      if (!running) return;
-      await FlutterForegroundTask.stopService();
+      if (Platform.isAndroid) {
+        final running = await FlutterForegroundTask.isRunningService;
+        if (!running) return;
+        await FlutterForegroundTask.stopService();
+        return;
+      }
+
+      // iOS
+      _iosTimer?.cancel();
+      _iosTimer = null;
+      _iosRunning = false;
     } catch (_) {}
+  }
+
+  static Future<bool> _startIosForegroundLoop() async {
+    if (_iosRunning) return true;
+
+    // manda 1 vez inmediato
+    final ls = LocationService(apiBase: _apiBase);
+    await ls.sendOnce();
+
+    _iosRunning = true;
+    _iosTimer?.cancel();
+    _iosTimer = Timer.periodic(const Duration(seconds: 10), (_) async {
+      try {
+        await ls.sendOnce();
+      } catch (_) {}
+    });
+
+    return true;
   }
 
   static Future<bool> _ensurePermissionsAlways(BuildContext context) async {
@@ -89,6 +128,7 @@ class TrackingService {
       return false;
     }
 
+    // ANDROID: exigir ALWAYS
     if (Platform.isAndroid && permission != LocationPermission.always) {
       final go = await showDialog<bool>(
         context: context,
@@ -119,6 +159,7 @@ class TrackingService {
       if (permission != LocationPermission.always) return false;
     }
 
+    // iOS: con whileInUse es suficiente para foreground loop
     return true;
   }
 }
