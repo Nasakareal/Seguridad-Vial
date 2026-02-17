@@ -6,6 +6,9 @@ import 'package:fl_chart/fl_chart.dart';
 
 import '../../services/auth_service.dart';
 
+// CAMBIO: ahora importamos el SHOW
+import '../../screens/vehiculos/vehiculo_show_screen.dart';
+
 class GruasScreen extends StatefulWidget {
   const GruasScreen({super.key});
 
@@ -21,14 +24,17 @@ class _GruasScreenState extends State<GruasScreen> {
   String? _errorChart;
 
   List<Map<String, dynamic>> _gruas = <Map<String, dynamic>>[];
-
   Map<String, dynamic>? _semana;
-
   List<Map<String, dynamic>> _gruasView = <Map<String, dynamic>>[];
 
   final Set<int> _hiddenGruas = <int>{};
   bool _hideZero = false;
 
+  // --- NUEVO: modo día/semana ---
+  bool _modoDia = false;
+  DateTime _selectedDay = DateTime.now();
+
+  // Semana
   DateTime _anchor = DateTime.now();
   late DateTime _start;
   late DateTime _end;
@@ -44,7 +50,7 @@ class _GruasScreenState extends State<GruasScreen> {
 
   void _recalcWeek() {
     final d = DateTime(_anchor.year, _anchor.month, _anchor.day);
-    final weekday = d.weekday;
+    final weekday = d.weekday; // 1=lun
     final monday = d.subtract(Duration(days: weekday - 1));
     final sunday = monday.add(const Duration(days: 6));
 
@@ -65,6 +71,11 @@ class _GruasScreenState extends State<GruasScreen> {
     return '$day/$mon/${d.year}';
   }
 
+  String _rangoLabel() {
+    if (_modoDia) return 'Día: ${_fmtShort(_selectedDay)}';
+    return '${_fmtShort(_start)} - ${_fmtShort(_end)}';
+  }
+
   Future<Map<String, String>> _headers() async {
     final token = await AuthService.getToken();
     return {
@@ -74,8 +85,29 @@ class _GruasScreenState extends State<GruasScreen> {
     };
   }
 
+  // --- Guard para cuando el server devuelve HTML ---
+  Map<String, dynamic> _safeJsonMapFromResponse(http.Response res) {
+    final body = res.body;
+
+    final head = body.trimLeft();
+    if (head.startsWith('<!doctype html') || head.startsWith('<html')) {
+      throw Exception(
+        'El servidor devolvió HTML (no JSON). '
+        'Status ${res.statusCode}. '
+        'Probable: token inválido / sin permisos / error del servidor.\n'
+        'Primeros caracteres: ${head.substring(0, head.length > 60 ? 60 : head.length)}',
+      );
+    }
+
+    final decoded = jsonDecode(body);
+    if (decoded is! Map<String, dynamic>) {
+      throw Exception('Respuesta inesperada (no es Map JSON).');
+    }
+    return decoded;
+  }
+
   Future<void> _cargarTodo() async {
-    await Future.wait([_cargarCatalogoGruas(), _cargarSemanaDetallada()]);
+    await Future.wait([_cargarCatalogoGruas(), _cargarResumenDetallado()]);
     _rebuildViewDetallado();
   }
 
@@ -90,18 +122,24 @@ class _GruasScreenState extends State<GruasScreen> {
       final res = await http.get(uri, headers: await _headers());
 
       if (res.statusCode != 200) {
+        final head = res.body.trimLeft();
+        if (head.startsWith('<!doctype html') || head.startsWith('<html')) {
+          throw Exception(
+            'Error ${res.statusCode}: HTML devuelto por servidor.',
+          );
+        }
         throw Exception('Error ${res.statusCode}: ${res.body}');
       }
 
-      final decoded = jsonDecode(res.body);
+      final decoded = _safeJsonMapFromResponse(res);
 
-      final list = (decoded is Map && decoded['data'] is List)
+      final list = (decoded['data'] is List)
           ? (decoded['data'] as List)
-          : (decoded is List ? decoded : <dynamic>[]);
+          : <dynamic>[];
 
       final items = <Map<String, dynamic>>[];
       for (final e in list) {
-        if (e is Map<String, dynamic>) items.add(e);
+        if (e is Map) items.add(Map<String, dynamic>.from(e));
       }
 
       if (!mounted) return;
@@ -118,30 +156,42 @@ class _GruasScreenState extends State<GruasScreen> {
     }
   }
 
-  Future<void> _cargarSemanaDetallada() async {
+  // --- CAMBIO: decide week/day ---
+  Future<void> _cargarResumenDetallado() async {
     setState(() {
       _cargandoChart = true;
       _errorChart = null;
     });
 
     try {
-      final from = _fmtYmd(_start);
-      final to = _fmtYmd(_end);
+      Uri uri;
 
-      final uri = Uri.parse(
-        '$_baseUrl/gruas/resumen-semanal-detallado?from=$from&to=$to',
-      );
+      if (_modoDia) {
+        final day = _fmtYmd(_selectedDay);
+        uri = Uri.parse('$_baseUrl/gruas/resumen-semanal-detallado?day=$day');
+      } else {
+        final from = _fmtYmd(_start);
+        final to = _fmtYmd(_end);
+        uri = Uri.parse(
+          '$_baseUrl/gruas/resumen-semanal-detallado?from=$from&to=$to',
+        );
+      }
 
       final res = await http.get(uri, headers: await _headers());
 
       if (res.statusCode != 200) {
+        final head = res.body.trimLeft();
+        if (head.startsWith('<!doctype html') || head.startsWith('<html')) {
+          throw Exception(
+            'Error ${res.statusCode}: HTML devuelto.\n'
+            'Esto pasa cuando el token no llega, no tienes permiso (can:ver estadisticas), '
+            'o el servidor devolvió página de error.',
+          );
+        }
         throw Exception('Error ${res.statusCode}: ${res.body}');
       }
 
-      final decoded = jsonDecode(res.body);
-      if (decoded is! Map<String, dynamic>) {
-        throw Exception('Respuesta inesperada en resumen semanal detallado');
-      }
+      final decoded = _safeJsonMapFromResponse(res);
 
       if (!mounted) return;
       setState(() {
@@ -163,9 +213,10 @@ class _GruasScreenState extends State<GruasScreen> {
 
     final byIdSemana = <int, Map<String, dynamic>>{};
     for (final e in rawSem) {
-      if (e is Map<String, dynamic>) {
-        final id = _toInt(e['id']);
-        if (id > 0) byIdSemana[id] = e;
+      if (e is Map) {
+        final m = Map<String, dynamic>.from(e);
+        final id = _toInt(m['id']);
+        if (id > 0) byIdSemana[id] = m;
       }
     }
 
@@ -176,7 +227,7 @@ class _GruasScreenState extends State<GruasScreen> {
 
       final sem = byIdSemana[id];
 
-      final semanal = sem != null ? _toInt(sem['servicios_count']) : 0;
+      final count = sem != null ? _toInt(sem['servicios_count']) : 0;
       final ultimo = sem?['fecha_ultimo_servicio'];
 
       final vehiculos = (sem?['vehiculos'] is List)
@@ -189,21 +240,20 @@ class _GruasScreenState extends State<GruasScreen> {
       merged.add({
         'id': id,
         'nombre': nombre,
-        'servicios_semana': semanal,
+        'servicios_semana': count,
         'fecha_ultimo_servicio': ultimo,
         'vehiculos': vehiculos,
       });
     }
 
     if (!mounted) return;
-    setState(() {
-      _gruasView = merged;
-    });
+    setState(() => _gruasView = merged);
   }
 
   void _refresh() => _cargarTodo();
 
   void _prevWeek() {
+    if (_modoDia) return;
     setState(() {
       _anchor = _anchor.subtract(const Duration(days: 7));
       _recalcWeek();
@@ -212,6 +262,7 @@ class _GruasScreenState extends State<GruasScreen> {
   }
 
   void _nextWeek() {
+    if (_modoDia) return;
     setState(() {
       _anchor = _anchor.add(const Duration(days: 7));
       _recalcWeek();
@@ -219,21 +270,27 @@ class _GruasScreenState extends State<GruasScreen> {
     _cargarTodo();
   }
 
-  Future<void> _pickWeek() async {
+  Future<void> _pickWeekOrDay() async {
+    final initial = _modoDia ? _selectedDay : _anchor;
+
     final picked = await showDatePicker(
       context: context,
-      initialDate: _anchor,
+      initialDate: initial,
       firstDate: DateTime(2020, 1, 1),
       lastDate: DateTime(2100, 12, 31),
-      helpText: 'Elige un día de la semana',
+      helpText: _modoDia ? 'Elige el día' : 'Elige un día de la semana',
     );
 
     if (picked == null) return;
 
-    setState(() {
-      _anchor = picked;
-      _recalcWeek();
-    });
+    if (_modoDia) {
+      setState(() => _selectedDay = picked);
+    } else {
+      setState(() {
+        _anchor = picked;
+        _recalcWeek();
+      });
+    }
 
     _cargarTodo();
   }
@@ -264,18 +321,62 @@ class _GruasScreenState extends State<GruasScreen> {
       list = list.where((g) => _toInt(g['servicios_semana']) > 0).toList();
     }
 
-    list.sort((a, b) {
-      final ta = _toInt(a['servicios_semana']);
-      final tb = _toInt(b['servicios_semana']);
-      return tb.compareTo(ta);
-    });
-
+    list.sort(
+      (a, b) => _toInt(
+        b['servicios_semana'],
+      ).compareTo(_toInt(a['servicios_semana'])),
+    );
     return list;
+  }
+
+  // CAMBIO: ir a SHOW en lugar de EDIT
+  Future<void> _irAVerVehiculo(Map<String, dynamic> v) async {
+    final vehiculoId = _toInt(v['vehiculo_id']);
+    final hechoId = _toInt(v['hecho_id']);
+
+    if (vehiculoId <= 0) {
+      _showInfo('No se encontró vehiculo_id para abrir el vehículo.');
+      return;
+    }
+
+    if (hechoId <= 0) {
+      _showInfo(
+        'No viene hecho_id en el JSON.\n\n'
+        'El backend debe regresar hecho_id dentro de cada item de "vehiculos".',
+      );
+      return;
+    }
+
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => const VehiculoShowScreen(),
+        settings: RouteSettings(
+          arguments: {'hechoId': hechoId, 'vehiculoId': vehiculoId},
+        ),
+      ),
+    );
+  }
+
+  void _showInfo(String msg) {
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Aviso'),
+        content: Text(msg),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cerrar'),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    final rango = '${_fmtShort(_start)} - ${_fmtShort(_end)}';
+    final rango = _rangoLabel();
 
     return Scaffold(
       backgroundColor: const Color(0xFFF6F7FB),
@@ -283,21 +384,35 @@ class _GruasScreenState extends State<GruasScreen> {
         title: const Text('Grúas'),
         backgroundColor: Colors.blue,
         actions: [
-          IconButton(
-            tooltip: 'Semana anterior',
-            onPressed: _prevWeek,
-            icon: const Icon(Icons.chevron_left),
+          Row(
+            children: [
+              const Text('Día', style: TextStyle(fontSize: 12)),
+              Switch(
+                value: _modoDia,
+                onChanged: (v) {
+                  setState(() => _modoDia = v);
+                  _cargarTodo();
+                },
+              ),
+            ],
           ),
+          if (!_modoDia)
+            IconButton(
+              tooltip: 'Semana anterior',
+              onPressed: _prevWeek,
+              icon: const Icon(Icons.chevron_left),
+            ),
           IconButton(
-            tooltip: 'Elegir semana',
-            onPressed: _pickWeek,
+            tooltip: _modoDia ? 'Elegir día' : 'Elegir semana',
+            onPressed: _pickWeekOrDay,
             icon: const Icon(Icons.date_range),
           ),
-          IconButton(
-            tooltip: 'Semana siguiente',
-            onPressed: _nextWeek,
-            icon: const Icon(Icons.chevron_right),
-          ),
+          if (!_modoDia)
+            IconButton(
+              tooltip: 'Semana siguiente',
+              onPressed: _nextWeek,
+              icon: const Icon(Icons.chevron_right),
+            ),
           IconButton(
             tooltip: 'Actualizar',
             onPressed: _refresh,
@@ -310,18 +425,21 @@ class _GruasScreenState extends State<GruasScreen> {
         children: [
           _WeekBanner(
             rango: rango,
-            onPrev: _prevWeek,
-            onPick: _pickWeek,
-            onNext: _nextWeek,
+            onPrev: _modoDia ? null : _prevWeek,
+            onPick: _pickWeekOrDay,
+            onNext: _modoDia ? null : _nextWeek,
+            modoDia: _modoDia,
           ),
           const SizedBox(height: 12),
           _buildFiltersCard(),
           const SizedBox(height: 12),
           _buildChartCard(rango),
           const SizedBox(height: 12),
-          const Text(
-            'Listado (semana seleccionada)',
-            style: TextStyle(
+          Text(
+            _modoDia
+                ? 'Listado (día seleccionado)'
+                : 'Listado (semana seleccionada)',
+            style: const TextStyle(
               fontSize: 15.5,
               fontWeight: FontWeight.w900,
               color: Color(0xFF0F172A),
@@ -335,9 +453,7 @@ class _GruasScreenState extends State<GruasScreen> {
   }
 
   Widget _buildFiltersCard() {
-    if (_cargandoLista || _cargandoChart) {
-      return const SizedBox.shrink();
-    }
+    if (_cargandoLista || _cargandoChart) return const SizedBox.shrink();
 
     final list = [..._gruasView];
     list.sort(
@@ -418,28 +534,31 @@ class _GruasScreenState extends State<GruasScreen> {
   }
 
   Widget _buildChartCard(String rango) {
+    final titulo = _modoDia
+        ? 'Servicios por grúa (día)'
+        : 'Servicios por grúa (semana)';
+
     if (_cargandoChart) {
-      return const _ChartCardShell(
-        title: 'Servicios por grúa (semana)',
-        subtitle: 'Conteo semanal',
-        child: _ChartLoading(),
+      return _ChartCardShell(
+        title: titulo,
+        subtitle: rango,
+        child: const _ChartLoading(),
       );
     }
+
     if (_errorChart != null) {
       return _ChartCardShell(
-        title: 'Servicios por grúa (semana)',
+        title: titulo,
         subtitle: rango,
         child: _ChartError(message: '$_errorChart'),
       );
     }
 
     final visible = _filteredGruasView();
-
-    final totalSemanal = visible.fold<int>(
+    final total = visible.fold<int>(
       0,
       (sum, e) => sum + _toInt(e['servicios_semana']),
     );
-
     final top = visible.take(10).toList();
 
     final maxY = _safeMax(
@@ -464,14 +583,16 @@ class _GruasScreenState extends State<GruasScreen> {
     }
 
     return _ChartCardShell(
-      title: 'Servicios por grúa (semana)',
+      title: titulo,
       subtitle: rango,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _BigNumberLine(
-            label: 'Total semanal (visible)',
-            value: '$totalSemanal',
+            label: _modoDia
+                ? 'Total (visible) del día'
+                : 'Total semanal (visible)',
+            value: '$total',
           ),
           const SizedBox(height: 10),
           SizedBox(
@@ -494,15 +615,13 @@ class _GruasScreenState extends State<GruasScreen> {
                       showTitles: true,
                       reservedSize: 34,
                       interval: _niceInterval(maxY),
-                      getTitlesWidget: (v, meta) {
-                        return Text(
-                          v.toInt().toString(),
-                          style: TextStyle(
-                            color: Colors.grey.shade700,
-                            fontSize: 11,
-                          ),
-                        );
-                      },
+                      getTitlesWidget: (v, meta) => Text(
+                        v.toInt().toString(),
+                        style: TextStyle(
+                          color: Colors.grey.shade700,
+                          fontSize: 11,
+                        ),
+                      ),
                     ),
                   ),
                   bottomTitles: AxisTitles(
@@ -541,7 +660,7 @@ class _GruasScreenState extends State<GruasScreen> {
             Padding(
               padding: const EdgeInsets.only(top: 8),
               child: Text(
-                'Sin servicios (o todas ocultas) en la semana seleccionada.',
+                'Sin servicios (o todas ocultas) en el periodo seleccionado.',
                 style: TextStyle(color: Colors.grey.shade700),
               ),
             ),
@@ -573,7 +692,6 @@ class _GruasScreenState extends State<GruasScreen> {
     }
 
     final list = _filteredGruasView();
-
     if (list.isEmpty) {
       return const Padding(
         padding: EdgeInsets.all(12),
@@ -585,7 +703,7 @@ class _GruasScreenState extends State<GruasScreen> {
       children: list.map((g) {
         final gruaId = _toInt(g['id']);
         final nombre = (g['nombre'] ?? 'Sin nombre').toString();
-        final semanal = _toInt(g['servicios_semana']);
+        final conteo = _toInt(g['servicios_semana']);
 
         final vehiculos = (g['vehiculos'] is List)
             ? (g['vehiculos'] as List)
@@ -604,7 +722,11 @@ class _GruasScreenState extends State<GruasScreen> {
           child: ExpansionTile(
             leading: const Icon(Icons.local_shipping),
             title: Text(nombre),
-            subtitle: Text('Servicios (semana): $semanal'),
+            subtitle: Text(
+              _modoDia
+                  ? 'Servicios (día): $conteo'
+                  : 'Servicios (semana): $conteo',
+            ),
             trailing: IconButton(
               tooltip: 'Ocultar esta grúa',
               onPressed: () => _toggleHidden(gruaId),
@@ -615,7 +737,7 @@ class _GruasScreenState extends State<GruasScreen> {
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16, 8, 16, 14),
                   child: Text(
-                    'Sin vehículos/servicios en esta semana.',
+                    'Sin vehículos/servicios en este periodo.',
                     style: TextStyle(color: Colors.grey.shade700),
                   ),
                 )
@@ -633,7 +755,6 @@ class _GruasScreenState extends State<GruasScreen> {
                       final tipo = (v['tipo_vehiculo'] ?? v['tipo'] ?? '')
                           .toString()
                           .trim();
-
                       final aseguradora = (v['aseguradora'] ?? '')
                           .toString()
                           .trim();
@@ -642,6 +763,8 @@ class _GruasScreenState extends State<GruasScreen> {
                       final tieneSeguro = tieneSeguroInt == 1;
 
                       final servicioId = _toInt(v['servicio_id']);
+                      final vehiculoId = _toInt(v['vehiculo_id']);
+                      final hechoId = _toInt(v['hecho_id']);
                       final fecha = (v['fecha_servicio'] ?? '').toString();
 
                       final title = [
@@ -658,6 +781,8 @@ class _GruasScreenState extends State<GruasScreen> {
                         if (aseguradora.isNotEmpty) 'Aseg: $aseguradora',
                         'Seguro: ${tieneSeguro ? 'SÍ' : 'NO'}',
                         if (servicioId > 0) 'Servicio #$servicioId',
+                        if (vehiculoId > 0) 'Vehículo #$vehiculoId',
+                        if (hechoId > 0) 'Hecho #$hechoId',
                         if (fecha.isNotEmpty) fecha,
                       ].where((s) => s.trim().isNotEmpty).join(' · ');
 
@@ -675,6 +800,9 @@ class _GruasScreenState extends State<GruasScreen> {
                           ),
                           title: Text(title.isEmpty ? 'Vehículo' : title),
                           subtitle: Text(desc),
+                          // CAMBIO: ahora abre el SHOW
+                          onTap: () => _irAVerVehiculo(v),
+                          trailing: const Icon(Icons.chevron_right),
                         ),
                       );
                     }).toList(),
@@ -713,15 +841,17 @@ class _GruasScreenState extends State<GruasScreen> {
 
 class _WeekBanner extends StatelessWidget {
   final String rango;
-  final VoidCallback onPrev;
+  final VoidCallback? onPrev;
   final Future<void> Function() onPick;
-  final VoidCallback onNext;
+  final VoidCallback? onNext;
+  final bool modoDia;
 
   const _WeekBanner({
     required this.rango,
     required this.onPrev,
     required this.onPick,
     required this.onNext,
+    required this.modoDia,
   });
 
   @override
@@ -741,9 +871,9 @@ class _WeekBanner extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'Semana seleccionada',
-                  style: TextStyle(
+                Text(
+                  modoDia ? 'Día seleccionado' : 'Semana seleccionada',
+                  style: const TextStyle(
                     fontWeight: FontWeight.w900,
                     color: Color(0xFF0F172A),
                   ),
@@ -757,7 +887,7 @@ class _WeekBanner extends StatelessWidget {
           OutlinedButton.icon(
             onPressed: () async => onPick(),
             icon: const Icon(Icons.date_range),
-            label: const Text('Cambiar'),
+            label: Text(modoDia ? 'Cambiar día' : 'Cambiar'),
           ),
           const SizedBox(width: 6),
           IconButton(onPressed: onNext, icon: const Icon(Icons.chevron_right)),

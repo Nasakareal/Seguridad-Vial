@@ -27,7 +27,6 @@ class _VehiculoEditScreenState extends State<VehiculoEditScreen> {
   final _capacidadCtrl = TextEditingController(text: '5');
   final _tipoServicioCtrl = TextEditingController(text: 'PARTICULAR');
   final _tarjetaCirculacionNombreCtrl = TextEditingController();
-  final _corralonCtrl = TextEditingController();
   final _aseguradoraCtrl = TextEditingController();
   final _montoDanosCtrl = TextEditingController();
   final _partesDanadasCtrl = TextEditingController();
@@ -37,6 +36,9 @@ class _VehiculoEditScreenState extends State<VehiculoEditScreen> {
   List<Map<String, dynamic>> _gruas = [];
   int? _gruaIdSeleccionada;
   int? _gruaIdPendiente;
+
+  int? _corralonGruaIdSeleccionada;
+  int? _corralonGruaIdPendiente;
 
   static const String _baseApi = 'https://seguridadvial-mich.com/api';
   static const String _urlGruas = '$_baseApi/gruas';
@@ -116,11 +118,44 @@ class _VehiculoEditScreenState extends State<VehiculoEditScreen> {
     return false;
   }
 
-  void _aplicarGruaPendienteSiSePuede() {
-    if (_gruaIdPendiente == null) return;
-    if (!_cargandoGruas && _gruaIdExisteEnLista(_gruaIdPendiente)) {
-      _gruaIdSeleccionada = _gruaIdPendiente;
-      _gruaIdPendiente = null;
+  int? _idGruaPorNombre(String? nombre) {
+    final n = (nombre ?? '').trim();
+    if (n.isEmpty) return null;
+    for (final g in _gruas) {
+      final gid = int.tryParse((g['id'] ?? '').toString());
+      final nom = (g['nombre'] ?? '').toString().trim();
+      if (gid != null &&
+          nom.isNotEmpty &&
+          nom.toUpperCase() == n.toUpperCase()) {
+        return gid;
+      }
+    }
+    return null;
+  }
+
+  String? _nombreGruaById(int? id) {
+    if (id == null) return null;
+    for (final g in _gruas) {
+      final gid = int.tryParse((g['id'] ?? '').toString());
+      if (gid == id) {
+        final nombre = (g['nombre'] ?? '').toString().trim();
+        return nombre.isEmpty ? null : nombre;
+      }
+    }
+    return null;
+  }
+
+  void _aplicarPendientesSiSePuede() {
+    if (!_cargandoGruas) {
+      if (_gruaIdPendiente != null && _gruaIdExisteEnLista(_gruaIdPendiente)) {
+        _gruaIdSeleccionada = _gruaIdPendiente;
+        _gruaIdPendiente = null;
+      }
+      if (_corralonGruaIdPendiente != null &&
+          _gruaIdExisteEnLista(_corralonGruaIdPendiente)) {
+        _corralonGruaIdSeleccionada = _corralonGruaIdPendiente;
+        _corralonGruaIdPendiente = null;
+      }
     }
   }
 
@@ -161,7 +196,6 @@ class _VehiculoEditScreenState extends State<VehiculoEditScreen> {
     _capacidadCtrl.dispose();
     _tipoServicioCtrl.dispose();
     _tarjetaCirculacionNombreCtrl.dispose();
-    _corralonCtrl.dispose();
     _aseguradoraCtrl.dispose();
     _montoDanosCtrl.dispose();
     _partesDanadasCtrl.dispose();
@@ -240,6 +274,14 @@ class _VehiculoEditScreenState extends State<VehiculoEditScreen> {
     return h;
   }
 
+  String _decodeBody(http.Response res) {
+    try {
+      return utf8.decode(res.bodyBytes);
+    } catch (_) {
+      return res.body;
+    }
+  }
+
   Future<void> _init() async {
     try {
       await Future.wait([_cargarGruas(), _cargarVehiculo()]);
@@ -261,10 +303,10 @@ class _VehiculoEditScreenState extends State<VehiculoEditScreen> {
       final res = await http.get(Uri.parse(_urlGruas), headers: h);
 
       if (res.statusCode != 200) {
-        throw Exception('HTTP ${res.statusCode}: ${res.body}');
+        throw Exception('HTTP ${res.statusCode}: ${_decodeBody(res)}');
       }
 
-      final raw = jsonDecode(res.body);
+      final raw = jsonDecode(_decodeBody(res));
 
       List list;
       if (raw is Map && raw['data'] is List) {
@@ -283,7 +325,13 @@ class _VehiculoEditScreenState extends State<VehiculoEditScreen> {
       if (!mounted) return;
       setState(() {
         _cargandoGruas = false;
-        _aplicarGruaPendienteSiSePuede();
+        _aplicarPendientesSiSePuede();
+        if (_corralonGruaIdSeleccionada == null &&
+            _corralonGruaIdPendiente == null) {
+          _corralonGruaIdSeleccionada = _idGruaPorNombre(
+            _corralonNombreCargado,
+          );
+        }
       });
     } catch (e) {
       if (!mounted) return;
@@ -293,6 +341,8 @@ class _VehiculoEditScreenState extends State<VehiculoEditScreen> {
       );
     }
   }
+
+  String? _corralonNombreCargado;
 
   Future<void> _cargarVehiculo() async {
     setState(() => _loading = true);
@@ -304,10 +354,10 @@ class _VehiculoEditScreenState extends State<VehiculoEditScreen> {
     if (res.statusCode != 200) {
       if (!mounted) return;
       setState(() => _loading = false);
-      throw Exception('HTTP ${res.statusCode}: ${res.body}');
+      throw Exception('HTTP ${res.statusCode}: ${_decodeBody(res)}');
     }
 
-    final raw = jsonDecode(res.body);
+    final raw = jsonDecode(_decodeBody(res));
     Map<String, dynamic> data;
 
     if (raw is Map<String, dynamic> && raw['data'] is Map) {
@@ -330,7 +380,6 @@ class _VehiculoEditScreenState extends State<VehiculoEditScreen> {
     _tipoServicioCtrl.text = (data['tipo_servicio'] ?? 'PARTICULAR').toString();
     _tarjetaCirculacionNombreCtrl.text =
         (data['tarjeta_circulacion_nombre'] ?? '').toString();
-    _corralonCtrl.text = (data['corralon'] ?? '').toString();
     _aseguradoraCtrl.text = (data['aseguradora'] ?? '').toString();
     _montoDanosCtrl.text = (data['monto_danos'] ?? '').toString();
     _partesDanadasCtrl.text = (data['partes_danadas'] ?? '').toString();
@@ -365,10 +414,29 @@ class _VehiculoEditScreenState extends State<VehiculoEditScreen> {
       _gruaIdPendiente = null;
     }
 
+    _corralonNombreCargado = (data['corralon'] ?? '').toString().trim();
+    final corralonIdByNombre = _idGruaPorNombre(_corralonNombreCargado);
+
+    if (corralonIdByNombre != null &&
+        _gruaIdExisteEnLista(corralonIdByNombre)) {
+      _corralonGruaIdSeleccionada = corralonIdByNombre;
+      _corralonGruaIdPendiente = null;
+    } else if (_corralonNombreCargado != null &&
+        _corralonNombreCargado!.isNotEmpty) {
+      _corralonGruaIdSeleccionada = null;
+      _corralonGruaIdPendiente = corralonIdByNombre;
+    } else {
+      _corralonGruaIdSeleccionada = null;
+      _corralonGruaIdPendiente = null;
+    }
+
     if (!mounted) return;
     setState(() {
       _loading = false;
-      _aplicarGruaPendienteSiSePuede();
+      _aplicarPendientesSiSePuede();
+      if (_corralonGruaIdSeleccionada == null && !_cargandoGruas) {
+        _corralonGruaIdSeleccionada = _idGruaPorNombre(_corralonNombreCargado);
+      }
     });
   }
 
@@ -396,6 +464,8 @@ class _VehiculoEditScreenState extends State<VehiculoEditScreen> {
 
       _tipoCtrl.text = (_tipoCarroceriaSeleccionada ?? '').trim();
 
+      final corralonNombre = _nombreGruaById(_corralonGruaIdSeleccionada);
+
       final payload = <String, dynamic>{
         'marca': _t(_marcaCtrl),
         'modelo': _t(_modeloCtrl).isEmpty ? null : _t(_modeloCtrl),
@@ -414,7 +484,9 @@ class _VehiculoEditScreenState extends State<VehiculoEditScreen> {
             ? null
             : _t(_tarjetaCirculacionNombreCtrl),
         'grua_id': _gruaIdSeleccionada,
-        'corralon': _t(_corralonCtrl).isEmpty ? null : _t(_corralonCtrl),
+        'corralon': (corralonNombre == null || corralonNombre.isEmpty)
+            ? null
+            : corralonNombre,
         'aseguradora': _t(_aseguradoraCtrl).isEmpty
             ? null
             : _t(_aseguradoraCtrl),
@@ -426,7 +498,7 @@ class _VehiculoEditScreenState extends State<VehiculoEditScreen> {
       final res = await http.put(uri, headers: h, body: jsonEncode(payload));
 
       if (res.statusCode != 200) {
-        throw Exception('HTTP ${res.statusCode}: ${res.body}');
+        throw Exception('HTTP ${res.statusCode}: ${_decodeBody(res)}');
       }
 
       if (!mounted) return;
@@ -660,7 +732,7 @@ class _VehiculoEditScreenState extends State<VehiculoEditScreen> {
                                 ? _gruaIdSeleccionada
                                 : null,
                             decoration: const InputDecoration(
-                              labelText: 'Grúa (empresa) *',
+                              labelText: 'Grúa (empresa)',
                               prefixIcon: Icon(Icons.local_shipping),
                             ),
                             items: [
@@ -685,13 +757,40 @@ class _VehiculoEditScreenState extends State<VehiculoEditScreen> {
                                 setState(() => _gruaIdSeleccionada = v),
                           ),
                     const SizedBox(height: 10),
-                    TextFormField(
-                      controller: _corralonCtrl,
-                      decoration: const InputDecoration(
-                        labelText: 'Corralón (opcional)',
-                        prefixIcon: Icon(Icons.warehouse),
-                      ),
-                    ),
+                    _cargandoGruas
+                        ? const SizedBox.shrink()
+                        : DropdownButtonFormField<int?>(
+                            value:
+                                _gruaIdExisteEnLista(
+                                  _corralonGruaIdSeleccionada,
+                                )
+                                ? _corralonGruaIdSeleccionada
+                                : null,
+                            decoration: const InputDecoration(
+                              labelText: 'Corralón (empresa)',
+                              prefixIcon: Icon(Icons.warehouse),
+                            ),
+                            items: [
+                              const DropdownMenuItem<int?>(
+                                value: null,
+                                child: Text('SIN CORRALÓN / N/A'),
+                              ),
+                              ..._gruas.map((g) {
+                                final id = int.tryParse(
+                                  (g['id'] ?? '').toString(),
+                                );
+                                final nombre = (g['nombre'] ?? '').toString();
+                                return DropdownMenuItem<int?>(
+                                  value: id,
+                                  child: Text(
+                                    nombre.isEmpty ? 'CORRALÓN #$id' : nombre,
+                                  ),
+                                );
+                              }),
+                            ],
+                            onChanged: (v) =>
+                                setState(() => _corralonGruaIdSeleccionada = v),
+                          ),
                     const SizedBox(height: 10),
                     TextFormField(
                       controller: _aseguradoraCtrl,

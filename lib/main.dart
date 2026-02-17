@@ -26,6 +26,7 @@ import 'screens/vehiculos/vehiculos_screen.dart';
 import 'screens/vehiculos/vehiculo_create_screen.dart';
 import 'screens/vehiculos/vehiculo_edit_screen.dart';
 import 'screens/vehiculos/vehiculo_conductor_create_screen.dart';
+import 'screens/vehiculos/vehiculo_show_screen.dart';
 
 import 'screens/sustento_legal/sustento_legal_home_screen.dart';
 import 'screens/sustento_legal/sustento_legal_categoria_screen.dart';
@@ -123,21 +124,21 @@ Future<void> _initLocalNotifications() async {
 }
 
 Future<void> main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-
-  FlutterError.onError = (FlutterErrorDetails details) {
-    final e = details.exception;
-    final st = details.stack ?? StackTrace.current;
-    bootFatal.value = 'FLUTTER ERROR: $e\n\n$st';
-  };
-
-  PlatformDispatcher.instance.onError = (error, stack) {
-    bootFatal.value = 'UNCAUGHT: $error\n\n$stack';
-    return true;
-  };
-
   runZonedGuarded(
-    () {
+    () async {
+      WidgetsFlutterBinding.ensureInitialized();
+
+      FlutterError.onError = (FlutterErrorDetails details) {
+        final e = details.exception;
+        final st = details.stack ?? StackTrace.current;
+        bootFatal.value = 'FLUTTER ERROR: $e\n\n$st';
+      };
+
+      PlatformDispatcher.instance.onError = (error, stack) {
+        bootFatal.value = 'UNCAUGHT: $error\n\n$stack';
+        return true;
+      };
+
       runApp(const _BootApp());
     },
     (error, stack) {
@@ -314,6 +315,7 @@ class AppRoutes {
   static const String vehiculos = '/accidentes/vehiculos';
   static const String vehiculosCreate = '/accidentes/vehiculos/create';
   static const String vehiculosEdit = '/accidentes/vehiculos/edit';
+  static const String vehiculosShow = '/accidentes/vehiculos/show';
   static const String vehiculoConductorCreate =
       '/accidentes/vehiculos/conductor/create';
 
@@ -449,6 +451,7 @@ class _SeguridadVialAppState extends State<SeguridadVialApp> {
         AppRoutes.vehiculos: (context) => const VehiculosScreen(),
         AppRoutes.vehiculosCreate: (context) => const VehiculoCreateScreen(),
         AppRoutes.vehiculosEdit: (context) => const VehiculoEditScreen(),
+        AppRoutes.vehiculosShow: (context) => const VehiculoShowScreen(),
         AppRoutes.vehiculoConductorCreate: (context) =>
             const VehiculoConductorCreateScreen(),
         AppRoutes.mapa: (context) => const MapaPatrullasScreen(),

@@ -104,7 +104,7 @@ class _DictamenCreateScreenState extends State<DictamenCreateScreen> {
         ),
       );
 
-      Navigator.pop(context, true); // regresa "true" para refrescar listado
+      Navigator.pop(context, true);
     } catch (e) {
       if (!mounted) return;
       setState(() => _error = e.toString());
@@ -186,7 +186,6 @@ class _DictamenCreateScreenState extends State<DictamenCreateScreen> {
                       ),
                       validator: (v) {
                         final s = (v ?? '').trim();
-                        if (s.isEmpty) return 'Este campo es obligatorio';
                         if (s.length > 100) return 'Máximo 100 caracteres';
                         return null;
                       },

@@ -29,7 +29,6 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
   final _capacidadCtrl = TextEditingController(text: '5');
   final _tipoServicioCtrl = TextEditingController(text: 'PARTICULAR');
   final _tarjetaCirculacionNombreCtrl = TextEditingController();
-  final _corralonCtrl = TextEditingController();
   final _aseguradoraCtrl = TextEditingController();
   final _montoDanosCtrl = TextEditingController();
   final _partesDanadasCtrl = TextEditingController();
@@ -42,6 +41,7 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
   bool _cargandoGruas = true;
   List<Map<String, dynamic>> _gruas = [];
   int? _gruaIdSeleccionada;
+  int? _corralonGruaIdSeleccionada;
 
   static const String _baseApi = 'https://seguridadvial-mich.com/api';
   static const String _urlGruas = '$_baseApi/gruas';
@@ -102,7 +102,6 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
     _capacidadCtrl.dispose();
     _tipoServicioCtrl.dispose();
     _tarjetaCirculacionNombreCtrl.dispose();
-    _corralonCtrl.dispose();
     _aseguradoraCtrl.dispose();
     _montoDanosCtrl.dispose();
     _partesDanadasCtrl.dispose();
@@ -298,6 +297,7 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
           .map((e) => Map<String, dynamic>.from(e))
           .toList();
       _gruaIdSeleccionada = null;
+      _corralonGruaIdSeleccionada = null;
 
       if (!mounted) return;
       setState(() => _cargandoGruas = false);
@@ -313,6 +313,18 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
   List<String> _carroceriasDeTipoGeneral(String? tipoGeneral) {
     if (tipoGeneral == null || tipoGeneral.isEmpty) return const [];
     return _carrocerias[tipoGeneral] ?? const [];
+  }
+
+  String? _nombreGruaById(int? id) {
+    if (id == null) return null;
+    for (final g in _gruas) {
+      final gid = int.tryParse((g['id'] ?? '').toString());
+      if (gid == id) {
+        final nombre = (g['nombre'] ?? '').toString().trim();
+        return nombre.isEmpty ? null : nombre;
+      }
+    }
+    return null;
   }
 
   Future<void> _guardar(int hechoId) async {
@@ -335,6 +347,8 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
       final h = await _headers();
       final uri = Uri.parse('$_baseApi/hechos/$hechoId/vehiculos');
 
+      final corralonNombre = _nombreGruaById(_corralonGruaIdSeleccionada);
+
       final payload = <String, dynamic>{
         'marca': _t(_marcaCtrl),
         'modelo': _t(_modeloCtrl).isEmpty ? null : _t(_modeloCtrl),
@@ -353,7 +367,9 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
             ? null
             : _t(_tarjetaCirculacionNombreCtrl),
         'grua_id': _gruaIdSeleccionada,
-        'corralon': _t(_corralonCtrl).isEmpty ? null : _t(_corralonCtrl),
+        'corralon': (corralonNombre == null || corralonNombre.isEmpty)
+            ? null
+            : corralonNombre,
         'aseguradora': _t(_aseguradoraCtrl).isEmpty
             ? null
             : _t(_aseguradoraCtrl),
@@ -597,7 +613,7 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
                   : DropdownButtonFormField<int?>(
                       value: _gruaIdSeleccionada,
                       decoration: const InputDecoration(
-                        labelText: 'Grúa (empresa) *',
+                        labelText: 'Grúa (empresa)',
                         prefixIcon: Icon(Icons.local_shipping),
                       ),
                       items: [
@@ -617,13 +633,33 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
                       onChanged: (v) => setState(() => _gruaIdSeleccionada = v),
                     ),
               const SizedBox(height: 10),
-              TextFormField(
-                controller: _corralonCtrl,
-                decoration: const InputDecoration(
-                  labelText: 'Corralón (opcional)',
-                  prefixIcon: Icon(Icons.warehouse),
-                ),
-              ),
+              _cargandoGruas
+                  ? const SizedBox.shrink()
+                  : DropdownButtonFormField<int?>(
+                      value: _corralonGruaIdSeleccionada,
+                      decoration: const InputDecoration(
+                        labelText: 'Corralón (empresa)',
+                        prefixIcon: Icon(Icons.warehouse),
+                      ),
+                      items: [
+                        const DropdownMenuItem<int?>(
+                          value: null,
+                          child: Text('SIN CORRALÓN / N/A'),
+                        ),
+                        ..._gruas.map((g) {
+                          final id = int.tryParse((g['id'] ?? '').toString());
+                          final nombre = (g['nombre'] ?? '').toString();
+                          return DropdownMenuItem<int?>(
+                            value: id,
+                            child: Text(
+                              nombre.isEmpty ? 'CORRALÓN #$id' : nombre,
+                            ),
+                          );
+                        }),
+                      ],
+                      onChanged: (v) =>
+                          setState(() => _corralonGruaIdSeleccionada = v),
+                    ),
               const SizedBox(height: 10),
               TextFormField(
                 controller: _aseguradoraCtrl,
