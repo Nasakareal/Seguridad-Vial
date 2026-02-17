@@ -1,0 +1,19 @@
+workflows:
+  ios_simulator_preview:
+    name: iOS Simulator Preview
+    max_build_duration: 120
+
+    environment:
+      flutter: stable
+
+    scripts:
+      - name: Flutter pub get
+        script: |
+          flutter pub get
+
+      - name: Build iOS Simulator (.app)
+        script: |
+          flutter build ios --simulator --release
+
+    artifacts:
+      - build/ios/iphonesimulator/*.app
