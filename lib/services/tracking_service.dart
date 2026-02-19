@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io' show Platform;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:geolocator/geolocator.dart';
@@ -10,16 +11,12 @@ import 'location_service.dart';
 
 class TrackingService {
   static bool _starting = false;
-
-  // iOS: ya NO dependemos de Timer para background
-  static Timer?
-  _iosTimer; // lo dejamos por compatibilidad, pero ya no lo usamos
+  static Timer? _iosTimer;
   static bool _iosRunning = false;
   static StreamSubscription<Position>? _iosSub;
 
   static const String _apiBase = 'https://seguridadvial-mich.com/api';
 
-  // Filtros anti “Zamora” / saltos raros
   static Position? _lastGood;
   static DateTime? _lastGoodAt;
 
@@ -98,30 +95,25 @@ class TrackingService {
       _iosTimer = null;
 
       _iosRunning = false;
-
       _lastGood = null;
       _lastGoodAt = null;
     } catch (_) {}
   }
 
-  // iOS: stream de ubicación (esto es lo que iOS “respeta” para background location)
   static Future<bool> _startIosStream() async {
     if (_iosRunning) return true;
 
     final ls = LocationService(apiBase: _apiBase);
 
-    // Primer envío: intenta conseguir una ubicación buena
     try {
       await _sendOnceIfGood(ls);
     } catch (_) {}
 
     _iosRunning = true;
 
-    // Configuración del stream
     final settings = LocationSettings(
       accuracy: LocationAccuracy.bestForNavigation,
-      distanceFilter: 10, // ajusta: 5-25m según qué tan “en vivo” lo quieres
-      timeLimit: const Duration(seconds: 15),
+      distanceFilter: 10,
     );
 
     await _iosSub?.cancel();
@@ -139,16 +131,13 @@ class TrackingService {
   }
 
   static Future<void> _handlePosition(LocationService ls, Position pos) async {
-    // 1) Accuracy mala
-    if (pos.accuracy.isNaN || pos.accuracy > 80) return;
+    if (pos.accuracy.isNaN || pos.accuracy > 150) return;
 
-    // 2) Timestamp viejo
     if (pos.timestamp != null) {
       final age = DateTime.now().difference(pos.timestamp!);
       if (age.inMinutes >= 2) return;
     }
 
-    // 3) Saltos imposibles (ej. 10km)
     if (_lastGood != null && _lastGoodAt != null) {
       final meters = Geolocator.distanceBetween(
         _lastGood!.latitude,
@@ -164,10 +153,9 @@ class TrackingService {
     _lastGood = pos;
     _lastGoodAt = DateTime.now();
 
-    await ls.sendOnce(positionOverride: pos);
+    await ls.sendOnce(positionOverride: pos, requireAlways: true);
   }
 
-  // Fallback: si no hay stream aún o para primer fix
   static Future<bool> _sendOnceIfGood(LocationService ls) async {
     final pos = await Geolocator.getCurrentPosition(
       desiredAccuracy: LocationAccuracy.bestForNavigation,
@@ -192,7 +180,6 @@ class TrackingService {
       return false;
     }
 
-    // ANDROID: como lo traías
     if (Platform.isAndroid && permission != LocationPermission.always) {
       final go = await showDialog<bool>(
         context: context,
@@ -223,7 +210,6 @@ class TrackingService {
       if (permission != LocationPermission.always) return false;
     }
 
-    // iOS: también exige ALWAYS si quieres background real
     if (!Platform.isAndroid && permission != LocationPermission.always) {
       await Geolocator.openAppSettings();
       permission = await Geolocator.checkPermission();

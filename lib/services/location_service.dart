@@ -1,6 +1,7 @@
 // lib/services/location_service.dart
 import 'dart:convert';
 import 'dart:io' show Platform;
+
 import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
 
@@ -11,8 +12,11 @@ class LocationService {
 
   final String apiBase;
 
-  Future<bool> sendOnce({Position? positionOverride}) async {
-    final ok = await _ensurePermissions();
+  Future<bool> sendOnce({
+    Position? positionOverride,
+    bool requireAlways = false,
+  }) async {
+    final ok = await _ensurePermissions(requireAlways: requireAlways);
     if (!ok) return false;
 
     try {
@@ -29,8 +33,9 @@ class LocationService {
             timeLimit: const Duration(seconds: 15),
           );
 
-      if (pos.accuracy.isNaN || pos.accuracy > 80) {
-        print('LOC: accuracy mala (${pos.accuracy})');
+      final acc = pos.accuracy.isFinite ? pos.accuracy : 9999.0;
+      if (acc > 150) {
+        print('LOC: accuracy muy mala ($acc), no se envía');
         return false;
       }
 
@@ -45,7 +50,7 @@ class LocationService {
       final payload = <String, dynamic>{
         'lat': pos.latitude,
         'lng': pos.longitude,
-        if (pos.accuracy.isFinite) 'accuracy': pos.accuracy,
+        'accuracy': acc,
         if (pos.speed.isFinite && pos.speed >= 0) 'speed': pos.speed,
         if (pos.heading.isFinite) 'heading': pos.heading,
       };
@@ -63,7 +68,6 @@ class LocationService {
           .timeout(const Duration(seconds: 12));
 
       print('LOC: ${res.statusCode} ${res.body}');
-
       return res.statusCode >= 200 && res.statusCode < 300;
     } catch (e) {
       print('LOC EXCEPTION: $e');
@@ -71,9 +75,10 @@ class LocationService {
     }
   }
 
-  Future<bool> _ensurePermissions() async {
+  Future<bool> _ensurePermissions({required bool requireAlways}) async {
     final enabled = await Geolocator.isLocationServiceEnabled();
     if (!enabled) {
+      // ignore: avoid_print
       print('LOC: GPS apagado');
       return false;
     }
@@ -89,8 +94,12 @@ class LocationService {
       return false;
     }
 
-    if (Platform.isIOS && permission != LocationPermission.always) {
-      print('LOC: iOS sin permiso ALWAYS');
+    if (Platform.isIOS &&
+        requireAlways &&
+        permission != LocationPermission.always) {
+      print(
+        'LOC: iOS requiere ALWAYS (modo servicio), pero está en: $permission',
+      );
       return false;
     }
 
