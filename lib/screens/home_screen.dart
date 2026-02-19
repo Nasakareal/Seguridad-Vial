@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 
@@ -42,6 +43,44 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   static const int _pageSize = 10;
   int _page = 1;
 
+  Set<String> _perms = {};
+  bool _loadingPerms = true;
+  bool _fetchingPerms = false;
+
+  Timer? _permTimer;
+
+  static const String permBusqueda = 'ver busqueda';
+  static const String permHechos = 'ver hechos';
+  static const String permGruas = 'ver gruas';
+  static const String permMapa = 'ver mapa';
+  static const String permSustento = 'ver sustento legal';
+
+  bool _allowed(String requiredPerm) {
+    return _perms.contains(requiredPerm.trim().toLowerCase());
+  }
+
+  Future<void> _loadPerms({bool force = false}) async {
+    if (_fetchingPerms) return;
+    _fetchingPerms = true;
+
+    try {
+      final list = await AuthService.refreshPermissions();
+
+      if (!mounted) return;
+      setState(() {
+        _perms = list.map((e) => e.trim().toLowerCase()).toSet();
+        _loadingPerms = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _loadingPerms = false;
+      });
+    } finally {
+      _fetchingPerms = false;
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -59,17 +98,32 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       } catch (_) {}
 
       try {
+        await _loadPerms(force: true);
+      } catch (_) {}
+
+      try {
         await _syncTrackingFromCommanderFlag();
       } catch (_) {}
 
       try {
         await _loadFeed(reset: true);
       } catch (_) {}
+
+      _startPermSoftRefresh();
+    });
+  }
+
+  void _startPermSoftRefresh() {
+    _permTimer?.cancel();
+    _permTimer = Timer.periodic(const Duration(seconds: 60), (_) {
+      if (!mounted) return;
+      _loadPerms();
     });
   }
 
   @override
   void dispose() {
+    _permTimer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     _scrollController.removeListener(_onScroll);
     _scrollController.dispose();
@@ -98,7 +152,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       PushService.listenTokenRefresh();
     } catch (_) {}
 
-    // ✅ IMPORTANTE: NO BLOQUEAR EL HOME CON PUSH (evita pantalla roja por timeout)
     try {
       Future.delayed(const Duration(seconds: 1), () {
         PushService.registerDeviceToken(reason: 'home_bootstrap');
@@ -262,10 +315,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) async {
     if (state == AppLifecycleState.resumed) {
       try {
+        await _loadPerms(force: true);
+      } catch (_) {}
+
+      try {
         await _syncTrackingFromCommanderFlag();
       } catch (_) {}
 
-      // ✅ NO BLOQUEAR EL RESUME
       try {
         Future.delayed(const Duration(milliseconds: 300), () {
           PushService.registerDeviceToken(reason: 'app_resumed');
@@ -350,10 +406,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       await _syncTrackingFromCommanderFlag();
     } catch (_) {}
     try {
+      await _loadPerms(force: true);
+    } catch (_) {}
+    try {
       await _loadFeed(reset: true);
     } catch (_) {}
 
-    // ✅ NO BLOQUEAR EL PULL TO REFRESH
     try {
       Future.delayed(const Duration(milliseconds: 250), () {
         PushService.registerDeviceToken(reason: 'pull_to_refresh');
@@ -365,6 +423,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
+    final canBuscar = !_loadingPerms && _allowed(permBusqueda);
+    final canHechos = !_loadingPerms && _allowed(permHechos);
+    final canGruas = !_loadingPerms && _allowed(permGruas);
+    final canMapa = !_loadingPerms && _allowed(permMapa);
+    final canSustento = !_loadingPerms && _allowed(permSustento);
+
     return Scaffold(
       backgroundColor: const Color(0xFFF6F7FB),
       appBar: AppBar(
@@ -372,11 +436,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         backgroundColor: Colors.blue,
         title: const Text('Sistema Estadístico'),
         actions: [
-          IconButton(
-            tooltip: 'Buscar',
-            icon: const Icon(Icons.search),
-            onPressed: () => _go(context, AppRoutes.hechosBuscar),
-          ),
+          if (canBuscar)
+            IconButton(
+              tooltip: 'Buscar',
+              icon: const Icon(Icons.search),
+              onPressed: () => _go(context, AppRoutes.hechosBuscar),
+            ),
         ],
       ),
       drawer: AppDrawer(
@@ -406,6 +471,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                       ),
                       const SizedBox(height: 12),
                       _QuickActionsGrid(
+                        canBuscar: canBuscar,
+                        canAccidentes: canHechos,
+                        canGruas: canGruas,
+                        canMapa: canMapa,
+                        canSustento: canSustento,
                         onAccidentes: () => _go(context, '/accidentes'),
                         onGruas: () => _go(context, '/gruas'),
                         onMapa: () => _go(context, '/mapa'),
@@ -825,6 +895,12 @@ class _ErrorInline extends StatelessWidget {
 }
 
 class _QuickActionsGrid extends StatelessWidget {
+  final bool canAccidentes;
+  final bool canGruas;
+  final bool canMapa;
+  final bool canSustento;
+  final bool canBuscar;
+
   final VoidCallback onAccidentes;
   final VoidCallback onGruas;
   final VoidCallback onMapa;
@@ -832,6 +908,11 @@ class _QuickActionsGrid extends StatelessWidget {
   final VoidCallback onBuscar;
 
   const _QuickActionsGrid({
+    required this.canAccidentes,
+    required this.canGruas,
+    required this.canMapa,
+    required this.canSustento,
+    required this.canBuscar,
     required this.onAccidentes,
     required this.onGruas,
     required this.onMapa,
@@ -841,66 +922,87 @@ class _QuickActionsGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Row(
-          children: [
-            Expanded(
-              child: _QuickCard(
-                icon: Icons.search,
-                title: 'Búsqueda',
-                subtitle: 'Por placa, serie, conductor…',
-                onTap: onBuscar,
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: _QuickCard(
-                icon: Icons.directions_car,
-                title: 'Hechos / Accidentes',
-                subtitle: 'Listado y registros',
-                onTap: onAccidentes,
-              ),
-            ),
-          ],
+    final rows = <Widget>[];
+
+    final row1 = <Widget>[];
+    if (canBuscar) {
+      row1.add(
+        Expanded(
+          child: _QuickCard(
+            icon: Icons.search,
+            title: 'Búsqueda',
+            subtitle: 'Por placa, serie, conductor…',
+            onTap: onBuscar,
+          ),
         ),
-        const SizedBox(height: 12),
-        Row(
-          children: [
-            Expanded(
-              child: _QuickCard(
-                icon: Icons.local_shipping,
-                title: 'Grúas',
-                subtitle: 'Listado y gráfica',
-                onTap: onGruas,
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: _QuickCard(
-                icon: Icons.map,
-                title: 'Mapa de Patrullas',
-                subtitle: 'Ubicaciones activas',
-                onTap: onMapa,
-              ),
-            ),
-          ],
+      );
+    }
+    if (canAccidentes) {
+      if (row1.isNotEmpty) row1.add(const SizedBox(width: 12));
+      row1.add(
+        Expanded(
+          child: _QuickCard(
+            icon: Icons.directions_car,
+            title: 'Siniestros',
+            subtitle: 'Listado y registros',
+            onTap: onAccidentes,
+          ),
         ),
-        const SizedBox(height: 12),
-        Row(
-          children: [
-            Expanded(
-              child: _QuickCard(
-                icon: Icons.gavel,
-                title: 'Sustento Legal',
-                subtitle: 'Catálogo y consulta',
-                onTap: onSustentoLegal,
-              ),
-            ),
-          ],
+      );
+    }
+    if (row1.isNotEmpty) rows.add(Row(children: row1));
+
+    final row2 = <Widget>[];
+    if (canGruas) {
+      row2.add(
+        Expanded(
+          child: _QuickCard(
+            icon: Icons.local_shipping,
+            title: 'Grúas',
+            subtitle: 'Listado y gráfica',
+            onTap: onGruas,
+          ),
         ),
-      ],
-    );
+      );
+    }
+    if (canMapa) {
+      if (row2.isNotEmpty) row2.add(const SizedBox(width: 12));
+      row2.add(
+        Expanded(
+          child: _QuickCard(
+            icon: Icons.map,
+            title: 'Mapa de Patrullas',
+            subtitle: 'Ubicaciones activas',
+            onTap: onMapa,
+          ),
+        ),
+      );
+    }
+    if (row2.isNotEmpty) {
+      if (rows.isNotEmpty) rows.add(const SizedBox(height: 12));
+      rows.add(Row(children: row2));
+    }
+
+    final row3 = <Widget>[];
+    if (canSustento) {
+      row3.add(
+        Expanded(
+          child: _QuickCard(
+            icon: Icons.gavel,
+            title: 'Sustento Legal',
+            subtitle: 'Catálogo y consulta',
+            onTap: onSustentoLegal,
+          ),
+        ),
+      );
+    }
+    if (row3.isNotEmpty) {
+      if (rows.isNotEmpty) rows.add(const SizedBox(height: 12));
+      rows.add(Row(children: row3));
+    }
+
+    if (rows.isEmpty) return const SizedBox.shrink();
+    return Column(children: rows);
   }
 }
 

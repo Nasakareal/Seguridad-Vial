@@ -1,5 +1,6 @@
 // lib/services/location_service.dart
 import 'dart:convert';
+import 'dart:io' show Platform;
 import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
 
@@ -10,7 +11,7 @@ class LocationService {
 
   final String apiBase;
 
-  Future<bool> sendOnce() async {
+  Future<bool> sendOnce({Position? positionOverride}) async {
     final ok = await _ensurePermissions();
     if (!ok) return false;
 
@@ -21,10 +22,25 @@ class LocationService {
         return false;
       }
 
-      final pos = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high,
-        timeLimit: const Duration(seconds: 15),
-      );
+      final pos =
+          positionOverride ??
+          await Geolocator.getCurrentPosition(
+            desiredAccuracy: LocationAccuracy.bestForNavigation,
+            timeLimit: const Duration(seconds: 15),
+          );
+
+      if (pos.accuracy.isNaN || pos.accuracy > 80) {
+        print('LOC: accuracy mala (${pos.accuracy})');
+        return false;
+      }
+
+      if (pos.timestamp != null) {
+        final age = DateTime.now().difference(pos.timestamp!);
+        if (age.inMinutes >= 2) {
+          print('LOC: posición vieja (${age.inSeconds}s)');
+          return false;
+        }
+      }
 
       final payload = <String, dynamic>{
         'lat': pos.latitude,
@@ -70,6 +86,11 @@ class LocationService {
     if (permission == LocationPermission.denied ||
         permission == LocationPermission.deniedForever) {
       print('LOC: permiso denegado');
+      return false;
+    }
+
+    if (Platform.isIOS && permission != LocationPermission.always) {
+      print('LOC: iOS sin permiso ALWAYS');
       return false;
     }
 

@@ -56,7 +56,6 @@ class AuthService {
       }
 
       List<String> perms = [];
-
       final dynamic rawPerms =
           data['permissions'] ??
           (data['user'] is Map ? data['user']['permissions'] : null) ??
@@ -83,7 +82,6 @@ class AuthService {
           .toList();
 
       final prefs = await SharedPreferences.getInstance();
-
       await prefs.setString(_tokenKey, token.toString());
 
       if (role != null && role.trim().isNotEmpty) {
@@ -97,6 +95,10 @@ class AuthService {
       } else {
         await prefs.remove(_permsKey);
       }
+
+      try {
+        await refreshPermissions();
+      } catch (_) {}
 
       try {
         PushService.registerDeviceToken(reason: 'login');
@@ -128,6 +130,37 @@ class AuthService {
   static Future<List<String>> getPermissions() async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getStringList(_permsKey) ?? <String>[];
+  }
+
+  static Future<List<String>> refreshPermissions() async {
+    final token = await getToken();
+    if (token == null || token.trim().isEmpty) return await getPermissions();
+
+    final res = await http
+        .get(
+          Uri.parse('$_baseUrl/permissions'),
+          headers: {
+            'Authorization': 'Bearer $token',
+            'Accept': 'application/json',
+          },
+        )
+        .timeout(const Duration(seconds: 10));
+
+    if (res.statusCode != 200) return await getPermissions();
+
+    final data = jsonDecode(res.body);
+    if (data is! List) return await getPermissions();
+
+    var perms = data.map((e) => e.toString()).toList();
+    perms = perms
+        .map((p) => p.trim().toLowerCase())
+        .where((p) => p.isNotEmpty)
+        .toSet()
+        .toList();
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList(_permsKey, perms);
+    return perms;
   }
 
   static Future<bool> can(String permission) async {

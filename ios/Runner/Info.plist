@@ -68,19 +68,26 @@
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Usamos tu ubicación para mostrar tu posición en el mapa y registrar hechos con coordenadas.</string>
 
-	<!-- Ubicación en segundo plano (monitoreo de patrullas / servicio activo) -->
+	<!-- Ubicación en segundo plano (monitoreo / servicio activo) -->
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
-	<string>Usamos tu ubicación en segundo plano para mantener el monitoreo de patrullas y el estado de servicio cuando está habilitado.</string>
+	<string>Usamos tu ubicación en segundo plano para mantener el monitoreo y el estado de servicio cuando está habilitado.</string>
 
-	<!-- Necesario si realmente usas ubicación en background -->
+	<!-- (Opcional, pero ayuda en algunas versiones / casos antiguos) -->
+	<key>NSLocationAlwaysUsageDescription</key>
+	<string>Usamos tu ubicación en segundo plano para mantener el monitoreo y el estado de servicio cuando está habilitado.</string>
+
+	<!-- Background mode para ubicación -->
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>location</string>
 	</array>
 
-	<!-- Notificaciones (Firebase / alertas) -->
-	<key>NSUserNotificationsUsageDescription</key>
-	<string>Usamos notificaciones para enviarte alertas y avisos operativos dentro del sistema.</string>
+	<!-- IMPORTANTE: permite que iOS muestre el toggle de "Ubicación precisa" y soporte full accuracy -->
+	<key>NSLocationTemporaryUsageDescriptionDictionary</key>
+	<dict>
+		<key>FullAccuracy</key>
+		<string>Necesitamos ubicación precisa para ubicar patrullas y registrar hechos con exactitud.</string>
+	</dict>
 
 	<!-- Cámara (image_picker) -->
 	<key>NSCameraUsageDescription</key>
@@ -90,7 +97,7 @@
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Usamos tu galería para seleccionar evidencia y adjuntarla a los reportes.</string>
 
-	<!-- Guardar/Compartir archivos (open_filex / file_saver / share_plus) -->
+	<!-- Guardar/Compartir archivos -->
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>Usamos esta función para guardar evidencias o archivos generados por la aplicación en tu dispositivo.</string>
 

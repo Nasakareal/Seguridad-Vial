@@ -34,6 +34,7 @@ import 'screens/sustento_legal/sustento_legal_detalle_screen.dart';
 import 'screens/sustento_legal/sustento_legal_busqueda_screen.dart';
 
 import 'screens/mapa/mapa_patrullas_screen.dart';
+import 'screens/mapa/mapa_incidencias_screen.dart';
 
 import 'screens/control_ubicacion/control_ubicacion_screen.dart';
 import 'screens/gruas/gruas_screen.dart';
@@ -56,6 +57,9 @@ import 'screens/actividades/actividades_screen.dart';
 import 'screens/actividades/actividad_create_screen.dart';
 import 'screens/actividades/actividad_edit_screen.dart';
 import 'screens/actividades/actividad_show_screen.dart';
+
+import 'screens/pendientes/pendientes_cortes_screen.dart';
+import 'screens/pendientes/pendiente_corte_show_screen.dart';
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
@@ -129,9 +133,15 @@ Future<void> main() async {
       WidgetsFlutterBinding.ensureInitialized();
 
       FlutterError.onError = (FlutterErrorDetails details) {
-        final e = details.exception;
+        final msg = details.exceptionAsString();
+
+        if (msg.contains('A RenderFlex overflowed by')) {
+          FlutterError.presentError(details);
+          return;
+        }
+
         final st = details.stack ?? StackTrace.current;
-        bootFatal.value = 'FLUTTER ERROR: $e\n\n$st';
+        bootFatal.value = 'FLUTTER ERROR: $msg\n\n$st';
       };
 
       PlatformDispatcher.instance.onError = (error, stack) {
@@ -320,6 +330,7 @@ class AppRoutes {
       '/accidentes/vehiculos/conductor/create';
 
   static const String mapa = '/mapa';
+  static const String mapaIncidencias = '/mapa-incidencias';
 
   static const String sustentoLegal = '/sustento-legal';
   static const String sustentoLegalCategoria = '/sustento-legal/categoria';
@@ -351,6 +362,9 @@ class AppRoutes {
   static const String actividadesEdit = '/actividades/edit';
 
   static const String feed = '/feed';
+
+  static const String pendientesCortes = '/pendientes/cortes';
+  static const String pendientesCorteShow = '/pendientes/cortes/show';
 }
 
 class SeguridadVialApp extends StatefulWidget {
@@ -445,16 +459,21 @@ class _SeguridadVialAppState extends State<SeguridadVialApp> {
       routes: {
         AppRoutes.login: (context) => const LoginScreen(),
         AppRoutes.home: (context) => const HomeScreen(),
+
         AppRoutes.accidentes: (context) => const AccidentesScreen(),
         AppRoutes.accidentesCreate: (context) => const CreateHechoScreen(),
         AppRoutes.accidentesShow: (context) => const HechoShowScreen(),
+
         AppRoutes.vehiculos: (context) => const VehiculosScreen(),
         AppRoutes.vehiculosCreate: (context) => const VehiculoCreateScreen(),
         AppRoutes.vehiculosEdit: (context) => const VehiculoEditScreen(),
         AppRoutes.vehiculosShow: (context) => const VehiculoShowScreen(),
         AppRoutes.vehiculoConductorCreate: (context) =>
             const VehiculoConductorCreateScreen(),
+
         AppRoutes.mapa: (context) => const MapaPatrullasScreen(),
+        AppRoutes.mapaIncidencias: (context) => const MapaIncidenciasScreen(),
+
         AppRoutes.sustentoLegal: (context) => const SustentoLegalHomeScreen(),
         AppRoutes.sustentoLegalCategoria: (context) =>
             const SustentoLegalCategoriaScreen(),
@@ -462,26 +481,36 @@ class _SeguridadVialAppState extends State<SeguridadVialApp> {
             const SustentoLegalDetalleScreen(),
         AppRoutes.sustentoLegalBuscar: (context) =>
             const SustentoLegalBusquedaScreen(),
+
         AppRoutes.controlUbicacion: (context) => const ControlUbicacionScreen(),
         AppRoutes.gruas: (context) => const GruasScreen(),
+
         AppRoutes.lesionados: (context) => const LesionadosScreen(),
         AppRoutes.lesionadoCreate: (context) => const LesionadoCreateScreen(),
         AppRoutes.lesionadoEdit: (context) => const LesionadoEditScreen(),
         AppRoutes.lesionadoShow: (context) => const LesionadoShowScreen(),
+
         AppRoutes.hechosBuscar: (context) => const HechosBusquedaScreen(),
+
         AppRoutes.estadisticasGlobales: (context) =>
             const EstadisticasGlobalesHomeScreen(),
         AppRoutes.estadisticasGlobalesHechos: (context) =>
             const EstadisticasGlobalesHechosScreen(),
+
         AppRoutes.dictamenes: (context) => const DictamenesScreen(),
         AppRoutes.dictamenesCreate: (context) => const DictamenCreateScreen(),
         AppRoutes.dictamenesShow: (context) => const DictamenShowScreen(),
         AppRoutes.dictamenesBuscar: (context) =>
             const DictamenesBusquedaScreen(),
+
         AppRoutes.actividades: (context) => const ActividadesScreen(),
         AppRoutes.actividadesCreate: (context) => const ActividadCreateScreen(),
         AppRoutes.actividadesShow: (context) => const ActividadShowScreen(),
         AppRoutes.actividadesEdit: (context) => const ActividadEditScreen(),
+
+        AppRoutes.pendientesCortes: (context) => const PendientesCortesScreen(),
+        AppRoutes.pendientesCorteShow: (context) =>
+            const PendienteCorteShowScreen(),
       },
       onUnknownRoute: (settings) => MaterialPageRoute(
         builder: (_) => UnknownRouteScreen(routeName: settings.name ?? ''),

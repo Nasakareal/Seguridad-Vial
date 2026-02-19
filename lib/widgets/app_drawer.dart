@@ -26,11 +26,10 @@ class AppDrawer extends StatelessWidget {
     BuildContext context,
     String route, {
     String? requiredPerm,
+    Object? arguments,
   }) async {
-    // Cierra el drawer
     Navigator.pop(context);
 
-    // Si requiere permiso, valida
     if (requiredPerm != null && requiredPerm.trim().isNotEmpty) {
       final ok = await AuthService.can(requiredPerm);
       if (!ok) {
@@ -42,17 +41,15 @@ class AppDrawer extends StatelessWidget {
       }
     }
 
-    // Evita apilar mil pantallas si ya estás en la ruta
     final current = ModalRoute.of(context)?.settings.name;
     if (current == route) return;
 
-    // Para Home conviene "volver" limpio
     if (route == AppRoutes.home) {
       Navigator.pushNamedAndRemoveUntil(context, route, (_) => false);
       return;
     }
 
-    Navigator.pushNamed(context, route);
+    Navigator.pushNamed(context, route, arguments: arguments);
   }
 
   bool _allowed(Set<String> perms, String? requiredPerm) {
@@ -91,8 +88,6 @@ class AppDrawer extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 6),
-
-                // ✅ No mostrar "Ubicación NO ACTIVA"
                 if (trackingOn)
                   Row(
                     children: [
@@ -111,7 +106,6 @@ class AppDrawer extends StatelessWidget {
                       ),
                     ],
                   ),
-
                 const SizedBox(height: 10),
                 Text(
                   'El control de ubicación lo realiza el mapa.',
@@ -120,7 +114,6 @@ class AppDrawer extends StatelessWidget {
               ],
             ),
           ),
-
           Expanded(
             child: FutureBuilder<List<String>>(
               future: AuthService.getPermissions(),
@@ -132,16 +125,13 @@ class AppDrawer extends StatelessWidget {
                 return ListView(
                   padding: EdgeInsets.zero,
                   children: [
-                    // ✅ HOME (siempre visible)
                     _DrawerItem(
                       icon: Icons.home,
                       label: 'Inicio',
                       onTap: () => _nav(context, AppRoutes.home),
                     ),
-
                     const Divider(height: 24),
 
-                    // ✅ BÚSQUEDA
                     if (_allowed(perms, permBusqueda))
                       _DrawerItem(
                         icon: Icons.search,
@@ -153,7 +143,6 @@ class AppDrawer extends StatelessWidget {
                         ),
                       ),
 
-                    // ✅ ESTADÍSTICAS
                     if (_allowed(perms, permEstadisticas))
                       _DrawerItem(
                         icon: Icons.insights,
@@ -165,7 +154,6 @@ class AppDrawer extends StatelessWidget {
                         ),
                       ),
 
-                    // ✅ DICTÁMENES
                     if (_allowed(perms, permDictamenes))
                       _DrawerItem(
                         icon: Icons.description,
@@ -179,19 +167,32 @@ class AppDrawer extends StatelessWidget {
 
                     const Divider(height: 24),
 
-                    // ✅ HECHOS / ACCIDENTES
                     if (_allowed(perms, permHechos))
-                      _DrawerItem(
+                      _DrawerGroup(
                         icon: Icons.directions_car,
-                        label: 'Hechos / Accidentes',
-                        onTap: () => _nav(
-                          context,
-                          AppRoutes.accidentes,
-                          requiredPerm: permHechos,
-                        ),
+                        label: 'Hechos',
+                        children: [
+                          _DrawerSubItem(
+                            icon: Icons.list_alt,
+                            label: 'Listado de hechos',
+                            onTap: () => _nav(
+                              context,
+                              AppRoutes.accidentes,
+                              requiredPerm: permHechos,
+                            ),
+                          ),
+                          _DrawerSubItem(
+                            icon: Icons.assignment_late,
+                            label: 'Cortes pendientes',
+                            onTap: () => _nav(
+                              context,
+                              AppRoutes.pendientesCortes,
+                              requiredPerm: permHechos,
+                            ),
+                          ),
+                        ],
                       ),
 
-                    // ✅ ACTIVIDADES
                     if (_allowed(perms, permActividades))
                       _DrawerItem(
                         icon: Icons.photo_library,
@@ -203,7 +204,6 @@ class AppDrawer extends StatelessWidget {
                         ),
                       ),
 
-                    // ✅ GRÚAS
                     if (_allowed(perms, permGruas))
                       _DrawerItem(
                         icon: Icons.local_shipping,
@@ -217,19 +217,32 @@ class AppDrawer extends StatelessWidget {
 
                     const Divider(height: 24),
 
-                    // ✅ MAPA
                     if (_allowed(perms, permMapa))
-                      _DrawerItem(
+                      _DrawerGroup(
                         icon: Icons.map,
-                        label: 'Mapa de Patrullas',
-                        onTap: () => _nav(
-                          context,
-                          AppRoutes.mapa,
-                          requiredPerm: permMapa,
-                        ),
+                        label: 'Mapa',
+                        children: [
+                          _DrawerSubItem(
+                            icon: Icons.local_police,
+                            label: 'Mapa patrullas',
+                            onTap: () => _nav(
+                              context,
+                              AppRoutes.mapa,
+                              requiredPerm: permMapa,
+                            ),
+                          ),
+                          _DrawerSubItem(
+                            icon: Icons.warning_amber,
+                            label: 'Mapa incidencias',
+                            onTap: () => _nav(
+                              context,
+                              AppRoutes.mapaIncidencias,
+                              requiredPerm: permMapa,
+                            ),
+                          ),
+                        ],
                       ),
 
-                    // ✅ SUSTENTO LEGAL
                     if (_allowed(perms, permSustento))
                       _DrawerItem(
                         icon: Icons.gavel,
@@ -276,5 +289,52 @@ class _DrawerItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ListTile(leading: Icon(icon), title: Text(label), onTap: onTap);
+  }
+}
+
+class _DrawerSubItem extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  const _DrawerSubItem({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      dense: true,
+      contentPadding: const EdgeInsets.only(left: 56, right: 16),
+      leading: Icon(icon, size: 20),
+      title: Text(label),
+      onTap: onTap,
+    );
+  }
+}
+
+class _DrawerGroup extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final List<Widget> children;
+
+  const _DrawerGroup({
+    required this.icon,
+    required this.label,
+    required this.children,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Theme(
+      data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+      child: ExpansionTile(
+        leading: Icon(icon),
+        title: Text(label),
+        children: children,
+      ),
+    );
   }
 }
