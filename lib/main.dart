@@ -95,6 +95,7 @@ class _AppLifecycleObserver with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       try {
+        // no truena si falla
         PushService.registerDeviceToken(reason: 'app_resumed');
       } catch (_) {}
     }
@@ -104,10 +105,11 @@ class _AppLifecycleObserver with WidgetsBindingObserver {
 Future<void> _initLocalNotifications() async {
   const androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
 
+  // IMPORTANTE: aquí NO pedimos permisos; solo inicializamos el plugin
   const iosInit = DarwinInitializationSettings(
-    requestAlertPermission: true,
-    requestBadgePermission: true,
-    requestSoundPermission: true,
+    requestAlertPermission: false,
+    requestBadgePermission: false,
+    requestSoundPermission: false,
   );
 
   const initSettings = InitializationSettings(
@@ -124,6 +126,32 @@ Future<void> _initLocalNotifications() async {
 
   if (androidPlugin != null) {
     await androidPlugin.createNotificationChannel(svAlertasChannel);
+  }
+}
+
+// Pide permisos de push SIN bloquear arranque.
+// Si App Preview tarda o el usuario no pica, no truena la app.
+Future<void> _setupPushNonBlocking({required bool logged}) async {
+  try {
+    // Permisos (puede tardar si aparece popup)
+    await PushService.ensurePermissions();
+  } catch (e) {
+    // solo log, no fatal
+    // ignore: avoid_print
+    print('PUSH: ensurePermissions falló/no concedido: $e');
+  }
+
+  try {
+    PushService.listenTokenRefresh();
+  } catch (_) {}
+
+  if (logged) {
+    try {
+      await PushService.registerDeviceToken(reason: 'app_start');
+    } catch (e) {
+      // ignore: avoid_print
+      print('PUSH: registerDeviceToken falló: $e');
+    }
   }
 }
 
@@ -190,17 +218,6 @@ class _BootAppState extends State<_BootApp> {
         _firebaseMessagingBackgroundHandler,
       );
 
-      setState(() => step = 'Permisos de notificaciones...');
-      await PushService.ensurePermissions().timeout(
-        const Duration(seconds: 10),
-        onTimeout: () =>
-            throw Exception('TIMEOUT: ensurePermissions tardó demasiado.'),
-      );
-
-      try {
-        PushService.listenTokenRefresh();
-      } catch (_) {}
-
       setState(() => step = 'Inicializando notificaciones locales...');
       await _initLocalNotifications().timeout(
         const Duration(seconds: 10),
@@ -218,11 +235,9 @@ class _BootAppState extends State<_BootApp> {
             throw Exception('TIMEOUT: AuthService.isLoggedIn tardó demasiado.'),
       );
 
-      if (logged) {
-        try {
-          PushService.registerDeviceToken(reason: 'app_start');
-        } catch (_) {}
-      }
+      // Push setup NO bloqueante (clave para que App Preview no truene)
+      // Lo lanzamos sin await para que la app arranque aunque el popup tarde.
+      unawaited(_setupPushNonBlocking(logged: logged));
 
       setState(() => step = 'Inicializando servicio de ubicación...');
       if (Platform.isAndroid) {
