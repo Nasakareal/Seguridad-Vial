@@ -890,12 +890,12 @@ class _CreateHechoScreenState extends State<CreateHechoScreen> {
                           'COLISIÓN POR INVASIÓN DE CARRIL',
                           'COLISIÓN POR CORTE DE CIRCULACIÓN',
                           'COLISIÓN POR CAMBIO DE CARRIL',
+                          'COLISIÓN POR MANIOBRA DE REVERSA',
                           'COLISIÓN CONTRA OBJETO FIJO',
                           'CAIDA ACUATICA DE VEHÍCULO',
                           'DESBARRANCAMIENTO',
                           'INCENDIO',
                           'EXPLOSIÓN',
-                          'Otro',
                         ]
                         .map((v) => DropdownMenuItem(value: v, child: Text(v)))
                         .toList(),

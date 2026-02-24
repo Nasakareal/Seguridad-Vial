@@ -34,6 +34,7 @@ class _AccidentesScreenState extends State<AccidentesScreen>
   late String _fechaSeleccionada;
 
   final Set<int> _descargando = <int>{};
+  final Set<int> _enviandoWhatsapp = <int>{};
 
   bool _trackingOn = false;
   bool _bootstrapped = false;
@@ -256,6 +257,13 @@ class _AccidentesScreenState extends State<AccidentesScreen>
     return cleaned;
   }
 
+  bool _whatsappYaEnviado(Map<String, dynamic> hecho) {
+    final v = hecho['whatsapp_sent_at'];
+    if (v == null) return false;
+    final s = v.toString().trim();
+    return s.isNotEmpty && s != 'null';
+  }
+
   Future<void> _obtenerHechos() async {
     if (!mounted) return;
     setState(() => _cargando = true);
@@ -460,6 +468,108 @@ class _AccidentesScreenState extends State<AccidentesScreen>
     } finally {
       if (mounted) {
         setState(() => _descargando.remove(hechoId));
+      }
+    }
+  }
+
+  Future<bool> _confirmarEnviarWhatsapp() async {
+    final res = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Confirmar'),
+        content: const Text('¿Enviar este hecho al grupo de WhatsApp?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Enviar'),
+          ),
+        ],
+      ),
+    );
+
+    return res == true;
+  }
+
+  Future<void> _enviarWhatsapp(int hechoId) async {
+    if (_enviandoWhatsapp.contains(hechoId)) return;
+
+    final okConfirm = await _confirmarEnviarWhatsapp();
+    if (!okConfirm) return;
+
+    setState(() => _enviandoWhatsapp.add(hechoId));
+
+    try {
+      final token = await AuthService.getToken();
+      if (token == null || token.isEmpty) {
+        throw Exception('Sesión inválida. Vuelve a iniciar sesión.');
+      }
+
+      final uri = Uri.parse('${AuthService.baseUrl}/hechos/$hechoId/whatsapp');
+
+      final headers = <String, String>{
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      };
+
+      final resp = await http.post(uri, headers: headers);
+
+      if (resp.statusCode != 200) {
+        final msg = _parseBackendError(resp.body, resp.statusCode);
+        throw Exception(msg);
+      }
+
+      String message = 'Hecho compartido por WhatsApp.';
+      try {
+        final raw = jsonDecode(resp.body);
+        if (raw is Map && raw['message'] is String) {
+          final m = (raw['message'] as String).trim();
+          if (m.isNotEmpty) message = m;
+        }
+      } catch (_) {}
+
+      if (!mounted) return;
+
+      final idx = _hechos.indexWhere((h) {
+        final id = h['id'];
+        final hid = (id is int) ? id : int.tryParse('$id');
+        return hid == hechoId;
+      });
+
+      if (idx != -1) {
+        final updated = Map<String, dynamic>.from(_hechos[idx]);
+        updated['whatsapp_sent_at'] =
+            updated['whatsapp_sent_at'] ?? DateTime.now().toIso8601String();
+        final newList = List<Map<String, dynamic>>.from(_hechos);
+        newList[idx] = updated;
+        setState(() => _hechos = newList);
+      }
+
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(message)));
+    } catch (e) {
+      if (!mounted) return;
+      showDialog(
+        context: context,
+        builder: (_) => AlertDialog(
+          title: const Text('Error'),
+          content: Text('No se pudo enviar a WhatsApp.\n\n$e'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Cerrar'),
+            ),
+          ],
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _enviandoWhatsapp.remove(hechoId));
       }
     }
   }
@@ -676,8 +786,13 @@ class _AccidentesScreenState extends State<AccidentesScreen>
 
                     final id = hecho['id'];
                     final hechoId = (id is int) ? id : int.tryParse('$id');
+
                     final isDownloading =
                         hechoId != null && _descargando.contains(hechoId);
+
+                    final yaEnviado = _whatsappYaEnviado(hecho);
+                    final isSending =
+                        hechoId != null && _enviandoWhatsapp.contains(hechoId);
 
                     return Card(
                       margin: const EdgeInsets.only(bottom: 12),
@@ -701,9 +816,7 @@ class _AccidentesScreenState extends State<AccidentesScreen>
                                 Text('Ubicación: ${_ubicacion(hecho)}'),
                                 Text('Situación: $situacion'),
                                 Text('Perito: $perito'),
-
                                 _onePhotoBlock('Foto del hecho', fotoHecho),
-
                                 if (fotosVehiculos.isNotEmpty)
                                   Padding(
                                     padding: const EdgeInsets.only(top: 10),
@@ -716,7 +829,6 @@ class _AccidentesScreenState extends State<AccidentesScreen>
                                     ),
                                   ),
                                 _fotosStrip(fotosVehiculos),
-
                                 _onePhotoBlock(
                                   'Convenio / Descargo',
                                   fotoConvenio,
@@ -726,28 +838,69 @@ class _AccidentesScreenState extends State<AccidentesScreen>
                           ),
                           isThreeLine: true,
                           onTap: () => _abrirEdit(hecho),
-                          trailing: Row(
+                          trailing: Column(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              IconButton(
-                                icon: isDownloading
-                                    ? const SizedBox(
-                                        height: 22,
-                                        width: 22,
-                                        child: CircularProgressIndicator(
-                                          strokeWidth: 2,
+                              SizedBox(
+                                height: 36,
+                                child: ElevatedButton(
+                                  onPressed:
+                                      (hechoId == null ||
+                                          yaEnviado ||
+                                          isSending)
+                                      ? null
+                                      : () => _enviarWhatsapp(hechoId),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: yaEnviado
+                                        ? Colors.grey
+                                        : Colors.green,
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 10,
+                                    ),
+                                  ),
+                                  child: isSending
+                                      ? const SizedBox(
+                                          height: 18,
+                                          width: 18,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                            color: Colors.white,
+                                          ),
+                                        )
+                                      : Text(
+                                          yaEnviado ? 'Terminado' : 'Terminado',
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.w800,
+                                          ),
                                         ),
-                                      )
-                                    : const Icon(Icons.download),
-                                tooltip: 'Descargar informe',
-                                onPressed: (hechoId == null || isDownloading)
-                                    ? null
-                                    : () => _descargarReporte(hechoId),
+                                ),
                               ),
-                              IconButton(
-                                icon: const Icon(Icons.edit),
-                                tooltip: 'Editar',
-                                onPressed: () => _abrirEdit(hecho),
+                              const SizedBox(height: 6),
+                              Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  IconButton(
+                                    icon: isDownloading
+                                        ? const SizedBox(
+                                            height: 22,
+                                            width: 22,
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2,
+                                            ),
+                                          )
+                                        : const Icon(Icons.download),
+                                    tooltip: 'Descargar informe',
+                                    onPressed:
+                                        (hechoId == null || isDownloading)
+                                        ? null
+                                        : () => _descargarReporte(hechoId),
+                                  ),
+                                  IconButton(
+                                    icon: const Icon(Icons.edit),
+                                    tooltip: 'Editar',
+                                    onPressed: () => _abrirEdit(hecho),
+                                  ),
+                                ],
                               ),
                             ],
                           ),

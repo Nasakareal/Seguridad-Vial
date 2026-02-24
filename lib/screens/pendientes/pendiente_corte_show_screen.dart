@@ -105,7 +105,7 @@ class _PendienteCorteShowScreenState extends State<PendienteCorteShowScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final title = (_meta?.corteFecha?.isNotEmpty ?? false)
+    final title = (_meta?.corteFecha.isNotEmpty ?? false)
         ? 'Corte ${_meta!.corteFecha}'
         : 'Detalle del corte';
 
@@ -259,9 +259,9 @@ class _PendientesService {
       final out = <_HechoMini>[];
       if (v is List) {
         for (final e in v) {
-          if (e is Map<String, dynamic>) out.add(_HechoMini.fromJson(e));
-          if (e is Map)
+          if (e is Map) {
             out.add(_HechoMini.fromJson(Map<String, dynamic>.from(e)));
+          }
         }
       }
       return out;

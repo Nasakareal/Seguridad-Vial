@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io' show Platform;
 import 'dart:ui';
 
@@ -7,6 +8,8 @@ import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:http/http.dart' as http;
 
 import 'firebase_options.dart';
 
@@ -17,6 +20,7 @@ import 'widgets/alerts_listener.dart';
 import 'screens/welcome_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/home_screen.dart';
+import 'screens/home_perito_screen.dart';
 
 import 'screens/accidentes/accidentes_screen.dart';
 import 'screens/accidentes/create_screen.dart';
@@ -82,6 +86,76 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 }
 
+Map<String, dynamic> _safeDecodePayload(String? payload) {
+  if (payload == null || payload.trim().isEmpty) return {};
+  try {
+    final decoded = jsonDecode(payload);
+    if (decoded is Map) {
+      return decoded.map((k, v) => MapEntry(k.toString(), v));
+    }
+  } catch (_) {}
+  return {};
+}
+
+double? _parseDouble(dynamic v) {
+  if (v == null) return null;
+  if (v is num) return v.toDouble();
+  final s = v.toString().trim();
+  if (s.isEmpty) return null;
+  return double.tryParse(s);
+}
+
+Future<void> _openMapsFromData(Map<String, dynamic> data) async {
+  try {
+    final mapsUrl = (data['maps_url'] ?? '').toString().trim();
+
+    Uri? uri;
+    if (mapsUrl.isNotEmpty) {
+      uri = Uri.tryParse(mapsUrl);
+    } else {
+      final lat = _parseDouble(data['lat']);
+      final lng = _parseDouble(data['lng']);
+      if (lat != null && lng != null) {
+        uri = Uri.parse(
+          'https://www.google.com/maps/search/?api=1&query=$lat,$lng',
+        );
+      }
+    }
+
+    if (uri == null) return;
+
+    final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (!ok) {
+      bootFatal.value = 'No se pudo abrir Google Maps: $uri';
+    }
+  } catch (e, st) {
+    bootFatal.value = 'openMaps ERROR: $e\n\n$st';
+  }
+}
+
+void _handlePushTap(Map<String, dynamic> data) {
+  try {
+    final type = (data['type'] ?? '').toString();
+
+    if (type == 'WAZE_ACCIDENT') {
+      unawaited(_openMapsFromData(data));
+      return;
+    }
+
+    final hechoId = (data['hecho_id'] ?? '').toString();
+    if (hechoId.isEmpty) return;
+
+    if (type == 'HECHO_48H' || type == 'HECHO_72H') {
+      navigatorKey.currentState?.pushNamed(
+        AppRoutes.accidentesShow,
+        arguments: {'id': hechoId},
+      );
+    }
+  } catch (e, st) {
+    bootFatal.value = 'handlePushTap ERROR: $e\n\n$st';
+  }
+}
+
 class _AppLifecycleObserver with WidgetsBindingObserver {
   static bool _running = false;
 
@@ -95,7 +169,6 @@ class _AppLifecycleObserver with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       try {
-        // no truena si falla
         PushService.registerDeviceToken(reason: 'app_resumed');
       } catch (_) {}
     }
@@ -105,7 +178,6 @@ class _AppLifecycleObserver with WidgetsBindingObserver {
 Future<void> _initLocalNotifications() async {
   const androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
 
-  // IMPORTANTE: aquí NO pedimos permisos; solo inicializamos el plugin
   const iosInit = DarwinInitializationSettings(
     requestAlertPermission: false,
     requestBadgePermission: false,
@@ -117,7 +189,13 @@ Future<void> _initLocalNotifications() async {
     iOS: iosInit,
   );
 
-  await localNotifications.initialize(initSettings);
+  await localNotifications.initialize(
+    initSettings,
+    onDidReceiveNotificationResponse: (NotificationResponse resp) {
+      final data = _safeDecodePayload(resp.payload);
+      if (data.isNotEmpty) _handlePushTap(data);
+    },
+  );
 
   final androidPlugin = localNotifications
       .resolvePlatformSpecificImplementation<
@@ -129,14 +207,10 @@ Future<void> _initLocalNotifications() async {
   }
 }
 
-// Pide permisos de push SIN bloquear arranque.
-// Si App Preview tarda o el usuario no pica, no truena la app.
 Future<void> _setupPushNonBlocking({required bool logged}) async {
   try {
-    // Permisos (puede tardar si aparece popup)
     await PushService.ensurePermissions();
   } catch (e) {
-    // solo log, no fatal
     // ignore: avoid_print
     print('PUSH: ensurePermissions falló/no concedido: $e');
   }
@@ -235,8 +309,6 @@ class _BootAppState extends State<_BootApp> {
             throw Exception('TIMEOUT: AuthService.isLoggedIn tardó demasiado.'),
       );
 
-      // Push setup NO bloqueante (clave para que App Preview no truene)
-      // Lo lanzamos sin await para que la app arranque aunque el popup tarde.
       unawaited(_setupPushNonBlocking(logged: logged));
 
       setState(() => step = 'Inicializando servicio de ubicación...');
@@ -332,6 +404,7 @@ class _BootAppState extends State<_BootApp> {
 class AppRoutes {
   static const String login = '/login';
   static const String home = '/home';
+  static const String homePerito = '/home-perito';
 
   static const String accidentes = '/accidentes';
   static const String accidentesCreate = '/accidentes/create';
@@ -397,17 +470,29 @@ class _SeguridadVialAppState extends State<SeguridadVialApp> {
   void initState() {
     super.initState();
 
+    unawaited(
+      FirebaseMessaging.instance.getInitialMessage().then((msg) {
+        if (msg == null) return;
+        final data = msg.data.map((k, v) => MapEntry(k.toString(), v));
+        _handlePushTap(data);
+      }),
+    );
+
     _subOnMessage = FirebaseMessaging.onMessage.listen((
       RemoteMessage message,
     ) async {
       try {
         final n = message.notification;
-        if (n == null) return;
+
+        final title = n?.title ?? 'Aviso';
+        final body = n?.body ?? '';
+
+        final payload = jsonEncode(message.data);
 
         await localNotifications.show(
           DateTime.now().millisecondsSinceEpoch ~/ 1000,
-          n.title ?? 'Aviso',
-          n.body ?? '',
+          title,
+          body,
           const NotificationDetails(
             android: AndroidNotificationDetails(
               'SV_ALERTAS',
@@ -424,6 +509,7 @@ class _SeguridadVialAppState extends State<SeguridadVialApp> {
               presentSound: true,
             ),
           ),
+          payload: payload,
         );
       } catch (e, st) {
         bootFatal.value = 'onMessage ERROR: $e\n\n$st';
@@ -434,18 +520,8 @@ class _SeguridadVialAppState extends State<SeguridadVialApp> {
       RemoteMessage message,
     ) {
       try {
-        final data = message.data;
-        final type = (data['type'] ?? '').toString();
-        final hechoId = (data['hecho_id'] ?? '').toString();
-
-        if (hechoId.isEmpty) return;
-
-        if (type == 'HECHO_48H' || type == 'HECHO_72H') {
-          navigatorKey.currentState?.pushNamed(
-            AppRoutes.accidentesShow,
-            arguments: {'id': hechoId},
-          );
-        }
+        final data = message.data.map((k, v) => MapEntry(k.toString(), v));
+        _handlePushTap(data);
       } catch (e, st) {
         bootFatal.value = 'onMessageOpenedApp ERROR: $e\n\n$st';
       }
@@ -474,6 +550,7 @@ class _SeguridadVialAppState extends State<SeguridadVialApp> {
       routes: {
         AppRoutes.login: (context) => const LoginScreen(),
         AppRoutes.home: (context) => const HomeScreen(),
+        AppRoutes.homePerito: (context) => const HomePeritoScreen(),
 
         AppRoutes.accidentes: (context) => const AccidentesScreen(),
         AppRoutes.accidentesCreate: (context) => const CreateHechoScreen(),
@@ -537,17 +614,46 @@ class _SeguridadVialAppState extends State<SeguridadVialApp> {
 class AuthGate extends StatelessWidget {
   const AuthGate({super.key});
 
+  static const String _baseUrl = 'https://seguridadvial-mich.com/api';
+
+  Future<Widget> _resolveHome() async {
+    final logged = await AuthService.isLoggedIn();
+    if (!logged) return const WelcomeScreen();
+
+    final token = await AuthService.getToken();
+    if (token == null || token.trim().isEmpty) return const WelcomeScreen();
+
+    try {
+      final uri = Uri.parse('$_baseUrl/home/perito');
+      final res = await http.get(
+        uri,
+        headers: {
+          'Accept': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      );
+
+      if (res.statusCode == 200) {
+        return const HomePeritoScreen();
+      }
+
+      return const HomeScreen();
+    } catch (_) {
+      return const HomeScreen();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<bool>(
-      future: AuthService.isLoggedIn(),
+    return FutureBuilder<Widget>(
+      future: _resolveHome(),
       builder: (context, snapshot) {
         if (!snapshot.hasData) {
           return const Scaffold(
             body: Center(child: CircularProgressIndicator()),
           );
         }
-        return snapshot.data! ? const HomeScreen() : const WelcomeScreen();
+        return snapshot.data!;
       },
     );
   }
