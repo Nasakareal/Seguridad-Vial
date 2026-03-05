@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../services/auth_service.dart';
 import 'home_screen.dart';
+import 'location_consent_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -47,9 +48,17 @@ class _LoginScreenState extends State<LoginScreen> {
       if (!mounted) return;
 
       if (ok) {
+        final askLocation = await AuthService.shouldAskLocation();
+
+        if (!mounted) return;
+
         Navigator.pushAndRemoveUntil(
           context,
-          MaterialPageRoute(builder: (_) => const HomeScreen()),
+          MaterialPageRoute(
+            builder: (_) => askLocation
+                ? LocationConsentScreen(next: const HomeScreen())
+                : const HomeScreen(),
+          ),
           (_) => false,
         );
       } else {
@@ -99,7 +108,6 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                     ),
                     const SizedBox(height: 16),
-
                     if (_error != null)
                       Padding(
                         padding: const EdgeInsets.only(bottom: 12),
@@ -108,7 +116,6 @@ class _LoginScreenState extends State<LoginScreen> {
                           style: const TextStyle(color: Colors.red),
                         ),
                       ),
-
                     TextField(
                       controller: _emailController,
                       keyboardType: TextInputType.emailAddress,
@@ -121,9 +128,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       onSubmitted: (_) =>
                           FocusScope.of(context).requestFocus(_passwordFocus),
                     ),
-
                     const SizedBox(height: 12),
-
                     TextField(
                       controller: _passwordController,
                       focusNode: _passwordFocus,
@@ -136,9 +141,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                       onSubmitted: (_) => _login(),
                     ),
-
                     const SizedBox(height: 16),
-
                     _loading
                         ? const CircularProgressIndicator()
                         : SizedBox(

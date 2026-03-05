@@ -24,6 +24,7 @@ import 'screens/home_perito_screen.dart';
 
 import 'screens/accidentes/accidentes_screen.dart';
 import 'screens/accidentes/create_screen.dart';
+import 'screens/accidentes/edit_screen.dart';
 import 'screens/accidentes/hecho_show_screen.dart';
 
 import 'screens/vehiculos/vehiculos_screen.dart';
@@ -409,6 +410,7 @@ class AppRoutes {
   static const String accidentes = '/accidentes';
   static const String accidentesCreate = '/accidentes/create';
   static const String accidentesShow = '/accidentes/show';
+  static const String accidentesEdit = '/accidentes/edit';
 
   static const String vehiculos = '/accidentes/vehiculos';
   static const String vehiculosCreate = '/accidentes/vehiculos/create';
@@ -465,6 +467,43 @@ class SeguridadVialApp extends StatefulWidget {
 class _SeguridadVialAppState extends State<SeguridadVialApp> {
   StreamSubscription<RemoteMessage>? _subOnMessage;
   StreamSubscription<RemoteMessage>? _subOnOpen;
+
+  int? _readHechoIdFromArgs(Object? args) {
+    if (args == null) return null;
+
+    if (args is int) return args;
+    if (args is String) return int.tryParse(args);
+
+    if (args is Map) {
+      final raw = args['id'];
+      if (raw is int) return raw;
+      if (raw is String) return int.tryParse(raw);
+    }
+
+    return null;
+  }
+
+  Route<dynamic>? _onGenerateRoute(RouteSettings settings) {
+    final name = settings.name ?? '';
+
+    if (name == AppRoutes.accidentesEdit) {
+      final id = _readHechoIdFromArgs(settings.arguments);
+      if (id == null) {
+        return MaterialPageRoute(
+          builder: (_) =>
+              const UnknownRouteScreen(routeName: '/accidentes/edit (sin id)'),
+          settings: settings,
+        );
+      }
+
+      return MaterialPageRoute(
+        builder: (_) => EditHechoScreen(hechoId: id),
+        settings: settings,
+      );
+    }
+
+    return null;
+  }
 
   @override
   void initState() {
@@ -604,6 +643,7 @@ class _SeguridadVialAppState extends State<SeguridadVialApp> {
         AppRoutes.pendientesCorteShow: (context) =>
             const PendienteCorteShowScreen(),
       },
+      onGenerateRoute: _onGenerateRoute,
       onUnknownRoute: (settings) => MaterialPageRoute(
         builder: (_) => UnknownRouteScreen(routeName: settings.name ?? ''),
       ),

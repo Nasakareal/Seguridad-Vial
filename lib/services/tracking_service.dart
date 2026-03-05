@@ -8,6 +8,7 @@ import 'package:geolocator/geolocator.dart';
 import '../widgets/location_disclosure_dialog.dart';
 import 'tracking_task.dart';
 import 'location_service.dart';
+import 'auth_service.dart';
 
 class TrackingService {
   static bool _starting = false;
@@ -20,11 +21,18 @@ class TrackingService {
   static Position? _lastGood;
   static DateTime? _lastGoodAt;
 
+  static Future<bool> startAfterConsent(BuildContext context) async {
+    return await startWithDisclosure(context);
+  }
+
   static Future<bool> startWithDisclosure(BuildContext context) async {
     if (_starting) return true;
     _starting = true;
 
     try {
+      final isPerito = await AuthService.isPerito();
+      if (!isPerito) return false;
+
       final accepted = await LocationDisclosure.isAccepted();
       if (!accepted) {
         final ok = await LocationDisclosure.show(context);
@@ -46,7 +54,7 @@ class TrackingService {
         return true;
       }
 
-      return await _startIosStream();
+      return await _startIosStream(requireAlways: true);
     } catch (_) {
       return false;
     } finally {
@@ -59,6 +67,9 @@ class TrackingService {
     _starting = true;
 
     try {
+      final isPerito = await AuthService.isPerito();
+      if (!isPerito) return false;
+
       if (Platform.isAndroid) {
         final running = await FlutterForegroundTask.isRunningService;
         if (running) return true;
@@ -71,7 +82,7 @@ class TrackingService {
         return true;
       }
 
-      return await _startIosStream();
+      return await _startIosStream(requireAlways: true);
     } catch (_) {
       return false;
     } finally {
@@ -100,13 +111,13 @@ class TrackingService {
     } catch (_) {}
   }
 
-  static Future<bool> _startIosStream() async {
+  static Future<bool> _startIosStream({required bool requireAlways}) async {
     if (_iosRunning) return true;
 
     final ls = LocationService(apiBase: _apiBase);
 
     try {
-      await _sendOnceIfGood(ls);
+      await _sendOnceIfGood(ls, requireAlways: requireAlways);
     } catch (_) {}
 
     _iosRunning = true;
@@ -120,7 +131,7 @@ class TrackingService {
     _iosSub = Geolocator.getPositionStream(locationSettings: settings).listen(
       (pos) async {
         try {
-          await _handlePosition(ls, pos);
+          await _handlePosition(ls, pos, requireAlways: requireAlways);
         } catch (_) {}
       },
       onError: (_) {},
@@ -130,7 +141,11 @@ class TrackingService {
     return true;
   }
 
-  static Future<void> _handlePosition(LocationService ls, Position pos) async {
+  static Future<void> _handlePosition(
+    LocationService ls,
+    Position pos, {
+    required bool requireAlways,
+  }) async {
     if (pos.accuracy.isNaN || pos.accuracy > 150) return;
 
     if (pos.timestamp != null) {
@@ -153,16 +168,19 @@ class TrackingService {
     _lastGood = pos;
     _lastGoodAt = DateTime.now();
 
-    await ls.sendOnce(positionOverride: pos, requireAlways: true);
+    await ls.sendOnce(positionOverride: pos, requireAlways: requireAlways);
   }
 
-  static Future<bool> _sendOnceIfGood(LocationService ls) async {
+  static Future<bool> _sendOnceIfGood(
+    LocationService ls, {
+    required bool requireAlways,
+  }) async {
     final pos = await Geolocator.getCurrentPosition(
       desiredAccuracy: LocationAccuracy.bestForNavigation,
       timeLimit: const Duration(seconds: 12),
     );
 
-    await _handlePosition(ls, pos);
+    await _handlePosition(ls, pos, requireAlways: requireAlways);
     return true;
   }
 
@@ -180,37 +198,41 @@ class TrackingService {
       return false;
     }
 
-    if (Platform.isAndroid && permission != LocationPermission.always) {
-      final go = await showDialog<bool>(
-        context: context,
-        barrierDismissible: false,
-        builder: (ctx) => AlertDialog(
-          title: const Text('Permitir “todo el tiempo”'),
-          content: const Text(
-            'Para enviar ubicación en segundo plano y ver patrullas en tiempo real, activa: Permisos > Ubicación > Permitir todo el tiempo.',
+    if (Platform.isAndroid) {
+      if (permission != LocationPermission.always) {
+        final go = await showDialog<bool>(
+          context: context,
+          barrierDismissible: false,
+          builder: (ctx) => AlertDialog(
+            title: const Text('Permitir “todo el tiempo”'),
+            content: const Text(
+              'Para enviar ubicación en segundo plano, activa: Permisos > Ubicación > Permitir todo el tiempo.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Cancelar'),
+              ),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Text('Abrir ajustes'),
+              ),
+            ],
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Cancelar'),
-            ),
-            ElevatedButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Abrir ajustes'),
-            ),
-          ],
-        ),
-      );
+        );
 
-      if (go != true) return false;
+        if (go != true) return false;
 
-      await Geolocator.openAppSettings();
+        await Geolocator.openAppSettings();
 
-      permission = await Geolocator.checkPermission();
-      if (permission != LocationPermission.always) return false;
+        permission = await Geolocator.checkPermission();
+        if (permission != LocationPermission.always) return false;
+      }
+
+      return true;
     }
 
-    if (!Platform.isAndroid && permission != LocationPermission.always) {
+    if (permission != LocationPermission.always) {
       await Geolocator.openAppSettings();
       permission = await Geolocator.checkPermission();
       if (permission != LocationPermission.always) return false;

@@ -18,7 +18,7 @@ class _VehiculoEditScreenState extends State<VehiculoEditScreen> {
 
   final _marcaCtrl = TextEditingController();
   final _modeloCtrl = TextEditingController();
-  final _tipoCtrl = TextEditingController();
+
   final _lineaCtrl = TextEditingController();
   final _colorCtrl = TextEditingController();
   final _placasCtrl = TextEditingController();
@@ -35,10 +35,12 @@ class _VehiculoEditScreenState extends State<VehiculoEditScreen> {
   bool _cargandoGruas = true;
   List<Map<String, dynamic>> _gruas = [];
   int? _gruaIdSeleccionada;
-  int? _gruaIdPendiente;
-
   int? _corralonGruaIdSeleccionada;
+
+  int? _gruaIdPendiente;
   int? _corralonGruaIdPendiente;
+
+  String? _corralonNombreCargado;
 
   static const String _baseApi = 'https://seguridadvial-mich.com/api';
   static const String _urlGruas = '$_baseApi/gruas';
@@ -78,6 +80,154 @@ class _VehiculoEditScreenState extends State<VehiculoEditScreen> {
     'remolque': ['Plataforma', 'Caja cerrada', 'Cama baja', 'Refrigerado'],
     'semoviente': ['Caballo', 'Burro', 'Vaca', 'Otro animal de tiro'],
   };
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_inicializo) return;
+
+    final args = ModalRoute.of(context)?.settings.arguments;
+    if (args is Map) {
+      _hechoId = int.tryParse((args['hechoId'] ?? '0').toString()) ?? 0;
+      _vehiculoId = int.tryParse((args['vehiculoId'] ?? '0').toString()) ?? 0;
+    }
+
+    _argsOk = _hechoId > 0 && _vehiculoId > 0;
+    _inicializo = true;
+
+    if (_argsOk) {
+      _init();
+    } else {
+      setState(() {
+        _loading = false;
+        _cargandoGruas = false;
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _marcaCtrl.dispose();
+    _modeloCtrl.dispose();
+    _lineaCtrl.dispose();
+    _colorCtrl.dispose();
+    _placasCtrl.dispose();
+    _estadoPlacasCtrl.dispose();
+    _serieCtrl.dispose();
+    _capacidadCtrl.dispose();
+    _tipoServicioCtrl.dispose();
+    _tarjetaCirculacionNombreCtrl.dispose();
+    _aseguradoraCtrl.dispose();
+    _montoDanosCtrl.dispose();
+    _partesDanadasCtrl.dispose();
+    super.dispose();
+  }
+
+  String _t(TextEditingController c) => c.text.trim();
+
+  int? _toIntOrNull(String s) {
+    final v = s.trim();
+    if (v.isEmpty) return null;
+    return int.tryParse(v);
+  }
+
+  double? _toDoubleOrNull(String s) {
+    final v = s.trim();
+    if (v.isEmpty) return null;
+    return double.tryParse(v);
+  }
+
+  String _limpiaPlacas(String s) =>
+      s.trim().toUpperCase().replaceAll(RegExp(r'[\s\-\._,]'), '');
+
+  String _limpiaEstado(String s) =>
+      s.trim().toUpperCase().replaceAll(RegExp(r'[\s\-\._,]'), '');
+
+  String? _req(String? v) {
+    if ((v ?? '').trim().isEmpty) return 'Requerido';
+    return null;
+  }
+
+  String? _maxLenOrNull(String? v, int max) {
+    final s = (v ?? '').trim();
+    if (s.isEmpty) return null;
+    if (s.length > max) return 'Máximo $max caracteres';
+    return null;
+  }
+
+  String? _capacidadValidator(String? v) {
+    final s = (v ?? '').trim();
+    if (s.isEmpty) return 'Requerido';
+    final n = int.tryParse(s);
+    if (n == null) return 'Debe ser número';
+    if (n < 0) return 'No puede ser negativo';
+    return null;
+  }
+
+  String? _montoValidator(String? v, {bool required = false}) {
+    final s = (v ?? '').trim();
+    if (s.isEmpty) return required ? 'Requerido' : null;
+    final n = double.tryParse(s);
+    if (n == null) return 'Debe ser número';
+    if (n < 0) return 'No puede ser negativo';
+    return null;
+  }
+
+  String? _tipoGeneralValidator(String? v) {
+    if ((v ?? '').trim().isEmpty) return 'Requerido';
+    return null;
+  }
+
+  String? _tipoCarroceriaValidator(String? v) {
+    if ((v ?? '').trim().isEmpty) return 'Requerido';
+    return null;
+  }
+
+  String? _placasValidator(String? v) {
+    final s = _limpiaPlacas(v ?? '');
+    if (s.isEmpty) return null;
+    final ok = RegExp(r'^[A-Z0-9]{5,15}$').hasMatch(s);
+    if (!ok) return 'Placas inválidas (solo letras y números, 5-15)';
+    return null;
+  }
+
+  String? _estadoPlacasValidator(String? v) {
+    final placas = _limpiaPlacas(_t(_placasCtrl));
+    final tienePlacas = placas.isNotEmpty;
+
+    if (!tienePlacas) return null;
+
+    final s = (v ?? '').trim();
+    if (s.isEmpty) return 'Requerido si capturas placas';
+
+    final clean = _limpiaEstado(s);
+    final ok = RegExp(r'^[A-Z]{3,15}$').hasMatch(clean);
+    if (!ok) return 'Estado inválido (solo letras, 3-15). Ej: MICHOACAN';
+    return null;
+  }
+
+  Future<Map<String, String>> _headers({bool json = false}) async {
+    final token = await AuthService.getToken();
+    if (token == null || token.isEmpty) {
+      throw Exception('Sin token. Inicia sesión otra vez.');
+    }
+
+    final h = <String, String>{
+      'Authorization': 'Bearer $token',
+      'Accept': 'application/json',
+    };
+
+    if (json) h['Content-Type'] = 'application/json';
+    return h;
+  }
+
+  String _decodeBody(http.Response res) {
+    try {
+      return utf8.decode(res.bodyBytes);
+    } catch (_) {
+      return res.body;
+    }
+  }
 
   List<String> _carroceriasDeTipoGeneral(String? tipoGeneral) {
     if (tipoGeneral == null || tipoGeneral.isEmpty) return const [];
@@ -146,139 +296,17 @@ class _VehiculoEditScreenState extends State<VehiculoEditScreen> {
   }
 
   void _aplicarPendientesSiSePuede() {
-    if (!_cargandoGruas) {
-      if (_gruaIdPendiente != null && _gruaIdExisteEnLista(_gruaIdPendiente)) {
-        _gruaIdSeleccionada = _gruaIdPendiente;
-        _gruaIdPendiente = null;
-      }
-      if (_corralonGruaIdPendiente != null &&
-          _gruaIdExisteEnLista(_corralonGruaIdPendiente)) {
-        _corralonGruaIdSeleccionada = _corralonGruaIdPendiente;
-        _corralonGruaIdPendiente = null;
-      }
-    }
-  }
+    if (_cargandoGruas) return;
 
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    if (_inicializo) return;
-
-    final args = ModalRoute.of(context)?.settings.arguments;
-    if (args is Map) {
-      _hechoId = int.tryParse((args['hechoId'] ?? '0').toString()) ?? 0;
-      _vehiculoId = int.tryParse((args['vehiculoId'] ?? '0').toString()) ?? 0;
+    if (_gruaIdPendiente != null && _gruaIdExisteEnLista(_gruaIdPendiente)) {
+      _gruaIdSeleccionada = _gruaIdPendiente;
+      _gruaIdPendiente = null;
     }
 
-    _argsOk = _hechoId > 0 && _vehiculoId > 0;
-    _inicializo = true;
-
-    if (_argsOk) {
-      _init();
-    } else {
-      setState(() {
-        _loading = false;
-        _cargandoGruas = false;
-      });
-    }
-  }
-
-  @override
-  void dispose() {
-    _marcaCtrl.dispose();
-    _modeloCtrl.dispose();
-    _tipoCtrl.dispose();
-    _lineaCtrl.dispose();
-    _colorCtrl.dispose();
-    _placasCtrl.dispose();
-    _estadoPlacasCtrl.dispose();
-    _serieCtrl.dispose();
-    _capacidadCtrl.dispose();
-    _tipoServicioCtrl.dispose();
-    _tarjetaCirculacionNombreCtrl.dispose();
-    _aseguradoraCtrl.dispose();
-    _montoDanosCtrl.dispose();
-    _partesDanadasCtrl.dispose();
-    super.dispose();
-  }
-
-  String _t(TextEditingController c) => c.text.trim();
-
-  int? _toIntOrNull(String s) {
-    final v = s.trim();
-    if (v.isEmpty) return null;
-    return int.tryParse(v);
-  }
-
-  double? _toDoubleOrNull(String s) {
-    final v = s.trim();
-    if (v.isEmpty) return null;
-    return double.tryParse(v);
-  }
-
-  String? _req(String? v) {
-    if ((v ?? '').trim().isEmpty) return 'Requerido';
-    return null;
-  }
-
-  String? _maxLenOrNull(String? v, int max) {
-    final s = (v ?? '').trim();
-    if (s.isEmpty) return null;
-    if (s.length > max) return 'Máximo $max caracteres';
-    return null;
-  }
-
-  String? _capacidadValidator(String? v) {
-    final s = (v ?? '').trim();
-    if (s.isEmpty) return 'Requerido';
-    final n = int.tryParse(s);
-    if (n == null) return 'Debe ser número';
-    if (n < 0) return 'No puede ser negativo';
-    return null;
-  }
-
-  String? _montoValidator(String? v, {bool required = false}) {
-    final s = (v ?? '').trim();
-    if (s.isEmpty) return required ? 'Requerido' : null;
-    final n = double.tryParse(s);
-    if (n == null) return 'Debe ser número';
-    if (n < 0) return 'No puede ser negativo';
-    return null;
-  }
-
-  String? _tipoGeneralValidator(String? v) {
-    if ((v ?? '').trim().isEmpty) return 'Requerido';
-    return null;
-  }
-
-  String? _tipoCarroceriaValidator(String? v) {
-    if ((v ?? '').trim().isEmpty) return 'Requerido';
-    return null;
-  }
-
-  Future<Map<String, String>> _headers({bool json = false}) async {
-    final token = await AuthService.getToken();
-    if (token == null || token.isEmpty) {
-      throw Exception('Sin token. Inicia sesión otra vez.');
-    }
-
-    final h = <String, String>{
-      'Authorization': 'Bearer $token',
-      'Accept': 'application/json',
-    };
-
-    if (json) {
-      h['Content-Type'] = 'application/json';
-    }
-
-    return h;
-  }
-
-  String _decodeBody(http.Response res) {
-    try {
-      return utf8.decode(res.bodyBytes);
-    } catch (_) {
-      return res.body;
+    if (_corralonGruaIdPendiente != null &&
+        _gruaIdExisteEnLista(_corralonGruaIdPendiente)) {
+      _corralonGruaIdSeleccionada = _corralonGruaIdPendiente;
+      _corralonGruaIdPendiente = null;
     }
   }
 
@@ -325,7 +353,9 @@ class _VehiculoEditScreenState extends State<VehiculoEditScreen> {
       if (!mounted) return;
       setState(() {
         _cargandoGruas = false;
+
         _aplicarPendientesSiSePuede();
+
         if (_corralonGruaIdSeleccionada == null &&
             _corralonGruaIdPendiente == null) {
           _corralonGruaIdSeleccionada = _idGruaPorNombre(
@@ -341,8 +371,6 @@ class _VehiculoEditScreenState extends State<VehiculoEditScreen> {
       );
     }
   }
-
-  String? _corralonNombreCargado;
 
   Future<void> _cargarVehiculo() async {
     setState(() => _loading = true);
@@ -370,7 +398,6 @@ class _VehiculoEditScreenState extends State<VehiculoEditScreen> {
 
     _marcaCtrl.text = (data['marca'] ?? '').toString();
     _modeloCtrl.text = (data['modelo'] ?? '').toString();
-    _tipoCtrl.text = (data['tipo'] ?? '').toString();
     _lineaCtrl.text = (data['linea'] ?? '').toString();
     _colorCtrl.text = (data['color'] ?? '').toString();
     _placasCtrl.text = (data['placas'] ?? '').toString();
@@ -399,19 +426,17 @@ class _VehiculoEditScreenState extends State<VehiculoEditScreen> {
       _tipoGeneralSeleccionado,
       carroceriaApi,
     );
-    _tipoCtrl.text = _tipoCarroceriaSeleccionada ?? '';
 
     final gruaIdApi = int.tryParse((data['grua_id'] ?? '').toString());
     _gruaIdSeleccionada = null;
+    _gruaIdPendiente = null;
+
     if (gruaIdApi != null && gruaIdApi > 0) {
       if (_gruaIdExisteEnLista(gruaIdApi)) {
         _gruaIdSeleccionada = gruaIdApi;
-        _gruaIdPendiente = null;
       } else {
         _gruaIdPendiente = gruaIdApi;
       }
-    } else {
-      _gruaIdPendiente = null;
     }
 
     _corralonNombreCargado = (data['corralon'] ?? '').toString().trim();
@@ -421,8 +446,7 @@ class _VehiculoEditScreenState extends State<VehiculoEditScreen> {
         _gruaIdExisteEnLista(corralonIdByNombre)) {
       _corralonGruaIdSeleccionada = corralonIdByNombre;
       _corralonGruaIdPendiente = null;
-    } else if (_corralonNombreCargado != null &&
-        _corralonNombreCargado!.isNotEmpty) {
+    } else if ((_corralonNombreCargado ?? '').isNotEmpty) {
       _corralonGruaIdSeleccionada = null;
       _corralonGruaIdPendiente = corralonIdByNombre;
     } else {
@@ -433,7 +457,9 @@ class _VehiculoEditScreenState extends State<VehiculoEditScreen> {
     if (!mounted) return;
     setState(() {
       _loading = false;
+
       _aplicarPendientesSiSePuede();
+
       if (_corralonGruaIdSeleccionada == null && !_cargandoGruas) {
         _corralonGruaIdSeleccionada = _idGruaPorNombre(_corralonNombreCargado);
       }
@@ -462,34 +488,43 @@ class _VehiculoEditScreenState extends State<VehiculoEditScreen> {
         '$_baseApi/hechos/$_hechoId/vehiculos/$_vehiculoId',
       );
 
-      _tipoCtrl.text = (_tipoCarroceriaSeleccionada ?? '').trim();
-
       final corralonNombre = _nombreGruaById(_corralonGruaIdSeleccionada);
+
+      final placasClean = _limpiaPlacas(_t(_placasCtrl));
+      final estadoClean = _limpiaEstado(_t(_estadoPlacasCtrl));
 
       final payload = <String, dynamic>{
         'marca': _t(_marcaCtrl),
         'modelo': _t(_modeloCtrl).isEmpty ? null : _t(_modeloCtrl),
-        'tipo': _tipoCtrl.text,
-        'tipo_general': _tipoGeneralSeleccionado,
+
+        'tipo': (_tipoCarroceriaSeleccionada ?? '').trim(),
+
         'linea': _t(_lineaCtrl),
         'color': _t(_colorCtrl),
-        'placas': _t(_placasCtrl),
-        'estado_placas': _t(_estadoPlacasCtrl).isEmpty
+
+        'placas': placasClean.isEmpty ? null : placasClean,
+        'estado_placas': placasClean.isEmpty
             ? null
-            : _t(_estadoPlacasCtrl),
+            : (estadoClean.isEmpty ? null : estadoClean),
+
         'serie': _t(_serieCtrl).isEmpty ? null : _t(_serieCtrl),
+
         'capacidad_personas': _toIntOrNull(_t(_capacidadCtrl)) ?? 0,
         'tipo_servicio': _t(_tipoServicioCtrl),
+
         'tarjeta_circulacion_nombre': _t(_tarjetaCirculacionNombreCtrl).isEmpty
             ? null
             : _t(_tarjetaCirculacionNombreCtrl),
+
         'grua_id': _gruaIdSeleccionada,
         'corralon': (corralonNombre == null || corralonNombre.isEmpty)
             ? null
             : corralonNombre,
+
         'aseguradora': _t(_aseguradoraCtrl).isEmpty
             ? null
             : _t(_aseguradoraCtrl),
+
         'monto_danos': _toDoubleOrNull(_t(_montoDanosCtrl)) ?? 0,
         'partes_danadas': _t(_partesDanadasCtrl),
         'antecedente_vehiculo': _antecedenteVehiculo,
@@ -536,6 +571,8 @@ class _VehiculoEditScreenState extends State<VehiculoEditScreen> {
       _tipoGeneralSeleccionado,
     );
 
+    final tienePlacas = _limpiaPlacas(_t(_placasCtrl)).isNotEmpty;
+
     return Scaffold(
       appBar: AppBar(
         title: Text('Editar vehículo (#$_vehiculoId)'),
@@ -563,6 +600,7 @@ class _VehiculoEditScreenState extends State<VehiculoEditScreen> {
                       validator: _req,
                     ),
                     const SizedBox(height: 10),
+
                     DropdownButtonFormField<String>(
                       value: _tipoGeneralSeleccionado,
                       decoration: const InputDecoration(
@@ -585,12 +623,12 @@ class _VehiculoEditScreenState extends State<VehiculoEditScreen> {
                         setState(() {
                           _tipoGeneralSeleccionado = v;
                           _tipoCarroceriaSeleccionada = null;
-                          _tipoCtrl.text = '';
                         });
                       },
                       validator: _tipoGeneralValidator,
                     ),
                     const SizedBox(height: 10),
+
                     DropdownButtonFormField<String>(
                       value: _tipoCarroceriaSeleccionada,
                       decoration: const InputDecoration(
@@ -620,12 +658,8 @@ class _VehiculoEditScreenState extends State<VehiculoEditScreen> {
                             ],
                       onChanged: carroceriasDisponibles.isEmpty
                           ? null
-                          : (v) {
-                              setState(() {
-                                _tipoCarroceriaSeleccionada = v;
-                                _tipoCtrl.text = (v ?? '').trim();
-                              });
-                            },
+                          : (v) =>
+                                setState(() => _tipoCarroceriaSeleccionada = v),
                       validator: (v) {
                         if ((_tipoGeneralSeleccionado ?? '').isEmpty)
                           return null;
@@ -633,15 +667,17 @@ class _VehiculoEditScreenState extends State<VehiculoEditScreen> {
                       },
                     ),
                     const SizedBox(height: 10),
+
                     TextFormField(
                       controller: _lineaCtrl,
                       decoration: const InputDecoration(
                         labelText: 'Línea *',
-                        prefixIcon: Icon(Icons.merge_type),
+                        prefixIcon: Icon(Icons.text_fields),
                       ),
                       validator: _req,
                     ),
                     const SizedBox(height: 10),
+
                     TextFormField(
                       controller: _modeloCtrl,
                       decoration: const InputDecoration(
@@ -651,6 +687,7 @@ class _VehiculoEditScreenState extends State<VehiculoEditScreen> {
                       validator: (v) => _maxLenOrNull(v, 10),
                     ),
                     const SizedBox(height: 10),
+
                     TextFormField(
                       controller: _colorCtrl,
                       decoration: const InputDecoration(
@@ -660,23 +697,29 @@ class _VehiculoEditScreenState extends State<VehiculoEditScreen> {
                       validator: _req,
                     ),
                     const SizedBox(height: 10),
+
                     TextFormField(
                       controller: _placasCtrl,
                       decoration: const InputDecoration(
-                        labelText: 'Placas *',
+                        labelText: 'Placas (opcional)',
                         prefixIcon: Icon(Icons.credit_card),
                       ),
-                      validator: _req,
+                      validator: _placasValidator,
+                      onChanged: (_) => setState(() {}),
                     ),
-                    const SizedBox(height: 10),
-                    TextFormField(
-                      controller: _estadoPlacasCtrl,
-                      decoration: const InputDecoration(
-                        labelText: 'Estado de placas (opcional, máx 15)',
-                        prefixIcon: Icon(Icons.map),
+
+                    if (tienePlacas) ...[
+                      const SizedBox(height: 10),
+                      TextFormField(
+                        controller: _estadoPlacasCtrl,
+                        decoration: const InputDecoration(
+                          labelText: 'Estado de placas *',
+                          prefixIcon: Icon(Icons.map),
+                        ),
+                        validator: _estadoPlacasValidator,
                       ),
-                      validator: (v) => _maxLenOrNull(v, 15),
-                    ),
+                    ],
+
                     const SizedBox(height: 10),
                     TextFormField(
                       controller: _serieCtrl,
@@ -687,6 +730,7 @@ class _VehiculoEditScreenState extends State<VehiculoEditScreen> {
                       validator: (v) => _maxLenOrNull(v, 17),
                     ),
                     const SizedBox(height: 10),
+
                     TextFormField(
                       controller: _capacidadCtrl,
                       keyboardType: TextInputType.number,
@@ -697,6 +741,7 @@ class _VehiculoEditScreenState extends State<VehiculoEditScreen> {
                       validator: _capacidadValidator,
                     ),
                     const SizedBox(height: 10),
+
                     TextFormField(
                       controller: _tipoServicioCtrl,
                       decoration: const InputDecoration(
@@ -707,6 +752,7 @@ class _VehiculoEditScreenState extends State<VehiculoEditScreen> {
                       validator: _req,
                     ),
                     const SizedBox(height: 10),
+
                     TextFormField(
                       controller: _tarjetaCirculacionNombreCtrl,
                       decoration: const InputDecoration(
@@ -717,6 +763,7 @@ class _VehiculoEditScreenState extends State<VehiculoEditScreen> {
                       validator: (v) => _maxLenOrNull(v, 60),
                     ),
                     const SizedBox(height: 10),
+
                     _cargandoGruas
                         ? const ListTile(
                             contentPadding: EdgeInsets.zero,
@@ -756,7 +803,9 @@ class _VehiculoEditScreenState extends State<VehiculoEditScreen> {
                             onChanged: (v) =>
                                 setState(() => _gruaIdSeleccionada = v),
                           ),
+
                     const SizedBox(height: 10),
+
                     _cargandoGruas
                         ? const SizedBox.shrink()
                         : DropdownButtonFormField<int?>(
@@ -791,6 +840,7 @@ class _VehiculoEditScreenState extends State<VehiculoEditScreen> {
                             onChanged: (v) =>
                                 setState(() => _corralonGruaIdSeleccionada = v),
                           ),
+
                     const SizedBox(height: 10),
                     TextFormField(
                       controller: _aseguradoraCtrl,
@@ -799,6 +849,7 @@ class _VehiculoEditScreenState extends State<VehiculoEditScreen> {
                         prefixIcon: Icon(Icons.security),
                       ),
                     ),
+
                     const SizedBox(height: 10),
                     TextFormField(
                       controller: _montoDanosCtrl,
@@ -811,6 +862,7 @@ class _VehiculoEditScreenState extends State<VehiculoEditScreen> {
                       ),
                       validator: (v) => _montoValidator(v, required: true),
                     ),
+
                     const SizedBox(height: 10),
                     TextFormField(
                       controller: _partesDanadasCtrl,
@@ -821,6 +873,7 @@ class _VehiculoEditScreenState extends State<VehiculoEditScreen> {
                       ),
                       validator: _req,
                     ),
+
                     const SizedBox(height: 6),
                     SwitchListTile(
                       title: const Text('Antecedente del vehículo'),
@@ -828,6 +881,7 @@ class _VehiculoEditScreenState extends State<VehiculoEditScreen> {
                       onChanged: (v) =>
                           setState(() => _antecedenteVehiculo = v),
                     ),
+
                     const SizedBox(height: 18),
                     ElevatedButton.icon(
                       onPressed: _saving ? null : _guardar,

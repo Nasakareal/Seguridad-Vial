@@ -127,6 +127,16 @@ class AuthService {
     return role.trim().toLowerCase() == 'superadmin';
   }
 
+  static Future<bool> isPerito() async {
+    final role = await getRole();
+    if (role == null) return false;
+    return role.trim().toLowerCase() == 'perito';
+  }
+
+  static Future<bool> shouldAskLocation() async {
+    return await isPerito();
+  }
+
   static Future<List<String>> getPermissions() async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getStringList(_permsKey) ?? <String>[];

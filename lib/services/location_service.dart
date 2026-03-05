@@ -16,6 +16,11 @@ class LocationService {
     Position? positionOverride,
     bool requireAlways = false,
   }) async {
+    final isPerito = await AuthService.isPerito();
+    if (!isPerito) {
+      return false;
+    }
+
     final ok = await _ensurePermissions(requireAlways: requireAlways);
     if (!ok) return false;
 

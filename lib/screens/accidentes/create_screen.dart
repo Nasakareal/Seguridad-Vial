@@ -15,6 +15,34 @@ class CreateHechoScreen extends StatefulWidget {
   State<CreateHechoScreen> createState() => _CreateHechoScreenState();
 }
 
+class DictamenItem {
+  final int id;
+
+  final String? numeroDictamen;
+  final int? anio;
+  final String? nombrePolicia;
+  final String? nombreMp;
+  final String? area;
+  final String? archivoDictamen;
+  final int? createdBy;
+  final int? updatedBy;
+
+  final String label;
+
+  const DictamenItem({
+    required this.id,
+    required this.label,
+    this.numeroDictamen,
+    this.anio,
+    this.nombrePolicia,
+    this.nombreMp,
+    this.area,
+    this.archivoDictamen,
+    this.createdBy,
+    this.updatedBy,
+  });
+}
+
 class _CreateHechoScreenState extends State<CreateHechoScreen> {
   final _formKey = GlobalKey<FormState>();
   bool _submitting = false;
@@ -49,11 +77,14 @@ class _CreateHechoScreenState extends State<CreateHechoScreen> {
 
   String? _situacion;
 
-  final _oficioMpCtrl = TextEditingController();
   final _vehMpCtrl = TextEditingController(text: '0');
   final _persMpCtrl = TextEditingController(text: '0');
 
-  // ✅ NUEVO: DAÑOS PATRIMONIALES (VAN EN HECHOS)
+  int? _dictamenId;
+  DictamenItem? _dictamenSelected;
+  bool _loadingDictamenes = false;
+  List<DictamenItem> _dictamenes = const [];
+
   bool _danosPatrimoniales = false;
   final _propiedadesAfectadasCtrl = TextEditingController();
   final _montoDanosCtrl = TextEditingController();
@@ -92,11 +123,9 @@ class _CreateHechoScreenState extends State<CreateHechoScreen> {
     _causasCtrl.dispose();
     _colisionCtrl.dispose();
 
-    _oficioMpCtrl.dispose();
     _vehMpCtrl.dispose();
     _persMpCtrl.dispose();
 
-    // ✅ daños
     _propiedadesAfectadasCtrl.dispose();
     _montoDanosCtrl.dispose();
 
@@ -372,7 +401,6 @@ class _CreateHechoScreenState extends State<CreateHechoScreen> {
     );
   }
 
-  // ✅ NUEVO: tarjeta de daños patrimoniales (en Hechos)
   Widget _danosPatrimonialesCard() {
     return Card(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -419,7 +447,7 @@ class _CreateHechoScreenState extends State<CreateHechoScreen> {
                 validator: (v) {
                   if (!_danosPatrimoniales) return null;
                   final txt = (v ?? '').trim();
-                  if (txt.isEmpty) return null; // opcional
+                  if (txt.isEmpty) return null;
                   final val = double.tryParse(txt.replaceAll(',', ''));
                   if (val == null) return 'Monto inválido';
                   if (val < 0) return 'No puede ser negativo';
@@ -436,6 +464,176 @@ class _CreateHechoScreenState extends State<CreateHechoScreen> {
         ),
       ),
     );
+  }
+
+  Uri _dictamenesUrl() {
+    return Uri.parse('${AuthService.baseUrl}/dictamenes');
+  }
+
+  int? _asInt(dynamic v) {
+    if (v == null) return null;
+    if (v is int) return v;
+    return int.tryParse(v.toString());
+  }
+
+  String? _asString(dynamic v) {
+    if (v == null) return null;
+    final s = v.toString().trim();
+    return s.isEmpty ? null : s;
+  }
+
+  String _buildDictamenLabel(Map<String, dynamic> m) {
+    final num = _asString(
+      m['numero_dictamen'] ?? m['numero'] ?? m['no_dictamen'],
+    );
+    final anio = _asInt(m['anio']);
+    final mp = _asString(m['nombre_mp']);
+    final parts = <String>[];
+
+    if (num != null && anio != null) {
+      parts.add('$num/$anio');
+    } else if (num != null) {
+      parts.add(num);
+    } else {
+      parts.add('SIN NÚMERO');
+    }
+
+    if (mp != null) {
+      parts.add(mp);
+    }
+
+    return parts.join(' ');
+  }
+
+  String _buildOficioFromSelected() {
+    final d = _dictamenSelected;
+    if (d == null) return '';
+    final num = (d.numeroDictamen ?? '').trim();
+    final anio = d.anio;
+    final mp = (d.nombreMp ?? '').trim();
+
+    final parts = <String>[];
+    if (num.isNotEmpty && anio != null) {
+      parts.add('$num/$anio');
+    } else if (num.isNotEmpty) {
+      parts.add(num);
+    }
+
+    if (mp.isNotEmpty) {
+      parts.add(mp);
+    }
+
+    return parts.join(' ').trim();
+  }
+
+  DictamenItem? _mapDictamenItem(Map<String, dynamic> m) {
+    final id = _asInt(m['id']);
+    if (id == null) return null;
+
+    final numero = _asString(
+      m['numero_dictamen'] ?? m['numero'] ?? m['no_dictamen'],
+    );
+    final anio = _asInt(m['anio']);
+    final nombrePolicia = _asString(m['nombre_policia']);
+    final nombreMp = _asString(m['nombre_mp']);
+    final area = _asString(m['area']);
+    final archivo = _asString(m['archivo_dictamen']);
+    final createdBy = _asInt(m['created_by']);
+    final updatedBy = _asInt(m['updated_by']);
+
+    final label = _buildDictamenLabel(m);
+
+    return DictamenItem(
+      id: id,
+      label: label,
+      numeroDictamen: numero,
+      anio: anio,
+      nombrePolicia: nombrePolicia,
+      nombreMp: nombreMp,
+      area: area,
+      archivoDictamen: archivo,
+      createdBy: createdBy,
+      updatedBy: updatedBy,
+    );
+  }
+
+  Future<void> _loadDictamenes() async {
+    if (_loadingDictamenes) return;
+
+    setState(() {
+      _loadingDictamenes = true;
+    });
+
+    try {
+      final token = await AuthService.getToken();
+      final uri = _dictamenesUrl();
+
+      final resp = await http.get(
+        uri,
+        headers: {
+          'Accept': 'application/json',
+          if (token != null && token.isNotEmpty)
+            'Authorization': 'Bearer $token',
+        },
+      );
+
+      if (resp.statusCode != 200) {
+        final msg = _parseBackendError(resp.body, resp.statusCode);
+        throw Exception(msg);
+      }
+
+      final raw = jsonDecode(resp.body);
+
+      List list;
+      if (raw is List) {
+        list = raw;
+      } else if (raw is Map<String, dynamic> && raw['data'] is List) {
+        list = raw['data'] as List;
+      } else {
+        list = const [];
+      }
+
+      final items = <DictamenItem>[];
+      for (final it in list) {
+        if (it is! Map) continue;
+        final m = Map<String, dynamic>.from(it as Map);
+        final item = _mapDictamenItem(m);
+        if (item == null) continue;
+        items.add(item);
+      }
+
+      items.sort((a, b) => a.label.compareTo(b.label));
+
+      if (!mounted) return;
+      setState(() {
+        _dictamenes = items;
+
+        if (_dictamenId != null) {
+          final found = _dictamenes.where((d) => d.id == _dictamenId).toList();
+          if (found.isEmpty) {
+            _dictamenId = null;
+            _dictamenSelected = null;
+          } else {
+            _dictamenSelected = found.first;
+          }
+        }
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _dictamenes = const [];
+        _dictamenId = null;
+        _dictamenSelected = null;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('No se pudieron cargar dictámenes: $e')),
+      );
+    } finally {
+      if (!mounted) return;
+      setState(() {
+        _loadingDictamenes = false;
+      });
+    }
   }
 
   Future<void> _submit() async {
@@ -458,20 +656,16 @@ class _CreateHechoScreenState extends State<CreateHechoScreen> {
       return;
     }
 
-    if (_situacion == 'TURNADO' && _oficioMpCtrl.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Oficio MP es requerido cuando es TURNADO'),
-        ),
-      );
+    if (_situacion == 'TURNADO' &&
+        (_dictamenId == null || _dictamenSelected == null)) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Selecciona el dictamen')));
       return;
     }
 
-    // ✅ ya no forzamos GPS obligatorio (el backend permite NULL)
-    // Solo validamos par: o vienen las 2 o ninguna (aquí ya lo mantienes con tu UI)
     final hasCoords = _lat != null && _lng != null;
 
-    // ✅ daños patrimoniales: si está activado, debe venir monto o propiedades
     if (_danosPatrimoniales) {
       final props = _propiedadesAfectadasCtrl.text.trim();
       final montoTxt = _montoDanosCtrl.text.trim();
@@ -515,7 +709,6 @@ class _CreateHechoScreenState extends State<CreateHechoScreen> {
       req.fields['hora'] = _horaStr(_hora!);
       req.fields['fecha'] = _ymd(_fecha!);
 
-      // ✅ mandar valores que el backend espera (sin acentos)
       req.fields['sector'] = _normalizeSector(_sector!);
 
       req.fields['calle'] = _calleCtrl.text.trim();
@@ -523,11 +716,9 @@ class _CreateHechoScreenState extends State<CreateHechoScreen> {
       req.fields['entre_calles'] = _entreCallesCtrl.text.trim();
       req.fields['municipio'] = _municipioCtrl.text.trim();
 
-      // ✅ tipo hecho: el backend lo normaliza en mayúsculas; mandamos tal cual
       req.fields['tipo_hecho'] = _tipoHecho ?? '';
       req.fields['superficie_via'] = _superficieCtrl.text.trim();
 
-      // ✅ mandar sin acentos (para que calce con Rule::in)
       req.fields['tiempo'] = _normalizeTiempo(_tiempo!);
       req.fields['clima'] = _normalizeClima(_clima!);
       req.fields['condiciones'] = _normalizeCondiciones(_condiciones!);
@@ -539,13 +730,51 @@ class _CreateHechoScreenState extends State<CreateHechoScreen> {
       req.fields['colision_camino'] = _colisionCtrl.text.trim();
 
       req.fields['situacion'] = _situacion ?? '';
-      req.fields['oficio_mp'] = (_situacion == 'TURNADO')
-          ? _oficioMpCtrl.text.trim()
-          : '';
+
+      if (_situacion == 'TURNADO' && _dictamenSelected != null) {
+        req.fields['dictamen_id'] = _dictamenSelected!.id.toString();
+
+        final oficio = _buildOficioFromSelected();
+        req.fields['oficio_mp'] = oficio;
+
+        if ((_dictamenSelected!.numeroDictamen ?? '').trim().isNotEmpty) {
+          req.fields['dictamen_numero'] = _dictamenSelected!.numeroDictamen!
+              .trim();
+        }
+        if (_dictamenSelected!.anio != null) {
+          req.fields['dictamen_anio'] = _dictamenSelected!.anio.toString();
+        }
+        if ((_dictamenSelected!.nombrePolicia ?? '').trim().isNotEmpty) {
+          req.fields['dictamen_nombre_policia'] = _dictamenSelected!
+              .nombrePolicia!
+              .trim();
+        }
+        if ((_dictamenSelected!.nombreMp ?? '').trim().isNotEmpty) {
+          req.fields['dictamen_nombre_mp'] = _dictamenSelected!.nombreMp!
+              .trim();
+        }
+        if ((_dictamenSelected!.area ?? '').trim().isNotEmpty) {
+          req.fields['dictamen_area'] = _dictamenSelected!.area!.trim();
+        }
+        if ((_dictamenSelected!.archivoDictamen ?? '').trim().isNotEmpty) {
+          req.fields['dictamen_archivo'] = _dictamenSelected!.archivoDictamen!
+              .trim();
+        }
+        if (_dictamenSelected!.createdBy != null) {
+          req.fields['dictamen_created_by'] = _dictamenSelected!.createdBy
+              .toString();
+        }
+        if (_dictamenSelected!.updatedBy != null) {
+          req.fields['dictamen_updated_by'] = _dictamenSelected!.updatedBy
+              .toString();
+        }
+      } else {
+        req.fields['oficio_mp'] = '';
+      }
+
       req.fields['vehiculos_mp'] = _vehMpCtrl.text.trim();
       req.fields['personas_mp'] = _persMpCtrl.text.trim();
 
-      // ✅ DAÑOS PATRIMONIALES (EN HECHOS)
       req.fields['danos_patrimoniales'] = _danosPatrimoniales ? '1' : '0';
       if (_danosPatrimoniales) {
         final props = _propiedadesAfectadasCtrl.text.trim();
@@ -555,7 +784,6 @@ class _CreateHechoScreenState extends State<CreateHechoScreen> {
           req.fields['propiedades_afectadas'] = props;
         }
         if (montoTxt.isNotEmpty) {
-          // por si ponen comas
           req.fields['monto_danos_patrimoniales'] = montoTxt.replaceAll(
             ',',
             '',
@@ -563,7 +791,6 @@ class _CreateHechoScreenState extends State<CreateHechoScreen> {
         }
       }
 
-      // ✅ ubicación opcional (pero si viene, mandamos las dos)
       if (hasCoords) {
         req.fields['lat'] = _lat!.toStringAsFixed(7);
         req.fields['lng'] = _lng!.toStringAsFixed(7);
@@ -621,7 +848,6 @@ class _CreateHechoScreenState extends State<CreateHechoScreen> {
   InputDecoration _dec(String label) =>
       InputDecoration(labelText: label, border: const OutlineInputBorder());
 
-  // ✅ helpers para enviar lo que el backend espera (Rule::in)
   String _normalizeSector(String v) {
     final x = v.trim().toUpperCase();
     switch (x) {
@@ -639,14 +865,12 @@ class _CreateHechoScreenState extends State<CreateHechoScreen> {
       case 'CENTRO':
         return 'CENTRO';
       default:
-        // fallback: quita acentos rápido
         return _removeAccents(x);
     }
   }
 
   String _normalizeTiempo(String v) {
     final x = _removeAccents(v.trim().toUpperCase());
-    // en UI vienen Día/Noche/Amanecer/Atardecer
     if (x == 'DIA') return 'DIA';
     if (x == 'NOCHE') return 'NOCHE';
     if (x == 'AMANECER') return 'AMANECER';
@@ -704,6 +928,94 @@ class _CreateHechoScreenState extends State<CreateHechoScreen> {
     return sb.toString();
   }
 
+  void _onSituacionChanged(String? v) {
+    setState(() {
+      _situacion = v;
+
+      if (_situacion != 'TURNADO') {
+        _dictamenId = null;
+        _dictamenSelected = null;
+      }
+    });
+
+    if (_situacion == 'TURNADO') {
+      _loadDictamenes();
+    }
+  }
+
+  void _onDictamenChanged(int? id) {
+    setState(() {
+      _dictamenId = id;
+      if (id == null) {
+        _dictamenSelected = null;
+      } else {
+        final found = _dictamenes.where((d) => d.id == id).toList();
+        _dictamenSelected = found.isEmpty ? null : found.first;
+      }
+    });
+  }
+
+  Widget _dictamenSelect() {
+    if (_situacion != 'TURNADO') return const SizedBox.shrink();
+
+    return Column(
+      children: [
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(
+              child: DropdownButtonFormField<int>(
+                decoration: _dec('Dictamen *'),
+                value: _dictamenId,
+                items: _dictamenes
+                    .map(
+                      (d) => DropdownMenuItem<int>(
+                        value: d.id,
+                        child: Text(d.label, overflow: TextOverflow.ellipsis),
+                      ),
+                    )
+                    .toList(),
+                onChanged: _submitting || _loadingDictamenes
+                    ? null
+                    : _onDictamenChanged,
+                validator: (v) {
+                  if (_situacion == 'TURNADO' && v == null) return 'Requerido';
+                  return null;
+                },
+              ),
+            ),
+            const SizedBox(width: 10),
+            SizedBox(
+              height: 56,
+              child: OutlinedButton.icon(
+                onPressed: (_submitting || _loadingDictamenes)
+                    ? null
+                    : _loadDictamenes,
+                icon: _loadingDictamenes
+                    ? const SizedBox(
+                        height: 18,
+                        width: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.refresh),
+                label: const Text(''),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        Text(
+          _loadingDictamenes
+              ? 'Cargando dictámenes...'
+              : (_dictamenes.isEmpty
+                    ? 'No hay dictámenes para seleccionar.'
+                    : 'Selecciona el dictamen (Oficio MP se llena automático).'),
+          style: const TextStyle(fontSize: 12, color: Colors.black54),
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final bottomSafe = MediaQuery.of(context).padding.bottom;
@@ -717,13 +1029,9 @@ class _CreateHechoScreenState extends State<CreateHechoScreen> {
           child: Column(
             children: [
               _ubicacionCard(),
-
               const SizedBox(height: 12),
-
               _danosPatrimonialesCard(),
-
               const SizedBox(height: 12),
-
               _photoPreview(
                 title: 'Foto del hecho (opcional)',
                 file: _fotoLugar,
@@ -736,9 +1044,7 @@ class _CreateHechoScreenState extends State<CreateHechoScreen> {
                 onPick: () => _pickPhoto(isLugar: false),
                 onClear: () => setState(() => _fotoSituacion = null),
               ),
-
               const SizedBox(height: 12),
-
               Row(
                 children: [
                   Expanded(
@@ -761,7 +1067,6 @@ class _CreateHechoScreenState extends State<CreateHechoScreen> {
                 ],
               ),
               const SizedBox(height: 12),
-
               Row(
                 children: [
                   Expanded(
@@ -781,17 +1086,13 @@ class _CreateHechoScreenState extends State<CreateHechoScreen> {
                   ),
                 ],
               ),
-
               const SizedBox(height: 12),
-
               TextFormField(
                 controller: _unidadOrgIdCtrl,
                 decoration: _dec('Unidad Org ID (opcional)'),
                 keyboardType: TextInputType.number,
               ),
-
               const SizedBox(height: 12),
-
               Row(
                 children: [
                   Expanded(
@@ -841,9 +1142,7 @@ class _CreateHechoScreenState extends State<CreateHechoScreen> {
                   ),
                 ],
               ),
-
               const SizedBox(height: 12),
-
               TextFormField(
                 controller: _calleCtrl,
                 decoration: _dec('Calle *'),
@@ -851,7 +1150,6 @@ class _CreateHechoScreenState extends State<CreateHechoScreen> {
                     (v == null || v.trim().isEmpty) ? 'Requerido' : null,
               ),
               const SizedBox(height: 8),
-
               TextFormField(
                 controller: _coloniaCtrl,
                 decoration: _dec('Colonia *'),
@@ -859,22 +1157,18 @@ class _CreateHechoScreenState extends State<CreateHechoScreen> {
                     (v == null || v.trim().isEmpty) ? 'Requerido' : null,
               ),
               const SizedBox(height: 8),
-
               TextFormField(
                 controller: _entreCallesCtrl,
                 decoration: _dec('Entre calles'),
               ),
               const SizedBox(height: 8),
-
               TextFormField(
                 controller: _municipioCtrl,
                 decoration: _dec('Municipio *'),
                 validator: (v) =>
                     (v == null || v.trim().isEmpty) ? 'Requerido' : null,
               ),
-
               const SizedBox(height: 12),
-
               DropdownButtonFormField<String>(
                 decoration: _dec('Tipo Hecho *'),
                 value: _tipoHecho,
@@ -902,18 +1196,14 @@ class _CreateHechoScreenState extends State<CreateHechoScreen> {
                 onChanged: (v) => setState(() => _tipoHecho = v),
                 validator: (v) => v == null ? 'Requerido' : null,
               ),
-
               const SizedBox(height: 12),
-
               TextFormField(
                 controller: _superficieCtrl,
                 decoration: _dec('Superficie vía *'),
                 validator: (v) =>
                     (v == null || v.trim().isEmpty) ? 'Requerido' : null,
               ),
-
               const SizedBox(height: 12),
-
               Row(
                 children: [
                   Expanded(
@@ -959,26 +1249,22 @@ class _CreateHechoScreenState extends State<CreateHechoScreen> {
                   ),
                 ],
               ),
-
               const SizedBox(height: 12),
-
               TextFormField(
                 controller: _controlTxCtrl,
                 decoration: _dec('Control tránsito *'),
                 validator: (v) =>
                     (v == null || v.trim().isEmpty) ? 'Requerido' : null,
               ),
-
               const SizedBox(height: 12),
-
               CheckboxListTile(
                 title: const Text('Checaron antecedentes?'),
                 value: _checaronAnt,
-                onChanged: (v) => setState(() => _checaronAnt = v ?? false),
+                onChanged: _submitting
+                    ? null
+                    : (v) => setState(() => _checaronAnt = v ?? false),
               ),
-
               const SizedBox(height: 12),
-
               TextFormField(
                 controller: _causasCtrl,
                 decoration: _dec('Causas *'),
@@ -986,9 +1272,7 @@ class _CreateHechoScreenState extends State<CreateHechoScreen> {
                     (v == null || v.trim().isEmpty) ? 'Requerido' : null,
                 maxLines: 2,
               ),
-
               const SizedBox(height: 12),
-
               TextFormField(
                 controller: _colisionCtrl,
                 decoration: _dec('Colisión camino *'),
@@ -996,31 +1280,18 @@ class _CreateHechoScreenState extends State<CreateHechoScreen> {
                     (v == null || v.trim().isEmpty) ? 'Requerido' : null,
                 maxLines: 2,
               ),
-
               const SizedBox(height: 12),
-
               DropdownButtonFormField<String>(
                 decoration: _dec('Situación *'),
                 value: _situacion,
                 items: const ['RESUELTO', 'PENDIENTE', 'TURNADO', 'REPORTE']
                     .map((v) => DropdownMenuItem(value: v, child: Text(v)))
                     .toList(),
-                onChanged: (v) => setState(() => _situacion = v),
+                onChanged: _submitting ? null : _onSituacionChanged,
                 validator: (v) => v == null ? 'Requerido' : null,
               ),
-
-              if (_situacion == 'TURNADO') ...[
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: _oficioMpCtrl,
-                  decoration: _dec('Oficio MP *'),
-                  validator: (v) =>
-                      (v == null || v.trim().isEmpty) ? 'Requerido' : null,
-                ),
-              ],
-
+              _dictamenSelect(),
               const SizedBox(height: 12),
-
               Row(
                 children: [
                   Expanded(
@@ -1044,9 +1315,7 @@ class _CreateHechoScreenState extends State<CreateHechoScreen> {
                   ),
                 ],
               ),
-
               const SizedBox(height: 20),
-
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(

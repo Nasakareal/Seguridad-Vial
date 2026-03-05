@@ -55,6 +55,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   static const String permMapa = 'ver mapa';
   static const String permSustento = 'ver sustento legal';
 
+  bool _askingDisclosure = false;
+  bool _disclosureAcceptedThisSession = false;
+
   bool _allowed(String requiredPerm) {
     return _perms.contains(requiredPerm.trim().toLowerCase());
   }
@@ -159,12 +162,72 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     } catch (_) {}
   }
 
+  Future<bool> _showProminentDisclosureDialog() async {
+    if (!mounted) return false;
+
+    final res = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) {
+        return AlertDialog(
+          title: const Text('Permiso de ubicación en segundo plano'),
+          content: const Text(
+            'Esta app recopila y transmite datos de ubicación para habilitar el monitoreo de unidades y el mapa de patrullas, incluso cuando la app está cerrada o no está en uso.\n\n'
+            'Si aceptas, se solicitará el permiso de ubicación necesario para activar esta función.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: const Text('No aceptar'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.of(ctx).pop(true),
+              child: const Text('Aceptar'),
+            ),
+          ],
+        );
+      },
+    );
+
+    return res == true;
+  }
+
+  Future<bool> _ensureDisclosureAcceptedBeforeStart() async {
+    if (_disclosureAcceptedThisSession) return true;
+    if (_askingDisclosure) return false;
+
+    _askingDisclosure = true;
+    try {
+      final ok = await _showProminentDisclosureDialog();
+      if (!mounted) return false;
+
+      if (ok) {
+        _disclosureAcceptedThisSession = true;
+        return true;
+      }
+      return false;
+    } finally {
+      _askingDisclosure = false;
+    }
+  }
+
   Future<void> _syncTrackingFromCommanderFlag() async {
     try {
-      final enabledByCommander = await LocationFlagService.isEnabledForMe();
-      if (!mounted) return;
-
+      final askLocation = await AuthService.shouldAskLocation();
       final running = await FlutterForegroundTask.isRunningService;
+
+      if (!askLocation) {
+        if (running) {
+          try {
+            await TrackingService.stop();
+          } catch (_) {}
+        }
+        if (!mounted) return;
+        setState(() => _trackingOn = false);
+        return;
+      }
+
+      final enabledByCommander = await LocationFlagService.isEnabledForMe();
       if (!mounted) return;
 
       if (!enabledByCommander) {
@@ -179,6 +242,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       }
 
       if (!running) {
+        final ok = await _ensureDisclosureAcceptedBeforeStart();
+        if (!ok) {
+          if (!mounted) return;
+          setState(() => _trackingOn = false);
+          return;
+        }
+
         bool started = false;
         try {
           started = await TrackingService.startWithDisclosure(context);
@@ -405,6 +475,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     try {
       await _syncTrackingFromCommanderFlag();
     } catch (_) {}
+
     try {
       await _loadPerms(force: true);
     } catch (_) {}

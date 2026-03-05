@@ -43,6 +43,9 @@ class TrackingTaskHandler extends TaskHandler {
     _sending = true;
 
     try {
+      final isPerito = await AuthService.isPerito();
+      if (!isPerito) return;
+
       final token = await AuthService.getToken();
       if (token == null || token.isEmpty) return;
 
@@ -51,11 +54,17 @@ class TrackingTaskHandler extends TaskHandler {
         timeLimit: const Duration(seconds: 15),
       );
 
-      final wantedInterval = _intervalForSpeed(pos.speed);
-
-      if (!_shouldSendNow(wantedInterval)) {
+      if (pos.accuracy.isNaN || !pos.accuracy.isFinite || pos.accuracy > 150) {
         return;
       }
+
+      if (pos.timestamp != null) {
+        final age = DateTime.now().difference(pos.timestamp!);
+        if (age.inMinutes >= 2) return;
+      }
+
+      final wantedInterval = _intervalForSpeed(pos.speed);
+      if (!_shouldSendNow(wantedInterval)) return;
 
       final payload = <String, dynamic>{
         'lat': pos.latitude,

@@ -19,6 +19,9 @@ import '../../widgets/header_card.dart';
 import '../login_screen.dart';
 import '../../main.dart' show AppRoutes;
 
+// ✅ IMPORTA TU EDIT SCREEN (para poder abrirlo con MaterialPageRoute)
+import 'edit_screen.dart';
+
 class AccidentesScreen extends StatefulWidget {
   const AccidentesScreen({super.key});
 
@@ -359,14 +362,33 @@ class _AccidentesScreenState extends State<AccidentesScreen>
     }
   }
 
-  void _abrirEdit(Map<String, dynamic> hecho) {
+  int? _hechoIdFromMap(Map<String, dynamic> hecho) {
     final id = hecho['id'];
-    if (id == null) return;
+    if (id == null) return null;
+    if (id is int) return id;
+    return int.tryParse('$id');
+  }
+
+  // ✅ SHOW: sigue siendo route named (tu HechoShowScreen ya lee arguments)
+  void _abrirShow(Map<String, dynamic> hecho) {
+    final hechoId = _hechoIdFromMap(hecho);
+    if (hechoId == null || hechoId <= 0) return;
 
     Navigator.pushNamed(
       context,
       '/accidentes/show',
-      arguments: {'hechoId': id},
+      arguments: {'hechoId': hechoId},
+    );
+  }
+
+  // ✅ EDIT: NO uses pushNamed porque EditHechoScreen requiere constructor con hechoId
+  void _abrirEdit(Map<String, dynamic> hecho) {
+    final hechoId = _hechoIdFromMap(hecho);
+    if (hechoId == null || hechoId <= 0) return;
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => EditHechoScreen(hechoId: hechoId)),
     );
   }
 
@@ -784,8 +806,7 @@ class _AccidentesScreenState extends State<AccidentesScreen>
                     final fotosVehiculos = _fotosDeVehiculos(hecho);
                     final fotoConvenio = _fotoConvenioUrl(hecho);
 
-                    final id = hecho['id'];
-                    final hechoId = (id is int) ? id : int.tryParse('$id');
+                    final hechoId = _hechoIdFromMap(hecho);
 
                     final isDownloading =
                         hechoId != null && _descargando.contains(hechoId);
@@ -837,7 +858,10 @@ class _AccidentesScreenState extends State<AccidentesScreen>
                             ),
                           ),
                           isThreeLine: true,
-                          onTap: () => _abrirEdit(hecho),
+
+                          // ✅ Tap normal = SHOW (no edit)
+                          onTap: () => _abrirShow(hecho),
+
                           trailing: Column(
                             mainAxisSize: MainAxisSize.min,
                             children: [
@@ -868,7 +892,7 @@ class _AccidentesScreenState extends State<AccidentesScreen>
                                           ),
                                         )
                                       : Text(
-                                          yaEnviado ? 'Terminado' : 'Terminado',
+                                          yaEnviado ? 'Enviado' : 'Enviar',
                                           style: const TextStyle(
                                             fontWeight: FontWeight.w800,
                                           ),
@@ -895,6 +919,8 @@ class _AccidentesScreenState extends State<AccidentesScreen>
                                         ? null
                                         : () => _descargarReporte(hechoId),
                                   ),
+
+                                  // ✅ Lápiz = EDIT (a tu EditHechoScreen)
                                   IconButton(
                                     icon: const Icon(Icons.edit),
                                     tooltip: 'Editar',

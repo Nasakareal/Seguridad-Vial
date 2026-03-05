@@ -34,10 +34,6 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
   final _partesDanadasCtrl = TextEditingController();
   bool _antecedenteVehiculo = false;
 
-  final _danosPatrimonialesCtrl = TextEditingController();
-  final _propiedadCtrl = TextEditingController();
-  final _montoDanosPatrimonialesCtrl = TextEditingController();
-
   bool _cargandoGruas = true;
   List<Map<String, dynamic>> _gruas = [];
   int? _gruaIdSeleccionada;
@@ -105,9 +101,6 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
     _aseguradoraCtrl.dispose();
     _montoDanosCtrl.dispose();
     _partesDanadasCtrl.dispose();
-    _danosPatrimonialesCtrl.dispose();
-    _propiedadCtrl.dispose();
-    _montoDanosPatrimonialesCtrl.dispose();
     super.dispose();
   }
 
@@ -162,6 +155,34 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
 
   String? _tipoCarroceriaValidator(String? v) {
     if ((v ?? '').trim().isEmpty) return 'Requerido';
+    return null;
+  }
+
+  // Placas: opcional, pero si se captura, validamos formato básico (5-15 alfanum, sin espacios/guiones).
+  String? _placasValidator(String? v) {
+    final s = (v ?? '').trim().toUpperCase().replaceAll(
+      RegExp(r'[\s\-\._,]'),
+      '',
+    );
+    if (s.isEmpty) return null;
+    final ok = RegExp(r'^[A-Z0-9]{5,15}$').hasMatch(s);
+    if (!ok) return 'Placas inválidas (solo letras y números, 5-15)';
+    return null;
+  }
+
+  // Estado de placas: requerido SOLO si hay placas
+  String? _estadoPlacasValidator(String? v) {
+    final placas = _t(_placasCtrl).trim();
+    final tienePlacas = placas.isNotEmpty;
+
+    if (!tienePlacas) return null;
+
+    final s = (v ?? '').trim();
+    if (s.isEmpty) return 'Requerido si capturas placas';
+
+    final clean = s.toUpperCase().replaceAll(RegExp(r'[\s\-\._,]'), '');
+    final ok = RegExp(r'^[A-Z]{3,15}$').hasMatch(clean);
+    if (!ok) return 'Estado inválido (solo letras, 3-15). Ej: MICHOACAN';
     return null;
   }
 
@@ -242,10 +263,7 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
         return '$head\n\n$errors';
       }
 
-      if (msg.isNotEmpty) {
-        return msg;
-      }
-
+      if (msg.isNotEmpty) return msg;
       return '$title (HTTP $status)';
     }
 
@@ -254,11 +272,7 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
     if (cleaned.startsWith('<!doctype') || cleaned.startsWith('<html')) {
       return '$title (HTTP $status)';
     }
-
-    if (cleaned.length > 600) {
-      return '$title (HTTP $status)';
-    }
-
+    if (cleaned.length > 600) return '$title (HTTP $status)';
     return '$title (HTTP $status)\n\n$cleaned';
   }
 
@@ -346,43 +360,50 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
     try {
       final h = await _headers();
       final uri = Uri.parse('$_baseApi/hechos/$hechoId/vehiculos');
-
       final corralonNombre = _nombreGruaById(_corralonGruaIdSeleccionada);
+
+      final placasClean = _t(
+        _placasCtrl,
+      ).toUpperCase().replaceAll(RegExp(r'[\s\-\._,]'), '');
+      final estadoClean = _t(
+        _estadoPlacasCtrl,
+      ).toUpperCase().replaceAll(RegExp(r'[\s\-\._,]'), '');
 
       final payload = <String, dynamic>{
         'marca': _t(_marcaCtrl),
         'modelo': _t(_modeloCtrl).isEmpty ? null : _t(_modeloCtrl),
-        'tipo_general': _tipoGeneralSeleccionado,
+
+        // Backend solo usa "tipo" (carrocería). Tipo general es solo UI.
         'tipo': _tipoCarroceriaSeleccionada,
+
         'linea': _t(_lineaCtrl),
         'color': _t(_colorCtrl),
-        'placas': _t(_placasCtrl),
-        'estado_placas': _t(_estadoPlacasCtrl).isEmpty
+
+        'placas': placasClean.isEmpty ? null : placasClean,
+        'estado_placas': placasClean.isEmpty
             ? null
-            : _t(_estadoPlacasCtrl),
+            : (estadoClean.isEmpty ? null : estadoClean),
+
         'serie': _t(_serieCtrl).isEmpty ? null : _t(_serieCtrl),
+
         'capacidad_personas': _toIntOrNull(_t(_capacidadCtrl)) ?? 0,
         'tipo_servicio': _t(_tipoServicioCtrl),
         'tarjeta_circulacion_nombre': _t(_tarjetaCirculacionNombreCtrl).isEmpty
             ? null
             : _t(_tarjetaCirculacionNombreCtrl),
+
         'grua_id': _gruaIdSeleccionada,
         'corralon': (corralonNombre == null || corralonNombre.isEmpty)
             ? null
             : corralonNombre,
+
         'aseguradora': _t(_aseguradoraCtrl).isEmpty
             ? null
             : _t(_aseguradoraCtrl),
+
         'monto_danos': _toDoubleOrNull(_t(_montoDanosCtrl)) ?? 0,
         'partes_danadas': _t(_partesDanadasCtrl),
         'antecedente_vehiculo': _antecedenteVehiculo,
-        'danos_patrimoniales': _t(_danosPatrimonialesCtrl).isEmpty
-            ? null
-            : _t(_danosPatrimonialesCtrl),
-        'propiedad': _t(_propiedadCtrl).isEmpty ? null : _t(_propiedadCtrl),
-        'monto_danos_patrimoniales': _t(_montoDanosPatrimonialesCtrl).isEmpty
-            ? null
-            : _toDoubleOrNull(_t(_montoDanosPatrimonialesCtrl)),
       };
 
       final res = await http.post(uri, headers: h, body: jsonEncode(payload));
@@ -438,6 +459,8 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
       _tipoGeneralSeleccionado,
     );
 
+    final tienePlacas = _t(_placasCtrl).isNotEmpty;
+
     return Scaffold(
       appBar: AppBar(title: Text('Nuevo vehículo (Hecho #$hechoId)')),
       body: Padding(
@@ -455,6 +478,7 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
                 validator: _req,
               ),
               const SizedBox(height: 10),
+
               DropdownButtonFormField<String>(
                 value: _tipoGeneralSeleccionado,
                 decoration: const InputDecoration(
@@ -482,6 +506,7 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
                 validator: _tipoGeneralValidator,
               ),
               const SizedBox(height: 10),
+
               DropdownButtonFormField<String>(
                 value: _tipoCarroceriaSeleccionada,
                 decoration: const InputDecoration(
@@ -518,6 +543,7 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
                 },
               ),
               const SizedBox(height: 10),
+
               TextFormField(
                 controller: _lineaCtrl,
                 decoration: const InputDecoration(
@@ -527,6 +553,7 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
                 validator: _req,
               ),
               const SizedBox(height: 10),
+
               TextFormField(
                 controller: _modeloCtrl,
                 decoration: const InputDecoration(
@@ -536,6 +563,7 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
                 validator: (v) => _maxLenOrNull(v, 10),
               ),
               const SizedBox(height: 10),
+
               TextFormField(
                 controller: _colorCtrl,
                 decoration: const InputDecoration(
@@ -545,23 +573,29 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
                 validator: _req,
               ),
               const SizedBox(height: 10),
+
               TextFormField(
                 controller: _placasCtrl,
                 decoration: const InputDecoration(
-                  labelText: 'Placas *',
+                  labelText: 'Placas (opcional)',
                   prefixIcon: Icon(Icons.credit_card),
                 ),
-                validator: _req,
+                validator: _placasValidator,
+                onChanged: (_) => setState(() {}),
               ),
-              const SizedBox(height: 10),
-              TextFormField(
-                controller: _estadoPlacasCtrl,
-                decoration: const InputDecoration(
-                  labelText: 'Estado de placas (opcional, máx 15)',
-                  prefixIcon: Icon(Icons.map),
+
+              if (tienePlacas) ...[
+                const SizedBox(height: 10),
+                TextFormField(
+                  controller: _estadoPlacasCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'Estado de placas *',
+                    prefixIcon: Icon(Icons.map),
+                  ),
+                  validator: _estadoPlacasValidator,
                 ),
-                validator: (v) => _maxLenOrNull(v, 15),
-              ),
+              ],
+
               const SizedBox(height: 10),
               TextFormField(
                 controller: _serieCtrl,
@@ -572,6 +606,7 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
                 validator: (v) => _maxLenOrNull(v, 17),
               ),
               const SizedBox(height: 10),
+
               TextFormField(
                 controller: _capacidadCtrl,
                 keyboardType: TextInputType.number,
@@ -582,6 +617,7 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
                 validator: _capacidadValidator,
               ),
               const SizedBox(height: 10),
+
               TextFormField(
                 controller: _tipoServicioCtrl,
                 decoration: const InputDecoration(
@@ -591,6 +627,7 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
                 validator: _req,
               ),
               const SizedBox(height: 10),
+
               TextFormField(
                 controller: _tarjetaCirculacionNombreCtrl,
                 decoration: const InputDecoration(
@@ -600,6 +637,7 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
                 validator: (v) => _maxLenOrNull(v, 60),
               ),
               const SizedBox(height: 10),
+
               _cargandoGruas
                   ? const ListTile(
                       contentPadding: EdgeInsets.zero,
@@ -632,7 +670,9 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
                       ],
                       onChanged: (v) => setState(() => _gruaIdSeleccionada = v),
                     ),
+
               const SizedBox(height: 10),
+
               _cargandoGruas
                   ? const SizedBox.shrink()
                   : DropdownButtonFormField<int?>(
@@ -660,6 +700,7 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
                       onChanged: (v) =>
                           setState(() => _corralonGruaIdSeleccionada = v),
                     ),
+
               const SizedBox(height: 10),
               TextFormField(
                 controller: _aseguradoraCtrl,
@@ -668,6 +709,7 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
                   prefixIcon: Icon(Icons.security),
                 ),
               ),
+
               const SizedBox(height: 10),
               TextFormField(
                 controller: _montoDanosCtrl,
@@ -680,6 +722,7 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
                 ),
                 validator: (v) => _montoValidator(v, required: true),
               ),
+
               const SizedBox(height: 10),
               TextFormField(
                 controller: _partesDanadasCtrl,
@@ -690,37 +733,14 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
                 ),
                 validator: _req,
               ),
+
               const SizedBox(height: 6),
               SwitchListTile(
                 title: const Text('Antecedente del vehículo'),
                 value: _antecedenteVehiculo,
                 onChanged: (v) => setState(() => _antecedenteVehiculo = v),
               ),
-              const Divider(height: 24),
-              TextFormField(
-                controller: _danosPatrimonialesCtrl,
-                decoration: const InputDecoration(
-                  labelText: 'Daños patrimoniales (opcional)',
-                ),
-              ),
-              const SizedBox(height: 10),
-              TextFormField(
-                controller: _propiedadCtrl,
-                decoration: const InputDecoration(
-                  labelText: 'Propiedad (opcional)',
-                ),
-              ),
-              const SizedBox(height: 10),
-              TextFormField(
-                controller: _montoDanosPatrimonialesCtrl,
-                keyboardType: const TextInputType.numberWithOptions(
-                  decimal: true,
-                ),
-                decoration: const InputDecoration(
-                  labelText: 'Monto daños patrimoniales (opcional)',
-                ),
-                validator: (v) => _montoValidator(v, required: false),
-              ),
+
               const SizedBox(height: 18),
               ElevatedButton.icon(
                 onPressed: _saving ? null : () => _guardar(hechoId),
