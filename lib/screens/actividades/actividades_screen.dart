@@ -14,7 +14,7 @@ import '../../widgets/app_drawer.dart';
 import '../../widgets/header_card.dart';
 
 import '../login_screen.dart';
-import '../../main.dart' show AppRoutes;
+import '../../app/routes.dart';
 
 class ActividadesScreen extends StatefulWidget {
   const ActividadesScreen({super.key});
@@ -49,9 +49,18 @@ class _ActividadesScreenState extends State<ActividadesScreen>
     WidgetsBinding.instance.addObserver(this);
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      await AppVersionService.enforceUpdateIfNeeded(context);
+      try {
+        await AppVersionService.enforceUpdateIfNeeded(context);
+      } catch (_) {}
+
+      if (!mounted) return;
+
       await _bootstrapTrackingStatusOnly();
+      if (!mounted) return;
+
       await _loadCatalogos();
+      if (!mounted) return;
+
       await _load();
     });
   }
@@ -146,7 +155,6 @@ class _ActividadesScreenState extends State<ActividadesScreen>
       if (!mounted) return;
       setState(() => _categorias = cats);
     } catch (_) {
-      // Si todavía no tienes endpoint de categorías, no truena la app.
       if (!mounted) return;
       setState(() => _categorias = const []);
     }
@@ -169,6 +177,7 @@ class _ActividadesScreenState extends State<ActividadesScreen>
         _subcategoriaId = null;
       });
 
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('No se pudieron cargar subcategorías.\n$e')),
       );
@@ -480,19 +489,16 @@ class _ActividadesScreenState extends State<ActividadesScreen>
             children: [
               if (_trackingOn) HeaderCard(trackingOn: _trackingOn),
               if (_trackingOn) const SizedBox(height: 16),
-
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(16),
-                  color: Colors.blue.withOpacity(.06),
-                  border: Border.all(color: Colors.blue.withOpacity(.18)),
+                  color: Colors.blue.withValues(alpha: .06),
+                  border: Border.all(color: Colors.blue.withValues(alpha: .18)),
                 ),
                 child: _filtersBar(),
               ),
-
               const SizedBox(height: 12),
-
               if (_loading)
                 const Padding(
                   padding: EdgeInsets.only(top: 40),

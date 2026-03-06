@@ -1,21 +1,24 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:flutter_foreground_task/flutter_foreground_task.dart';
+
+import 'package:seguridad_vial_app/app/routes.dart';
 
 import '../services/auth_service.dart';
-import '../services/tracking_service.dart';
 import '../services/app_version_service.dart';
-import '../services/feed_service.dart';
-import '../services/location_flag_service.dart';
 import '../services/push_service.dart';
-
-import '../models/feed_item.dart';
 
 import '../widgets/app_drawer.dart';
 import '../widgets/header_card.dart';
 
-import '../main.dart' show AppRoutes;
 import 'login_screen.dart';
+
+import 'home/controllers/home_permissions_controller.dart';
+import 'home/controllers/home_tracking_controller.dart';
+import 'home/controllers/home_feed_controller.dart';
+import 'home/widgets/quick_actions_grid.dart';
+import 'home/widgets/feed_sliver.dart';
+
+import '../models/feed_item.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -25,64 +28,14 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
-  bool _trackingOn = false;
   bool _busy = false;
   bool _bootstrapped = false;
 
-  DateTime _selectedDate = DateTime.now();
-
   final ScrollController _scrollController = ScrollController();
 
-  bool _loadingFeed = false;
-  bool _loadingMore = false;
-  bool _hasMore = true;
-  String? _feedError;
-
-  final List<FeedItem> _feed = [];
-
-  static const int _pageSize = 10;
-  int _page = 1;
-
-  Set<String> _perms = {};
-  bool _loadingPerms = true;
-  bool _fetchingPerms = false;
-
-  Timer? _permTimer;
-
-  static const String permBusqueda = 'ver busqueda';
-  static const String permHechos = 'ver hechos';
-  static const String permGruas = 'ver gruas';
-  static const String permMapa = 'ver mapa';
-  static const String permSustento = 'ver sustento legal';
-
-  bool _askingDisclosure = false;
-  bool _disclosureAcceptedThisSession = false;
-
-  bool _allowed(String requiredPerm) {
-    return _perms.contains(requiredPerm.trim().toLowerCase());
-  }
-
-  Future<void> _loadPerms({bool force = false}) async {
-    if (_fetchingPerms) return;
-    _fetchingPerms = true;
-
-    try {
-      final list = await AuthService.refreshPermissions();
-
-      if (!mounted) return;
-      setState(() {
-        _perms = list.map((e) => e.trim().toLowerCase()).toSet();
-        _loadingPerms = false;
-      });
-    } catch (_) {
-      if (!mounted) return;
-      setState(() {
-        _loadingPerms = false;
-      });
-    } finally {
-      _fetchingPerms = false;
-    }
-  }
+  final HomePermissionsController _permsCtrl = HomePermissionsController();
+  final HomeTrackingController _trackingCtrl = HomeTrackingController();
+  final HomeFeedController _feedCtrl = HomeFeedController();
 
   @override
   void initState() {
@@ -94,39 +47,40 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       try {
         await AppVersionService.enforceUpdateIfNeeded(context);
+        if (!mounted) return;
       } catch (_) {}
 
       try {
         await _bootstrapOnce();
+        if (!mounted) return;
       } catch (_) {}
 
       try {
-        await _loadPerms(force: true);
+        await _permsCtrl.load(force: true);
+        if (!mounted) return;
       } catch (_) {}
 
       try {
-        await _syncTrackingFromCommanderFlag();
+        await _trackingCtrl.syncFromCommanderFlag(context);
+        if (!mounted) return;
       } catch (_) {}
 
       try {
-        await _loadFeed(reset: true);
+        _feedCtrl.setDate(_feedCtrl.onlyDate(DateTime.now()));
+        await _feedCtrl.load(reset: true);
+        if (!mounted) return;
       } catch (_) {}
 
-      _startPermSoftRefresh();
-    });
-  }
-
-  void _startPermSoftRefresh() {
-    _permTimer?.cancel();
-    _permTimer = Timer.periodic(const Duration(seconds: 60), (_) {
-      if (!mounted) return;
-      _loadPerms();
+      _permsCtrl.startSoftRefresh();
     });
   }
 
   @override
   void dispose() {
-    _permTimer?.cancel();
+    _permsCtrl.dispose();
+    _trackingCtrl.dispose();
+    _feedCtrl.dispose();
+
     WidgetsBinding.instance.removeObserver(this);
     _scrollController.removeListener(_onScroll);
     _scrollController.dispose();
@@ -137,11 +91,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     if (!_scrollController.hasClients) return;
     final pos = _scrollController.position;
     if (pos.pixels >= (pos.maxScrollExtent - 350)) {
-      _loadMoreFeed();
+      _feedCtrl.loadMore();
     }
   }
-
-  DateTime _onlyDate(DateTime d) => DateTime(d.year, d.month, d.day);
 
   Future<void> _bootstrapOnce() async {
     if (_bootstrapped) return;
@@ -162,234 +114,17 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     } catch (_) {}
   }
 
-  Future<bool> _showProminentDisclosureDialog() async {
-    if (!mounted) return false;
-
-    final res = await showDialog<bool>(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) {
-        return AlertDialog(
-          title: const Text('Permiso de ubicación en segundo plano'),
-          content: const Text(
-            'Esta app recopila y transmite datos de ubicación para habilitar el monitoreo de unidades y el mapa de patrullas, incluso cuando la app está cerrada o no está en uso.\n\n'
-            'Si aceptas, se solicitará el permiso de ubicación necesario para activar esta función.',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(ctx).pop(false),
-              child: const Text('No aceptar'),
-            ),
-            ElevatedButton(
-              onPressed: () => Navigator.of(ctx).pop(true),
-              child: const Text('Aceptar'),
-            ),
-          ],
-        );
-      },
-    );
-
-    return res == true;
-  }
-
-  Future<bool> _ensureDisclosureAcceptedBeforeStart() async {
-    if (_disclosureAcceptedThisSession) return true;
-    if (_askingDisclosure) return false;
-
-    _askingDisclosure = true;
-    try {
-      final ok = await _showProminentDisclosureDialog();
-      if (!mounted) return false;
-
-      if (ok) {
-        _disclosureAcceptedThisSession = true;
-        return true;
-      }
-      return false;
-    } finally {
-      _askingDisclosure = false;
-    }
-  }
-
-  Future<void> _syncTrackingFromCommanderFlag() async {
-    try {
-      final askLocation = await AuthService.shouldAskLocation();
-      final running = await FlutterForegroundTask.isRunningService;
-
-      if (!askLocation) {
-        if (running) {
-          try {
-            await TrackingService.stop();
-          } catch (_) {}
-        }
-        if (!mounted) return;
-        setState(() => _trackingOn = false);
-        return;
-      }
-
-      final enabledByCommander = await LocationFlagService.isEnabledForMe();
-      if (!mounted) return;
-
-      if (!enabledByCommander) {
-        if (running) {
-          try {
-            await TrackingService.stop();
-          } catch (_) {}
-        }
-        if (!mounted) return;
-        setState(() => _trackingOn = false);
-        return;
-      }
-
-      if (!running) {
-        final ok = await _ensureDisclosureAcceptedBeforeStart();
-        if (!ok) {
-          if (!mounted) return;
-          setState(() => _trackingOn = false);
-          return;
-        }
-
-        bool started = false;
-        try {
-          started = await TrackingService.startWithDisclosure(context);
-        } catch (_) {
-          started = false;
-        }
-        if (!mounted) return;
-        setState(() => _trackingOn = started);
-      } else {
-        if (!mounted) return;
-        setState(() => _trackingOn = true);
-      }
-    } catch (_) {
-      if (!mounted) return;
-      setState(() => _trackingOn = false);
-    }
-  }
-
-  Future<void> _loadFeed({required bool reset}) async {
-    if (_loadingFeed) return;
-
-    if (mounted) {
-      setState(() {
-        _loadingFeed = true;
-        _feedError = null;
-
-        if (reset) {
-          _feed.clear();
-          _page = 1;
-          _hasMore = true;
-        }
-      });
-    }
-
-    try {
-      final limit = (_pageSize * _page).clamp(1, 50);
-
-      final items = await FeedService.fetchFeed(
-        limit: limit,
-        date: _onlyDate(_selectedDate),
-      );
-
-      if (!mounted) return;
-
-      final existingIds = _feed.map((e) => e.id).toSet();
-      final newOnes = <FeedItem>[];
-
-      for (final it in items) {
-        if (!existingIds.contains(it.id)) {
-          newOnes.add(it);
-        }
-      }
-
-      setState(() {
-        if (reset) {
-          _feed.addAll(items);
-        } else {
-          _feed.addAll(newOnes);
-        }
-
-        if (items.length < limit) {
-          _hasMore = false;
-        } else {
-          if (newOnes.isEmpty && _feed.isNotEmpty) {
-            _hasMore = false;
-          } else {
-            _hasMore = true;
-          }
-        }
-      });
-    } catch (_) {
-      if (!mounted) return;
-      setState(() => _feedError = 'No se pudo cargar el feed.');
-    } finally {
-      if (!mounted) return;
-      setState(() => _loadingFeed = false);
-    }
-  }
-
-  Future<void> _loadMoreFeed() async {
-    if (_loadingFeed) return;
-    if (_loadingMore) return;
-    if (!_hasMore) return;
-    if (_feedError != null) return;
-
-    if (mounted) {
-      setState(() => _loadingMore = true);
-    }
-
-    try {
-      final nextPage = _page + 1;
-      final nextLimit = (_pageSize * nextPage).clamp(1, 50);
-
-      final items = await FeedService.fetchFeed(
-        limit: nextLimit,
-        date: _onlyDate(_selectedDate),
-      );
-
-      if (!mounted) return;
-
-      final existingIds = _feed.map((e) => e.id).toSet();
-      final newOnes = <FeedItem>[];
-
-      for (final it in items) {
-        if (!existingIds.contains(it.id)) {
-          newOnes.add(it);
-        }
-      }
-
-      setState(() {
-        if (newOnes.isNotEmpty) {
-          _feed.addAll(newOnes);
-          _page = nextPage;
-        }
-
-        if (newOnes.isEmpty) {
-          _hasMore = false;
-        }
-
-        if (items.length < nextLimit) {
-          _hasMore = false;
-        }
-      });
-    } catch (_) {
-      if (!mounted) return;
-      setState(() => _feedError = 'No se pudo cargar el feed.');
-    } finally {
-      if (!mounted) return;
-      setState(() => _loadingMore = false);
-    }
-  }
-
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) async {
     if (state == AppLifecycleState.resumed) {
       try {
-        await _loadPerms(force: true);
+        await _permsCtrl.load(force: true);
+        if (!mounted) return;
       } catch (_) {}
 
       try {
-        await _syncTrackingFromCommanderFlag();
+        await _trackingCtrl.syncFromCommanderFlag(context);
+        if (!mounted) return;
       } catch (_) {}
 
       try {
@@ -406,7 +141,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
     try {
       try {
-        await TrackingService.stop();
+        await _trackingCtrl.stop();
       } catch (_) {}
       try {
         await AuthService.logout();
@@ -429,7 +164,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   Future<void> _pickDate() async {
     final now = DateTime.now();
-    final initial = _onlyDate(_selectedDate);
+    final initial = _feedCtrl.onlyDate(_feedCtrl.selectedDate.value);
 
     final picked = await showDatePicker(
       context: context,
@@ -440,11 +175,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
     if (picked == null) return;
 
-    setState(() {
-      _selectedDate = _onlyDate(picked);
-    });
-
-    await _loadFeed(reset: true);
+    _feedCtrl.setDate(picked);
+    await _feedCtrl.load(reset: true);
   }
 
   String _fmtDate(DateTime d) {
@@ -456,7 +188,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     if (item.type == FeedItemType.hecho) {
       Navigator.pushNamed(
         context,
-        '/accidentes/show',
+        AppRoutes.accidentesShow,
         arguments: {'hechoId': item.id},
       );
       return;
@@ -473,14 +205,18 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   Future<void> _refreshAll() async {
     try {
-      await _syncTrackingFromCommanderFlag();
+      await _trackingCtrl.syncFromCommanderFlag(context);
+      if (!mounted) return;
     } catch (_) {}
 
     try {
-      await _loadPerms(force: true);
+      await _permsCtrl.load(force: true);
+      if (!mounted) return;
     } catch (_) {}
+
     try {
-      await _loadFeed(reset: true);
+      await _feedCtrl.load(reset: true);
+      if (!mounted) return;
     } catch (_) {}
 
     try {
@@ -494,668 +230,207 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    final canBuscar = !_loadingPerms && _allowed(permBusqueda);
-    final canHechos = !_loadingPerms && _allowed(permHechos);
-    final canGruas = !_loadingPerms && _allowed(permGruas);
-    final canMapa = !_loadingPerms && _allowed(permMapa);
-    final canSustento = !_loadingPerms && _allowed(permSustento);
+    return ValueListenableBuilder<bool>(
+      valueListenable: _permsCtrl.loading,
+      builder: (context, loadingPerms, _) {
+        final canBuscar =
+            !loadingPerms &&
+            _permsCtrl.allowed(HomePermissionsController.permBusqueda);
+        final canHechos =
+            !loadingPerms &&
+            _permsCtrl.allowed(HomePermissionsController.permHechos);
+        final canGruas =
+            !loadingPerms &&
+            _permsCtrl.allowed(HomePermissionsController.permGruas);
+        final canMapa =
+            !loadingPerms &&
+            _permsCtrl.allowed(HomePermissionsController.permMapa);
+        final canSustento =
+            !loadingPerms &&
+            _permsCtrl.allowed(HomePermissionsController.permSustento);
 
-    return Scaffold(
-      backgroundColor: const Color(0xFFF6F7FB),
-      appBar: AppBar(
-        elevation: 0,
-        backgroundColor: Colors.blue,
-        title: const Text('Sistema Estadístico'),
-        actions: [
-          if (canBuscar)
-            IconButton(
-              tooltip: 'Buscar',
-              icon: const Icon(Icons.search),
-              onPressed: () => _go(context, AppRoutes.hechosBuscar),
-            ),
-        ],
-      ),
-      drawer: AppDrawer(
-        trackingOn: _trackingOn,
-        onLogout: () => _logout(context),
-      ),
-      body: SafeArea(
-        child: RefreshIndicator(
-          onRefresh: _refreshAll,
-          child: CustomScrollView(
-            controller: _scrollController,
-            slivers: [
-              SliverPadding(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 10),
-                sliver: SliverToBoxAdapter(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      HeaderCard(trackingOn: _trackingOn),
-                      const SizedBox(height: 16),
-                      Text(
-                        'Accesos rápidos',
-                        style: theme.textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w800,
-                          color: const Color(0xFF0F172A),
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      _QuickActionsGrid(
-                        canBuscar: canBuscar,
-                        canAccidentes: canHechos,
-                        canGruas: canGruas,
-                        canMapa: canMapa,
-                        canSustento: canSustento,
-                        onAccidentes: () => _go(context, '/accidentes'),
-                        onGruas: () => _go(context, '/gruas'),
-                        onMapa: () => _go(context, '/mapa'),
-                        onSustentoLegal: () => _go(context, '/sustento-legal'),
-                        onBuscar: () => _go(context, AppRoutes.hechosBuscar),
-                      ),
-                      const SizedBox(height: 14),
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(16),
-                          color: Colors.blue.withOpacity(.06),
-                          border: Border.all(
-                            color: Colors.blue.withOpacity(.18),
-                          ),
-                        ),
-                        child: Text(
-                          _trackingOn
-                              ? 'Ubicación activa (enviando ubicación en segundo plano).'
-                              : 'Ubicación inactiva (puede activarse desde el mapa de patrullas).',
-                          style: TextStyle(color: Colors.blue.shade900),
-                        ),
-                      ),
-                      const SizedBox(height: 18),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              'Feed',
-                              style: theme.textTheme.titleMedium?.copyWith(
-                                fontWeight: FontWeight.w900,
-                                color: const Color(0xFF0F172A),
+        return ValueListenableBuilder<bool>(
+          valueListenable: _trackingCtrl.trackingOn,
+          builder: (context, trackingOn, __) {
+            return Scaffold(
+              backgroundColor: const Color(0xFFF6F7FB),
+              appBar: AppBar(
+                elevation: 0,
+                backgroundColor: Colors.blue,
+                title: const Text('Sistema Estadístico'),
+                actions: [
+                  if (canBuscar)
+                    IconButton(
+                      tooltip: 'Buscar',
+                      icon: const Icon(Icons.search),
+                      onPressed: () => _go(context, AppRoutes.hechosBuscar),
+                    ),
+                ],
+              ),
+              drawer: AppDrawer(
+                trackingOn: trackingOn,
+                onLogout: () => _logout(context),
+              ),
+              body: SafeArea(
+                child: RefreshIndicator(
+                  onRefresh: _refreshAll,
+                  child: CustomScrollView(
+                    controller: _scrollController,
+                    slivers: [
+                      SliverPadding(
+                        padding: const EdgeInsets.fromLTRB(16, 16, 16, 10),
+                        sliver: SliverToBoxAdapter(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              HeaderCard(trackingOn: trackingOn),
+                              const SizedBox(height: 16),
+                              Text(
+                                'Accesos rápidos',
+                                style: theme.textTheme.titleMedium?.copyWith(
+                                  fontWeight: FontWeight.w800,
+                                  color: const Color(0xFF0F172A),
+                                ),
                               ),
-                            ),
-                          ),
-                          InkWell(
-                            borderRadius: BorderRadius.circular(12),
-                            onTap: _pickDate,
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 12,
-                                vertical: 10,
+                              const SizedBox(height: 12),
+                              QuickActionsGrid(
+                                canBuscar: canBuscar,
+                                canAccidentes: canHechos,
+                                canGruas: canGruas,
+                                canMapa: canMapa,
+                                canSustento: canSustento,
+                                onAccidentes: () =>
+                                    _go(context, AppRoutes.accidentes),
+                                onGruas: () => _go(context, AppRoutes.gruas),
+                                onMapa: () => _go(context, AppRoutes.mapa),
+                                onSustentoLegal: () =>
+                                    _go(context, AppRoutes.sustentoLegal),
+                                onBuscar: () =>
+                                    _go(context, AppRoutes.hechosBuscar),
                               ),
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(color: Colors.grey.shade200),
+                              const SizedBox(height: 14),
+                              Container(
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(16),
+                                  color: Colors.blue.withValues(alpha: 0.06),
+                                  border: Border.all(
+                                    color: Colors.blue.withValues(alpha: 0.18),
+                                  ),
+                                ),
+                                child: Text(
+                                  trackingOn
+                                      ? 'Ubicación activa (enviando ubicación en segundo plano).'
+                                      : 'Ubicación inactiva (puede activarse desde el mapa de patrullas).',
+                                  style: TextStyle(color: Colors.blue.shade900),
+                                ),
                               ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
+                              const SizedBox(height: 18),
+                              Row(
                                 children: [
-                                  const Icon(Icons.calendar_month, size: 18),
-                                  const SizedBox(width: 8),
-                                  Text(
-                                    _fmtDate(_selectedDate),
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.w800,
+                                  Expanded(
+                                    child: Text(
+                                      'Feed',
+                                      style: theme.textTheme.titleMedium
+                                          ?.copyWith(
+                                            fontWeight: FontWeight.w900,
+                                            color: const Color(0xFF0F172A),
+                                          ),
+                                    ),
+                                  ),
+                                  InkWell(
+                                    borderRadius: BorderRadius.circular(12),
+                                    onTap: _pickDate,
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 12,
+                                        vertical: 10,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: Colors.white,
+                                        borderRadius: BorderRadius.circular(12),
+                                        border: Border.all(
+                                          color: Colors.grey.shade200,
+                                        ),
+                                      ),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          const Icon(
+                                            Icons.calendar_month,
+                                            size: 18,
+                                          ),
+                                          const SizedBox(width: 8),
+                                          ValueListenableBuilder<DateTime>(
+                                            valueListenable:
+                                                _feedCtrl.selectedDate,
+                                            builder: (_, d, __) {
+                                              return Text(
+                                                _fmtDate(d),
+                                                style: const TextStyle(
+                                                  fontWeight: FontWeight.w800,
+                                                ),
+                                              );
+                                            },
+                                          ),
+                                        ],
+                                      ),
                                     ),
                                   ),
                                 ],
                               ),
-                            ),
+                              const SizedBox(height: 10),
+                            ],
                           ),
-                        ],
+                        ),
                       ),
-                      const SizedBox(height: 10),
+                      SliverPadding(
+                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+                        sliver: ValueListenableBuilder<bool>(
+                          valueListenable: _feedCtrl.loadingFeed,
+                          builder: (context, loadingFeed, _) {
+                            return ValueListenableBuilder<bool>(
+                              valueListenable: _feedCtrl.loadingMore,
+                              builder: (context, loadingMore, __) {
+                                return ValueListenableBuilder<bool>(
+                                  valueListenable: _feedCtrl.hasMore,
+                                  builder: (context, hasMore, ___) {
+                                    return ValueListenableBuilder<String?>(
+                                      valueListenable: _feedCtrl.error,
+                                      builder: (context, feedError, ____) {
+                                        return ValueListenableBuilder<
+                                          List<FeedItem>
+                                        >(
+                                          valueListenable: _feedCtrl.feed,
+                                          builder: (context, feed, _____) {
+                                            return FeedSliver(
+                                              loadingFeed: loadingFeed,
+                                              loadingMore: loadingMore,
+                                              hasMore: hasMore,
+                                              feedError: feedError,
+                                              feed: feed,
+                                              onLoadMore: _feedCtrl.loadMore,
+                                              onOpen: _openFeedItem,
+                                            );
+                                          },
+                                        );
+                                      },
+                                    );
+                                  },
+                                );
+                              },
+                            );
+                          },
+                        ),
+                      ),
                     ],
                   ),
                 ),
               ),
-              SliverPadding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-                sliver: _buildFeedSliver(),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildFeedSliver() {
-    if (_loadingFeed && _feed.isEmpty) {
-      return const SliverToBoxAdapter(
-        child: Padding(
-          padding: EdgeInsets.symmetric(vertical: 18),
-          child: Center(child: CircularProgressIndicator()),
-        ),
-      );
-    }
-
-    if (_feedError != null && _feed.isEmpty) {
-      return SliverToBoxAdapter(
-        child: _ErrorCard(message: 'No se pudo cargar el feed.', onRetry: null),
-      );
-    }
-
-    if (_feed.isEmpty) {
-      return const SliverToBoxAdapter(child: _EmptyCard());
-    }
-
-    return SliverList(
-      delegate: SliverChildBuilderDelegate((context, index) {
-        if (index == _feed.length) {
-          if (_feedError != null) {
-            return Padding(
-              padding: const EdgeInsets.only(top: 10),
-              child: _ErrorInline(message: _feedError!, onRetry: _loadMoreFeed),
             );
-          }
-
-          if (_loadingMore) {
-            return const Padding(
-              padding: EdgeInsets.symmetric(vertical: 16),
-              child: Center(child: CircularProgressIndicator()),
-            );
-          }
-
-          if (!_hasMore) {
-            return const SizedBox(height: 12);
-          }
-
-          return const SizedBox(height: 12);
-        }
-
-        final item = _feed[index];
-        return Padding(
-          padding: EdgeInsets.only(bottom: index == _feed.length - 1 ? 0 : 12),
-          child: _FeedPostCard(item: item, onTap: () => _openFeedItem(item)),
-        );
-      }, childCount: _feed.length + 1),
-    );
-  }
-}
-
-class _FeedPostCard extends StatelessWidget {
-  final FeedItem item;
-  final VoidCallback onTap;
-
-  const _FeedPostCard({required this.item, required this.onTap});
-
-  String get _typeLabel {
-    if (item.type == FeedItemType.hecho) return 'SINIESTRO';
-    if (item.type == FeedItemType.actividad) return 'PROXIMIDAD SOCIAL';
-    return 'PUBLICACIÓN';
-  }
-
-  IconData get _icon {
-    if (item.type == FeedItemType.hecho) return Icons.car_crash;
-    if (item.type == FeedItemType.actividad) return Icons.camera_alt;
-    return Icons.feed;
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final resumen = (item.resumen ?? '').trim();
-    final subtitle = resumen.isNotEmpty ? resumen : 'Publicación';
-
-    final userName = (item.userName ?? '').trim();
-    final user = userName.isNotEmpty ? userName : 'Usuario';
-
-    final rawFoto = (item.fotoUrl ?? '').trim();
-    final fotoUrl = rawFoto.isNotEmpty ? rawFoto : null;
-
-    return Material(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(18),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(18),
-        onTap: onTap,
-        child: Container(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: Colors.grey.shade200),
-            boxShadow: [
-              BoxShadow(
-                blurRadius: 14,
-                offset: const Offset(0, 8),
-                color: Colors.black.withOpacity(.06),
-              ),
-            ],
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(14, 12, 14, 10),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Container(
-                      width: 44,
-                      height: 44,
-                      decoration: BoxDecoration(
-                        color: Colors.blue.withOpacity(.10),
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                      child: Icon(_icon, color: Colors.blue, size: 24),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  user,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.w900,
-                                    color: Color(0xFF0F172A),
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 10,
-                                  vertical: 4,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: Colors.grey.shade100,
-                                  borderRadius: BorderRadius.circular(999),
-                                  border: Border.all(
-                                    color: Colors.grey.shade200,
-                                  ),
-                                ),
-                                child: Text(
-                                  _typeLabel,
-                                  style: const TextStyle(
-                                    fontSize: 11.5,
-                                    fontWeight: FontWeight.w900,
-                                    color: Color(0xFF0F172A),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 6),
-                          Text(
-                            subtitle,
-                            style: TextStyle(
-                              color: Colors.grey.shade800,
-                              fontSize: 13.2,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              if (fotoUrl != null) ...[
-                Divider(height: 1, color: Colors.grey.shade200),
-                ClipRRect(
-                  borderRadius: const BorderRadius.only(
-                    bottomLeft: Radius.circular(18),
-                    bottomRight: Radius.circular(18),
-                  ),
-                  child: _BigFeedImage(url: fotoUrl),
-                ),
-              ],
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _BigFeedImage extends StatelessWidget {
-  final String url;
-  const _BigFeedImage({required this.url});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      color: Colors.grey.shade100,
-      child: AspectRatio(
-        aspectRatio: 1,
-        child: Image.network(
-          url,
-          fit: BoxFit.contain,
-          alignment: Alignment.center,
-          filterQuality: FilterQuality.medium,
-          loadingBuilder: (context, child, progress) {
-            if (progress == null) return child;
-            return const Center(child: CircularProgressIndicator());
           },
-          errorBuilder: (_, __, ___) => Center(
-            child: Icon(
-              Icons.broken_image,
-              color: Colors.grey.shade500,
-              size: 34,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _EmptyCard extends StatelessWidget {
-  const _EmptyCard();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: Colors.grey.shade200),
-        boxShadow: [
-          BoxShadow(
-            blurRadius: 14,
-            offset: const Offset(0, 8),
-            color: Colors.black.withOpacity(.06),
-          ),
-        ],
-      ),
-      padding: const EdgeInsets.all(16),
-      child: const Center(
-        child: Text(
-          'Sin publicaciones en este día.',
-          style: TextStyle(color: Colors.grey, fontWeight: FontWeight.w700),
-        ),
-      ),
-    );
-  }
-}
-
-class _ErrorCard extends StatelessWidget {
-  final String message;
-  final VoidCallback? onRetry;
-
-  const _ErrorCard({required this.message, required this.onRetry});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: Colors.grey.shade200),
-        boxShadow: [
-          BoxShadow(
-            blurRadius: 14,
-            offset: const Offset(0, 8),
-            color: Colors.black.withOpacity(.06),
-          ),
-        ],
-      ),
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        children: [
-          Text(
-            message,
-            style: const TextStyle(
-              color: Colors.red,
-              fontWeight: FontWeight.w800,
-            ),
-            textAlign: TextAlign.center,
-          ),
-          if (onRetry != null) ...[
-            const SizedBox(height: 10),
-            ElevatedButton.icon(
-              onPressed: onRetry,
-              icon: const Icon(Icons.refresh),
-              label: const Text('Reintentar'),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-class _ErrorInline extends StatelessWidget {
-  final String message;
-  final VoidCallback onRetry;
-
-  const _ErrorInline({required this.message, required this.onRetry});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.red.withOpacity(.06),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.red.withOpacity(.18)),
-      ),
-      child: Row(
-        children: [
-          const Icon(Icons.error_outline, color: Colors.red),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              message,
-              style: const TextStyle(
-                color: Colors.red,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-          ),
-          const SizedBox(width: 10),
-          TextButton(onPressed: onRetry, child: const Text('Reintentar')),
-        ],
-      ),
-    );
-  }
-}
-
-class _QuickActionsGrid extends StatelessWidget {
-  final bool canAccidentes;
-  final bool canGruas;
-  final bool canMapa;
-  final bool canSustento;
-  final bool canBuscar;
-
-  final VoidCallback onAccidentes;
-  final VoidCallback onGruas;
-  final VoidCallback onMapa;
-  final VoidCallback onSustentoLegal;
-  final VoidCallback onBuscar;
-
-  const _QuickActionsGrid({
-    required this.canAccidentes,
-    required this.canGruas,
-    required this.canMapa,
-    required this.canSustento,
-    required this.canBuscar,
-    required this.onAccidentes,
-    required this.onGruas,
-    required this.onMapa,
-    required this.onSustentoLegal,
-    required this.onBuscar,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final rows = <Widget>[];
-
-    final row1 = <Widget>[];
-    if (canBuscar) {
-      row1.add(
-        Expanded(
-          child: _QuickCard(
-            icon: Icons.search,
-            title: 'Búsqueda',
-            subtitle: 'Por placa, serie, conductor…',
-            onTap: onBuscar,
-          ),
-        ),
-      );
-    }
-    if (canAccidentes) {
-      if (row1.isNotEmpty) row1.add(const SizedBox(width: 12));
-      row1.add(
-        Expanded(
-          child: _QuickCard(
-            icon: Icons.directions_car,
-            title: 'Siniestros',
-            subtitle: 'Listado y registros',
-            onTap: onAccidentes,
-          ),
-        ),
-      );
-    }
-    if (row1.isNotEmpty) rows.add(Row(children: row1));
-
-    final row2 = <Widget>[];
-    if (canGruas) {
-      row2.add(
-        Expanded(
-          child: _QuickCard(
-            icon: Icons.local_shipping,
-            title: 'Grúas',
-            subtitle: 'Listado y gráfica',
-            onTap: onGruas,
-          ),
-        ),
-      );
-    }
-    if (canMapa) {
-      if (row2.isNotEmpty) row2.add(const SizedBox(width: 12));
-      row2.add(
-        Expanded(
-          child: _QuickCard(
-            icon: Icons.map,
-            title: 'Mapa de Patrullas',
-            subtitle: 'Ubicaciones activas',
-            onTap: onMapa,
-          ),
-        ),
-      );
-    }
-    if (row2.isNotEmpty) {
-      if (rows.isNotEmpty) rows.add(const SizedBox(height: 12));
-      rows.add(Row(children: row2));
-    }
-
-    final row3 = <Widget>[];
-    if (canSustento) {
-      row3.add(
-        Expanded(
-          child: _QuickCard(
-            icon: Icons.gavel,
-            title: 'Sustento Legal',
-            subtitle: 'Catálogo y consulta',
-            onTap: onSustentoLegal,
-          ),
-        ),
-      );
-    }
-    if (row3.isNotEmpty) {
-      if (rows.isNotEmpty) rows.add(const SizedBox(height: 12));
-      rows.add(Row(children: row3));
-    }
-
-    if (rows.isEmpty) return const SizedBox.shrink();
-    return Column(children: rows);
-  }
-}
-
-class _QuickCard extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final String subtitle;
-  final VoidCallback onTap;
-
-  const _QuickCard({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(18),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(18),
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: Colors.grey.shade200),
-            boxShadow: [
-              BoxShadow(
-                blurRadius: 14,
-                offset: const Offset(0, 8),
-                color: Colors.black.withOpacity(.06),
-              ),
-            ],
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: 44,
-                height: 44,
-                decoration: BoxDecoration(
-                  color: Colors.blue.withOpacity(.10),
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: Icon(icon, color: Colors.blue, size: 26),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w900,
-                        color: Color(0xFF0F172A),
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      subtitle,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: Colors.grey.shade700,
-                        fontSize: 12.5,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 8),
-              Icon(Icons.chevron_right, color: Colors.grey.shade500),
-            ],
-          ),
-        ),
-      ),
+        );
+      },
     );
   }
 }

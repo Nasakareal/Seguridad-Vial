@@ -8,7 +8,7 @@ import 'package:share_plus/share_plus.dart';
 
 import '../../services/estadisticas_globales_service.dart';
 import '../../widgets/app_drawer.dart';
-import '../../main.dart' show AppRoutes;
+import '../../app/routes.dart';
 
 class EstadisticasGlobalesHomeScreen extends StatefulWidget {
   const EstadisticasGlobalesHomeScreen({super.key});

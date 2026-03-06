@@ -2,25 +2,26 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
 import 'package:file_saver/file_saver.dart';
-import 'package:share_plus/share_plus.dart';
-import 'package:path_provider/path_provider.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
+
+import 'package:seguridad_vial_app/app/routes.dart';
 
 import '../../services/auth_service.dart';
 import '../../services/tracking_service.dart';
 import '../../services/app_version_service.dart';
+import '../../services/accidentes_service.dart';
 
 import '../../widgets/app_drawer.dart';
 import '../../widgets/header_card.dart';
 
 import '../login_screen.dart';
-import '../../main.dart' show AppRoutes;
-
-// ✅ IMPORTA TU EDIT SCREEN (para poder abrirlo con MaterialPageRoute)
 import 'edit_screen.dart';
+
+import 'widgets/hecho_card.dart';
 
 class AccidentesScreen extends StatefulWidget {
   const AccidentesScreen({super.key});
@@ -51,9 +52,20 @@ class _AccidentesScreenState extends State<AccidentesScreen>
     _fechaSeleccionada = _fmtYmd(DateTime.now());
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      await AppVersionService.enforceUpdateIfNeeded(context);
-      await _bootstrapTrackingStatusOnly();
-      await _obtenerHechos();
+      try {
+        await AppVersionService.enforceUpdateIfNeeded(context);
+        if (!mounted) return;
+      } catch (_) {}
+
+      try {
+        await _bootstrapTrackingStatusOnly();
+        if (!mounted) return;
+      } catch (_) {}
+
+      try {
+        await _obtenerHechos();
+        if (!mounted) return;
+      } catch (_) {}
     });
   }
 
@@ -80,8 +92,12 @@ class _AccidentesScreenState extends State<AccidentesScreen>
     _busy = true;
 
     try {
-      await TrackingService.stop();
-      await AuthService.logout();
+      try {
+        await TrackingService.stop();
+      } catch (_) {}
+      try {
+        await AuthService.logout();
+      } catch (_) {}
     } finally {
       _busy = false;
     }
@@ -140,13 +156,8 @@ class _AccidentesScreenState extends State<AccidentesScreen>
 
     final root = AuthService.baseUrl.replaceFirst(RegExp(r'/api/?$'), '');
 
-    if (p.startsWith('/storage/')) {
-      return '$root$p';
-    }
-
-    if (p.startsWith('storage/')) {
-      return '$root/$p';
-    }
+    if (p.startsWith('/storage/')) return '$root$p';
+    if (p.startsWith('storage/')) return '$root/$p';
 
     return '$root/storage/$p';
   }
@@ -155,8 +166,8 @@ class _AccidentesScreenState extends State<AccidentesScreen>
     final v = hecho['vehiculos'];
     if (v is List) {
       return v
-          .where((e) => e is Map)
-          .map((e) => Map<String, dynamic>.from(e as Map))
+          .whereType<Map>()
+          .map((e) => Map<String, dynamic>.from(e))
           .toList();
     }
     return const [];
@@ -176,7 +187,6 @@ class _AccidentesScreenState extends State<AccidentesScreen>
       final v = (hecho[k] ?? '').toString().trim();
       if (v.isNotEmpty) return _toPublicUrl(v);
     }
-
     return '';
   }
 
@@ -194,7 +204,6 @@ class _AccidentesScreenState extends State<AccidentesScreen>
       final v = (hecho[k] ?? '').toString().trim();
       if (v.isNotEmpty) return _toPublicUrl(v);
     }
-
     return '';
   }
 
@@ -267,49 +276,22 @@ class _AccidentesScreenState extends State<AccidentesScreen>
     return s.isNotEmpty && s != 'null';
   }
 
+  int? _hechoIdFromMap(Map<String, dynamic> hecho) {
+    final id = hecho['id'];
+    if (id == null) return null;
+    if (id is int) return id;
+    return int.tryParse('$id');
+  }
+
   Future<void> _obtenerHechos() async {
     if (!mounted) return;
     setState(() => _cargando = true);
 
-    final token = await AuthService.getToken();
-
     try {
-      final uri = Uri.parse('${AuthService.baseUrl}/hechos').replace(
-        queryParameters: {'per_page': '100', 'fecha': _fechaSeleccionada},
+      final hechosMap = await AccidentesService.fetchHechos(
+        fecha: _fechaSeleccionada,
+        perPage: 100,
       );
-
-      final headers = <String, String>{
-        'Accept': 'application/json',
-        'Content-Type': 'application/json',
-      };
-
-      if (token != null && token.isNotEmpty) {
-        headers['Authorization'] = 'Bearer $token';
-      }
-
-      final response = await http.get(uri, headers: headers);
-
-      if (response.statusCode != 200) {
-        throw Exception('HTTP ${response.statusCode}: ${response.body}');
-      }
-
-      final raw = jsonDecode(response.body);
-      List<dynamic> datos;
-
-      if (raw is List) {
-        datos = raw;
-      } else if (raw is Map<String, dynamic> && raw['data'] is List) {
-        datos = raw['data'] as List<dynamic>;
-      } else if (raw is Map<String, dynamic> && raw['hechos'] is List) {
-        datos = raw['hechos'] as List<dynamic>;
-      } else {
-        datos = [];
-      }
-
-      final List<Map<String, dynamic>> hechosMap = datos
-          .where((e) => e is Map)
-          .map((e) => Map<String, dynamic>.from(e as Map))
-          .toList();
 
       if (!mounted) return;
       setState(() {
@@ -320,6 +302,7 @@ class _AccidentesScreenState extends State<AccidentesScreen>
       if (!mounted) return;
       setState(() => _cargando = false);
 
+      if (!mounted) return;
       showDialog(
         context: context,
         builder: (_) => AlertDialog(
@@ -362,26 +345,17 @@ class _AccidentesScreenState extends State<AccidentesScreen>
     }
   }
 
-  int? _hechoIdFromMap(Map<String, dynamic> hecho) {
-    final id = hecho['id'];
-    if (id == null) return null;
-    if (id is int) return id;
-    return int.tryParse('$id');
-  }
-
-  // ✅ SHOW: sigue siendo route named (tu HechoShowScreen ya lee arguments)
   void _abrirShow(Map<String, dynamic> hecho) {
     final hechoId = _hechoIdFromMap(hecho);
     if (hechoId == null || hechoId <= 0) return;
 
     Navigator.pushNamed(
       context,
-      '/accidentes/show',
+      AppRoutes.accidentesShow,
       arguments: {'hechoId': hechoId},
     );
   }
 
-  // ✅ EDIT: NO uses pushNamed porque EditHechoScreen requiere constructor con hechoId
   void _abrirEdit(Map<String, dynamic> hecho) {
     final hechoId = _hechoIdFromMap(hecho);
     if (hechoId == null || hechoId <= 0) return;
@@ -392,61 +366,16 @@ class _AccidentesScreenState extends State<AccidentesScreen>
     );
   }
 
-  String _parseBackendError(String body, int statusCode) {
-    try {
-      final raw = jsonDecode(body);
-
-      if (raw is Map<String, dynamic>) {
-        if (raw['message'] is String) {
-          final msg = (raw['message'] as String).trim();
-          if (msg.isNotEmpty) return msg;
-        }
-
-        final errors = raw['errors'];
-        if (errors is Map) {
-          final sb = StringBuffer();
-          errors.forEach((k, v) {
-            if (v is List && v.isNotEmpty) {
-              sb.writeln('• ${v.first}');
-            }
-          });
-          final out = sb.toString().trim();
-          if (out.isNotEmpty) return out;
-        }
-      }
-    } catch (_) {}
-
-    return 'Error HTTP $statusCode';
-  }
-
   Future<void> _descargarReporte(int hechoId) async {
     if (_descargando.contains(hechoId)) return;
 
     setState(() => _descargando.add(hechoId));
 
     try {
-      final token = await AuthService.getToken();
-      if (token == null || token.isEmpty) {
-        throw Exception('Sesión inválida. Vuelve a iniciar sesión.');
-      }
-
-      final uri = Uri.parse(
-        '${AuthService.baseUrl}/hechos/$hechoId/reporte-doc',
+      final Uint8List bytes = await AccidentesService.downloadReporteDoc(
+        hechoId: hechoId,
       );
 
-      final headers = <String, String>{
-        'Accept': 'application/octet-stream',
-        'Authorization': 'Bearer $token',
-      };
-
-      final resp = await http.get(uri, headers: headers);
-
-      if (resp.statusCode != 200) {
-        final msg = _parseBackendError(resp.body, resp.statusCode);
-        throw Exception(msg);
-      }
-
-      final Uint8List bytes = resp.bodyBytes;
       const ext = 'doc';
       final baseName = 'hecho_$hechoId';
 
@@ -488,9 +417,7 @@ class _AccidentesScreenState extends State<AccidentesScreen>
         ),
       );
     } finally {
-      if (mounted) {
-        setState(() => _descargando.remove(hechoId));
-      }
+      if (mounted) setState(() => _descargando.remove(hechoId));
     }
   }
 
@@ -525,34 +452,7 @@ class _AccidentesScreenState extends State<AccidentesScreen>
     setState(() => _enviandoWhatsapp.add(hechoId));
 
     try {
-      final token = await AuthService.getToken();
-      if (token == null || token.isEmpty) {
-        throw Exception('Sesión inválida. Vuelve a iniciar sesión.');
-      }
-
-      final uri = Uri.parse('${AuthService.baseUrl}/hechos/$hechoId/whatsapp');
-
-      final headers = <String, String>{
-        'Accept': 'application/json',
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer $token',
-      };
-
-      final resp = await http.post(uri, headers: headers);
-
-      if (resp.statusCode != 200) {
-        final msg = _parseBackendError(resp.body, resp.statusCode);
-        throw Exception(msg);
-      }
-
-      String message = 'Hecho compartido por WhatsApp.';
-      try {
-        final raw = jsonDecode(resp.body);
-        if (raw is Map && raw['message'] is String) {
-          final m = (raw['message'] as String).trim();
-          if (m.isNotEmpty) message = m;
-        }
-      } catch (_) {}
+      final message = await AccidentesService.enviarWhatsapp(hechoId: hechoId);
 
       if (!mounted) return;
 
@@ -590,136 +490,8 @@ class _AccidentesScreenState extends State<AccidentesScreen>
         ),
       );
     } finally {
-      if (mounted) {
-        setState(() => _enviandoWhatsapp.remove(hechoId));
-      }
+      if (mounted) setState(() => _enviandoWhatsapp.remove(hechoId));
     }
-  }
-
-  Widget _fotosStrip(List<String> urls) {
-    if (urls.isEmpty) return const SizedBox.shrink();
-
-    return Padding(
-      padding: const EdgeInsets.only(top: 10),
-      child: SizedBox(
-        height: 72,
-        child: ListView.separated(
-          scrollDirection: Axis.horizontal,
-          itemCount: urls.length,
-          separatorBuilder: (_, __) => const SizedBox(width: 10),
-          itemBuilder: (context, i) {
-            final u = urls[i];
-            return ClipRRect(
-              borderRadius: BorderRadius.circular(12),
-              child: AspectRatio(
-                aspectRatio: 1,
-                child: InkWell(
-                  onTap: () {
-                    showDialog(
-                      context: context,
-                      builder: (_) => Dialog(
-                        insetPadding: const EdgeInsets.all(16),
-                        child: InteractiveViewer(
-                          child: Image.network(
-                            u,
-                            fit: BoxFit.contain,
-                            errorBuilder: (_, __, ___) => const Padding(
-                              padding: EdgeInsets.all(24),
-                              child: Text('No se pudo cargar la imagen.'),
-                            ),
-                          ),
-                        ),
-                      ),
-                    );
-                  },
-                  child: Image.network(
-                    u,
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => Container(
-                      color: Colors.grey.shade200,
-                      child: const Icon(Icons.broken_image),
-                    ),
-                    loadingBuilder: (context, child, progress) {
-                      if (progress == null) return child;
-                      return Container(
-                        color: Colors.grey.shade200,
-                        alignment: Alignment.center,
-                        child: const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-              ),
-            );
-          },
-        ),
-      ),
-    );
-  }
-
-  Widget _onePhotoBlock(String label, String url) {
-    if (url.trim().isEmpty) return const SizedBox.shrink();
-
-    return Padding(
-      padding: const EdgeInsets.only(top: 10),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(label, style: const TextStyle(fontWeight: FontWeight.w900)),
-          const SizedBox(height: 8),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(12),
-            child: AspectRatio(
-              aspectRatio: 16 / 9,
-              child: InkWell(
-                onTap: () {
-                  showDialog(
-                    context: context,
-                    builder: (_) => Dialog(
-                      insetPadding: const EdgeInsets.all(16),
-                      child: InteractiveViewer(
-                        child: Image.network(
-                          url,
-                          fit: BoxFit.contain,
-                          errorBuilder: (_, __, ___) => const Padding(
-                            padding: EdgeInsets.all(24),
-                            child: Text('No se pudo cargar la imagen.'),
-                          ),
-                        ),
-                      ),
-                    ),
-                  );
-                },
-                child: Image.network(
-                  url,
-                  fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) => Container(
-                    color: Colors.grey.shade200,
-                    child: const Icon(Icons.broken_image),
-                  ),
-                  loadingBuilder: (context, child, progress) {
-                    if (progress == null) return child;
-                    return Container(
-                      color: Colors.grey.shade200,
-                      alignment: Alignment.center,
-                      child: const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      ),
-                    );
-                  },
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
   }
 
   @override
@@ -769,8 +541,10 @@ class _AccidentesScreenState extends State<AccidentesScreen>
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(16),
-                  color: Colors.blue.withOpacity(.06),
-                  border: Border.all(color: Colors.blue.withOpacity(.18)),
+                  color: Colors.blue.withValues(alpha: 0.06),
+                  border: Border.all(
+                    color: Colors.blue.withValues(alpha: 0.18),
+                  ),
                 ),
                 child: Text(
                   'Mostrando hechos del día: $_fechaSeleccionada',
@@ -815,123 +589,29 @@ class _AccidentesScreenState extends State<AccidentesScreen>
                     final isSending =
                         hechoId != null && _enviandoWhatsapp.contains(hechoId);
 
-                    return Card(
-                      margin: const EdgeInsets.only(bottom: 12),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 6),
-                        child: ListTile(
-                          leading: const Icon(Icons.directions_car),
-                          title: Text('Folio: $folio'),
-                          subtitle: Padding(
-                            padding: const EdgeInsets.only(top: 6),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'Fecha: $fecha ${hora == '—' ? '' : hora}'
-                                      .trim(),
-                                ),
-                                Text('Ubicación: ${_ubicacion(hecho)}'),
-                                Text('Situación: $situacion'),
-                                Text('Perito: $perito'),
-                                _onePhotoBlock('Foto del hecho', fotoHecho),
-                                if (fotosVehiculos.isNotEmpty)
-                                  Padding(
-                                    padding: const EdgeInsets.only(top: 10),
-                                    child: Text(
-                                      'Fotos de vehículos: ${fotosVehiculos.length}',
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.w800,
-                                        color: Colors.blue.shade700,
-                                      ),
-                                    ),
-                                  ),
-                                _fotosStrip(fotosVehiculos),
-                                _onePhotoBlock(
-                                  'Convenio / Descargo',
-                                  fotoConvenio,
-                                ),
-                              ],
-                            ),
-                          ),
-                          isThreeLine: true,
-
-                          // ✅ Tap normal = SHOW (no edit)
-                          onTap: () => _abrirShow(hecho),
-
-                          trailing: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              SizedBox(
-                                height: 36,
-                                child: ElevatedButton(
-                                  onPressed:
-                                      (hechoId == null ||
-                                          yaEnviado ||
-                                          isSending)
-                                      ? null
-                                      : () => _enviarWhatsapp(hechoId),
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: yaEnviado
-                                        ? Colors.grey
-                                        : Colors.green,
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 10,
-                                    ),
-                                  ),
-                                  child: isSending
-                                      ? const SizedBox(
-                                          height: 18,
-                                          width: 18,
-                                          child: CircularProgressIndicator(
-                                            strokeWidth: 2,
-                                            color: Colors.white,
-                                          ),
-                                        )
-                                      : Text(
-                                          yaEnviado ? 'Enviado' : 'Enviar',
-                                          style: const TextStyle(
-                                            fontWeight: FontWeight.w800,
-                                          ),
-                                        ),
-                                ),
-                              ),
-                              const SizedBox(height: 6),
-                              Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  IconButton(
-                                    icon: isDownloading
-                                        ? const SizedBox(
-                                            height: 22,
-                                            width: 22,
-                                            child: CircularProgressIndicator(
-                                              strokeWidth: 2,
-                                            ),
-                                          )
-                                        : const Icon(Icons.download),
-                                    tooltip: 'Descargar informe',
-                                    onPressed:
-                                        (hechoId == null || isDownloading)
-                                        ? null
-                                        : () => _descargarReporte(hechoId),
-                                  ),
-
-                                  // ✅ Lápiz = EDIT (a tu EditHechoScreen)
-                                  IconButton(
-                                    icon: const Icon(Icons.edit),
-                                    tooltip: 'Editar',
-                                    onPressed: () => _abrirEdit(hecho),
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
+                    return HechoCard(
+                      hecho: hecho,
+                      folio: folio,
+                      fecha: fecha,
+                      hora: hora,
+                      situacion: situacion,
+                      perito: perito,
+                      ubicacion: _ubicacion(hecho),
+                      fotoHecho: fotoHecho,
+                      fotosVehiculos: fotosVehiculos,
+                      fotoConvenio: fotoConvenio,
+                      isDownloading: isDownloading,
+                      isSending: isSending,
+                      yaEnviado: yaEnviado,
+                      onTapShow: () => _abrirShow(hecho),
+                      onTapEdit: () => _abrirEdit(hecho),
+                      onDownload: (hechoId == null || isDownloading)
+                          ? null
+                          : () => _descargarReporte(hechoId),
+                      onEnviarWhatsapp:
+                          (hechoId == null || yaEnviado || isSending)
+                          ? null
+                          : () => _enviarWhatsapp(hechoId),
                     );
                   },
                 ),
@@ -940,7 +620,8 @@ class _AccidentesScreenState extends State<AccidentesScreen>
         ),
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: () => Navigator.pushNamed(context, '/accidentes/create'),
+        onPressed: () =>
+            Navigator.pushNamed(context, AppRoutes.accidentesCreate),
         tooltip: 'Crear nuevo hecho',
         child: const Icon(Icons.add),
       ),

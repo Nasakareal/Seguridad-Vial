@@ -12,7 +12,7 @@ import '../widgets/app_drawer.dart';
 import '../widgets/header_card.dart';
 import '../widgets/riesgo_map_embed.dart';
 
-import '../main.dart' show AppRoutes;
+import '../../app/routes.dart';
 import 'login_screen.dart';
 
 class HomePeritoScreen extends StatefulWidget {

@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
 import '../../services/auth_service.dart';
-import '../../main.dart' show AppRoutes;
+import '../../app/routes.dart';
 
 class PendientesCortesScreen extends StatefulWidget {
   const PendientesCortesScreen({super.key});

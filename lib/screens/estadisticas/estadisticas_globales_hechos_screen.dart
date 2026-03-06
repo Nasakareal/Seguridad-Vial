@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../services/estadisticas_globales_service.dart';
-import '../../main.dart' show AppRoutes;
+import '../../app/routes.dart';
 
 class EstadisticasGlobalesHechosScreen extends StatefulWidget {
   const EstadisticasGlobalesHechosScreen({super.key});

@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import '../services/alert_service.dart';
 import '../services/auth_service.dart';
-import '../main.dart' show navigatorKey;
+import '../core/globals.dart' show navigatorKey;
 
 class AlertsListener extends StatefulWidget {
   const AlertsListener({super.key, required this.child});

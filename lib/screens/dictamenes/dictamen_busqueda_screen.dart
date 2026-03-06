@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../services/dictamenes_service.dart';
-import '../../main.dart' show AppRoutes;
+import '../../app/routes.dart';
 
 class DictamenesBusquedaScreen extends StatefulWidget {
   const DictamenesBusquedaScreen({super.key});

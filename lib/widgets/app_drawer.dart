@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../main.dart' show AppRoutes;
+import '../../app/routes.dart';
 import '../services/auth_service.dart';
 
 class AppDrawer extends StatelessWidget {

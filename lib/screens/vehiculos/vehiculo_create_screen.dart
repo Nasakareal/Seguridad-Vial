@@ -2,7 +2,9 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
-import '../services/auth_service.dart';
+import '../../services/auth_service.dart';
+import '../../core/vehiculos/vehiculo_taxonomia.dart';
+import '../../core/vehiculos/estados_republica.dart';
 
 class VehiculoCreateScreen extends StatefulWidget {
   const VehiculoCreateScreen({super.key});
@@ -24,7 +26,6 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
   final _lineaCtrl = TextEditingController();
   final _colorCtrl = TextEditingController();
   final _placasCtrl = TextEditingController();
-  final _estadoPlacasCtrl = TextEditingController();
   final _serieCtrl = TextEditingController();
   final _capacidadCtrl = TextEditingController(text: '5');
   final _tipoServicioCtrl = TextEditingController(text: 'PARTICULAR');
@@ -34,6 +35,8 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
   final _partesDanadasCtrl = TextEditingController();
   bool _antecedenteVehiculo = false;
 
+  String? _estadoPlacasSeleccionado;
+
   bool _cargandoGruas = true;
   List<Map<String, dynamic>> _gruas = [];
   int? _gruaIdSeleccionada;
@@ -41,34 +44,6 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
 
   static const String _baseApi = 'https://seguridadvial-mich.com/api';
   static const String _urlGruas = '$_baseApi/gruas';
-
-  static const List<Map<String, String>> _tiposGenerales = [
-    {'value': 'semoviente', 'label': 'Semoviente'},
-    {'value': 'automovil', 'label': 'Automóvil'},
-    {'value': 'camion', 'label': 'Camión'},
-    {'value': 'camioneta', 'label': 'Camioneta'},
-    {'value': 'bicicleta', 'label': 'Bicicleta'},
-    {'value': 'motocicleta', 'label': 'Motocicleta'},
-    {'value': 'remolque', 'label': 'Remolque'},
-  ];
-
-  static const Map<String, List<String>> _carrocerias = {
-    'automovil': ['Sedán', 'Hatchback', 'Coupé', 'SUV', 'Convertible'],
-    'camion': ['Caja seca', 'Plataforma', 'Volteo', 'Refrigerado', 'Tracto'],
-    'camioneta': ['Pick-up', 'Panel', 'Vagoneta', 'Furgoneta'],
-    'motocicleta': [
-      'Trabajo',
-      'Cruisier',
-      'Doble Propósito',
-      'Scooter',
-      'Enduro',
-      'Naked',
-      'Pista',
-    ],
-    'bicicleta': ['Montaña', 'Ruta', 'BMX'],
-    'remolque': ['Plataforma', 'Caja cerrada', 'Cama baja', 'Refrigerado'],
-    'semoviente': ['Caballo', 'Burro', 'Vaca', 'Otro animal de tiro'],
-  };
 
   int _hechoIdFromArgs(BuildContext context) {
     final args = ModalRoute.of(context)?.settings.arguments;
@@ -93,7 +68,6 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
     _lineaCtrl.dispose();
     _colorCtrl.dispose();
     _placasCtrl.dispose();
-    _estadoPlacasCtrl.dispose();
     _serieCtrl.dispose();
     _capacidadCtrl.dispose();
     _tipoServicioCtrl.dispose();
@@ -158,7 +132,6 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
     return null;
   }
 
-  // Placas: opcional, pero si se captura, validamos formato básico (5-15 alfanum, sin espacios/guiones).
   String? _placasValidator(String? v) {
     final s = (v ?? '').trim().toUpperCase().replaceAll(
       RegExp(r'[\s\-\._,]'),
@@ -167,22 +140,6 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
     if (s.isEmpty) return null;
     final ok = RegExp(r'^[A-Z0-9]{5,15}$').hasMatch(s);
     if (!ok) return 'Placas inválidas (solo letras y números, 5-15)';
-    return null;
-  }
-
-  // Estado de placas: requerido SOLO si hay placas
-  String? _estadoPlacasValidator(String? v) {
-    final placas = _t(_placasCtrl).trim();
-    final tienePlacas = placas.isNotEmpty;
-
-    if (!tienePlacas) return null;
-
-    final s = (v ?? '').trim();
-    if (s.isEmpty) return 'Requerido si capturas placas';
-
-    final clean = s.toUpperCase().replaceAll(RegExp(r'[\s\-\._,]'), '');
-    final ok = RegExp(r'^[A-Z]{3,15}$').hasMatch(clean);
-    if (!ok) return 'Estado inválido (solo letras, 3-15). Ej: MICHOACAN';
     return null;
   }
 
@@ -325,8 +282,7 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
   }
 
   List<String> _carroceriasDeTipoGeneral(String? tipoGeneral) {
-    if (tipoGeneral == null || tipoGeneral.isEmpty) return const [];
-    return _carrocerias[tipoGeneral] ?? const [];
+    return VehiculoTaxonomia.carroceriasDeTipoGeneral(tipoGeneral);
   }
 
   String? _nombreGruaById(int? id) {
@@ -365,42 +321,34 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
       final placasClean = _t(
         _placasCtrl,
       ).toUpperCase().replaceAll(RegExp(r'[\s\-\._,]'), '');
-      final estadoClean = _t(
-        _estadoPlacasCtrl,
-      ).toUpperCase().replaceAll(RegExp(r'[\s\-\._,]'), '');
+
+      final estadoClean = (_estadoPlacasSeleccionado ?? '')
+          .trim()
+          .toUpperCase();
 
       final payload = <String, dynamic>{
         'marca': _t(_marcaCtrl),
         'modelo': _t(_modeloCtrl).isEmpty ? null : _t(_modeloCtrl),
-
-        // Backend solo usa "tipo" (carrocería). Tipo general es solo UI.
         'tipo': _tipoCarroceriaSeleccionada,
-
         'linea': _t(_lineaCtrl),
         'color': _t(_colorCtrl),
-
         'placas': placasClean.isEmpty ? null : placasClean,
         'estado_placas': placasClean.isEmpty
             ? null
             : (estadoClean.isEmpty ? null : estadoClean),
-
         'serie': _t(_serieCtrl).isEmpty ? null : _t(_serieCtrl),
-
         'capacidad_personas': _toIntOrNull(_t(_capacidadCtrl)) ?? 0,
         'tipo_servicio': _t(_tipoServicioCtrl),
         'tarjeta_circulacion_nombre': _t(_tarjetaCirculacionNombreCtrl).isEmpty
             ? null
             : _t(_tarjetaCirculacionNombreCtrl),
-
         'grua_id': _gruaIdSeleccionada,
         'corralon': (corralonNombre == null || corralonNombre.isEmpty)
             ? null
             : corralonNombre,
-
         'aseguradora': _t(_aseguradoraCtrl).isEmpty
             ? null
             : _t(_aseguradoraCtrl),
-
         'monto_danos': _toDoubleOrNull(_t(_montoDanosCtrl)) ?? 0,
         'partes_danadas': _t(_partesDanadasCtrl),
         'antecedente_vehiculo': _antecedenteVehiculo,
@@ -458,8 +406,14 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
     final carroceriasDisponibles = _carroceriasDeTipoGeneral(
       _tipoGeneralSeleccionado,
     );
-
     final tienePlacas = _t(_placasCtrl).isNotEmpty;
+
+    if (!tienePlacas && _estadoPlacasSeleccionado != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        setState(() => _estadoPlacasSeleccionado = null);
+      });
+    }
 
     return Scaffold(
       appBar: AppBar(title: Text('Nuevo vehículo (Hecho #$hechoId)')),
@@ -478,7 +432,6 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
                 validator: _req,
               ),
               const SizedBox(height: 10),
-
               DropdownButtonFormField<String>(
                 value: _tipoGeneralSeleccionado,
                 decoration: const InputDecoration(
@@ -490,7 +443,7 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
                     value: null,
                     child: Text('-- Seleccione --'),
                   ),
-                  ..._tiposGenerales.map((t) {
+                  ...VehiculoTaxonomia.tiposGenerales.map((t) {
                     return DropdownMenuItem<String>(
                       value: t['value'],
                       child: Text(t['label'] ?? ''),
@@ -506,7 +459,6 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
                 validator: _tipoGeneralValidator,
               ),
               const SizedBox(height: 10),
-
               DropdownButtonFormField<String>(
                 value: _tipoCarroceriaSeleccionada,
                 decoration: const InputDecoration(
@@ -543,7 +495,6 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
                 },
               ),
               const SizedBox(height: 10),
-
               TextFormField(
                 controller: _lineaCtrl,
                 decoration: const InputDecoration(
@@ -553,7 +504,6 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
                 validator: _req,
               ),
               const SizedBox(height: 10),
-
               TextFormField(
                 controller: _modeloCtrl,
                 decoration: const InputDecoration(
@@ -563,7 +513,6 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
                 validator: (v) => _maxLenOrNull(v, 10),
               ),
               const SizedBox(height: 10),
-
               TextFormField(
                 controller: _colorCtrl,
                 decoration: const InputDecoration(
@@ -573,7 +522,6 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
                 validator: _req,
               ),
               const SizedBox(height: 10),
-
               TextFormField(
                 controller: _placasCtrl,
                 decoration: const InputDecoration(
@@ -583,19 +531,37 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
                 validator: _placasValidator,
                 onChanged: (_) => setState(() {}),
               ),
-
               if (tienePlacas) ...[
                 const SizedBox(height: 10),
-                TextFormField(
-                  controller: _estadoPlacasCtrl,
+                DropdownButtonFormField<String>(
+                  value: _estadoPlacasSeleccionado,
                   decoration: const InputDecoration(
                     labelText: 'Estado de placas *',
                     prefixIcon: Icon(Icons.map),
                   ),
-                  validator: _estadoPlacasValidator,
+                  items: [
+                    const DropdownMenuItem<String>(
+                      value: null,
+                      child: Text('-- Seleccione --'),
+                    ),
+                    ...EstadosRepublica.estados.map((e) {
+                      return DropdownMenuItem<String>(
+                        value: e['value'],
+                        child: Text(e['label'] ?? ''),
+                      );
+                    }),
+                  ],
+                  onChanged: (v) =>
+                      setState(() => _estadoPlacasSeleccionado = v),
+                  validator: (v) {
+                    if (!tienePlacas) return null;
+                    if ((v ?? '').trim().isEmpty) {
+                      return 'Requerido si capturas placas';
+                    }
+                    return null;
+                  },
                 ),
               ],
-
               const SizedBox(height: 10),
               TextFormField(
                 controller: _serieCtrl,
@@ -606,7 +572,6 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
                 validator: (v) => _maxLenOrNull(v, 17),
               ),
               const SizedBox(height: 10),
-
               TextFormField(
                 controller: _capacidadCtrl,
                 keyboardType: TextInputType.number,
@@ -617,7 +582,6 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
                 validator: _capacidadValidator,
               ),
               const SizedBox(height: 10),
-
               TextFormField(
                 controller: _tipoServicioCtrl,
                 decoration: const InputDecoration(
@@ -627,7 +591,6 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
                 validator: _req,
               ),
               const SizedBox(height: 10),
-
               TextFormField(
                 controller: _tarjetaCirculacionNombreCtrl,
                 decoration: const InputDecoration(
@@ -637,7 +600,6 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
                 validator: (v) => _maxLenOrNull(v, 60),
               ),
               const SizedBox(height: 10),
-
               _cargandoGruas
                   ? const ListTile(
                       contentPadding: EdgeInsets.zero,
@@ -670,9 +632,7 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
                       ],
                       onChanged: (v) => setState(() => _gruaIdSeleccionada = v),
                     ),
-
               const SizedBox(height: 10),
-
               _cargandoGruas
                   ? const SizedBox.shrink()
                   : DropdownButtonFormField<int?>(
@@ -700,7 +660,6 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
                       onChanged: (v) =>
                           setState(() => _corralonGruaIdSeleccionada = v),
                     ),
-
               const SizedBox(height: 10),
               TextFormField(
                 controller: _aseguradoraCtrl,
@@ -709,7 +668,6 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
                   prefixIcon: Icon(Icons.security),
                 ),
               ),
-
               const SizedBox(height: 10),
               TextFormField(
                 controller: _montoDanosCtrl,
@@ -722,7 +680,6 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
                 ),
                 validator: (v) => _montoValidator(v, required: true),
               ),
-
               const SizedBox(height: 10),
               TextFormField(
                 controller: _partesDanadasCtrl,
@@ -733,14 +690,12 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
                 ),
                 validator: _req,
               ),
-
               const SizedBox(height: 6),
               SwitchListTile(
                 title: const Text('Antecedente del vehículo'),
                 value: _antecedenteVehiculo,
                 onChanged: (v) => setState(() => _antecedenteVehiculo = v),
               ),
-
               const SizedBox(height: 18),
               ElevatedButton.icon(
                 onPressed: _saving ? null : () => _guardar(hechoId),
