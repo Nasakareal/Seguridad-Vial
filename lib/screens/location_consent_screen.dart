@@ -46,11 +46,12 @@ class _LocationConsentScreenState extends State<LocationConsentScreen> {
         return;
       }
 
+      if (!mounted) return;
       final started = await TrackingService.startAfterConsent(context);
       if (!started) {
         setState(() {
           _error =
-              'No se pudo activar la ubicación en segundo plano. Revisa permisos en Ajustes.';
+              'No se pudo activar la ubicación obligatoria. Revisa permisos, ubicación precisa y segundo plano en Ajustes.';
         });
         return;
       }
@@ -66,15 +67,16 @@ class _LocationConsentScreenState extends State<LocationConsentScreen> {
         _error = 'Ocurrió un error al activar la ubicación.';
       });
     } finally {
-      if (!mounted) return;
-      setState(() => _busy = false);
+      if (mounted) {
+        setState(() => _busy = false);
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return WillPopScope(
-      onWillPop: () async => false,
+    return PopScope(
+      canPop: false,
       child: Scaffold(
         backgroundColor: const Color(0xFFF6F7FB),
         appBar: AppBar(
@@ -101,7 +103,7 @@ class _LocationConsentScreenState extends State<LocationConsentScreen> {
                         BoxShadow(
                           blurRadius: 14,
                           offset: const Offset(0, 8),
-                          color: Colors.black.withOpacity(.06),
+                          color: Colors.black.withValues(alpha: 0.06),
                         ),
                       ],
                     ),
@@ -119,7 +121,7 @@ class _LocationConsentScreenState extends State<LocationConsentScreen> {
                         ),
                         const SizedBox(height: 10),
                         Text(
-                          'La app necesita enviar tu ubicación incluso en segundo plano para mostrar patrullas activas y coordinar el servicio.',
+                          'La app necesita enviar tu ubicación incluso en segundo plano para mostrar patrullas activas y coordinar el servicio. Para continuar deberá quedar activo “Permitir siempre” y, en iPhone, “Ubicación precisa”.',
                           style: TextStyle(
                             color: Colors.grey.shade800,
                             fontSize: 13.5,
@@ -132,13 +134,13 @@ class _LocationConsentScreenState extends State<LocationConsentScreen> {
                           padding: const EdgeInsets.all(12),
                           decoration: BoxDecoration(
                             borderRadius: BorderRadius.circular(14),
-                            color: Colors.blue.withOpacity(.06),
+                            color: Colors.blue.withValues(alpha: 0.06),
                             border: Border.all(
-                              color: Colors.blue.withOpacity(.18),
+                              color: Colors.blue.withValues(alpha: 0.18),
                             ),
                           ),
                           child: Text(
-                            'Se solicitará “Permitir todo el tiempo”.',
+                            'Se solicitará “Permitir siempre” y, en Android, ejecución sin restricciones de batería.',
                             style: TextStyle(
                               color: Colors.blue.shade900,
                               fontWeight: FontWeight.w800,
@@ -151,9 +153,9 @@ class _LocationConsentScreenState extends State<LocationConsentScreen> {
                             padding: const EdgeInsets.all(12),
                             decoration: BoxDecoration(
                               borderRadius: BorderRadius.circular(14),
-                              color: Colors.red.withOpacity(.06),
+                              color: Colors.red.withValues(alpha: 0.06),
                               border: Border.all(
-                                color: Colors.red.withOpacity(.18),
+                                color: Colors.red.withValues(alpha: 0.18),
                               ),
                             ),
                             child: Row(

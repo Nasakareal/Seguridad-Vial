@@ -19,7 +19,7 @@ class HomeTrackingController {
           title: const Text('Permiso de ubicacion en segundo plano'),
           content: const Text(
             'Esta app recopila y transmite datos de ubicacion para habilitar el monitoreo de unidades y el mapa de patrullas, incluso cuando la app esta cerrada o no esta en uso.\n\n'
-            'Si aceptas, se solicitara el permiso de ubicacion necesario para activar esta funcion.',
+            'Si aceptas, se solicitara permiso de ubicacion en segundo plano y, en iPhone, ubicacion precisa para mantener esta funcion activa.',
           ),
           actions: [
             TextButton(

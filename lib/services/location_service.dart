@@ -28,6 +28,13 @@ class LocationService {
         return false;
       }
 
+      if (Platform.isIOS && requireAlways) {
+        final accuracyStatus = await Geolocator.getLocationAccuracy();
+        if (accuracyStatus == LocationAccuracyStatus.reduced) {
+          return false;
+        }
+      }
+
       final pos =
           positionOverride ??
           await Geolocator.getCurrentPosition(

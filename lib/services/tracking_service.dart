@@ -53,7 +53,7 @@ class TrackingService {
         if (!ok || !context.mounted) return false;
       }
 
-      final okPerms = await _ensurePermissionsAlways(context);
+      final okPerms = await _ensureTrackingRequirements(context);
       if (!okPerms) return false;
 
       if (Platform.isAndroid) {
@@ -144,7 +144,7 @@ class TrackingService {
       activityType: ActivityType.automotiveNavigation,
       pauseLocationUpdatesAutomatically: false,
       allowBackgroundLocationUpdates: true,
-      showBackgroundLocationIndicator: false,
+      showBackgroundLocationIndicator: true,
     );
 
     await _iosSub?.cancel();
@@ -202,107 +202,260 @@ class TrackingService {
     return true;
   }
 
-  static Future<bool> _ensurePermissionsAlways(BuildContext context) async {
-    final enabled = await Geolocator.isLocationServiceEnabled();
-    if (!enabled) return false;
-
-    var permission = await Geolocator.checkPermission();
-    if (permission == LocationPermission.denied) {
-      permission = await Geolocator.requestPermission();
-    }
-
-    if (permission == LocationPermission.denied ||
-        permission == LocationPermission.deniedForever) {
-      return false;
-    }
-
-    if (permission == LocationPermission.always) {
-      await _maybeRequestPreciseAccuracy();
-      return true;
-    }
-
+  static Future<bool> _ensureTrackingRequirements(BuildContext context) async {
+    final locationEnabled = await _ensureLocationServicesEnabled(context);
+    if (!locationEnabled) return false;
     if (!context.mounted) return false;
 
-    final go = await _showAlwaysPermissionDialog(context);
-    if (!go) return false;
+    final permissionOk = await _ensurePermissionsAlways(context);
+    if (!permissionOk) return false;
+    if (!context.mounted) return false;
 
-    permission = await _openAppSettingsAndAwaitPermission();
-    if (permission != LocationPermission.always) return false;
+    final preciseOk = await _ensurePreciseAccuracy(context);
+    if (!preciseOk) return false;
+    if (!context.mounted) return false;
 
-    await _maybeRequestPreciseAccuracy();
+    final batteryOk = await _ensureBatteryOptimizationExemption(context);
+    if (!batteryOk) return false;
+
     return true;
   }
 
-  static Future<bool> _showAlwaysPermissionDialog(BuildContext context) async {
+  static Future<bool> _ensureLocationServicesEnabled(
+    BuildContext context,
+  ) async {
+    while (!await Geolocator.isLocationServiceEnabled()) {
+      if (!context.mounted) return false;
+
+      await _showBlockingSettingsDialog(
+        context,
+        title: 'Activar ubicacion del dispositivo',
+        content:
+            'Para compartir la ubicacion de la patrulla, la ubicacion del dispositivo debe permanecer encendida.',
+      );
+
+      final enabled = await _openLocationSettingsAndAwaitEnabled();
+      if (!enabled && !context.mounted) return false;
+    }
+
+    return true;
+  }
+
+  static Future<bool> _ensurePermissionsAlways(BuildContext context) async {
+    var permission = await Geolocator.checkPermission();
+
+    while (true) {
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+
+      if (permission == LocationPermission.always) {
+        return true;
+      }
+
+      if (!context.mounted) return false;
+
+      await _showAlwaysPermissionDialog(context);
+      permission = await _openAppSettingsAndAwaitPermission();
+    }
+  }
+
+  static Future<bool> _ensurePreciseAccuracy(BuildContext context) async {
+    if (!Platform.isIOS) return true;
+
+    await _maybeRequestPreciseAccuracy();
+
+    while (true) {
+      final accuracyStatus = await _safeGetLocationAccuracy();
+      if (accuracyStatus == LocationAccuracyStatus.precise) {
+        return true;
+      }
+
+      if (!context.mounted) return false;
+
+      await _showBlockingSettingsDialog(
+        context,
+        title: 'Activar ubicacion precisa',
+        content:
+            'Para seguir mostrando patrullas con exactitud en iPhone, activa Ajustes > Seguridad Vial > Ubicacion > Ubicacion precisa.',
+      );
+
+      final updated = await _openAppSettingsAndAwaitAccuracy();
+      if (updated == LocationAccuracyStatus.precise) {
+        return true;
+      }
+    }
+  }
+
+  static Future<bool> _ensureBatteryOptimizationExemption(
+    BuildContext context,
+  ) async {
+    if (!Platform.isAndroid) return true;
+
+    while (true) {
+      try {
+        if (await FlutterForegroundTask.isIgnoringBatteryOptimizations) {
+          return true;
+        }
+      } catch (_) {
+        return true;
+      }
+
+      if (!context.mounted) return false;
+
+      await _showBlockingSettingsDialog(
+        context,
+        title: 'Permitir segundo plano',
+        content:
+            'Para que Android no detenga el rastreo en segundo plano, permite que esta app se ejecute sin restricciones de bateria.',
+      );
+
+      try {
+        final granted =
+            await FlutterForegroundTask.requestIgnoreBatteryOptimization();
+        if (granted) {
+          return true;
+        }
+      } catch (_) {}
+
+      final grantedFromSettings =
+          await _openIgnoreBatteryOptimizationSettingsAndAwait();
+      if (grantedFromSettings) {
+        return true;
+      }
+    }
+  }
+
+  static Future<void> _showAlwaysPermissionDialog(BuildContext context) async {
     final title = Platform.isIOS
         ? 'Permitir Siempre'
         : 'Permitir todo el tiempo';
     final content = Platform.isIOS
         ? 'Para enviar ubicacion en segundo plano en iPhone, cambia el permiso a Siempre y deja activa Ubicacion precisa.'
-        : 'Para enviar ubicacion en segundo plano, activa: Permisos > Ubicacion > Permitir todo el tiempo.';
+        : 'Para enviar ubicacion en segundo plano, activa Permisos > Ubicacion > Permitir todo el tiempo.';
 
-    final go = await showDialog<bool>(
+    await _showBlockingSettingsDialog(context, title: title, content: content);
+  }
+
+  static Future<void> _showBlockingSettingsDialog(
+    BuildContext context, {
+    required String title,
+    required String content,
+    String actionLabel = 'Abrir ajustes',
+  }) async {
+    await showDialog<void>(
       context: context,
       barrierDismissible: false,
       builder: (ctx) => AlertDialog(
         title: Text(title),
         content: Text(content),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancelar'),
-          ),
           ElevatedButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Abrir ajustes'),
+            onPressed: () => Navigator.pop(ctx),
+            child: Text(actionLabel),
           ),
         ],
       ),
     );
-
-    return go == true;
   }
 
-  static Future<LocationPermission> _openAppSettingsAndAwaitPermission() async {
+  static Future<LocationPermission> _openAppSettingsAndAwaitPermission() {
+    return _openSettingsAndAwait<LocationPermission>(
+      openSettings: Geolocator.openAppSettings,
+      evaluator: Geolocator.checkPermission,
+      fallback: LocationPermission.denied,
+    );
+  }
+
+  static Future<LocationAccuracyStatus> _openAppSettingsAndAwaitAccuracy() {
+    return _openSettingsAndAwait<LocationAccuracyStatus>(
+      openSettings: Geolocator.openAppSettings,
+      evaluator: _safeGetLocationAccuracy,
+      fallback: LocationAccuracyStatus.reduced,
+    );
+  }
+
+  static Future<bool> _openLocationSettingsAndAwaitEnabled() {
+    return _openSettingsAndAwait<bool>(
+      openSettings: Geolocator.openLocationSettings,
+      evaluator: Geolocator.isLocationServiceEnabled,
+      fallback: false,
+    );
+  }
+
+  static Future<bool> _openIgnoreBatteryOptimizationSettingsAndAwait() {
+    return _openSettingsAndAwait<bool>(
+      openSettings: FlutterForegroundTask.openIgnoreBatteryOptimizationSettings,
+      evaluator: () => FlutterForegroundTask.isIgnoringBatteryOptimizations,
+      fallback: false,
+    );
+  }
+
+  static Future<T> _openSettingsAndAwait<T>({
+    required Future<bool> Function() openSettings,
+    required Future<T> Function() evaluator,
+    required T fallback,
+  }) async {
     AppLifecycleListener? listener;
 
     try {
-      final completer = Completer<LocationPermission>();
+      final completer = Completer<T>();
       listener = AppLifecycleListener(
         onResume: () {
-          unawaited(_completePermissionCheck(completer));
+          unawaited(
+            _completeSettingsCheck(
+              completer,
+              evaluator: evaluator,
+              fallback: fallback,
+            ),
+          );
         },
       );
 
-      final opened = await Geolocator.openAppSettings();
+      final opened = await openSettings();
       if (!opened) {
-        return await Geolocator.checkPermission();
+        return await _safeEvaluate(evaluator, fallback);
       }
 
       return await completer.future.timeout(
         const Duration(minutes: 2),
         onTimeout: () async {
-          return await Geolocator.checkPermission();
+          return await _safeEvaluate(evaluator, fallback);
         },
       );
     } catch (_) {
-      return LocationPermission.denied;
+      return fallback;
     } finally {
       listener?.dispose();
     }
   }
 
-  static Future<void> _completePermissionCheck(
-    Completer<LocationPermission> completer,
+  static Future<void> _completeSettingsCheck<T>(
+    Completer<T> completer, {
+    required Future<T> Function() evaluator,
+    required T fallback,
+  }) async {
+    await Future<void>.delayed(const Duration(milliseconds: 350));
+    if (completer.isCompleted) return;
+    completer.complete(await _safeEvaluate(evaluator, fallback));
+  }
+
+  static Future<T> _safeEvaluate<T>(
+    Future<T> Function() evaluator,
+    T fallback,
   ) async {
     try {
-      await Future<void>.delayed(const Duration(milliseconds: 350));
-      if (completer.isCompleted) return;
-      completer.complete(await Geolocator.checkPermission());
+      return await evaluator();
     } catch (_) {
-      if (!completer.isCompleted) {
-        completer.complete(LocationPermission.denied);
-      }
+      return fallback;
+    }
+  }
+
+  static Future<LocationAccuracyStatus> _safeGetLocationAccuracy() async {
+    try {
+      return await Geolocator.getLocationAccuracy();
+    } catch (_) {
+      return LocationAccuracyStatus.reduced;
     }
   }
 

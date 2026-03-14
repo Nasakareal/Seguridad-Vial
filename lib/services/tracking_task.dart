@@ -15,9 +15,9 @@ class TrackingTaskHandler extends TaskHandler {
   DateTime? _lastSentAt;
 
   static const Duration kMinInterval = Duration(seconds: 12);
-  static const Duration kStillInterval = Duration(seconds: 45);
-  static const Duration kSlowInterval = Duration(seconds: 25);
-  static const Duration kMoveInterval = Duration(seconds: 15);
+  static const Duration kStillInterval = Duration(seconds: 50);
+  static const Duration kSlowInterval = Duration(seconds: 30);
+  static const Duration kMoveInterval = Duration(seconds: 20);
 
   Duration _intervalForSpeed(double speedMps) {
     if (!speedMps.isFinite || speedMps < 0) return kSlowInterval;

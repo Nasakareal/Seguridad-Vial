@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class LocationDisclosure {
-  static const String _kAccepted = 'location_disclosure_accepted_v1';
+  static const String _kAccepted = 'location_disclosure_accepted_v2';
 
   static Future<bool> isAccepted() async {
     final sp = await SharedPreferences.getInstance();
@@ -21,8 +21,8 @@ class LocationDisclosure {
       builder: (ctx) => AlertDialog(
         title: const Text('Ubicación en segundo plano'),
         content: const Text(
-          'Para mostrar patrullas activas en tiempo real, la app necesita acceder a tu ubicación incluso cuando está en segundo plano.\n\n'
-          'Esto se usa únicamente para operación y coordinación del servicio.',
+          'Esta app recopila y transmite datos de ubicación para mostrar patrullas activas y coordinar el servicio, incluso cuando la app está cerrada o no está en uso.\n\n'
+          'Para continuar debes mantener habilitados los permisos de ubicación en segundo plano y, en iPhone, la ubicación precisa.',
         ),
         actions: [
           TextButton(
