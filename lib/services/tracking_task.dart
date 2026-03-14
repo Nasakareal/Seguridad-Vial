@@ -1,11 +1,10 @@
-import 'dart:convert';
 import 'dart:isolate';
 
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:http/http.dart' as http;
 
 import 'auth_service.dart';
+import 'location_service.dart';
 
 class TrackingTaskHandler extends TaskHandler {
   TrackingTaskHandler(this.apiBase);
@@ -58,35 +57,17 @@ class TrackingTaskHandler extends TaskHandler {
         return;
       }
 
-      if (pos.timestamp != null) {
-        final age = DateTime.now().difference(pos.timestamp!);
-        if (age.inMinutes >= 2) return;
-      }
+      final age = DateTime.now().difference(pos.timestamp);
+      if (age.inMinutes >= 2) return;
 
       final wantedInterval = _intervalForSpeed(pos.speed);
       if (!_shouldSendNow(wantedInterval)) return;
 
-      final payload = <String, dynamic>{
-        'lat': pos.latitude,
-        'lng': pos.longitude,
-        if (pos.accuracy.isFinite) 'accuracy': pos.accuracy,
-        if (pos.speed.isFinite && pos.speed >= 0) 'speed': pos.speed,
-        if (pos.heading.isFinite) 'heading': pos.heading,
-      };
+      final sent = await LocationService(
+        apiBase: apiBase,
+      ).sendOnce(positionOverride: pos);
 
-      final res = await http
-          .post(
-            Uri.parse('$apiBase/location'),
-            headers: {
-              'Authorization': 'Bearer $token',
-              'Accept': 'application/json',
-              'Content-Type': 'application/json',
-            },
-            body: jsonEncode(payload),
-          )
-          .timeout(const Duration(seconds: 12));
-
-      if (res.statusCode >= 200 && res.statusCode < 300) {
+      if (sent) {
         _lastSentAt = DateTime.now();
       }
     } catch (_) {

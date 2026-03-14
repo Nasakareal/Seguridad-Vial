@@ -2,14 +2,20 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/actividad.dart';
 import '../models/actividad_categoria.dart';
 import '../models/actividad_subcategoria.dart';
 import 'auth_service.dart';
+import 'offline_sync_service.dart';
 
 class ActividadesService {
   static String get _base => '${AuthService.baseUrl}/actividades';
+  static const String _categoriasCacheKey = 'actividades_categorias_cache_v1';
+
+  static String _subcategoriasCacheKey(int categoriaId) =>
+      'actividades_subcategorias_cache_v1_$categoriaId';
 
   static String toPublicUrl(String pathOrUrl) {
     final p = pathOrUrl.trim();
@@ -37,25 +43,6 @@ class ActividadesService {
       'Content-Type': 'application/json',
       'Authorization': 'Bearer $token',
     };
-  }
-
-  static Future<Map<String, String>> _headersAuthOnly() async {
-    final token = await AuthService.getToken();
-    if (token == null || token.isEmpty) {
-      throw Exception('Sesión inválida. Vuelve a iniciar sesión.');
-    }
-
-    return <String, String>{
-      'Accept': 'application/json',
-      'Authorization': 'Bearer $token',
-    };
-  }
-
-  static String _fmtYmd(DateTime d) {
-    final y = d.year.toString().padLeft(4, '0');
-    final m = d.month.toString().padLeft(2, '0');
-    final day = d.day.toString().padLeft(2, '0');
-    return '$y-$m-$day';
   }
 
   static String _parseBackendError(String body, int statusCode) {
@@ -86,8 +73,6 @@ class ActividadesService {
   }
 
   static List<Actividad> _decodeActividadesList(dynamic raw) {
-    // Controller: { ok, date, per_page, data: paginator }
-    // paginator: { data: [...], current_page, last_page, ... }
     if (raw is Map<String, dynamic>) {
       final data = raw['data'];
 
@@ -116,7 +101,7 @@ class ActividadesService {
           .toList();
     }
 
-    return const [];
+    return const <Actividad>[];
   }
 
   static Future<List<Actividad>> fetchIndex({
@@ -177,134 +162,114 @@ class ActividadesService {
     throw Exception('Respuesta inválida del servidor.');
   }
 
-  /// ✅ NUEVO: categorías según tus rutas:
-  /// GET /api/actividades/categorias
   static Future<List<ActividadCategoria>> fetchCategorias() async {
-    final headers = await _headersJson();
+    try {
+      final headers = await _headersJson();
+      final uri = Uri.parse('$_base/categorias');
+      final resp = await http.get(uri, headers: headers);
 
-    final uri = Uri.parse('$_base/categorias');
-    final resp = await http.get(uri, headers: headers);
+      if (resp.statusCode < 200 || resp.statusCode >= 300) {
+        throw Exception(_parseBackendError(resp.body, resp.statusCode));
+      }
 
-    if (resp.statusCode < 200 || resp.statusCode >= 300) {
-      throw Exception(_parseBackendError(resp.body, resp.statusCode));
-    }
+      final raw = jsonDecode(resp.body);
+      final list = _extractListFromResponse(raw);
+      await _saveCache(_categoriasCacheKey, list);
 
-    final raw = jsonDecode(resp.body);
-
-    if (raw is Map<String, dynamic> && raw['data'] is List) {
-      final list = raw['data'] as List;
       return list
-          .whereType<Map>()
-          .map((e) => ActividadCategoria.fromJson(Map<String, dynamic>.from(e)))
+          .map((e) => ActividadCategoria.fromJson(e))
+          .where((e) => e.id > 0)
           .toList();
+    } catch (e) {
+      final cached = await _loadCache(_categoriasCacheKey);
+      if (cached.isNotEmpty) {
+        return cached
+            .map((e) => ActividadCategoria.fromJson(e))
+            .where((e) => e.id > 0)
+            .toList();
+      }
+      rethrow;
     }
-
-    return const [];
   }
 
-  /// GET /api/actividades/subcategorias/{categoria}
   static Future<List<ActividadSubcategoria>> fetchSubcategorias(
     int categoriaId,
   ) async {
-    final headers = await _headersJson();
-    final uri = Uri.parse('$_base/subcategorias/$categoriaId');
+    final cacheKey = _subcategoriasCacheKey(categoriaId);
 
-    final resp = await http.get(uri, headers: headers);
+    try {
+      final headers = await _headersJson();
+      final uri = Uri.parse('$_base/subcategorias/$categoriaId');
+      final resp = await http.get(uri, headers: headers);
 
-    if (resp.statusCode < 200 || resp.statusCode >= 300) {
-      throw Exception(_parseBackendError(resp.body, resp.statusCode));
-    }
+      if (resp.statusCode < 200 || resp.statusCode >= 300) {
+        throw Exception(_parseBackendError(resp.body, resp.statusCode));
+      }
 
-    final raw = jsonDecode(resp.body);
+      final raw = jsonDecode(resp.body);
+      final list = _extractListFromResponse(raw);
+      await _saveCache(cacheKey, list);
 
-    if (raw is Map<String, dynamic> && raw['data'] is List) {
-      final list = raw['data'] as List;
       return list
-          .whereType<Map>()
-          .map(
-            (e) => ActividadSubcategoria.fromJson(Map<String, dynamic>.from(e)),
-          )
+          .map((e) => ActividadSubcategoria.fromJson(e))
+          .where((e) => e.id > 0)
           .toList();
+    } catch (e) {
+      final cached = await _loadCache(cacheKey);
+      if (cached.isNotEmpty) {
+        return cached
+            .map((e) => ActividadSubcategoria.fromJson(e))
+            .where((e) => e.id > 0)
+            .toList();
+      }
+      rethrow;
     }
-
-    return const [];
   }
 
-  static Future<Actividad> create({
+  static Future<OfflineActionResult> create({
     required int actividadCategoriaId,
     int? actividadSubcategoriaId,
     required File foto,
   }) async {
-    final headers = await _headersAuthOnly();
-
-    final uri = Uri.parse(_base);
-    final req = http.MultipartRequest('POST', uri);
-
-    req.headers.addAll(headers);
-    req.fields['actividad_categoria_id'] = actividadCategoriaId.toString();
-
-    if (actividadSubcategoriaId != null && actividadSubcategoriaId > 0) {
-      req.fields['actividad_subcategoria_id'] = actividadSubcategoriaId
-          .toString();
-    }
-
-    req.files.add(await http.MultipartFile.fromPath('foto', foto.path));
-
-    final streamed = await req.send();
-    final resp = await http.Response.fromStream(streamed);
-
-    if (resp.statusCode < 200 || resp.statusCode >= 300) {
-      throw Exception(_parseBackendError(resp.body, resp.statusCode));
-    }
-
-    final raw = jsonDecode(resp.body);
-
-    if (raw is Map<String, dynamic> && raw['data'] is Map) {
-      return Actividad.fromJson(Map<String, dynamic>.from(raw['data']));
-    }
-
-    throw Exception('Respuesta inválida del servidor.');
+    return OfflineSyncService.submitMultipart(
+      label: 'Actividad',
+      method: 'POST',
+      uri: Uri.parse(_base),
+      fields: <String, String>{
+        'actividad_categoria_id': actividadCategoriaId.toString(),
+        if (actividadSubcategoriaId != null && actividadSubcategoriaId > 0)
+          'actividad_subcategoria_id': actividadSubcategoriaId.toString(),
+      },
+      files: <OfflineUploadFile>[
+        OfflineUploadFile(field: 'foto', path: foto.path),
+      ],
+      successCodes: const <int>{200, 201},
+      errorParser: _parseBackendError,
+    );
   }
 
-  static Future<Actividad> update({
+  static Future<OfflineActionResult> update({
     required int id,
     required int actividadCategoriaId,
     int? actividadSubcategoriaId,
     File? foto,
   }) async {
-    final headers = await _headersAuthOnly();
-
-    final uri = Uri.parse('$_base/$id');
-    final req = http.MultipartRequest('POST', uri);
-
-    // Laravel: PUT con multipart => POST + _method=PUT
-    req.headers.addAll(headers);
-    req.fields['_method'] = 'PUT';
-    req.fields['actividad_categoria_id'] = actividadCategoriaId.toString();
-
-    if (actividadSubcategoriaId != null && actividadSubcategoriaId > 0) {
-      req.fields['actividad_subcategoria_id'] = actividadSubcategoriaId
-          .toString();
-    }
-
-    if (foto != null) {
-      req.files.add(await http.MultipartFile.fromPath('foto', foto.path));
-    }
-
-    final streamed = await req.send();
-    final resp = await http.Response.fromStream(streamed);
-
-    if (resp.statusCode < 200 || resp.statusCode >= 300) {
-      throw Exception(_parseBackendError(resp.body, resp.statusCode));
-    }
-
-    final raw = jsonDecode(resp.body);
-
-    if (raw is Map<String, dynamic> && raw['data'] is Map) {
-      return Actividad.fromJson(Map<String, dynamic>.from(raw['data']));
-    }
-
-    throw Exception('Respuesta inválida del servidor.');
+    return OfflineSyncService.submitMultipart(
+      label: 'Actividad',
+      method: 'POST',
+      uri: Uri.parse('$_base/$id'),
+      fields: <String, String>{
+        '_method': 'PUT',
+        'actividad_categoria_id': actividadCategoriaId.toString(),
+        if (actividadSubcategoriaId != null && actividadSubcategoriaId > 0)
+          'actividad_subcategoria_id': actividadSubcategoriaId.toString(),
+      },
+      files: <OfflineUploadFile>[
+        if (foto != null) OfflineUploadFile(field: 'foto', path: foto.path),
+      ],
+      successCodes: const <int>{200},
+      errorParser: _parseBackendError,
+    );
   }
 
   static Future<void> destroy(int id) async {
@@ -315,6 +280,57 @@ class ActividadesService {
 
     if (resp.statusCode < 200 || resp.statusCode >= 300) {
       throw Exception(_parseBackendError(resp.body, resp.statusCode));
+    }
+  }
+
+  static String _fmtYmd(DateTime d) {
+    final y = d.year.toString().padLeft(4, '0');
+    final m = d.month.toString().padLeft(2, '0');
+    final day = d.day.toString().padLeft(2, '0');
+    return '$y-$m-$day';
+  }
+
+  static List<Map<String, dynamic>> _extractListFromResponse(dynamic raw) {
+    if (raw is Map<String, dynamic> && raw['data'] is List) {
+      return (raw['data'] as List)
+          .whereType<Map>()
+          .map((e) => Map<String, dynamic>.from(e))
+          .toList();
+    }
+
+    if (raw is List) {
+      return raw
+          .whereType<Map>()
+          .map((e) => Map<String, dynamic>.from(e))
+          .toList();
+    }
+
+    return const <Map<String, dynamic>>[];
+  }
+
+  static Future<void> _saveCache(
+    String key,
+    List<Map<String, dynamic>> items,
+  ) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(key, jsonEncode(items));
+  }
+
+  static Future<List<Map<String, dynamic>>> _loadCache(String key) async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(key);
+    if (raw == null || raw.trim().isEmpty)
+      return const <Map<String, dynamic>>[];
+
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! List) return const <Map<String, dynamic>>[];
+      return decoded
+          .whereType<Map>()
+          .map((e) => Map<String, dynamic>.from(e))
+          .toList();
+    } catch (_) {
+      return const <Map<String, dynamic>>[];
     }
   }
 }

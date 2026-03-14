@@ -89,13 +89,16 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
     setState(() => _saving = true);
 
     try {
-      await ActividadesService.create(
+      final result = await ActividadesService.create(
         actividadCategoriaId: _categoriaId!,
         actividadSubcategoriaId: _subcategoriaId,
         foto: _foto!,
       );
 
       if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(result.message)));
       Navigator.pop(context, true);
     } catch (e) {
       if (!mounted) return;

@@ -2,7 +2,6 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 
 import '../../services/auth_service.dart';
 import '../../services/tracking_service.dart';
@@ -32,12 +31,14 @@ class _HechoShowScreenState extends State<HechoShowScreen>
   bool _trackingOn = false;
   bool _bootstrapped = false;
   bool _busy = false;
+  bool _initialized = false;
+  int _hechoId = 0;
 
   Future<void> _bootstrapTrackingStatusOnly() async {
     if (_bootstrapped) return;
     _bootstrapped = true;
 
-    final running = await FlutterForegroundTask.isRunningService;
+    final running = await TrackingService.isRunning();
     if (!mounted) return;
     setState(() => _trackingOn = running);
   }
@@ -46,17 +47,28 @@ class _HechoShowScreenState extends State<HechoShowScreen>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_initialized) return;
+    _initialized = true;
+    _hechoId = HechoShowHelpers.hechoIdFromArgs(context);
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+
       try {
         await AppVersionService.enforceUpdateIfNeeded(context);
+        if (!mounted) return;
       } catch (_) {}
 
       await _bootstrapTrackingStatusOnly();
+      if (!mounted) return;
 
-      final id = HechoShowHelpers.hechoIdFromArgs(context);
-      if (id > 0) {
-        await _cargarHecho(id);
+      if (_hechoId > 0) {
+        await _cargarHecho(_hechoId);
       } else if (mounted) {
         setState(() => _cargando = false);
       }
@@ -66,7 +78,7 @@ class _HechoShowScreenState extends State<HechoShowScreen>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) async {
     if (state == AppLifecycleState.resumed) {
-      final running = await FlutterForegroundTask.isRunningService;
+      final running = await TrackingService.isRunning();
       if (!mounted) return;
       setState(() => _trackingOn = running);
     }
@@ -239,7 +251,7 @@ class _HechoShowScreenState extends State<HechoShowScreen>
 
   @override
   Widget build(BuildContext context) {
-    final hechoId = HechoShowHelpers.hechoIdFromArgs(context);
+    final hechoId = _hechoId;
 
     final h = _hecho ?? {};
 
@@ -264,6 +276,7 @@ class _HechoShowScreenState extends State<HechoShowScreen>
     })();
 
     final fotoHecho = HechoShowHelpers.fotoLugarUrl(_hecho);
+    final fotoSituacion = HechoShowHelpers.fotoSituacionUrl(_hecho);
     final fotosVehiculos = HechoShowHelpers.fotosVehiculosFromHecho(_hecho);
 
     final fotoConvenio = (() {
@@ -429,6 +442,7 @@ class _HechoShowScreenState extends State<HechoShowScreen>
                       perito: perito,
                       ubicacion: ubicacion,
                       fotoHecho: fotoHecho,
+                      fotoSituacion: fotoSituacion,
                       fotosVehiculos: fotosVehiculos,
                       fotoConvenio: fotoConvenio,
                       isDownloading: false,
@@ -508,7 +522,7 @@ class _KVCard extends StatelessWidget {
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: Colors.black.withOpacity(0.05)),
+          border: Border.all(color: Colors.black.withValues(alpha: 0.05)),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 class HechoFormData {
+  String? clientUuid;
+
   String folioC5i = '';
   String perito = '';
   String autorizacionPractico = '';
@@ -44,5 +46,6 @@ class HechoFormData {
 
   int? dictamenId;
 
+  bool get hasClientUuid => (clientUuid?.trim().isNotEmpty ?? false);
   bool get hasCoords => lat != null && lng != null;
 }

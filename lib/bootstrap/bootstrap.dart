@@ -11,6 +11,7 @@ import '../core/globals.dart';
 import '../firebase_options.dart';
 import '../services/auth_service.dart';
 import '../services/push_service.dart';
+import '../services/offline_sync_service.dart';
 
 import 'local_notifications.dart';
 import 'lifecycle_observer.dart';
@@ -55,6 +56,14 @@ Future<bool> bootstrapApp({required void Function(String step) onStep}) async {
 
     AppLifecycleObserver.ensureInstalled();
 
+    onStep('Preparando modo offline...');
+    await OfflineSyncService.initialize().timeout(
+      const Duration(seconds: 10),
+      onTimeout: () => throw Exception(
+        'TIMEOUT: OfflineSyncService.initialize tardó demasiado.',
+      ),
+    );
+
     onStep('Validando sesión...');
     final logged = await AuthService.isLoggedIn().timeout(
       const Duration(seconds: 12),
@@ -63,6 +72,10 @@ Future<bool> bootstrapApp({required void Function(String step) onStep}) async {
     );
 
     unawaited(_setupPushNonBlocking(logged: logged));
+
+    if (logged) {
+      unawaited(OfflineSyncService.flushPending());
+    }
 
     onStep('Inicializando servicio de ubicación...');
     if (Platform.isAndroid) {

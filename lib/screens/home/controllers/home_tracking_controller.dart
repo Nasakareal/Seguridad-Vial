@@ -1,10 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart';
-import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 
 import '../../../services/auth_service.dart';
-import '../../../services/tracking_service.dart';
 import '../../../services/location_flag_service.dart';
+import '../../../services/tracking_service.dart';
 
 class HomeTrackingController {
   final ValueNotifier<bool> trackingOn = ValueNotifier<bool>(false);
@@ -18,10 +16,10 @@ class HomeTrackingController {
       barrierDismissible: false,
       builder: (ctx) {
         return AlertDialog(
-          title: const Text('Permiso de ubicación en segundo plano'),
+          title: const Text('Permiso de ubicacion en segundo plano'),
           content: const Text(
-            'Esta app recopila y transmite datos de ubicación para habilitar el monitoreo de unidades y el mapa de patrullas, incluso cuando la app está cerrada o no está en uso.\n\n'
-            'Si aceptas, se solicitará el permiso de ubicación necesario para activar esta función.',
+            'Esta app recopila y transmite datos de ubicacion para habilitar el monitoreo de unidades y el mapa de patrullas, incluso cuando la app esta cerrada o no esta en uso.\n\n'
+            'Si aceptas, se solicitara el permiso de ubicacion necesario para activar esta funcion.',
           ),
           actions: [
             TextButton(
@@ -62,7 +60,7 @@ class HomeTrackingController {
   Future<void> syncFromCommanderFlag(BuildContext context) async {
     try {
       final askLocation = await AuthService.shouldAskLocation();
-      final running = await FlutterForegroundTask.isRunningService;
+      final running = await TrackingService.isRunning();
 
       if (!askLocation) {
         if (running) {
@@ -75,6 +73,7 @@ class HomeTrackingController {
       }
 
       final enabledByCommander = await LocationFlagService.isEnabledForMe();
+      if (!context.mounted) return;
 
       if (!enabledByCommander) {
         if (running) {
@@ -88,7 +87,7 @@ class HomeTrackingController {
 
       if (!running) {
         final ok = await _ensureDisclosureAcceptedBeforeStart(context);
-        if (!ok) {
+        if (!context.mounted || !ok) {
           trackingOn.value = false;
           return;
         }
@@ -99,6 +98,7 @@ class HomeTrackingController {
         } catch (_) {
           started = false;
         }
+        if (!context.mounted) return;
         trackingOn.value = started;
       } else {
         trackingOn.value = true;

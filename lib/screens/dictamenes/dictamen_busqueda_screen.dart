@@ -33,7 +33,9 @@ class _DictamenesBusquedaScreenState extends State<DictamenesBusquedaScreen> {
     super.initState();
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
       await _loadAnios();
+      if (!mounted) return;
       await _search(); // primera carga
     });
   }

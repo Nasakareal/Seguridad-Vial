@@ -1,9 +1,16 @@
+import 'dart:convert';
+
+import 'package:shared_preferences/shared_preferences.dart';
+
 import '../models/dictamen_item.dart';
 import 'dictamenes_service.dart';
 
 class DictamenesFormService {
-  final DictamenesService api;
   DictamenesFormService(this.api);
+
+  final DictamenesService api;
+
+  static const String _cachePrefix = 'dictamenes_form_cache_v1';
 
   int? _asInt(dynamic v) {
     if (v == null) return null;
@@ -25,12 +32,13 @@ class DictamenesFormService {
     final mp = _asString(m['nombre_mp']);
 
     final parts = <String>[];
-    if (num != null && anio != null)
+    if (num != null && anio != null) {
       parts.add('$num/$anio');
-    else if (num != null)
+    } else if (num != null) {
       parts.add(num);
-    else
+    } else {
       parts.add('SIN NÚMERO');
+    }
 
     if (mp != null) parts.add(mp);
     return parts.join(' ');
@@ -60,27 +68,65 @@ class DictamenesFormService {
     if (raw is List) return raw;
 
     if (raw is Map<String, dynamic>) {
-      final cands = [raw['data'], raw['dictamenes'], raw['items']];
+      final cands = <dynamic>[raw['data'], raw['dictamenes'], raw['items']];
       for (final c in cands) {
         if (c is List) return c;
-        if (c is Map && c['data'] is List) return (c['data'] as List);
+        if (c is Map && c['data'] is List) return c['data'] as List;
       }
     }
-    return const [];
+    return const <dynamic>[];
   }
 
   Future<List<DictamenItem>> fetchAll({int? anio}) async {
-    final raw = await api.index(anio: anio);
-    final list = _extractList(raw);
+    final cacheKey = anio == null ? _cachePrefix : '${_cachePrefix}_$anio';
 
+    try {
+      final raw = await api.index(anio: anio);
+      final list = _extractList(
+        raw,
+      ).whereType<Map>().map((it) => Map<String, dynamic>.from(it)).toList();
+      await _saveCache(cacheKey, list);
+      return _mapItems(list);
+    } catch (e) {
+      final cached = await _loadCache(cacheKey);
+      if (cached.isNotEmpty) {
+        return _mapItems(cached);
+      }
+      rethrow;
+    }
+  }
+
+  List<DictamenItem> _mapItems(List<Map<String, dynamic>> list) {
     final out = <DictamenItem>[];
     for (final it in list) {
-      if (it is! Map) continue;
-      final item = _map(Map<String, dynamic>.from(it as Map));
+      final item = _map(it);
       if (item != null) out.add(item);
     }
 
     out.sort((a, b) => a.label.compareTo(b.label));
     return out;
+  }
+
+  Future<void> _saveCache(String key, List<Map<String, dynamic>> items) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(key, jsonEncode(items));
+  }
+
+  Future<List<Map<String, dynamic>>> _loadCache(String key) async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(key);
+    if (raw == null || raw.trim().isEmpty)
+      return const <Map<String, dynamic>>[];
+
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! List) return const <Map<String, dynamic>>[];
+      return decoded
+          .whereType<Map>()
+          .map((e) => Map<String, dynamic>.from(e))
+          .toList();
+    } catch (_) {
+      return const <Map<String, dynamic>>[];
+    }
   }
 }

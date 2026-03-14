@@ -1,9 +1,6 @@
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
 
-import '../../services/auth_service.dart';
+import '../../services/offline_sync_service.dart';
 
 class LesionadoCreateScreen extends StatefulWidget {
   const LesionadoCreateScreen({super.key});
@@ -41,6 +38,15 @@ class _LesionadoCreateScreenState extends State<LesionadoCreateScreen> {
     return 0;
   }
 
+  String? _hechoClientUuidFromArgs(BuildContext context) {
+    final args = ModalRoute.of(context)?.settings.arguments;
+    if (args is Map && args['hechoClientUuid'] != null) {
+      final value = args['hechoClientUuid'].toString().trim();
+      return value.isEmpty ? null : value;
+    }
+    return null;
+  }
+
   @override
   void dispose() {
     _nombreCtrl.dispose();
@@ -52,33 +58,27 @@ class _LesionadoCreateScreenState extends State<LesionadoCreateScreen> {
     super.dispose();
   }
 
-  Future<Map<String, String>> _headers() async {
-    final token = await AuthService.getToken();
-    return {
-      'Accept': 'application/json',
-      'Content-Type': 'application/json',
-      if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
-    };
-  }
-
   int? _toIntOrNull(String v) {
     final t = v.trim();
     if (t.isEmpty) return null;
     return int.tryParse(t);
   }
 
-  Uri _postUri(int hechoId) {
-    // ✅ API real
-    return Uri.parse('$_baseUrl/hechos/$hechoId/lesionados');
+  Uri _createUri() {
+    return Uri.parse('$_baseUrl/lesionados');
   }
 
   Future<void> _guardar() async {
     if (_guardando) return;
 
     final hechoId = _hechoIdFromArgs(context);
-    if (hechoId <= 0) {
+    final hechoClientUuid = _hechoClientUuidFromArgs(context);
+    final normalizedHechoClientUuid = (hechoClientUuid ?? '').trim();
+    if (hechoId <= 0 && normalizedHechoClientUuid.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No llegó hechoId para crear lesionado.')),
+        const SnackBar(
+          content: Text('No llegó el contexto del hecho para crear lesionado.'),
+        ),
       );
       return;
     }
@@ -89,7 +89,12 @@ class _LesionadoCreateScreenState extends State<LesionadoCreateScreen> {
     setState(() => _guardando = true);
 
     try {
+      final clientUuid = OfflineSyncService.newClientUuid();
       final body = <String, dynamic>{
+        'client_uuid': clientUuid,
+        if (hechoId > 0) 'hecho_id': hechoId,
+        if (hechoId <= 0 && normalizedHechoClientUuid.isNotEmpty)
+          'hecho_client_uuid': normalizedHechoClientUuid,
         'nombre': _nombreCtrl.text.trim(),
         if (_toIntOrNull(_edadCtrl.text) != null)
           'edad': _toIntOrNull(_edadCtrl.text),
@@ -110,21 +115,21 @@ class _LesionadoCreateScreenState extends State<LesionadoCreateScreen> {
           'observaciones': _observacionesCtrl.text.trim(),
       };
 
-      final res = await http.post(
-        _postUri(hechoId),
-        headers: await _headers(),
-        body: jsonEncode(body),
+      final result = await OfflineSyncService.submitJson(
+        label: 'Lesionado',
+        method: 'POST',
+        uri: _createUri(),
+        body: body,
+        requestId: clientUuid,
+        dependsOnOperationId: hechoId > 0 ? null : normalizedHechoClientUuid,
+        successCodes: const <int>{200, 201},
       );
-
-      if (res.statusCode != 200 && res.statusCode != 201) {
-        throw Exception('Error ${res.statusCode}: ${res.body}');
-      }
 
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Lesionado creado correctamente')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(result.message)));
 
       Navigator.pop(context, true);
     } catch (e) {
@@ -140,11 +145,18 @@ class _LesionadoCreateScreenState extends State<LesionadoCreateScreen> {
   @override
   Widget build(BuildContext context) {
     final hechoId = _hechoIdFromArgs(context);
+    final hechoClientUuid = _hechoClientUuidFromArgs(context);
+    final pendingParent =
+        hechoId <= 0 && (hechoClientUuid?.trim().isNotEmpty ?? false);
 
     return Scaffold(
       backgroundColor: const Color(0xFFF6F7FB),
       appBar: AppBar(
-        title: Text('Nuevo lesionado (Hecho #$hechoId)'),
+        title: Text(
+          pendingParent
+              ? 'Nuevo lesionado (Hecho pendiente)'
+              : 'Nuevo lesionado (Hecho #$hechoId)',
+        ),
         backgroundColor: Colors.blue,
       ),
       body: SafeArea(
@@ -153,6 +165,19 @@ class _LesionadoCreateScreenState extends State<LesionadoCreateScreen> {
           child: ListView(
             padding: const EdgeInsets.fromLTRB(12, 12, 12, 20),
             children: [
+              if (pendingParent)
+                Container(
+                  margin: const EdgeInsets.only(bottom: 12),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.orange.withOpacity(0.08),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.orange.withOpacity(0.2)),
+                  ),
+                  child: const Text(
+                    'Este hecho todavía no tiene ID de servidor. El lesionado se guardará con el UUID local del hecho y se sincronizará cuando el hecho padre suba primero.',
+                  ),
+                ),
               _CardShell(
                 title: 'Datos del lesionado',
                 child: Column(

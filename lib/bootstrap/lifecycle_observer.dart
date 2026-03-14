@@ -1,5 +1,6 @@
 import 'package:flutter/widgets.dart';
 import '../services/push_service.dart';
+import '../services/offline_sync_service.dart';
 
 class AppLifecycleObserver with WidgetsBindingObserver {
   static bool _installed = false;
@@ -15,6 +16,9 @@ class AppLifecycleObserver with WidgetsBindingObserver {
     if (state == AppLifecycleState.resumed) {
       try {
         PushService.registerDeviceToken(reason: 'app_resumed');
+      } catch (_) {}
+      try {
+        OfflineSyncService.flushPending();
       } catch (_) {}
     }
   }

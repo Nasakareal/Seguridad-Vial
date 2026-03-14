@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import '../../services/auth_service.dart';
 import '../../core/vehiculos/vehiculo_taxonomia.dart';
 import '../../core/vehiculos/estados_republica.dart';
+import '../../services/offline_sync_service.dart';
 
 class VehiculoCreateScreen extends StatefulWidget {
   const VehiculoCreateScreen({super.key});
@@ -48,9 +49,18 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
   int _hechoIdFromArgs(BuildContext context) {
     final args = ModalRoute.of(context)?.settings.arguments;
     if (args is Map && args['hechoId'] != null) {
-      return int.parse(args['hechoId'].toString());
+      return int.tryParse(args['hechoId'].toString()) ?? 0;
     }
     return 0;
+  }
+
+  String? _hechoClientUuidFromArgs(BuildContext context) {
+    final args = ModalRoute.of(context)?.settings.arguments;
+    if (args is Map && args['hechoClientUuid'] != null) {
+      final value = args['hechoClientUuid'].toString().trim();
+      return value.isEmpty ? null : value;
+    }
+    return null;
   }
 
   @override
@@ -297,13 +307,19 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
     return null;
   }
 
-  Future<void> _guardar(int hechoId) async {
-    if (hechoId <= 0) {
+  Future<void> _guardar({
+    required int hechoId,
+    required String? hechoClientUuid,
+  }) async {
+    final normalizedHechoClientUuid = (hechoClientUuid ?? '').trim();
+    if (hechoId <= 0 && normalizedHechoClientUuid.isEmpty) {
       showDialog(
         context: context,
         builder: (_) => const AlertDialog(
           title: Text('Error'),
-          content: Text('Falta hechoId (ruta mal llamada).'),
+          content: Text(
+            'Falta el contexto del hecho para guardar el vehículo.',
+          ),
         ),
       );
       return;
@@ -314,8 +330,8 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
     setState(() => _saving = true);
 
     try {
-      final h = await _headers();
-      final uri = Uri.parse('$_baseApi/hechos/$hechoId/vehiculos');
+      final clientUuid = OfflineSyncService.newClientUuid();
+      final uri = Uri.parse('$_baseApi/vehiculos');
       final corralonNombre = _nombreGruaById(_corralonGruaIdSeleccionada);
 
       final placasClean = _t(
@@ -327,6 +343,10 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
           .toUpperCase();
 
       final payload = <String, dynamic>{
+        'client_uuid': clientUuid,
+        if (hechoId > 0) 'hecho_id': hechoId,
+        if (hechoId <= 0 && normalizedHechoClientUuid.isNotEmpty)
+          'hecho_client_uuid': normalizedHechoClientUuid,
         'marca': _t(_marcaCtrl),
         'modelo': _t(_modeloCtrl).isEmpty ? null : _t(_modeloCtrl),
         'tipo': _tipoCarroceriaSeleccionada,
@@ -354,31 +374,20 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
         'antecedente_vehiculo': _antecedenteVehiculo,
       };
 
-      final res = await http.post(uri, headers: h, body: jsonEncode(payload));
-
-      if (res.statusCode != 200 && res.statusCode != 201) {
-        final msg = _apiErrorText(
-          res,
-          fallbackTitle: 'No se pudo guardar el vehículo',
-        );
-        if (!mounted) return;
-        showDialog(
-          context: context,
-          builder: (_) => AlertDialog(
-            title: const Text('Error'),
-            content: Text(msg),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('Cerrar'),
-              ),
-            ],
-          ),
-        );
-        return;
-      }
+      final result = await OfflineSyncService.submitJson(
+        label: 'Vehículo',
+        method: 'POST',
+        uri: uri,
+        body: payload,
+        requestId: clientUuid,
+        dependsOnOperationId: hechoId > 0 ? null : normalizedHechoClientUuid,
+        successCodes: const <int>{200, 201},
+      );
 
       if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(result.message)));
       Navigator.pop(context, true);
     } catch (e) {
       if (!mounted) return;
@@ -403,6 +412,9 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
   @override
   Widget build(BuildContext context) {
     final hechoId = _hechoIdFromArgs(context);
+    final hechoClientUuid = _hechoClientUuidFromArgs(context);
+    final pendingParent =
+        hechoId <= 0 && (hechoClientUuid?.trim().isNotEmpty ?? false);
     final carroceriasDisponibles = _carroceriasDeTipoGeneral(
       _tipoGeneralSeleccionado,
     );
@@ -416,13 +428,32 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
     }
 
     return Scaffold(
-      appBar: AppBar(title: Text('Nuevo vehículo (Hecho #$hechoId)')),
+      appBar: AppBar(
+        title: Text(
+          pendingParent
+              ? 'Nuevo vehículo (Hecho pendiente)'
+              : 'Nuevo vehículo (Hecho #$hechoId)',
+        ),
+      ),
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: Form(
           key: _formKey,
           child: ListView(
             children: [
+              if (pendingParent)
+                Container(
+                  margin: const EdgeInsets.only(bottom: 12),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.orange.withOpacity(0.08),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.orange.withOpacity(0.2)),
+                  ),
+                  child: const Text(
+                    'Este hecho todavía no tiene ID de servidor. El vehículo se guardará con el UUID local del hecho y se sincronizará en cuanto el hecho padre suba primero.',
+                  ),
+                ),
               TextFormField(
                 controller: _marcaCtrl,
                 decoration: const InputDecoration(
@@ -698,7 +729,12 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
               ),
               const SizedBox(height: 18),
               ElevatedButton.icon(
-                onPressed: _saving ? null : () => _guardar(hechoId),
+                onPressed: _saving
+                    ? null
+                    : () => _guardar(
+                        hechoId: hechoId,
+                        hechoClientUuid: hechoClientUuid,
+                      ),
                 icon: _saving
                     ? const SizedBox(
                         width: 18,

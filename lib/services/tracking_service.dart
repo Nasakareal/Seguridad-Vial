@@ -6,9 +6,9 @@ import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:geolocator/geolocator.dart';
 
 import '../widgets/location_disclosure_dialog.dart';
-import 'tracking_task.dart';
-import 'location_service.dart';
 import 'auth_service.dart';
+import 'location_service.dart';
+import 'tracking_task.dart';
 
 class TrackingService {
   static bool _starting = false;
@@ -25,6 +25,18 @@ class TrackingService {
     return await startWithDisclosure(context);
   }
 
+  static Future<bool> isRunning() async {
+    if (Platform.isAndroid) {
+      try {
+        return await FlutterForegroundTask.isRunningService;
+      } catch (_) {
+        return false;
+      }
+    }
+
+    return _iosRunning;
+  }
+
   static Future<bool> startWithDisclosure(BuildContext context) async {
     if (_starting) return true;
     _starting = true;
@@ -34,21 +46,23 @@ class TrackingService {
       if (!isPerito) return false;
 
       final accepted = await LocationDisclosure.isAccepted();
+      if (!context.mounted) return false;
+
       if (!accepted) {
         final ok = await LocationDisclosure.show(context);
-        if (!ok) return false;
+        if (!ok || !context.mounted) return false;
       }
 
       final okPerms = await _ensurePermissionsAlways(context);
       if (!okPerms) return false;
 
       if (Platform.isAndroid) {
-        final running = await FlutterForegroundTask.isRunningService;
+        final running = await isRunning();
         if (running) return true;
 
         await FlutterForegroundTask.startService(
           notificationTitle: 'Seguridad Vial',
-          notificationText: 'Enviando ubicación…',
+          notificationText: 'Enviando ubicacion...',
           callback: startCallback,
         );
         return true;
@@ -71,12 +85,12 @@ class TrackingService {
       if (!isPerito) return false;
 
       if (Platform.isAndroid) {
-        final running = await FlutterForegroundTask.isRunningService;
+        final running = await isRunning();
         if (running) return true;
 
         await FlutterForegroundTask.startService(
           notificationTitle: 'Seguridad Vial',
-          notificationText: 'Enviando ubicación…',
+          notificationText: 'Enviando ubicacion...',
           callback: startCallback,
         );
         return true;
@@ -93,7 +107,7 @@ class TrackingService {
   static Future<void> stop() async {
     try {
       if (Platform.isAndroid) {
-        final running = await FlutterForegroundTask.isRunningService;
+        final running = await isRunning();
         if (!running) return;
         await FlutterForegroundTask.stopService();
         return;
@@ -116,15 +130,21 @@ class TrackingService {
 
     final ls = LocationService(apiBase: _apiBase);
 
+    await _maybeRequestPreciseAccuracy();
+
     try {
       await _sendOnceIfGood(ls, requireAlways: requireAlways);
     } catch (_) {}
 
     _iosRunning = true;
 
-    final settings = LocationSettings(
+    final settings = AppleSettings(
       accuracy: LocationAccuracy.bestForNavigation,
       distanceFilter: 10,
+      activityType: ActivityType.automotiveNavigation,
+      pauseLocationUpdatesAutomatically: false,
+      allowBackgroundLocationUpdates: true,
+      showBackgroundLocationIndicator: false,
     );
 
     await _iosSub?.cancel();
@@ -148,10 +168,8 @@ class TrackingService {
   }) async {
     if (pos.accuracy.isNaN || pos.accuracy > 150) return;
 
-    if (pos.timestamp != null) {
-      final age = DateTime.now().difference(pos.timestamp!);
-      if (age.inMinutes >= 2) return;
-    }
+    final age = DateTime.now().difference(pos.timestamp);
+    if (age.inMinutes >= 2) return;
 
     if (_lastGood != null && _lastGoodAt != null) {
       final meters = Geolocator.distanceBetween(
@@ -198,46 +216,106 @@ class TrackingService {
       return false;
     }
 
-    if (Platform.isAndroid) {
-      if (permission != LocationPermission.always) {
-        final go = await showDialog<bool>(
-          context: context,
-          barrierDismissible: false,
-          builder: (ctx) => AlertDialog(
-            title: const Text('Permitir “todo el tiempo”'),
-            content: const Text(
-              'Para enviar ubicación en segundo plano, activa: Permisos > Ubicación > Permitir todo el tiempo.',
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(ctx, false),
-                child: const Text('Cancelar'),
-              ),
-              ElevatedButton(
-                onPressed: () => Navigator.pop(ctx, true),
-                child: const Text('Abrir ajustes'),
-              ),
-            ],
-          ),
-        );
-
-        if (go != true) return false;
-
-        await Geolocator.openAppSettings();
-
-        permission = await Geolocator.checkPermission();
-        if (permission != LocationPermission.always) return false;
-      }
-
+    if (permission == LocationPermission.always) {
+      await _maybeRequestPreciseAccuracy();
       return true;
     }
 
-    if (permission != LocationPermission.always) {
-      await Geolocator.openAppSettings();
-      permission = await Geolocator.checkPermission();
-      if (permission != LocationPermission.always) return false;
-    }
+    if (!context.mounted) return false;
 
+    final go = await _showAlwaysPermissionDialog(context);
+    if (!go) return false;
+
+    permission = await _openAppSettingsAndAwaitPermission();
+    if (permission != LocationPermission.always) return false;
+
+    await _maybeRequestPreciseAccuracy();
     return true;
+  }
+
+  static Future<bool> _showAlwaysPermissionDialog(BuildContext context) async {
+    final title = Platform.isIOS
+        ? 'Permitir Siempre'
+        : 'Permitir todo el tiempo';
+    final content = Platform.isIOS
+        ? 'Para enviar ubicacion en segundo plano en iPhone, cambia el permiso a Siempre y deja activa Ubicacion precisa.'
+        : 'Para enviar ubicacion en segundo plano, activa: Permisos > Ubicacion > Permitir todo el tiempo.';
+
+    final go = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        title: Text(title),
+        content: Text(content),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Abrir ajustes'),
+          ),
+        ],
+      ),
+    );
+
+    return go == true;
+  }
+
+  static Future<LocationPermission> _openAppSettingsAndAwaitPermission() async {
+    AppLifecycleListener? listener;
+
+    try {
+      final completer = Completer<LocationPermission>();
+      listener = AppLifecycleListener(
+        onResume: () {
+          unawaited(_completePermissionCheck(completer));
+        },
+      );
+
+      final opened = await Geolocator.openAppSettings();
+      if (!opened) {
+        return await Geolocator.checkPermission();
+      }
+
+      return await completer.future.timeout(
+        const Duration(minutes: 2),
+        onTimeout: () async {
+          return await Geolocator.checkPermission();
+        },
+      );
+    } catch (_) {
+      return LocationPermission.denied;
+    } finally {
+      listener?.dispose();
+    }
+  }
+
+  static Future<void> _completePermissionCheck(
+    Completer<LocationPermission> completer,
+  ) async {
+    try {
+      await Future<void>.delayed(const Duration(milliseconds: 350));
+      if (completer.isCompleted) return;
+      completer.complete(await Geolocator.checkPermission());
+    } catch (_) {
+      if (!completer.isCompleted) {
+        completer.complete(LocationPermission.denied);
+      }
+    }
+  }
+
+  static Future<void> _maybeRequestPreciseAccuracy() async {
+    if (!Platform.isIOS) return;
+
+    try {
+      final accuracyStatus = await Geolocator.getLocationAccuracy();
+      if (accuracyStatus == LocationAccuracyStatus.reduced) {
+        await Geolocator.requestTemporaryFullAccuracy(
+          purposeKey: 'FullAccuracy',
+        );
+      }
+    } catch (_) {}
   }
 }

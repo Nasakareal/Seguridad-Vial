@@ -101,6 +101,7 @@ class _EditHechoScreenState extends State<EditHechoScreen> {
   HechoFormData _mapHecho(Map<String, dynamic> raw) {
     final d = HechoFormData();
 
+    d.clientUuid = _asString(raw['client_uuid']);
     d.folioC5i = _asString(raw['folio_c5i']) ?? '';
     d.perito = _asString(raw['perito']) ?? '';
     d.autorizacionPractico = _asString(raw['autorizacion_practico']) ?? '';

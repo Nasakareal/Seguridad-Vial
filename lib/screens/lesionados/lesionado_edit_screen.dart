@@ -1,9 +1,6 @@
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
 
-import '../../services/auth_service.dart';
+import '../../services/offline_sync_service.dart';
 
 class LesionadoEditScreen extends StatefulWidget {
   const LesionadoEditScreen({super.key});
@@ -46,15 +43,6 @@ class _LesionadoEditScreenState extends State<LesionadoEditScreen> {
     _paramedicoCtrl.dispose();
     _observacionesCtrl.dispose();
     super.dispose();
-  }
-
-  Future<Map<String, String>> _headers() async {
-    final token = await AuthService.getToken();
-    return {
-      'Accept': 'application/json',
-      'Content-Type': 'application/json',
-      if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
-    };
   }
 
   int? _toIntOrNull(String v) {
@@ -186,21 +174,19 @@ class _LesionadoEditScreenState extends State<LesionadoEditScreen> {
           'observaciones': _observacionesCtrl.text.trim(),
       };
 
-      final res = await http.put(
-        _putUri(_hechoId, lesionadoId),
-        headers: await _headers(),
-        body: jsonEncode(body),
+      final result = await OfflineSyncService.submitJson(
+        label: 'Lesionado',
+        method: 'PUT',
+        uri: _putUri(_hechoId, lesionadoId),
+        body: body,
+        successCodes: const <int>{200, 204},
       );
-
-      if (res.statusCode != 200 && res.statusCode != 204) {
-        throw Exception('Error ${res.statusCode}: ${res.body}');
-      }
 
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Lesionado actualizado correctamente')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(result.message)));
 
       Navigator.pop(context, true);
     } catch (e) {

@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 
 import '../services/auth_service.dart';
 import '../services/tracking_service.dart';
@@ -11,6 +10,7 @@ import '../services/push_service.dart';
 import '../widgets/app_drawer.dart';
 import '../widgets/header_card.dart';
 import '../widgets/riesgo_map_embed.dart';
+import '../widgets/offline_sync_status_card.dart';
 
 import '../../app/routes.dart';
 import 'login_screen.dart';
@@ -78,22 +78,29 @@ class _HomePeritoScreenState extends State<HomePeritoScreen>
     WidgetsBinding.instance.addObserver(this);
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+
       try {
         await AppVersionService.enforceUpdateIfNeeded(context);
+        if (!mounted) return;
       } catch (_) {}
 
       try {
         await _bootstrapOnce();
+        if (!mounted) return;
       } catch (_) {}
 
       try {
         await _loadPerms(force: true);
+        if (!mounted) return;
       } catch (_) {}
 
       try {
         await _syncTrackingFromCommanderFlag();
+        if (!mounted) return;
       } catch (_) {}
 
+      if (!mounted) return;
       _startPermSoftRefresh();
     });
   }
@@ -137,7 +144,7 @@ class _HomePeritoScreenState extends State<HomePeritoScreen>
       final enabledByCommander = await LocationFlagService.isEnabledForMe();
       if (!mounted) return;
 
-      final running = await FlutterForegroundTask.isRunningService;
+      final running = await TrackingService.isRunning();
       if (!mounted) return;
 
       if (!enabledByCommander) {
@@ -264,7 +271,13 @@ class _HomePeritoScreenState extends State<HomePeritoScreen>
                   children: [
                     Padding(
                       padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
-                      child: HeaderCard(trackingOn: _trackingOn),
+                      child: Column(
+                        children: [
+                          HeaderCard(trackingOn: _trackingOn),
+                          SizedBox(height: 12),
+                          OfflineSyncStatusCard(),
+                        ],
+                      ),
                     ),
                     SizedBox(
                       height:

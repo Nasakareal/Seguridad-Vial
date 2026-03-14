@@ -12,6 +12,9 @@ class AuthService {
   static const String _tokenKey = 'auth_token';
   static const String _roleKey = 'auth_role';
   static const String _permsKey = 'auth_perms';
+  static const String _userIdKey = 'auth_user_id';
+  static const String _userEmailKey = 'auth_user_email';
+  static const String _sessionOwnerKeyKey = 'auth_session_owner_key';
 
   static String get baseUrl => _baseUrl;
 
@@ -82,7 +85,20 @@ class AuthService {
           .toList();
 
       final prefs = await SharedPreferences.getInstance();
+      final normalizedEmail = email.trim().toLowerCase();
       await prefs.setString(_tokenKey, token.toString());
+      await prefs.setString(_userEmailKey, normalizedEmail);
+
+      final user = data['user'];
+      final dynamic rawUserId = user is Map
+          ? (user['id'] ?? user['user_id'])
+          : null;
+      final userId = int.tryParse(rawUserId?.toString() ?? '');
+      if (userId != null && userId > 0) {
+        await prefs.setInt(_userIdKey, userId);
+      } else {
+        await prefs.remove(_userIdKey);
+      }
 
       if (role != null && role.trim().isNotEmpty) {
         await prefs.setString(_roleKey, role.trim());
@@ -95,6 +111,15 @@ class AuthService {
       } else {
         await prefs.remove(_permsKey);
       }
+
+      await prefs.setString(
+        _sessionOwnerKeyKey,
+        _buildSessionOwnerKey(
+          userId: userId,
+          email: normalizedEmail,
+          token: token.toString(),
+        ),
+      );
 
       try {
         await refreshPermissions();
@@ -119,6 +144,49 @@ class AuthService {
   static Future<String?> getRole() async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getString(_roleKey);
+  }
+
+  static Future<int?> getUserId() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getInt(_userIdKey);
+  }
+
+  static Future<String?> getUserEmail() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_userEmailKey);
+  }
+
+  static Future<String?> getSessionOwnerKey() async {
+    final prefs = await SharedPreferences.getInstance();
+
+    final stored = prefs.getString(_sessionOwnerKeyKey)?.trim() ?? '';
+    if (stored.isNotEmpty) {
+      return stored;
+    }
+
+    final userId = prefs.getInt(_userIdKey);
+    if (userId != null && userId > 0) {
+      final ownerKey = 'user:$userId';
+      await prefs.setString(_sessionOwnerKeyKey, ownerKey);
+      return ownerKey;
+    }
+
+    final email = prefs.getString(_userEmailKey);
+    final normalized = email?.trim().toLowerCase() ?? '';
+    if (normalized.isNotEmpty) {
+      final ownerKey = 'email:$normalized';
+      await prefs.setString(_sessionOwnerKeyKey, ownerKey);
+      return ownerKey;
+    }
+
+    final token = prefs.getString(_tokenKey)?.trim() ?? '';
+    if (token.isNotEmpty) {
+      final ownerKey = _buildSessionOwnerKey(token: token);
+      await prefs.setString(_sessionOwnerKeyKey, ownerKey);
+      return ownerKey;
+    }
+
+    return null;
   }
 
   static Future<bool> isSuperadmin() async {
@@ -218,5 +286,39 @@ class AuthService {
     await prefs.remove(_tokenKey);
     await prefs.remove(_roleKey);
     await prefs.remove(_permsKey);
+    await prefs.remove(_userIdKey);
+    await prefs.remove(_userEmailKey);
+    await prefs.remove(_sessionOwnerKeyKey);
+  }
+
+  static String _buildSessionOwnerKey({
+    int? userId,
+    String? email,
+    String? token,
+  }) {
+    if (userId != null && userId > 0) {
+      return 'user:$userId';
+    }
+
+    final normalizedEmail = email?.trim().toLowerCase() ?? '';
+    if (normalizedEmail.isNotEmpty) {
+      return 'email:$normalizedEmail';
+    }
+
+    final normalizedToken = token?.trim() ?? '';
+    if (normalizedToken.isNotEmpty) {
+      return 'token:${_stableHash(normalizedToken)}';
+    }
+
+    return 'anonymous';
+  }
+
+  static String _stableHash(String value) {
+    var hash = 0x811C9DC5;
+    for (final byte in utf8.encode(value)) {
+      hash ^= byte;
+      hash = (hash * 0x01000193) & 0xFFFFFFFF;
+    }
+    return hash.toRadixString(16).padLeft(8, '0');
   }
 }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../services/auth_service.dart';
+import '../services/offline_sync_service.dart';
 import 'home_screen.dart';
 import 'location_consent_screen.dart';
 
@@ -48,6 +49,9 @@ class _LoginScreenState extends State<LoginScreen> {
       if (!mounted) return;
 
       if (ok) {
+        await OfflineSyncService.initialize();
+        await OfflineSyncService.flushPending();
+
         final askLocation = await AuthService.shouldAskLocation();
 
         if (!mounted) return;

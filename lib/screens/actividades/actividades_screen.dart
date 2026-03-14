@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 
 import '../../services/auth_service.dart';
 import '../../services/tracking_service.dart';
@@ -49,11 +48,12 @@ class _ActividadesScreenState extends State<ActividadesScreen>
     WidgetsBinding.instance.addObserver(this);
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+
       try {
         await AppVersionService.enforceUpdateIfNeeded(context);
+        if (!mounted) return;
       } catch (_) {}
-
-      if (!mounted) return;
 
       await _bootstrapTrackingStatusOnly();
       if (!mounted) return;
@@ -69,7 +69,7 @@ class _ActividadesScreenState extends State<ActividadesScreen>
     if (_bootstrapped) return;
     _bootstrapped = true;
 
-    final running = await FlutterForegroundTask.isRunningService;
+    final running = await TrackingService.isRunning();
     if (!mounted) return;
     setState(() => _trackingOn = running);
   }
@@ -77,7 +77,7 @@ class _ActividadesScreenState extends State<ActividadesScreen>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) async {
     if (state == AppLifecycleState.resumed) {
-      final running = await FlutterForegroundTask.isRunningService;
+      final running = await TrackingService.isRunning();
       if (!mounted) return;
       setState(() => _trackingOn = running);
     }

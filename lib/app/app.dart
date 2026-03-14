@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 
 import '../core/globals.dart';
 import '../widgets/alerts_listener.dart';
+import '../widgets/offline_sync_listener.dart';
 
 import 'auth_gate.dart';
-import 'routes.dart';
 import 'nav.dart';
 import 'router_map.dart';
 
@@ -22,7 +22,9 @@ class SeguridadVialApp extends StatelessWidget {
         scaffoldBackgroundColor: Colors.white,
         fontFamily: 'Roboto',
       ),
-      home: const PushNavBinder(child: AlertsListener(child: AuthGate())),
+      home: const PushNavBinder(
+        child: AlertsListener(child: OfflineSyncListener(child: AuthGate())),
+      ),
       routes: appRoutesMap,
       onGenerateRoute: onGenerateRoute,
       onUnknownRoute: (settings) => MaterialPageRoute(

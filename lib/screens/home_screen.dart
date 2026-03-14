@@ -9,6 +9,7 @@ import '../services/push_service.dart';
 
 import '../widgets/app_drawer.dart';
 import '../widgets/header_card.dart';
+import '../widgets/offline_sync_status_card.dart';
 
 import 'login_screen.dart';
 
@@ -45,6 +46,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     _scrollController.addListener(_onScroll);
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+
       try {
         await AppVersionService.enforceUpdateIfNeeded(context);
         if (!mounted) return;
@@ -71,6 +74,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         if (!mounted) return;
       } catch (_) {}
 
+      if (!mounted) return;
       _permsCtrl.startSoftRefresh();
     });
   }
@@ -284,6 +288,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               HeaderCard(trackingOn: trackingOn),
+                              const SizedBox(height: 12),
+                              const OfflineSyncStatusCard(),
                               const SizedBox(height: 16),
                               Text(
                                 'Accesos rápidos',

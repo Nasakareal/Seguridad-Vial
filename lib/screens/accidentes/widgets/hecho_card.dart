@@ -14,6 +14,7 @@ class HechoCard extends StatelessWidget {
   final String ubicacion;
 
   final String fotoHecho;
+  final String fotoSituacion;
   final List<String> fotosVehiculos;
   final String fotoConvenio;
 
@@ -36,6 +37,7 @@ class HechoCard extends StatelessWidget {
     required this.perito,
     required this.ubicacion,
     required this.fotoHecho,
+    required this.fotoSituacion,
     required this.fotosVehiculos,
     required this.fotoConvenio,
     required this.isDownloading,
@@ -79,6 +81,7 @@ class HechoCard extends StatelessWidget {
                     Text('Situación: $situacion'),
                     Text('Perito: $perito'),
                     PhotoBlock(label: 'Foto del hecho', url: fotoHecho),
+                    PhotoBlock(label: 'Foto de la situacion', url: fotoSituacion),
                     if (fotosVehiculos.isNotEmpty)
                       Padding(
                         padding: const EdgeInsets.only(top: 10),

@@ -50,8 +50,10 @@ class _DictamenShowScreenState extends State<DictamenShowScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
       final id = _dictamenIdFromArgs(context);
       if (id <= 0) {
+        if (!mounted) return;
         setState(() {
           _loading = false;
           _error = 'No se recibió dictamenId.';

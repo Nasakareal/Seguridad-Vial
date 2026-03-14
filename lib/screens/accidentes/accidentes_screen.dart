@@ -4,7 +4,6 @@ import 'dart:typed_data';
 
 import 'package:file_saver/file_saver.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
@@ -52,6 +51,8 @@ class _AccidentesScreenState extends State<AccidentesScreen>
     _fechaSeleccionada = _fmtYmd(DateTime.now());
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+
       try {
         await AppVersionService.enforceUpdateIfNeeded(context);
         if (!mounted) return;
@@ -73,7 +74,7 @@ class _AccidentesScreenState extends State<AccidentesScreen>
     if (_bootstrapped) return;
     _bootstrapped = true;
 
-    final running = await FlutterForegroundTask.isRunningService;
+    final running = await TrackingService.isRunning();
     if (!mounted) return;
     setState(() => _trackingOn = running);
   }
@@ -81,7 +82,7 @@ class _AccidentesScreenState extends State<AccidentesScreen>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) async {
     if (state == AppLifecycleState.resumed) {
-      final running = await FlutterForegroundTask.isRunningService;
+      final running = await TrackingService.isRunning();
       if (!mounted) return;
       setState(() => _trackingOn = running);
     }
@@ -181,6 +182,20 @@ class _AccidentesScreenState extends State<AccidentesScreen>
       'foto_hecho_url',
       'foto_hecho_path',
       'foto_hecho',
+    ];
+
+    for (final k in candidates) {
+      final v = (hecho[k] ?? '').toString().trim();
+      if (v.isNotEmpty) return _toPublicUrl(v);
+    }
+    return '';
+  }
+
+  String _fotoSituacionUrl(Map<String, dynamic> hecho) {
+    final candidates = [
+      'foto_situacion_url',
+      'foto_situacion_path',
+      'foto_situacion',
     ];
 
     for (final k in candidates) {
@@ -577,6 +592,7 @@ class _AccidentesScreenState extends State<AccidentesScreen>
                     final perito = _safeText(hecho['perito']);
 
                     final fotoHecho = _fotoHechoUrl(hecho);
+                    final fotoSituacion = _fotoSituacionUrl(hecho);
                     final fotosVehiculos = _fotosDeVehiculos(hecho);
                     final fotoConvenio = _fotoConvenioUrl(hecho);
 
@@ -598,6 +614,7 @@ class _AccidentesScreenState extends State<AccidentesScreen>
                       perito: perito,
                       ubicacion: _ubicacion(hecho),
                       fotoHecho: fotoHecho,
+                      fotoSituacion: fotoSituacion,
                       fotosVehiculos: fotosVehiculos,
                       fotoConvenio: fotoConvenio,
                       isDownloading: isDownloading,

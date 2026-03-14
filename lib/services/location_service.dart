@@ -1,11 +1,9 @@
-// lib/services/location_service.dart
-import 'dart:convert';
 import 'dart:io' show Platform;
 
 import 'package:geolocator/geolocator.dart';
-import 'package:http/http.dart' as http;
 
 import 'auth_service.dart';
+import 'offline_sync_service.dart';
 
 class LocationService {
   LocationService({required this.apiBase});
@@ -27,7 +25,6 @@ class LocationService {
     try {
       final token = await AuthService.getToken();
       if (token == null || token.isEmpty) {
-        print('LOC: sin token');
         return false;
       }
 
@@ -40,16 +37,12 @@ class LocationService {
 
       final acc = pos.accuracy.isFinite ? pos.accuracy : 9999.0;
       if (acc > 150) {
-        print('LOC: accuracy muy mala ($acc), no se envía');
         return false;
       }
 
-      if (pos.timestamp != null) {
-        final age = DateTime.now().difference(pos.timestamp!);
-        if (age.inMinutes >= 2) {
-          print('LOC: posición vieja (${age.inSeconds}s)');
-          return false;
-        }
+      final age = DateTime.now().difference(pos.timestamp);
+      if (age.inMinutes >= 2) {
+        return false;
       }
 
       final payload = <String, dynamic>{
@@ -60,22 +53,17 @@ class LocationService {
         if (pos.heading.isFinite) 'heading': pos.heading,
       };
 
-      final res = await http
-          .post(
-            Uri.parse('$apiBase/location'),
-            headers: {
-              'Authorization': 'Bearer $token',
-              'Accept': 'application/json',
-              'Content-Type': 'application/json',
-            },
-            body: jsonEncode(payload),
-          )
-          .timeout(const Duration(seconds: 12));
+      final result = await OfflineSyncService.submitJson(
+        label: 'Ubicación',
+        method: 'POST',
+        uri: Uri.parse('$apiBase/location'),
+        body: payload,
+        successCodes: const <int>{200, 201},
+        announceOnQueue: false,
+      );
 
-      print('LOC: ${res.statusCode} ${res.body}');
-      return res.statusCode >= 200 && res.statusCode < 300;
-    } catch (e) {
-      print('LOC EXCEPTION: $e');
+      return result.synced || result.queued;
+    } catch (_) {
       return false;
     }
   }
@@ -83,8 +71,6 @@ class LocationService {
   Future<bool> _ensurePermissions({required bool requireAlways}) async {
     final enabled = await Geolocator.isLocationServiceEnabled();
     if (!enabled) {
-      // ignore: avoid_print
-      print('LOC: GPS apagado');
       return false;
     }
 
@@ -95,16 +81,12 @@ class LocationService {
 
     if (permission == LocationPermission.denied ||
         permission == LocationPermission.deniedForever) {
-      print('LOC: permiso denegado');
       return false;
     }
 
     if (Platform.isIOS &&
         requireAlways &&
         permission != LocationPermission.always) {
-      print(
-        'LOC: iOS requiere ALWAYS (modo servicio), pero está en: $permission',
-      );
       return false;
     }
 

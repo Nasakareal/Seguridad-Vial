@@ -139,7 +139,7 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
     setState(() => _saving = true);
 
     try {
-      await ActividadesService.update(
+      final result = await ActividadesService.update(
         id: a.id,
         actividadCategoriaId: _categoriaId!,
         actividadSubcategoriaId: _subcategoriaId,
@@ -147,6 +147,9 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
       );
 
       if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(result.message)));
       Navigator.pop(context, true);
     } catch (e) {
       if (!mounted) return;

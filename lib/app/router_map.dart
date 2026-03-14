@@ -10,6 +10,7 @@ import '../screens/accidentes/accidentes_screen.dart';
 import '../screens/accidentes/create_screen.dart';
 import '../screens/accidentes/edit_screen.dart';
 import '../screens/accidentes/hecho_show_screen.dart';
+import '../screens/accidentes/pending_capture_screen.dart';
 
 import '../screens/vehiculos/vehiculos_screen.dart';
 import '../screens/vehiculos/vehiculo_create_screen.dart';
@@ -59,6 +60,7 @@ final Map<String, WidgetBuilder> appRoutesMap = {
   AppRoutes.accidentes: (context) => const AccidentesScreen(),
   AppRoutes.accidentesCreate: (context) => const CreateHechoScreen(),
   AppRoutes.accidentesShow: (context) => const HechoShowScreen(),
+  AppRoutes.pendingHechoCapture: (context) => const PendingHechoCaptureScreen(),
 
   AppRoutes.vehiculos: (context) => const VehiculosScreen(),
   AppRoutes.vehiculosCreate: (context) => const VehiculoCreateScreen(),

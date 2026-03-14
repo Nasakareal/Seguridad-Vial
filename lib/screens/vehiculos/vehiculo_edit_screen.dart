@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import '../../services/auth_service.dart';
 import '../../core/vehiculos/vehiculo_taxonomia.dart';
 import '../../core/vehiculos/estados_republica.dart';
+import '../../services/offline_sync_service.dart';
 
 class VehiculoEditScreen extends StatefulWidget {
   const VehiculoEditScreen({super.key});
@@ -532,10 +533,7 @@ class _VehiculoEditScreenState extends State<VehiculoEditScreen> {
     setState(() => _saving = true);
 
     try {
-      final h = await _headers(json: true);
-      final uri = Uri.parse(
-        '$_baseApi/hechos/$_hechoId/vehiculos/$_vehiculoId',
-      );
+      final uri = Uri.parse('/hechos//vehiculos/');
 
       final corralonNombre = _nombreGruaById(_corralonGruaIdSeleccionada);
 
@@ -577,17 +575,18 @@ class _VehiculoEditScreenState extends State<VehiculoEditScreen> {
         'antecedente_vehiculo': _antecedenteVehiculo,
       };
 
-      final res = await http.put(uri, headers: h, body: jsonEncode(payload));
-
-      if (res.statusCode != 200) {
-        final msg = _apiErrorText(
-          res,
-          fallbackTitle: 'No se pudo actualizar el vehículo',
-        );
-        throw Exception(msg);
-      }
+      final result = await OfflineSyncService.submitJson(
+        label: 'Vehículo',
+        method: 'PUT',
+        uri: uri,
+        body: payload,
+        successCodes: const <int>{200},
+      );
 
       if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(result.message)));
       Navigator.pop(context, true);
     } catch (e) {
       if (!mounted) return;

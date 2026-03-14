@@ -6,6 +6,7 @@ import '../../../core/hechos/hechos_catalogos.dart';
 import '../../../models/dictamen_item.dart';
 import '../../../models/hecho_form_data.dart';
 import '../../../services/hechos_form_service.dart';
+import '../../../services/offline_sync_service.dart';
 import 'ubicacion_card.dart';
 import 'photo_card.dart';
 import 'danos_patrimoniales_card.dart';
@@ -16,19 +17,22 @@ enum HechoFormMode { create, edit }
 class HechoForm extends StatefulWidget {
   final HechoFormMode mode;
   final HechoFormData data;
-  final Future<void> Function({
+  final Future<OfflineActionResult> Function({
     required HechoFormData data,
     required DictamenItem? dictamenSelected,
     required File? fotoLugar,
     required File? fotoSituacion,
   })
   onSubmit;
+  final Future<void> Function(OfflineActionResult result, HechoFormData data)?
+  onSubmitted;
 
   const HechoForm({
     super.key,
     required this.mode,
     required this.data,
     required this.onSubmit,
+    this.onSubmitted,
   });
 
   @override
@@ -256,7 +260,7 @@ class _HechoFormState extends State<HechoForm> {
     setState(() => _submitting = true);
 
     try {
-      await widget.onSubmit(
+      final result = await widget.onSubmit(
         data: widget.data,
         dictamenSelected: _dictamenSelected,
         fotoLugar: _fotoLugar,
@@ -264,6 +268,14 @@ class _HechoFormState extends State<HechoForm> {
       );
 
       if (!mounted) return;
+      if (widget.onSubmitted != null) {
+        await widget.onSubmitted!(result, widget.data);
+        return;
+      }
+
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(result.message)));
       Navigator.pop(context, true);
     } catch (e) {
       if (!mounted) return;
@@ -420,21 +432,23 @@ class _HechoFormState extends State<HechoForm> {
                   ),
                 ),
               ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: DropdownButtonFormField<String>(
-                  decoration: _dec('Sector *'),
-                  value: sectorValue,
-                  items: HechosCatalogos.sectoresUi
-                      .map((v) => DropdownMenuItem(value: v, child: Text(v)))
-                      .toList(),
-                  onChanged: _submitting
-                      ? null
-                      : (v) => setState(() => d.sector = v),
-                  validator: (v) => v == null ? 'Requerido' : null,
-                ),
-              ),
             ],
+          ),
+          const SizedBox(height: 8),
+          DropdownButtonFormField<String>(
+            isExpanded: true,
+            decoration: _dec('Sector *'),
+            value: sectorValue,
+            items: HechosCatalogos.sectoresUi
+                .map(
+                  (v) => DropdownMenuItem(
+                    value: v,
+                    child: Text(v, overflow: TextOverflow.ellipsis),
+                  ),
+                )
+                .toList(),
+            onChanged: _submitting ? null : (v) => setState(() => d.sector = v),
+            validator: (v) => v == null ? 'Requerido' : null,
           ),
 
           const SizedBox(height: 12),
@@ -466,6 +480,7 @@ class _HechoFormState extends State<HechoForm> {
 
           const SizedBox(height: 12),
           DropdownButtonFormField<String>(
+            isExpanded: true,
             decoration: _dec('Tipo Hecho *'),
             value: tipoHechoValue,
             items: HechosCatalogos.tiposHecho
@@ -479,6 +494,7 @@ class _HechoFormState extends State<HechoForm> {
 
           const SizedBox(height: 12),
           DropdownButtonFormField<String>(
+            isExpanded: true,
             decoration: _dec('Superficie vía *'),
             value: superficieViaValue,
             items: HechosCatalogos.superficiesViaUi
@@ -495,10 +511,16 @@ class _HechoFormState extends State<HechoForm> {
             children: [
               Expanded(
                 child: DropdownButtonFormField<String>(
+                  isExpanded: true,
                   decoration: _dec('Tiempo *'),
                   value: tiempoValue,
                   items: HechosCatalogos.tiemposUi
-                      .map((v) => DropdownMenuItem(value: v, child: Text(v)))
+                      .map(
+                        (v) => DropdownMenuItem(
+                          value: v,
+                          child: Text(v, overflow: TextOverflow.ellipsis),
+                        ),
+                      )
                       .toList(),
                   onChanged: _submitting
                       ? null
@@ -509,10 +531,16 @@ class _HechoFormState extends State<HechoForm> {
               const SizedBox(width: 8),
               Expanded(
                 child: DropdownButtonFormField<String>(
+                  isExpanded: true,
                   decoration: _dec('Clima *'),
                   value: climaValue,
                   items: HechosCatalogos.climasUi
-                      .map((v) => DropdownMenuItem(value: v, child: Text(v)))
+                      .map(
+                        (v) => DropdownMenuItem(
+                          value: v,
+                          child: Text(v, overflow: TextOverflow.ellipsis),
+                        ),
+                      )
                       .toList(),
                   onChanged: _submitting
                       ? null
@@ -520,25 +548,30 @@ class _HechoFormState extends State<HechoForm> {
                   validator: (v) => v == null ? 'Requerido' : null,
                 ),
               ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: DropdownButtonFormField<String>(
-                  decoration: _dec('Condiciones *'),
-                  value: condicionesValue,
-                  items: HechosCatalogos.condicionesUi
-                      .map((v) => DropdownMenuItem(value: v, child: Text(v)))
-                      .toList(),
-                  onChanged: _submitting
-                      ? null
-                      : (v) => setState(() => d.condiciones = v),
-                  validator: (v) => v == null ? 'Requerido' : null,
-                ),
-              ),
             ],
+          ),
+          const SizedBox(height: 8),
+          DropdownButtonFormField<String>(
+            isExpanded: true,
+            decoration: _dec('Condiciones *'),
+            value: condicionesValue,
+            items: HechosCatalogos.condicionesUi
+                .map(
+                  (v) => DropdownMenuItem(
+                    value: v,
+                    child: Text(v, overflow: TextOverflow.ellipsis),
+                  ),
+                )
+                .toList(),
+            onChanged: _submitting
+                ? null
+                : (v) => setState(() => d.condiciones = v),
+            validator: (v) => v == null ? 'Requerido' : null,
           ),
 
           const SizedBox(height: 12),
           DropdownButtonFormField<String>(
+            isExpanded: true,
             decoration: _dec('Control tránsito *'),
             value: controlTransitoValue,
             items: HechosCatalogos.controlesTransitoUi
@@ -561,6 +594,7 @@ class _HechoFormState extends State<HechoForm> {
 
           const SizedBox(height: 12),
           DropdownButtonFormField<String>(
+            isExpanded: true,
             decoration: _dec('Causas *'),
             value: causaValue,
             items: HechosCatalogos.causasUi
@@ -572,6 +606,7 @@ class _HechoFormState extends State<HechoForm> {
 
           const SizedBox(height: 12),
           DropdownButtonFormField<String>(
+            isExpanded: true,
             decoration: _dec('Colisión camino *'),
             value: colisionCaminoValue,
             items: HechosCatalogos.colisionCaminoUi
@@ -585,6 +620,7 @@ class _HechoFormState extends State<HechoForm> {
 
           const SizedBox(height: 12),
           DropdownButtonFormField<String>(
+            isExpanded: true,
             decoration: _dec('Situación *'),
             value: situacionValue,
             items: HechosCatalogos.situaciones
