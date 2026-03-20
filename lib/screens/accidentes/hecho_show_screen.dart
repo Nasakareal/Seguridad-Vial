@@ -27,6 +27,7 @@ class _HechoShowScreenState extends State<HechoShowScreen>
     with WidgetsBindingObserver {
   Map<String, dynamic>? _hecho;
   bool _cargando = true;
+  String? _error;
 
   bool _trackingOn = false;
   bool _bootstrapped = false;
@@ -113,40 +114,51 @@ class _HechoShowScreenState extends State<HechoShowScreen>
 
   Future<void> _cargarHecho(int id) async {
     if (!mounted) return;
-    setState(() => _cargando = true);
-
-    final token = await AuthService.getToken();
-    final headers = <String, String>{'Accept': 'application/json'};
-    if (token != null && token.isNotEmpty) {
-      headers['Authorization'] = 'Bearer $token';
-    }
-
-    final uri = Uri.parse('${AuthService.baseUrl}/hechos/$id');
-    final res = await http.get(uri, headers: headers);
-
-    if (res.statusCode != 200) {
-      if (mounted) setState(() => _cargando = false);
-      throw Exception('HTTP ${res.statusCode}: ${res.body}');
-    }
-
-    final raw = jsonDecode(res.body);
-    Map<String, dynamic> hecho;
-
-    if (raw is Map<String, dynamic> && raw['data'] is Map) {
-      hecho = Map<String, dynamic>.from(raw['data']);
-    } else if (raw is Map<String, dynamic> && raw['hecho'] is Map) {
-      hecho = Map<String, dynamic>.from(raw['hecho']);
-    } else if (raw is Map<String, dynamic>) {
-      hecho = raw;
-    } else {
-      hecho = {};
-    }
-
-    if (!mounted) return;
     setState(() {
-      _hecho = hecho;
-      _cargando = false;
+      _cargando = true;
+      _error = null;
     });
+
+    try {
+      final token = await AuthService.getToken();
+      final headers = <String, String>{'Accept': 'application/json'};
+      if (token != null && token.isNotEmpty) {
+        headers['Authorization'] = 'Bearer $token';
+      }
+
+      final uri = Uri.parse('${AuthService.baseUrl}/hechos/$id');
+      final res = await http.get(uri, headers: headers);
+
+      if (res.statusCode != 200) {
+        throw Exception('HTTP ${res.statusCode}: ${res.body}');
+      }
+
+      final raw = jsonDecode(res.body);
+      Map<String, dynamic> hecho;
+
+      if (raw is Map<String, dynamic> && raw['data'] is Map) {
+        hecho = Map<String, dynamic>.from(raw['data']);
+      } else if (raw is Map<String, dynamic> && raw['hecho'] is Map) {
+        hecho = Map<String, dynamic>.from(raw['hecho']);
+      } else if (raw is Map<String, dynamic>) {
+        hecho = raw;
+      } else {
+        hecho = {};
+      }
+
+      if (!mounted) return;
+      setState(() {
+        _hecho = hecho;
+        _cargando = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _hecho = null;
+        _error = 'No se pudo cargar el hecho: $e';
+        _cargando = false;
+      });
+    }
   }
 
   Future<void> _goEdit(int hechoId) async {
@@ -423,6 +435,18 @@ class _HechoShowScreenState extends State<HechoShowScreen>
                   children: const [
                     SizedBox(height: 140),
                     Center(child: CircularProgressIndicator()),
+                  ],
+                )
+              : _error != null
+              ? ListView(
+                  padding: const EdgeInsets.fromLTRB(24, 80, 24, 24),
+                  children: [
+                    Text(_error!, textAlign: TextAlign.center),
+                    const SizedBox(height: 12),
+                    ElevatedButton(
+                      onPressed: hechoId > 0 ? () => _cargarHecho(hechoId) : null,
+                      child: const Text('Reintentar'),
+                    ),
                   ],
                 )
               : (_hecho == null || _hecho!.isEmpty)

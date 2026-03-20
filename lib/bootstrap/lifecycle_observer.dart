@@ -1,6 +1,7 @@
 import 'package:flutter/widgets.dart';
 import '../services/push_service.dart';
 import '../services/offline_sync_service.dart';
+import '../services/tracking_service.dart';
 
 class AppLifecycleObserver with WidgetsBindingObserver {
   static bool _installed = false;
@@ -19,6 +20,9 @@ class AppLifecycleObserver with WidgetsBindingObserver {
       } catch (_) {}
       try {
         OfflineSyncService.flushPending();
+      } catch (_) {}
+      try {
+        TrackingService.ensureAndroidPersistentGuard();
       } catch (_) {}
     }
   }

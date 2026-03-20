@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:isolate';
 
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
@@ -5,14 +6,21 @@ import 'package:geolocator/geolocator.dart';
 
 import 'auth_service.dart';
 import 'location_service.dart';
+import 'location_flag_service.dart';
+import 'tracking_guard_constants.dart';
+import 'tracking_guard_notification_service.dart';
 
 class TrackingTaskHandler extends TaskHandler {
   TrackingTaskHandler(this.apiBase);
 
   final String apiBase;
+  static const String panicButtonId = 'panic_symbolic';
+  static const String panicPressedAtKey = 'panic_symbolic_pressed_at';
 
   bool _sending = false;
   DateTime? _lastSentAt;
+  bool? _enabledByCommander;
+  DateTime? _enabledByCommanderCheckedAt;
 
   static const Duration kMinInterval = Duration(seconds: 12);
   static const Duration kStillInterval = Duration(seconds: 50);
@@ -37,6 +45,24 @@ class TrackingTaskHandler extends TaskHandler {
     return true;
   }
 
+  Future<bool> _canShareLocationNow() async {
+    final checkedAt = _enabledByCommanderCheckedAt;
+    if (checkedAt != null &&
+        DateTime.now().difference(checkedAt) < const Duration(seconds: 45) &&
+        _enabledByCommander != null) {
+      return _enabledByCommander!;
+    }
+
+    try {
+      final enabled = await LocationFlagService.isEnabledForMe();
+      _enabledByCommander = enabled;
+      _enabledByCommanderCheckedAt = DateTime.now();
+      return enabled;
+    } catch (_) {
+      return _enabledByCommander ?? false;
+    }
+  }
+
   Future<void> _sendLocationOnce() async {
     if (_sending) return;
     _sending = true;
@@ -47,6 +73,9 @@ class TrackingTaskHandler extends TaskHandler {
 
       final token = await AuthService.getToken();
       if (token == null || token.isEmpty) return;
+
+      final canShare = await _canShareLocationNow();
+      if (!canShare) return;
 
       final pos = await Geolocator.getCurrentPosition(
         desiredAccuracy: LocationAccuracy.high,
@@ -76,21 +105,51 @@ class TrackingTaskHandler extends TaskHandler {
     }
   }
 
+  Future<void> _refreshGuardPresence() async {
+    try {
+      await FlutterForegroundTask.updateService(
+        notificationTitle: trackingGuardNotificationTitle,
+        notificationText: trackingGuardNotificationText,
+      );
+    } catch (_) {}
+
+    try {
+      await TrackingGuardNotificationService.show();
+    } catch (_) {}
+  }
+
   @override
   void onStart(DateTime timestamp, SendPort? sendPort) {
-    _sendLocationOnce();
+    unawaited(_refreshGuardPresence());
+    unawaited(_sendLocationOnce());
   }
 
   @override
   void onRepeatEvent(DateTime timestamp, SendPort? sendPort) {
-    _sendLocationOnce();
+    unawaited(_refreshGuardPresence());
+    unawaited(_sendLocationOnce());
   }
 
   @override
-  void onDestroy(DateTime timestamp, SendPort? sendPort) {}
+  void onDestroy(DateTime timestamp, SendPort? sendPort) {
+    unawaited(TrackingGuardNotificationService.cancel());
+  }
 
   @override
-  void onNotificationPressed() {}
+  void onNotificationButtonPressed(String id) {
+    if (id != panicButtonId) return;
+
+    FlutterForegroundTask.saveData(
+      key: panicPressedAtKey,
+      value: DateTime.now().toIso8601String(),
+    );
+    FlutterForegroundTask.launchApp('/');
+  }
+
+  @override
+  void onNotificationPressed() {
+    FlutterForegroundTask.launchApp('/');
+  }
 }
 
 @pragma('vm:entry-point')

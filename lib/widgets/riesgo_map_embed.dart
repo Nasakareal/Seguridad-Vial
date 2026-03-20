@@ -4,6 +4,7 @@ import 'package:latlong2/latlong.dart';
 
 import '../services/riesgo_service.dart';
 import '../models/riesgo_cell.dart';
+import 'safe_osm_tile_layer.dart';
 
 class RiesgoMapEmbed extends StatefulWidget {
   final int precision;
@@ -152,9 +153,8 @@ class _RiesgoMapEmbedState extends State<RiesgoMapEmbed> {
               ),
             ),
             children: [
-              TileLayer(
-                urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                userAgentPackageName: 'com.example.app',
+              buildSafeOpenStreetMapTileLayer(
+                userAgentPackageName: 'com.nasaka.seguridad_vial_app',
                 maxZoom: 19,
               ),
               CircleLayer(

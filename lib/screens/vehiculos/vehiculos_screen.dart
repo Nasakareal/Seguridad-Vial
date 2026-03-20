@@ -72,11 +72,11 @@ class _VehiculosScreenState extends State<VehiculosScreen> {
   }
 
   Uri _vehiculosUri() => Uri.parse(
-    'https://seguridadvial-mich.com/api/hechos/$_hechoId/vehiculos',
+      'https://seguridadvial-mich.com/api/hechos/$_hechoId/vehiculos',
   );
 
   Uri _fotoApiUri(int vehiculoId) => Uri.parse(
-    'https://seguridadvial-mich.com/api/hechos/$_hechoId/vehiculos/$vehiculoId/foto',
+      'https://seguridadvial-mich.com/api/hechos/$_hechoId/vehiculos/$vehiculoId/foto',
   );
 
   Future<void> _cargarVehiculos() async {
@@ -114,8 +114,8 @@ class _VehiculosScreenState extends State<VehiculosScreen> {
       }
 
       final items = datos
-          .where((e) => e is Map)
-          .map((e) => Map<String, dynamic>.from(e as Map))
+          .whereType<Map>()
+          .map((e) => Map<String, dynamic>.from(e))
           .toList();
 
       if (!mounted) return;
@@ -138,7 +138,7 @@ class _VehiculosScreenState extends State<VehiculosScreen> {
     await Navigator.pushNamed(
       context,
       '/accidentes/vehiculos/create',
-      arguments: {'hechoId': _hechoId},
+      arguments: {'hechoId': _hechoId, 'vehiculosSnapshot': _vehiculos},
     );
     await _cargarVehiculos();
   }
@@ -149,7 +149,11 @@ class _VehiculosScreenState extends State<VehiculosScreen> {
     await Navigator.pushNamed(
       context,
       '/accidentes/vehiculos/edit',
-      arguments: {'hechoId': _hechoId, 'vehiculoId': vehiculoId},
+      arguments: {
+        'hechoId': _hechoId,
+        'vehiculoId': vehiculoId,
+        'vehiculosSnapshot': _vehiculos,
+      },
     );
     await _cargarVehiculos();
   }
@@ -160,7 +164,11 @@ class _VehiculosScreenState extends State<VehiculosScreen> {
     await Navigator.pushNamed(
       context,
       '/accidentes/vehiculos/conductor/create',
-      arguments: {'hechoId': _hechoId, 'vehiculoId': vehiculoId},
+      arguments: {
+        'hechoId': _hechoId,
+        'vehiculoId': vehiculoId,
+        'vehiculosSnapshot': _vehiculos,
+      },
     );
     await _cargarVehiculos();
   }
@@ -279,8 +287,9 @@ class _VehiculosScreenState extends State<VehiculosScreen> {
       final token = await AuthService.getToken();
       final req = http.MultipartRequest('POST', _fotoApiUri(vehiculoId));
       req.headers['Accept'] = 'application/json';
-      if (token != null && token.isNotEmpty)
+      if (token != null && token.isNotEmpty) {
         req.headers['Authorization'] = 'Bearer $token';
+      }
 
       req.files.add(await http.MultipartFile.fromPath('foto', file.path));
 

@@ -7,6 +7,7 @@ import 'package:http/http.dart' as http;
 import 'package:latlong2/latlong.dart';
 
 import '../../services/auth_service.dart';
+import '../../widgets/safe_osm_tile_layer.dart';
 
 class MapaIncidenciasScreen extends StatefulWidget {
   const MapaIncidenciasScreen({super.key});
@@ -549,9 +550,7 @@ class _MapaIncidenciasScreenState extends State<MapaIncidenciasScreen>
                     ),
                   ),
                   children: [
-                    TileLayer(
-                      urlTemplate:
-                          'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                    buildSafeOpenStreetMapTileLayer(
                       userAgentPackageName: 'seguridad_vial_app',
                     ),
                     MarkerLayer(markers: markers),

@@ -182,6 +182,9 @@ class _EditHechoScreenState extends State<EditHechoScreen> {
     d.fuenteUbicacion = _asString(raw['fuente_ubicacion']);
 
     d.dictamenId = _asInt(raw['dictamen_id']);
+    d.hasFotoSituacionActual =
+        (_asString(raw['foto_situacion']) ?? '').isNotEmpty ||
+        (_asString(raw['foto_situacion_url']) ?? '').isNotEmpty;
 
     return d;
   }

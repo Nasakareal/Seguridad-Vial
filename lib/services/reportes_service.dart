@@ -18,7 +18,7 @@ class ReporteHechoService {
 
     // ✅ Ajusta a tu endpoint real (ej: /hechos/{id}/reporte)
     final uri = Uri.parse(
-      'https://seguridadvial-mich.com/api/hechos/$hechoId/reporte',
+        'https://seguridadvial-mich.com/api/hechos/$hechoId/reporte',
     );
 
     final headers = <String, String>{

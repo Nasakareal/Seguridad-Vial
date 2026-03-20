@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:seguridad_vial_app/app/routes.dart';
 
 import '../screens/login_screen.dart';
+import '../screens/home_agente_upec_screen.dart';
 import '../screens/home_screen.dart';
 import '../screens/home_perito_screen.dart';
 
@@ -48,6 +49,8 @@ import '../screens/actividades/actividades_screen.dart';
 import '../screens/actividades/actividad_create_screen.dart';
 import '../screens/actividades/actividad_edit_screen.dart';
 import '../screens/actividades/actividad_show_screen.dart';
+import '../screens/dispositivos/dispositivo_create_screen.dart';
+import '../screens/dispositivos/dispositivos_screen.dart';
 
 import '../screens/pendientes/pendientes_cortes_screen.dart';
 import '../screens/pendientes/pendiente_corte_show_screen.dart';
@@ -56,6 +59,7 @@ final Map<String, WidgetBuilder> appRoutesMap = {
   AppRoutes.login: (context) => const LoginScreen(),
   AppRoutes.home: (context) => const HomeScreen(),
   AppRoutes.homePerito: (context) => const HomePeritoScreen(),
+  AppRoutes.homeAgenteUpec: (context) => const HomeAgenteUpecScreen(),
 
   AppRoutes.accidentes: (context) => const AccidentesScreen(),
   AppRoutes.accidentesCreate: (context) => const CreateHechoScreen(),
@@ -104,6 +108,8 @@ final Map<String, WidgetBuilder> appRoutesMap = {
   AppRoutes.actividadesCreate: (context) => const ActividadCreateScreen(),
   AppRoutes.actividadesShow: (context) => const ActividadShowScreen(),
   AppRoutes.actividadesEdit: (context) => const ActividadEditScreen(),
+  AppRoutes.dispositivos: (context) => const DispositivosScreen(),
+  AppRoutes.dispositivosCreate: (context) => const DispositivoCreateScreen(),
 
   AppRoutes.pendientesCortes: (context) => const PendientesCortesScreen(),
   AppRoutes.pendientesCorteShow: (context) => const PendienteCorteShowScreen(),

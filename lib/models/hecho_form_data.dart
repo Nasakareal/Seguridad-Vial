@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 class HechoFormData {
   String? clientUuid;
+  bool hasFotoSituacionActual = false;
 
   String folioC5i = '';
   String perito = '';

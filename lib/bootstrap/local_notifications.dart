@@ -13,6 +13,15 @@ const AndroidNotificationChannel svAlertasChannel = AndroidNotificationChannel(
   enableVibration: true,
 );
 
+const AndroidNotificationChannel svGuardiaChannel = AndroidNotificationChannel(
+  'SV_GUARDIA',
+  'Guardia en segundo plano',
+  description: 'Mantiene visible la guardia activa y el botón de pánico',
+  importance: Importance.low,
+  playSound: false,
+  enableVibration: false,
+);
+
 Future<void> initLocalNotifications() async {
   const androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
 
@@ -42,5 +51,6 @@ Future<void> initLocalNotifications() async {
 
   if (androidPlugin != null) {
     await androidPlugin.createNotificationChannel(svAlertasChannel);
+    await androidPlugin.createNotificationChannel(svGuardiaChannel);
   }
 }

@@ -18,34 +18,34 @@ class GeoResult {
 
 class GeoService {
   static Future<GeoResult> getCurrent() async {
-    final serviceEnabled = await Geolocator.isLocationServiceEnabled();
-    if (!serviceEnabled) {
-      return const GeoResult(
-        lat: null,
-        lng: null,
-        calidadGeo: 'OFF',
-        notaGeo: 'GPS desactivado',
-        fuenteUbicacion: null,
-      );
-    }
-
-    LocationPermission permission = await Geolocator.checkPermission();
-    if (permission == LocationPermission.denied) {
-      permission = await Geolocator.requestPermission();
-    }
-
-    if (permission == LocationPermission.denied ||
-        permission == LocationPermission.deniedForever) {
-      return const GeoResult(
-        lat: null,
-        lng: null,
-        calidadGeo: 'DENIED',
-        notaGeo: 'Permiso de ubicación denegado',
-        fuenteUbicacion: null,
-      );
-    }
-
     try {
+      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        return const GeoResult(
+          lat: null,
+          lng: null,
+          calidadGeo: 'OFF',
+          notaGeo: 'GPS desactivado',
+          fuenteUbicacion: null,
+        );
+      }
+
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
+        return const GeoResult(
+          lat: null,
+          lng: null,
+          calidadGeo: 'DENIED',
+          notaGeo: 'Permiso de ubicación denegado',
+          fuenteUbicacion: null,
+        );
+      }
+
       final pos = await Geolocator.getCurrentPosition(
         desiredAccuracy: LocationAccuracy.high,
         timeLimit: const Duration(seconds: 15),
@@ -66,7 +66,7 @@ class GeoService {
         lat: null,
         lng: null,
         calidadGeo: 'ERR',
-        notaGeo: 'Error GPS: $e',
+        notaGeo: 'Error al inicializar ubicación: $e',
         fuenteUbicacion: null,
       );
     }

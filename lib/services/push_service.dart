@@ -12,6 +12,9 @@ class PushService {
   static bool _refreshListenerInstalled = false;
   static bool _registering = false;
   static DateTime? _lastSuccessAt;
+  static DateTime? _lastAttemptAt;
+  static String? _lastSubmittedToken;
+  static String? _lastSubmittedOwnerKey;
 
   static Future<void> ensurePermissions() async {
     try {
@@ -59,6 +62,19 @@ class PushService {
 
       final fcm = await _getFcmTokenSafely(maxWait: const Duration(seconds: 6));
       if (fcm == null || fcm.isEmpty) return;
+      final ownerKey = await AuthService.getSessionOwnerKey();
+
+      final lastAttempt = _lastAttemptAt;
+      if (lastAttempt != null &&
+          _lastSubmittedToken == fcm &&
+          _lastSubmittedOwnerKey == ownerKey &&
+          DateTime.now().difference(lastAttempt).inMinutes < 10) {
+        return;
+      }
+
+      _lastAttemptAt = DateTime.now();
+      _lastSubmittedToken = fcm;
+      _lastSubmittedOwnerKey = ownerKey;
 
       final uri = Uri.parse('${AuthService.baseUrl}/device-tokens');
 
@@ -79,6 +95,13 @@ class PushService {
           .timeout(const Duration(seconds: 8));
 
       if (resp.statusCode >= 200 && resp.statusCode < 300) {
+        _lastSuccessAt = DateTime.now();
+        return;
+      }
+
+      final body = resp.body.toLowerCase();
+      if (body.contains('device_tokens_token_unique') ||
+          body.contains('duplicate entry')) {
         _lastSuccessAt = DateTime.now();
       }
     } catch (_) {

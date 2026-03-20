@@ -25,27 +25,34 @@ class _UbicacionCardState extends State<UbicacionCard> {
     if (_loading) return;
     setState(() => _loading = true);
 
-    final res = await GeoService.getCurrent();
-    widget.data
-      ..lat = res.lat
-      ..lng = res.lng
-      ..calidadGeo = res.calidadGeo
-      ..notaGeo = res.notaGeo
-      ..fuenteUbicacion = res.fuenteUbicacion;
+    try {
+      final res = await GeoService.getCurrent();
+      widget.data
+        ..lat = res.lat
+        ..lng = res.lng
+        ..calidadGeo = res.calidadGeo
+        ..notaGeo = res.notaGeo
+        ..fuenteUbicacion = res.fuenteUbicacion;
 
-    if (mounted) {
-      setState(() => _loading = false);
+      if (!mounted) return;
       widget.onChanged();
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            widget.data.hasCoords
-                ? 'Ubicación lista: ${widget.data.lat}, ${widget.data.lng}'
-                : 'No se pudo obtener ubicación',
-          ),
-        ),
-      );
+      final detalle = widget.data.hasCoords
+          ? 'Ubicación lista: ${widget.data.lat}, ${widget.data.lng}'
+          : (res.notaGeo?.trim().isNotEmpty ?? false)
+          ? res.notaGeo!
+          : 'No se pudo obtener ubicación';
+
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(detalle)));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Error al obtener ubicación: $e')));
+    } finally {
+      if (mounted) setState(() => _loading = false);
     }
   }
 

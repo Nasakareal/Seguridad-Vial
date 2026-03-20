@@ -63,7 +63,11 @@ class _BootAppState extends State<BootApp> {
                         ),
                         const SizedBox(height: 16),
                         Text(
-                          fatal == null ? step : 'FALLÓ EN:\n$step',
+                          fatal == null
+                              ? step
+                              : (ready
+                                    ? 'Ocurrió un error dentro de la app.'
+                                    : 'FALLÓ EN:\n$step'),
                           textAlign: TextAlign.center,
                         ),
                         const SizedBox(height: 16),

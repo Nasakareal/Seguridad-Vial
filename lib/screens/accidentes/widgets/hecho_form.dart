@@ -130,6 +130,41 @@ class _HechoFormState extends State<HechoForm> {
     return options.contains(value) ? value : null;
   }
 
+  String? _requiredValidator(String? value) {
+    return (value == null || value.trim().isEmpty) ? 'Requerido' : null;
+  }
+
+  String? _requiredMaxValidator(String? value, int max, String label) {
+    final required = _requiredValidator(value);
+    if (required != null) return required;
+    if (value!.trim().length > max) {
+      return 'Máximo $max caracteres en $label';
+    }
+    return null;
+  }
+
+  String? _maxLengthValidator(String? value, int max, String label) {
+    if (value == null || value.trim().isEmpty) return null;
+    if (value.trim().length > max) {
+      return 'Máximo $max caracteres en $label';
+    }
+    return null;
+  }
+
+  String? _nonNegativeIntValidator(
+    String? value, {
+    required String label,
+    bool required = false,
+  }) {
+    final txt = (value ?? '').trim();
+    if (txt.isEmpty) return required ? 'Requerido' : null;
+
+    final parsed = int.tryParse(txt);
+    if (parsed == null) return '$label inválido';
+    if (parsed < 0) return '$label no puede ser negativo';
+    return null;
+  }
+
   Future<void> _pickHora() async {
     final picked = await showTimePicker(
       context: context,
@@ -177,7 +212,7 @@ class _HechoFormState extends State<HechoForm> {
     });
   }
 
-  bool _validateBusinessRules() {
+  Future<bool> _validateBusinessRules() async {
     final d = widget.data;
 
     if (_hora == null ||
@@ -198,28 +233,18 @@ class _HechoFormState extends State<HechoForm> {
       return false;
     }
 
-    if (d.situacion == 'TURNADO' &&
-        (d.dictamenId == null || _dictamenSelected == null)) {
+    final offlineError = await HechosFormService.validateBeforeSubmit(
+      data: d,
+      dictamenSelected: _dictamenSelected,
+      fotoLugar: _fotoLugar,
+      fotoSituacion: _fotoSituacion,
+    );
+    if (offlineError != null) {
+      if (!mounted) return false;
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text('Selecciona el dictamen')));
+      ).showSnackBar(SnackBar(content: Text(offlineError)));
       return false;
-    }
-
-    if (d.danosPatrimoniales) {
-      final props = _propsCtrl.text.trim();
-      final monto = _montoCtrl.text.trim();
-
-      if (props.isEmpty && monto.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Si hay daños patrimoniales, captura el monto o describe las propiedades afectadas.',
-            ),
-          ),
-        );
-        return false;
-      }
     }
 
     return true;
@@ -255,7 +280,7 @@ class _HechoFormState extends State<HechoForm> {
     if (!valid) return;
 
     _syncToData();
-    if (!_validateBusinessRules()) return;
+    if (!await _validateBusinessRules()) return;
 
     setState(() => _submitting = true);
 
@@ -365,8 +390,7 @@ class _HechoFormState extends State<HechoForm> {
                 child: TextFormField(
                   controller: _folioCtrl,
                   decoration: _dec('Folio C5i *'),
-                  validator: (v) =>
-                      (v == null || v.trim().isEmpty) ? 'Requerido' : null,
+                  validator: (v) => _requiredMaxValidator(v, 20, 'Folio C5i'),
                 ),
               ),
               const SizedBox(width: 8),
@@ -374,8 +398,7 @@ class _HechoFormState extends State<HechoForm> {
                 child: TextFormField(
                   controller: _peritoCtrl,
                   decoration: _dec('Perito *'),
-                  validator: (v) =>
-                      (v == null || v.trim().isEmpty) ? 'Requerido' : null,
+                  validator: (v) => _requiredMaxValidator(v, 255, 'Perito'),
                 ),
               ),
             ],
@@ -388,6 +411,8 @@ class _HechoFormState extends State<HechoForm> {
                 child: TextFormField(
                   controller: _authPracCtrl,
                   decoration: _dec('Autorización Práctico'),
+                  validator: (v) =>
+                      _maxLengthValidator(v, 255, 'Autorización Práctico'),
                 ),
               ),
               const SizedBox(width: 8),
@@ -395,8 +420,7 @@ class _HechoFormState extends State<HechoForm> {
                 child: TextFormField(
                   controller: _unidadCtrl,
                   decoration: _dec('Unidad *'),
-                  validator: (v) =>
-                      (v == null || v.trim().isEmpty) ? 'Requerido' : null,
+                  validator: (v) => _requiredMaxValidator(v, 50, 'Unidad'),
                 ),
               ),
             ],
@@ -455,27 +479,25 @@ class _HechoFormState extends State<HechoForm> {
           TextFormField(
             controller: _calleCtrl,
             decoration: _dec('Calle *'),
-            validator: (v) =>
-                (v == null || v.trim().isEmpty) ? 'Requerido' : null,
+            validator: (v) => _requiredMaxValidator(v, 255, 'Calle'),
           ),
           const SizedBox(height: 8),
           TextFormField(
             controller: _coloniaCtrl,
             decoration: _dec('Colonia *'),
-            validator: (v) =>
-                (v == null || v.trim().isEmpty) ? 'Requerido' : null,
+            validator: (v) => _requiredMaxValidator(v, 255, 'Colonia'),
           ),
           const SizedBox(height: 8),
           TextFormField(
             controller: _entreCtrl,
             decoration: _dec('Entre calles'),
+            validator: (v) => _maxLengthValidator(v, 255, 'Entre calles'),
           ),
           const SizedBox(height: 8),
           TextFormField(
             controller: _municipioCtrl,
             decoration: _dec('Municipio *'),
-            validator: (v) =>
-                (v == null || v.trim().isEmpty) ? 'Requerido' : null,
+            validator: (v) => _requiredMaxValidator(v, 100, 'Municipio'),
           ),
 
           const SizedBox(height: 12),
@@ -654,8 +676,11 @@ class _HechoFormState extends State<HechoForm> {
                   controller: _vehMpCtrl,
                   decoration: _dec('Vehículos MP *'),
                   keyboardType: TextInputType.number,
-                  validator: (v) =>
-                      (v == null || v.trim().isEmpty) ? 'Requerido' : null,
+                  validator: (v) => _nonNegativeIntValidator(
+                    v,
+                    label: 'Vehículos MP',
+                    required: d.situacion == 'TURNADO',
+                  ),
                 ),
               ),
               const SizedBox(width: 8),
@@ -664,8 +689,11 @@ class _HechoFormState extends State<HechoForm> {
                   controller: _persMpCtrl,
                   decoration: _dec('Personas MP *'),
                   keyboardType: TextInputType.number,
-                  validator: (v) =>
-                      (v == null || v.trim().isEmpty) ? 'Requerido' : null,
+                  validator: (v) => _nonNegativeIntValidator(
+                    v,
+                    label: 'Personas MP',
+                    required: d.situacion == 'TURNADO',
+                  ),
                 ),
               ),
             ],

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../app/routes.dart';
 import '../services/auth_service.dart';
+import '../services/home_resolver_service.dart';
 
 class AppDrawer extends StatelessWidget {
   final bool trackingOn;
@@ -17,6 +18,7 @@ class AppDrawer extends StatelessWidget {
   static const String permEstadisticas = 'ver estadisticas';
   static const String permDictamenes = 'ver dictamenes';
   static const String permHechos = 'ver hechos';
+  static const String permOperativosCarreteras = 'ver operativos carreteras';
   static const String permActividades = 'ver actividades';
   static const String permGruas = 'ver gruas';
   static const String permMapa = 'ver mapa';
@@ -28,28 +30,37 @@ class AppDrawer extends StatelessWidget {
     String? requiredPerm,
     Object? arguments,
   }) async {
+    final navigator = Navigator.of(context);
+    final messenger = ScaffoldMessenger.of(context);
+    final current = ModalRoute.of(context)?.settings.name;
+
     Navigator.pop(context);
 
     if (requiredPerm != null && requiredPerm.trim().isNotEmpty) {
       final ok = await AuthService.can(requiredPerm);
       if (!ok) {
-        if (!context.mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
+        messenger.showSnackBar(
           const SnackBar(content: Text('No tienes permiso para acceder.')),
         );
         return;
       }
     }
 
-    final current = ModalRoute.of(context)?.settings.name;
     if (current == route) return;
 
     if (route == AppRoutes.home) {
-      Navigator.pushNamedAndRemoveUntil(context, route, (_) => false);
+      final agenteUpecHomeAvailable =
+          await HomeResolverService.isAgenteUpecHomeAvailable();
+      final peritoHomeAvailable =
+          await HomeResolverService.isPeritoHomeAvailable();
+      final homeRoute = agenteUpecHomeAvailable
+          ? AppRoutes.homeAgenteUpec
+          : (peritoHomeAvailable ? AppRoutes.homePerito : AppRoutes.home);
+      navigator.pushNamedAndRemoveUntil(homeRoute, (_) => false);
       return;
     }
 
-    Navigator.pushNamed(context, route, arguments: arguments);
+    navigator.pushNamed(route, arguments: arguments);
   }
 
   bool _allowed(Set<String> perms, String? requiredPerm) {
@@ -102,14 +113,16 @@ class AppDrawer extends StatelessWidget {
                       const SizedBox(width: 8),
                       Text(
                         'Ubicación ACTIVA',
-                        style: TextStyle(color: Colors.white.withOpacity(.9)),
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: .9),
+                        ),
                       ),
                     ],
                   ),
                 const SizedBox(height: 10),
                 Text(
                   'El control de ubicación lo realiza el mapa.',
-                  style: TextStyle(color: Colors.white.withOpacity(.85)),
+                  style: TextStyle(color: Colors.white.withValues(alpha: .85)),
                 ),
               ],
             ),
@@ -121,6 +134,11 @@ class AppDrawer extends StatelessWidget {
                 final perms = (snap.data ?? <String>[])
                     .map((e) => e.trim().toLowerCase())
                     .toSet();
+                final canSeeDispositivos =
+                    _allowed(perms, permOperativosCarreteras) ||
+                    perms.contains('crear operativos carreteras') ||
+                    perms.contains('editar operativos carreteras') ||
+                    perms.contains('eliminar operativos carreteras');
 
                 return ListView(
                   padding: EdgeInsets.zero,
@@ -202,6 +220,19 @@ class AppDrawer extends StatelessWidget {
                           AppRoutes.actividades,
                           requiredPerm: permActividades,
                         ),
+                      ),
+
+                    if (canSeeDispositivos)
+                      _DrawerGroup(
+                        icon: Icons.add_road,
+                        label: 'Dispositivos',
+                        children: [
+                          _DrawerSubItem(
+                            icon: Icons.list_alt,
+                            label: 'Listado',
+                            onTap: () => _nav(context, AppRoutes.dispositivos),
+                          ),
+                        ],
                       ),
 
                     if (_allowed(perms, permGruas))

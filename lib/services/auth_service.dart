@@ -11,6 +11,7 @@ class AuthService {
 
   static const String _tokenKey = 'auth_token';
   static const String _roleKey = 'auth_role';
+  static const String _roleIdKey = 'auth_role_id';
   static const String _permsKey = 'auth_perms';
   static const String _userIdKey = 'auth_user_id';
   static const String _userEmailKey = 'auth_user_email';
@@ -45,18 +46,42 @@ class AuthService {
       }
 
       String? role;
+      int? roleId;
       if (data['role'] != null) {
-        role = data['role'].toString();
+        if (data['role'] is Map) {
+          final roleMap = data['role'] as Map;
+          if (roleMap['name'] != null) role = roleMap['name'].toString();
+          final rawRoleId = roleMap['id'];
+          roleId = int.tryParse(rawRoleId?.toString() ?? '');
+        } else {
+          role = data['role'].toString();
+        }
       } else if (data['user'] is Map && data['user']['role'] != null) {
-        role = data['user']['role'].toString();
+        final rawRole = data['user']['role'];
+        if (rawRole is Map) {
+          if (rawRole['name'] != null) role = rawRole['name'].toString();
+          roleId = int.tryParse(rawRole['id']?.toString() ?? '');
+        } else {
+          role = rawRole.toString();
+        }
       } else if (data['user'] is Map && data['user']['roles'] is List) {
         final roles = data['user']['roles'] as List;
         if (roles.isNotEmpty) {
           final r0 = roles.first;
-          if (r0 is Map && r0['name'] != null) role = r0['name'].toString();
+          if (r0 is Map) {
+            if (r0['name'] != null) role = r0['name'].toString();
+            roleId = int.tryParse(r0['id']?.toString() ?? '');
+          }
           if (r0 is String) role = r0;
         }
       }
+
+      roleId ??= int.tryParse(
+        (data['role_id'] ??
+                    (data['user'] is Map ? data['user']['role_id'] : null))
+                ?.toString() ??
+            '',
+      );
 
       List<String> perms = [];
       final dynamic rawPerms =
@@ -106,6 +131,12 @@ class AuthService {
         await prefs.remove(_roleKey);
       }
 
+      if (roleId != null && roleId > 0) {
+        await prefs.setInt(_roleIdKey, roleId);
+      } else {
+        await prefs.remove(_roleIdKey);
+      }
+
       if (perms.isNotEmpty) {
         await prefs.setStringList(_permsKey, perms);
       } else {
@@ -144,6 +175,11 @@ class AuthService {
   static Future<String?> getRole() async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getString(_roleKey);
+  }
+
+  static Future<int?> getRoleId() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getInt(_roleIdKey);
   }
 
   static Future<int?> getUserId() async {
@@ -196,9 +232,23 @@ class AuthService {
   }
 
   static Future<bool> isPerito() async {
+    final roleId = await getRoleId();
+    if (roleId == 4) return true;
+
     final role = await getRole();
     if (role == null) return false;
     return role.trim().toLowerCase() == 'perito';
+  }
+
+  static Future<bool> isAgenteUpec() async {
+    final role = await getRole();
+    final normalized = role?.trim().toLowerCase() ?? '';
+    if (normalized.contains('upec')) {
+      return true;
+    }
+
+    final perms = await getPermissions();
+    return perms.any((perm) => perm.contains('upec'));
   }
 
   static Future<bool> shouldAskLocation() async {
@@ -285,6 +335,7 @@ class AuthService {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_tokenKey);
     await prefs.remove(_roleKey);
+    await prefs.remove(_roleIdKey);
     await prefs.remove(_permsKey);
     await prefs.remove(_userIdKey);
     await prefs.remove(_userEmailKey);

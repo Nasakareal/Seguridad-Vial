@@ -8,9 +8,13 @@ import 'package:geolocator/geolocator.dart';
 import '../widgets/location_disclosure_dialog.dart';
 import 'auth_service.dart';
 import 'location_service.dart';
+import 'tracking_guard_constants.dart';
+import 'tracking_guard_notification_service.dart';
 import 'tracking_task.dart';
 
 class TrackingService {
+  static const String notificationTitle = trackingGuardNotificationTitle;
+  static const String notificationText = trackingGuardNotificationText;
   static bool _starting = false;
   static Timer? _iosTimer;
   static bool _iosRunning = false;
@@ -23,6 +27,54 @@ class TrackingService {
 
   static Future<bool> startAfterConsent(BuildContext context) async {
     return await startWithDisclosure(context);
+  }
+
+  static Future<bool> ensureAndroidPersistentGuard() async {
+    if (!Platform.isAndroid) return false;
+
+    try {
+      final logged = await AuthService.isLoggedIn();
+      if (!logged) return false;
+
+      final isPerito = await AuthService.isPerito();
+      if (!isPerito) return false;
+
+      final accepted = await LocationDisclosure.isAccepted();
+      if (!accepted) return false;
+
+      if (!await Geolocator.isLocationServiceEnabled()) {
+        return false;
+      }
+
+      final permission = await Geolocator.checkPermission();
+      if (permission != LocationPermission.always) {
+        return false;
+      }
+
+      try {
+        final notifPermission =
+            await FlutterForegroundTask.checkNotificationPermission();
+        if (notifPermission != NotificationPermission.granted) {
+          return false;
+        }
+      } catch (_) {}
+
+      final running = await isRunning();
+      if (running) {
+        await TrackingGuardNotificationService.show();
+        return true;
+      }
+
+      await FlutterForegroundTask.startService(
+        notificationTitle: notificationTitle,
+        notificationText: notificationText,
+        callback: startCallback,
+      );
+      await TrackingGuardNotificationService.show();
+      return true;
+    } catch (_) {
+      return false;
+    }
   }
 
   static Future<bool> isRunning() async {
@@ -58,13 +110,17 @@ class TrackingService {
 
       if (Platform.isAndroid) {
         final running = await isRunning();
-        if (running) return true;
+        if (running) {
+          await TrackingGuardNotificationService.show();
+          return true;
+        }
 
         await FlutterForegroundTask.startService(
-          notificationTitle: 'Seguridad Vial',
-          notificationText: 'Enviando ubicacion...',
+          notificationTitle: notificationTitle,
+          notificationText: notificationText,
           callback: startCallback,
         );
+        await TrackingGuardNotificationService.show();
         return true;
       }
 
@@ -86,13 +142,17 @@ class TrackingService {
 
       if (Platform.isAndroid) {
         final running = await isRunning();
-        if (running) return true;
+        if (running) {
+          await TrackingGuardNotificationService.show();
+          return true;
+        }
 
         await FlutterForegroundTask.startService(
-          notificationTitle: 'Seguridad Vial',
-          notificationText: 'Enviando ubicacion...',
+          notificationTitle: notificationTitle,
+          notificationText: notificationText,
           callback: startCallback,
         );
+        await TrackingGuardNotificationService.show();
         return true;
       }
 
@@ -108,6 +168,7 @@ class TrackingService {
     try {
       if (Platform.isAndroid) {
         final running = await isRunning();
+        await TrackingGuardNotificationService.cancel();
         if (!running) return;
         await FlutterForegroundTask.stopService();
         return;
@@ -213,6 +274,10 @@ class TrackingService {
 
     final preciseOk = await _ensurePreciseAccuracy(context);
     if (!preciseOk) return false;
+    if (!context.mounted) return false;
+
+    final notifOk = await _ensureNotificationPermission(context);
+    if (!notifOk) return false;
     if (!context.mounted) return false;
 
     final batteryOk = await _ensureBatteryOptimizationExemption(context);
@@ -323,6 +388,35 @@ class TrackingService {
       if (grantedFromSettings) {
         return true;
       }
+    }
+  }
+
+  static Future<bool> _ensureNotificationPermission(
+    BuildContext context,
+  ) async {
+    if (!Platform.isAndroid) return true;
+
+    try {
+      final status = await FlutterForegroundTask.checkNotificationPermission();
+      if (status == NotificationPermission.granted) {
+        return true;
+      }
+
+      if (!context.mounted) return false;
+
+      await _showBlockingSettingsDialog(
+        context,
+        title: 'Permitir notificaciones',
+        content:
+            'Para mantener el servicio en segundo plano y recibir alertas, Android debe permitir notificaciones para esta app.',
+        actionLabel: 'Continuar',
+      );
+
+      final requested =
+          await FlutterForegroundTask.requestNotificationPermission();
+      return requested == NotificationPermission.granted;
+    } catch (_) {
+      return true;
     }
   }
 

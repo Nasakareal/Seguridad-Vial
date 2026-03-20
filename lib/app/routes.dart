@@ -2,6 +2,7 @@ class AppRoutes {
   static const String login = '/login';
   static const String home = '/home';
   static const String homePerito = '/home-perito';
+  static const String homeAgenteUpec = '/home-agente-upec';
 
   static const String accidentes = '/accidentes';
   static const String accidentesCreate = '/accidentes/create';
@@ -47,6 +48,9 @@ class AppRoutes {
   static const String actividadesCreate = '/actividades/create';
   static const String actividadesShow = '/actividades/show';
   static const String actividadesEdit = '/actividades/edit';
+
+  static const String dispositivos = '/dispositivos';
+  static const String dispositivosCreate = '/dispositivos/create';
 
   static const String feed = '/feed';
 

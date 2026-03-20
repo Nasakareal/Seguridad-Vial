@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 
 import '../core/globals.dart';
 import '../widgets/alerts_listener.dart';
@@ -22,6 +23,9 @@ class SeguridadVialApp extends StatelessWidget {
         scaffoldBackgroundColor: Colors.white,
         fontFamily: 'Roboto',
       ),
+      builder: (context, child) {
+        return WithForegroundTask(child: child ?? const SizedBox.shrink());
+      },
       home: const PushNavBinder(
         child: AlertsListener(child: OfflineSyncListener(child: AuthGate())),
       ),

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
 import '../services/auth_service.dart';
+import '../../services/vehiculo_form_service.dart';
 
 class VehiculoConductorCreateScreen extends StatefulWidget {
   const VehiculoConductorCreateScreen({super.key});
@@ -21,6 +22,7 @@ class _VehiculoConductorCreateScreenState
   int vehiculoId = 0;
 
   Map<String, dynamic> _vehiculo = {};
+  List<Map<String, dynamic>> _vehiculosSnapshot = const [];
 
   final _formKey = GlobalKey<FormState>();
 
@@ -108,7 +110,7 @@ class _VehiculoConductorCreateScreenState
 
     final h = await _headers();
     final uri = Uri.parse(
-      'https://seguridadvial-mich.com/api/hechos/$hechoId/vehiculos/$vehiculoId',
+                    'https://seguridadvial-mich.com/api/hechos/$hechoId/vehiculos/$vehiculoId',
     );
     final res = await http.get(uri, headers: h);
 
@@ -195,6 +197,40 @@ class _VehiculoConductorCreateScreenState
     if (_guardando) return;
     if (!_formKey.currentState!.validate()) return;
 
+    final validationError = VehiculoFormService.validateConductorBeforeSubmit(
+      nombre: _nombreCtrl.text.trim(),
+      telefono: _telefonoCtrl.text.trim(),
+      domicilio: _domicilioCtrl.text.trim(),
+      sexo: _sexo,
+      ocupacion: _ocupacionCtrl.text.trim(),
+      edad: _edadCtrl.text.trim(),
+      tipoLicencia: _tipoLicenciaCtrl.text.trim(),
+      estadoLicencia: _estadoLicenciaCtrl.text.trim(),
+      numeroLicencia: _numeroLicenciaCtrl.text.trim(),
+    );
+    if (validationError != null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(validationError)));
+      return;
+    }
+
+    final duplicateError =
+        await VehiculoFormService.validateConductorDuplicatesWithinHecho(
+          hechoId: hechoId,
+          hechoClientUuid: null,
+          existingVehiculos: _vehiculosSnapshot,
+          currentVehiculoId: vehiculoId,
+          conductorNombre: _nombreCtrl.text.trim(),
+        );
+    if (duplicateError != null) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(duplicateError)));
+      return;
+    }
+
     setState(() => _guardando = true);
 
     try {
@@ -250,9 +286,7 @@ class _VehiculoConductorCreateScreenState
         'permanente': _permanente,
         'vigencia_licencia': _permanente
             ? null
-            : (_vigenciaLicencia != null
-                  ? _vigenciaLicencia!.toIso8601String().substring(0, 10)
-                  : null),
+            : _vigenciaLicencia?.toIso8601String().substring(0, 10),
 
         'cinturon': _cinturon,
         'antecedente_conductor': _antecedenteConductor,
@@ -283,8 +317,9 @@ class _VehiculoConductorCreateScreenState
         context,
       ).showSnackBar(SnackBar(content: Text('Error al guardar: $e')));
     } finally {
-      if (!mounted) return;
-      setState(() => _guardando = false);
+      if (mounted) {
+        setState(() => _guardando = false);
+      }
     }
   }
 
@@ -299,6 +334,12 @@ class _VehiculoConductorCreateScreenState
     final a = _args(context);
     hechoId = int.tryParse((a['hechoId'] ?? 0).toString()) ?? 0;
     vehiculoId = int.tryParse((a['vehiculoId'] ?? 0).toString()) ?? 0;
+    if (a['vehiculosSnapshot'] is List) {
+      _vehiculosSnapshot = (a['vehiculosSnapshot'] as List)
+          .whereType<Map>()
+          .map((item) => Map<String, dynamic>.from(item))
+          .toList();
+    }
 
     // evitar llamar setState aquí si no hace falta
     if (hechoId > 0 && vehiculoId > 0) {
@@ -341,10 +382,12 @@ class _VehiculoConductorCreateScreenState
                         labelText: 'Nombre del conductor',
                         prefixIcon: Icon(Icons.person),
                       ),
-                      validator: (v) {
-                        if ((v ?? '').trim().isEmpty) return 'Requerido';
-                        return null;
-                      },
+                      validator: (v) =>
+                          VehiculoFormService.validateRequiredText(
+                            v,
+                            max: 255,
+                            label: 'Nombre del conductor',
+                          ),
                     ),
                     const SizedBox(height: 10),
 
@@ -355,6 +398,7 @@ class _VehiculoConductorCreateScreenState
                         labelText: 'Teléfono (10 dígitos)',
                         prefixIcon: Icon(Icons.phone),
                       ),
+                      validator: VehiculoFormService.validateTelefono,
                     ),
                     const SizedBox(height: 10),
 
@@ -364,6 +408,12 @@ class _VehiculoConductorCreateScreenState
                         labelText: 'Domicilio',
                         prefixIcon: Icon(Icons.home),
                       ),
+                      validator: (v) =>
+                          VehiculoFormService.validateOptionalText(
+                            v,
+                            max: 255,
+                            label: 'Domicilio',
+                          ),
                     ),
                     const SizedBox(height: 10),
 
@@ -398,6 +448,12 @@ class _VehiculoConductorCreateScreenState
                         labelText: 'Ocupación',
                         prefixIcon: Icon(Icons.work),
                       ),
+                      validator: (v) =>
+                          VehiculoFormService.validateOptionalText(
+                            v,
+                            max: 255,
+                            label: 'Ocupación',
+                          ),
                     ),
                     const SizedBox(height: 10),
 
@@ -408,6 +464,7 @@ class _VehiculoConductorCreateScreenState
                         labelText: 'Edad',
                         prefixIcon: Icon(Icons.numbers),
                       ),
+                      validator: VehiculoFormService.validateEdad,
                     ),
 
                     const Divider(height: 24),
@@ -439,6 +496,12 @@ class _VehiculoConductorCreateScreenState
                       decoration: const InputDecoration(
                         labelText: 'Tipo de licencia',
                       ),
+                      validator: (v) =>
+                          VehiculoFormService.validateOptionalText(
+                            v,
+                            max: 50,
+                            label: 'Tipo de licencia',
+                          ),
                     ),
                     const SizedBox(height: 10),
                     TextFormField(
@@ -446,6 +509,12 @@ class _VehiculoConductorCreateScreenState
                       decoration: const InputDecoration(
                         labelText: 'Estado de licencia',
                       ),
+                      validator: (v) =>
+                          VehiculoFormService.validateOptionalText(
+                            v,
+                            max: 100,
+                            label: 'Estado de licencia',
+                          ),
                     ),
                     const SizedBox(height: 10),
                     TextFormField(
@@ -453,6 +522,12 @@ class _VehiculoConductorCreateScreenState
                       decoration: const InputDecoration(
                         labelText: 'Número de licencia',
                       ),
+                      validator: (v) =>
+                          VehiculoFormService.validateOptionalText(
+                            v,
+                            max: 50,
+                            label: 'Número de licencia',
+                          ),
                     ),
 
                     const Divider(height: 24),

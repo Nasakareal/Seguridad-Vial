@@ -6,6 +6,7 @@ import '../../services/auth_service.dart';
 import '../../core/vehiculos/vehiculo_taxonomia.dart';
 import '../../core/vehiculos/estados_republica.dart';
 import '../../services/offline_sync_service.dart';
+import '../../services/vehiculo_form_service.dart';
 
 class VehiculoCreateScreen extends StatefulWidget {
   const VehiculoCreateScreen({super.key});
@@ -63,6 +64,17 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
     return null;
   }
 
+  List<Map<String, dynamic>> _vehiculosSnapshotFromArgs(BuildContext context) {
+    final args = ModalRoute.of(context)?.settings.arguments;
+    if (args is Map && args['vehiculosSnapshot'] is List) {
+      return (args['vehiculosSnapshot'] as List)
+          .whereType<Map>()
+          .map((item) => Map<String, dynamic>.from(item))
+          .toList();
+    }
+    return const <Map<String, dynamic>>[];
+  }
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -102,36 +114,6 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
     return double.tryParse(v);
   }
 
-  String? _req(String? v) {
-    if ((v ?? '').trim().isEmpty) return 'Requerido';
-    return null;
-  }
-
-  String? _maxLenOrNull(String? v, int max) {
-    final s = (v ?? '').trim();
-    if (s.isEmpty) return null;
-    if (s.length > max) return 'Máximo $max caracteres';
-    return null;
-  }
-
-  String? _capacidadValidator(String? v) {
-    final s = (v ?? '').trim();
-    if (s.isEmpty) return 'Requerido';
-    final n = int.tryParse(s);
-    if (n == null) return 'Debe ser número';
-    if (n < 0) return 'No puede ser negativo';
-    return null;
-  }
-
-  String? _montoValidator(String? v, {bool required = false}) {
-    final s = (v ?? '').trim();
-    if (s.isEmpty) return required ? 'Requerido' : null;
-    final n = double.tryParse(s);
-    if (n == null) return 'Debe ser número';
-    if (n < 0) return 'No puede ser negativo';
-    return null;
-  }
-
   String? _tipoGeneralValidator(String? v) {
     if ((v ?? '').trim().isEmpty) return 'Requerido';
     return null;
@@ -139,17 +121,6 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
 
   String? _tipoCarroceriaValidator(String? v) {
     if ((v ?? '').trim().isEmpty) return 'Requerido';
-    return null;
-  }
-
-  String? _placasValidator(String? v) {
-    final s = (v ?? '').trim().toUpperCase().replaceAll(
-      RegExp(r'[\s\-\._,]'),
-      '',
-    );
-    if (s.isEmpty) return null;
-    final ok = RegExp(r'^[A-Z0-9]{5,15}$').hasMatch(s);
-    if (!ok) return 'Placas inválidas (solo letras y números, 5-15)';
     return null;
   }
 
@@ -312,6 +283,7 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
     required String? hechoClientUuid,
   }) async {
     final normalizedHechoClientUuid = (hechoClientUuid ?? '').trim();
+    final vehiculosSnapshot = _vehiculosSnapshotFromArgs(context);
     if (hechoId <= 0 && normalizedHechoClientUuid.isEmpty) {
       showDialog(
         context: context,
@@ -327,6 +299,47 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
 
     if (!_formKey.currentState!.validate()) return;
 
+    final validationError = VehiculoFormService.validateVehiculoBeforeSubmit(
+      marca: _t(_marcaCtrl),
+      linea: _t(_lineaCtrl),
+      color: _t(_colorCtrl),
+      tipoServicio: _t(_tipoServicioCtrl),
+      partesDanadas: _t(_partesDanadasCtrl),
+      tipoGeneral: _tipoGeneralSeleccionado,
+      tipoCarroceria: _tipoCarroceriaSeleccionada,
+      placas: _t(_placasCtrl),
+      estadoPlacas: _estadoPlacasSeleccionado,
+      serie: _t(_serieCtrl),
+      capacidad: _t(_capacidadCtrl),
+      montoDanos: _t(_montoDanosCtrl),
+      modelo: _t(_modeloCtrl),
+      tarjetaCirculacionNombre: _t(_tarjetaCirculacionNombreCtrl),
+      aseguradora: _t(_aseguradoraCtrl),
+    );
+    if (validationError != null) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(validationError)));
+      return;
+    }
+
+    final duplicateError =
+        await VehiculoFormService.validateVehiculoDuplicatesWithinHecho(
+          hechoId: hechoId,
+          hechoClientUuid: normalizedHechoClientUuid,
+          existingVehiculos: vehiculosSnapshot,
+          placas: _t(_placasCtrl),
+          serie: _t(_serieCtrl),
+        );
+    if (duplicateError != null) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(duplicateError)));
+      return;
+    }
+
     setState(() => _saving = true);
 
     try {
@@ -334,13 +347,11 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
       final uri = Uri.parse('$_baseApi/vehiculos');
       final corralonNombre = _nombreGruaById(_corralonGruaIdSeleccionada);
 
-      final placasClean = _t(
-        _placasCtrl,
-      ).toUpperCase().replaceAll(RegExp(r'[\s\-\._,]'), '');
+      final placasClean = VehiculoFormService.normalizePlacas(_t(_placasCtrl));
 
-      final estadoClean = (_estadoPlacasSeleccionado ?? '')
-          .trim()
-          .toUpperCase();
+      final estadoClean = VehiculoFormService.normalizeEstadoPlacas(
+        _estadoPlacasSeleccionado,
+      );
 
       final payload = <String, dynamic>{
         'client_uuid': clientUuid,
@@ -353,10 +364,8 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
         'linea': _t(_lineaCtrl),
         'color': _t(_colorCtrl),
         'placas': placasClean.isEmpty ? null : placasClean,
-        'estado_placas': placasClean.isEmpty
-            ? null
-            : (estadoClean.isEmpty ? null : estadoClean),
-        'serie': _t(_serieCtrl).isEmpty ? null : _t(_serieCtrl),
+        'estado_placas': placasClean.isEmpty ? null : estadoClean,
+        'serie': VehiculoFormService.normalizeSerie(_t(_serieCtrl)),
         'capacidad_personas': _toIntOrNull(_t(_capacidadCtrl)) ?? 0,
         'tipo_servicio': _t(_tipoServicioCtrl),
         'tarjeta_circulacion_nombre': _t(_tarjetaCirculacionNombreCtrl).isEmpty
@@ -446,9 +455,11 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
                   margin: const EdgeInsets.only(bottom: 12),
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: Colors.orange.withOpacity(0.08),
+                    color: Colors.orange.withValues(alpha: 0.08),
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.orange.withOpacity(0.2)),
+                    border: Border.all(
+                      color: Colors.orange.withValues(alpha: 0.2),
+                    ),
                   ),
                   child: const Text(
                     'Este hecho todavía no tiene ID de servidor. El vehículo se guardará con el UUID local del hecho y se sincronizará en cuanto el hecho padre suba primero.',
@@ -460,7 +471,11 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
                   labelText: 'Marca *',
                   prefixIcon: Icon(Icons.local_offer),
                 ),
-                validator: _req,
+                validator: (v) => VehiculoFormService.validateRequiredText(
+                  v,
+                  max: 50,
+                  label: 'Marca',
+                ),
               ),
               const SizedBox(height: 10),
               DropdownButtonFormField<String>(
@@ -532,7 +547,11 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
                   labelText: 'Línea *',
                   prefixIcon: Icon(Icons.text_fields),
                 ),
-                validator: _req,
+                validator: (v) => VehiculoFormService.validateRequiredText(
+                  v,
+                  max: 50,
+                  label: 'Línea',
+                ),
               ),
               const SizedBox(height: 10),
               TextFormField(
@@ -541,7 +560,11 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
                   labelText: 'Modelo (opcional, máx 10)',
                   prefixIcon: Icon(Icons.calendar_month),
                 ),
-                validator: (v) => _maxLenOrNull(v, 10),
+                validator: (v) => VehiculoFormService.validateOptionalText(
+                  v,
+                  max: 10,
+                  label: 'Modelo',
+                ),
               ),
               const SizedBox(height: 10),
               TextFormField(
@@ -550,7 +573,11 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
                   labelText: 'Color *',
                   prefixIcon: Icon(Icons.color_lens),
                 ),
-                validator: _req,
+                validator: (v) => VehiculoFormService.validateRequiredText(
+                  v,
+                  max: 30,
+                  label: 'Color',
+                ),
               ),
               const SizedBox(height: 10),
               TextFormField(
@@ -559,7 +586,7 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
                   labelText: 'Placas (opcional)',
                   prefixIcon: Icon(Icons.credit_card),
                 ),
-                validator: _placasValidator,
+                validator: VehiculoFormService.validatePlacas,
                 onChanged: (_) => setState(() {}),
               ),
               if (tienePlacas) ...[
@@ -600,7 +627,7 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
                   labelText: 'No. Serie (opcional, máx 17)',
                   prefixIcon: Icon(Icons.confirmation_number),
                 ),
-                validator: (v) => _maxLenOrNull(v, 17),
+                validator: VehiculoFormService.validateSerie,
               ),
               const SizedBox(height: 10),
               TextFormField(
@@ -610,7 +637,7 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
                   labelText: 'Capacidad de personas *',
                   prefixIcon: Icon(Icons.people),
                 ),
-                validator: _capacidadValidator,
+                validator: VehiculoFormService.validateCapacidad,
               ),
               const SizedBox(height: 10),
               TextFormField(
@@ -619,7 +646,11 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
                   labelText: 'Tipo de servicio * (PARTICULAR, PÚBLICO, etc.)',
                   prefixIcon: Icon(Icons.miscellaneous_services),
                 ),
-                validator: _req,
+                validator: (v) => VehiculoFormService.validateRequiredText(
+                  v,
+                  max: 50,
+                  label: 'Tipo de servicio',
+                ),
               ),
               const SizedBox(height: 10),
               TextFormField(
@@ -628,7 +659,11 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
                   labelText: 'Nombre tarjeta circulación (opcional, máx 60)',
                   prefixIcon: Icon(Icons.badge),
                 ),
-                validator: (v) => _maxLenOrNull(v, 60),
+                validator: (v) => VehiculoFormService.validateOptionalText(
+                  v,
+                  max: 60,
+                  label: 'Nombre en tarjeta de circulación',
+                ),
               ),
               const SizedBox(height: 10),
               _cargandoGruas
@@ -698,6 +733,11 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
                   labelText: 'Aseguradora (opcional)',
                   prefixIcon: Icon(Icons.security),
                 ),
+                validator: (v) => VehiculoFormService.validateOptionalText(
+                  v,
+                  max: 100,
+                  label: 'Aseguradora',
+                ),
               ),
               const SizedBox(height: 10),
               TextFormField(
@@ -709,7 +749,8 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
                   labelText: 'Monto daños *',
                   prefixIcon: Icon(Icons.attach_money),
                 ),
-                validator: (v) => _montoValidator(v, required: true),
+                validator: (v) =>
+                    VehiculoFormService.validateMonto(v, required: true),
               ),
               const SizedBox(height: 10),
               TextFormField(
@@ -719,7 +760,11 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
                   labelText: 'Partes dañadas *',
                   prefixIcon: Icon(Icons.car_crash),
                 ),
-                validator: _req,
+                validator: (v) => VehiculoFormService.validateRequiredText(
+                  v,
+                  max: 10000,
+                  label: 'Partes dañadas',
+                ),
               ),
               const SizedBox(height: 6),
               SwitchListTile(

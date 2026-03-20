@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 
 import '../services/auth_service.dart';
+import '../services/home_resolver_service.dart';
 import '../services/offline_sync_service.dart';
+import 'home_agente_upec_screen.dart';
 import 'home_screen.dart';
+import 'home_perito_screen.dart';
 import 'location_consent_screen.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -53,15 +56,23 @@ class _LoginScreenState extends State<LoginScreen> {
         await OfflineSyncService.flushPending();
 
         final askLocation = await AuthService.shouldAskLocation();
+        final agenteUpecHomeAvailable =
+            await HomeResolverService.isAgenteUpecHomeAvailable();
+        final peritoHomeAvailable =
+            await HomeResolverService.isPeritoHomeAvailable();
+        final nextHome = agenteUpecHomeAvailable
+            ? const HomeAgenteUpecScreen()
+            : (peritoHomeAvailable
+                  ? const HomePeritoScreen()
+                  : const HomeScreen());
 
         if (!mounted) return;
 
         Navigator.pushAndRemoveUntil(
           context,
           MaterialPageRoute(
-            builder: (_) => askLocation
-                ? LocationConsentScreen(next: const HomeScreen())
-                : const HomeScreen(),
+            builder: (_) =>
+                askLocation ? LocationConsentScreen(next: nextHome) : nextHome,
           ),
           (_) => false,
         );
@@ -72,8 +83,9 @@ class _LoginScreenState extends State<LoginScreen> {
       if (!mounted) return;
       setState(() => _error = 'Error al conectar con el servidor');
     } finally {
-      if (!mounted) return;
-      setState(() => _loading = false);
+      if (mounted) {
+        setState(() => _loading = false);
+      }
     }
   }
 
@@ -96,7 +108,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   borderRadius: BorderRadius.circular(6),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.grey.withOpacity(0.2),
+                      color: Colors.grey.withValues(alpha: 0.2),
                       blurRadius: 10,
                       offset: const Offset(0, 5),
                     ),

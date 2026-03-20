@@ -694,9 +694,13 @@ class OfflineSyncService {
   }) {
     if (successCodes.contains(response.statusCode)) return;
 
-    final message = errorParser != null
+    final baseMessage = errorParser != null
         ? errorParser(response.body, response.statusCode)
         : _defaultErrorMessage(response.body, response.statusCode);
+    final message = _decorateHttpError(
+      baseMessage: baseMessage,
+      response: response,
+    );
 
     if (response.statusCode == 408 ||
         response.statusCode == 425 ||
@@ -730,6 +734,38 @@ class OfflineSyncService {
     } catch (_) {}
 
     return 'Error HTTP $statusCode';
+  }
+
+  static String _decorateHttpError({
+    required String baseMessage,
+    required http.Response response,
+  }) {
+    final trimmedBase = baseMessage.trim().isEmpty
+        ? 'Error HTTP ${response.statusCode}'
+        : baseMessage.trim();
+
+    final buffer = StringBuffer(trimmedBase);
+    final location = response.headers['location']?.trim();
+    final contentType = response.headers['content-type']?.trim() ?? '';
+
+    if (response.statusCode >= 300 && response.statusCode < 400) {
+      if (location != null && location.isNotEmpty) {
+        buffer.write(' Redirección a: $location');
+      } else {
+        buffer.write(' El servidor respondió con una redirección.');
+      }
+    }
+
+    final looksLikeHtml =
+        contentType.toLowerCase().contains('text/html') ||
+        response.body.toLowerCase().contains('<html') ||
+        response.body.toLowerCase().contains('<!doctype html');
+
+    if (looksLikeHtml) {
+      buffer.write(' El servidor devolvió HTML en lugar de JSON.');
+    }
+
+    return buffer.toString();
   }
 
   static Future<List<_QueuedUploadFile>> _stashFilesForQueue(

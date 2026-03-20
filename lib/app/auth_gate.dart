@@ -4,6 +4,7 @@ import '../services/auth_service.dart';
 import '../services/home_resolver_service.dart';
 
 import '../screens/welcome_screen.dart';
+import '../screens/home_agente_upec_screen.dart';
 import '../screens/home_screen.dart';
 import '../screens/home_perito_screen.dart';
 
@@ -21,8 +22,13 @@ class AuthGate extends StatelessWidget {
       return const WelcomeScreen();
     }
 
-    final peritoHome = await HomeResolverService.isPeritoHomeAvailable();
+    final agenteUpecHome =
+        await HomeResolverService.isAgenteUpecHomeAvailable();
+    if (agenteUpecHome) {
+      return const HomeAgenteUpecScreen();
+    }
 
+    final peritoHome = await HomeResolverService.isPeritoHomeAvailable();
     if (peritoHome) {
       return const HomePeritoScreen();
     }
