@@ -18,6 +18,7 @@ class VehiculoCreateScreen extends StatefulWidget {
 class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
   final _formKey = GlobalKey<FormState>();
   bool _saving = false;
+  bool _draftHydrated = false;
 
   final _marcaCtrl = TextEditingController();
   final _modeloCtrl = TextEditingController();
@@ -78,6 +79,10 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+    if (!_draftHydrated) {
+      _draftHydrated = true;
+      _hydrateDraftFromArgs();
+    }
     if (_cargandoGruas) {
       _cargarGruas();
     }
@@ -248,8 +253,6 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
           .whereType<Map>()
           .map((e) => Map<String, dynamic>.from(e))
           .toList();
-      _gruaIdSeleccionada = null;
-      _corralonGruaIdSeleccionada = null;
 
       if (!mounted) return;
       setState(() => _cargandoGruas = false);
@@ -262,8 +265,68 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
     }
   }
 
+  void _hydrateDraftFromArgs() {
+    final args = ModalRoute.of(context)?.settings.arguments;
+    if (args is! Map || args['offlineDraft'] is! Map) return;
+
+    final draft = Map<String, dynamic>.from(args['offlineDraft'] as Map);
+    final body = draft['body'] is Map
+        ? Map<String, dynamic>.from(draft['body'] as Map)
+        : const <String, dynamic>{};
+
+    _marcaCtrl.text = (body['marca'] ?? '').toString();
+    _modeloCtrl.text = (body['modelo'] ?? '').toString();
+    _lineaCtrl.text = (body['linea'] ?? '').toString();
+    _colorCtrl.text = (body['color'] ?? '').toString();
+    _placasCtrl.text = (body['placas'] ?? '').toString();
+    _serieCtrl.text = (body['serie'] ?? '').toString();
+    _capacidadCtrl.text = (body['capacidad_personas'] ?? '5').toString();
+    _tipoServicioCtrl.text = (body['tipo_servicio'] ?? 'PARTICULAR').toString();
+    _tarjetaCirculacionNombreCtrl.text =
+        (body['tarjeta_circulacion_nombre'] ?? '').toString();
+    _aseguradoraCtrl.text = (body['aseguradora'] ?? '').toString();
+    _montoDanosCtrl.text = (body['monto_danos'] ?? '').toString();
+    _partesDanadasCtrl.text = (body['partes_danadas'] ?? '').toString();
+    _antecedenteVehiculo = _toBool(body['antecedente_vehiculo']);
+    _estadoPlacasSeleccionado =
+        (body['estado_placas'] ?? '').toString().trim().isEmpty
+        ? null
+        : (body['estado_placas'] ?? '').toString().trim();
+    _tipoCarroceriaSeleccionada = (body['tipo'] ?? '').toString().trim().isEmpty
+        ? null
+        : (body['tipo'] ?? '').toString().trim();
+    _tipoGeneralSeleccionado = _inferirTipoGeneralPorCarroceria(
+      _tipoCarroceriaSeleccionada,
+    );
+    _gruaIdSeleccionada = int.tryParse((body['grua_id'] ?? '').toString());
+    _corralonGruaIdSeleccionada = int.tryParse(
+      (body['corralon_id'] ?? '').toString(),
+    );
+  }
+
+  bool _toBool(dynamic value) {
+    if (value is bool) return value;
+    final raw = value?.toString().trim().toLowerCase() ?? '';
+    return raw == '1' || raw == 'true' || raw == 'si' || raw == 'sí';
+  }
+
   List<String> _carroceriasDeTipoGeneral(String? tipoGeneral) {
     return VehiculoTaxonomia.carroceriasDeTipoGeneral(tipoGeneral);
+  }
+
+  String? _inferirTipoGeneralPorCarroceria(String? carroceria) {
+    final current = (carroceria ?? '').trim();
+    if (current.isEmpty) return null;
+
+    for (final entry in VehiculoTaxonomia.carrocerias.entries) {
+      for (final option in entry.value) {
+        if (option.toUpperCase() == current.toUpperCase()) {
+          return entry.key;
+        }
+      }
+    }
+
+    return null;
   }
 
   String? _nombreGruaById(int? id) {
@@ -324,6 +387,8 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
       return;
     }
 
+    final routeArgs = ModalRoute.of(context)?.settings.arguments;
+
     final duplicateError =
         await VehiculoFormService.validateVehiculoDuplicatesWithinHecho(
           hechoId: hechoId,
@@ -343,7 +408,14 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
     setState(() => _saving = true);
 
     try {
-      final clientUuid = OfflineSyncService.newClientUuid();
+      final draftOpId = routeArgs is Map
+          ? (routeArgs['offlineDraft'] is Map
+                ? (routeArgs['offlineDraft'] as Map)['id']
+                : null)
+          : null;
+      final clientUuid = (draftOpId ?? '').toString().trim().isNotEmpty
+          ? (draftOpId ?? '').toString().trim()
+          : OfflineSyncService.newClientUuid();
       final uri = Uri.parse('$_baseApi/vehiculos');
       final corralonNombre = _nombreGruaById(_corralonGruaIdSeleccionada);
 

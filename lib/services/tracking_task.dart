@@ -68,8 +68,8 @@ class TrackingTaskHandler extends TaskHandler {
     _sending = true;
 
     try {
-      final isPerito = await AuthService.isPerito();
-      if (!isPerito) return;
+      final canShareLocation = await AuthService.canShareLocationTracking();
+      if (!canShareLocation) return;
 
       final token = await AuthService.getToken();
       if (token == null || token.isEmpty) return;

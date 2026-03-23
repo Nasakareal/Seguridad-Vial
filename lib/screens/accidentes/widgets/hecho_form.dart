@@ -17,6 +17,8 @@ enum HechoFormMode { create, edit }
 class HechoForm extends StatefulWidget {
   final HechoFormMode mode;
   final HechoFormData data;
+  final File? initialFotoLugar;
+  final File? initialFotoSituacion;
   final Future<OfflineActionResult> Function({
     required HechoFormData data,
     required DictamenItem? dictamenSelected,
@@ -31,6 +33,8 @@ class HechoForm extends StatefulWidget {
     super.key,
     required this.mode,
     required this.data,
+    this.initialFotoLugar,
+    this.initialFotoSituacion,
     required this.onSubmit,
     this.onSubmitted,
   });
@@ -103,6 +107,9 @@ class _HechoFormState extends State<HechoForm> {
 
     _propsCtrl.text = d.propiedadesAfectadas;
     _montoCtrl.text = d.montoDanos;
+
+    _fotoLugar ??= widget.initialFotoLugar;
+    _fotoSituacion ??= widget.initialFotoSituacion;
   }
 
   @override

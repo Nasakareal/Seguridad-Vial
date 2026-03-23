@@ -14,8 +14,8 @@ class LocationService {
     Position? positionOverride,
     bool requireAlways = false,
   }) async {
-    final isPerito = await AuthService.isPerito();
-    if (!isPerito) {
+    final canShareLocation = await AuthService.canShareLocationTracking();
+    if (!canShareLocation) {
       return false;
     }
 

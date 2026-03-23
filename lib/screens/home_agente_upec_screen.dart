@@ -9,7 +9,9 @@ import '../services/agente_upec_home_service.dart';
 import '../services/app_version_service.dart';
 import '../services/auth_service.dart';
 import '../services/home_resolver_service.dart';
+import '../services/location_flag_service.dart';
 import '../services/push_service.dart';
+import '../services/tracking_service.dart';
 import '../widgets/app_drawer.dart';
 import '../widgets/offline_sync_status_card.dart';
 import '../widgets/safe_osm_tile_layer.dart';
@@ -24,6 +26,7 @@ class HomeAgenteUpecScreen extends StatefulWidget {
 
 class _HomeAgenteUpecScreenState extends State<HomeAgenteUpecScreen>
     with WidgetsBindingObserver {
+  bool _trackingOn = false;
   bool _busy = false;
   bool _bootstrapped = false;
   bool _loading = true;
@@ -97,6 +100,35 @@ class _HomeAgenteUpecScreenState extends State<HomeAgenteUpecScreen>
   Future<void> _refreshAll() async {
     final position = await _resolveCurrentPosition();
     await _loadMap(position: position);
+    if (!mounted) return;
+    await _syncTrackingFromCommanderFlag();
+  }
+
+  Future<void> _syncTrackingFromCommanderFlag() async {
+    try {
+      final enabledByCommander = await LocationFlagService.isEnabledForMe();
+      if (!mounted) return;
+
+      var running = await TrackingService.isRunning();
+      if (!mounted) return;
+
+      if (!running) {
+        bool started = false;
+        try {
+          started = await TrackingService.startWithDisclosure(context);
+        } catch (_) {
+          started = false;
+        }
+        if (!mounted) return;
+        running = started;
+      }
+
+      if (!mounted) return;
+      setState(() => _trackingOn = enabledByCommander && running);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _trackingOn = false);
+    }
   }
 
   Future<void> _loadMap({Position? position}) async {
@@ -208,6 +240,9 @@ class _HomeAgenteUpecScreenState extends State<HomeAgenteUpecScreen>
     _busy = true;
 
     try {
+      try {
+        await TrackingService.stop();
+      } catch (_) {}
       await AuthService.logout();
     } finally {
       _busy = false;
@@ -393,7 +428,10 @@ class _HomeAgenteUpecScreenState extends State<HomeAgenteUpecScreen>
           ),
         ],
       ),
-      drawer: AppDrawer(trackingOn: false, onLogout: () => _logout(context)),
+      drawer: AppDrawer(
+        trackingOn: _trackingOn,
+        onLogout: () => _logout(context),
+      ),
       body: SafeArea(
         child: RefreshIndicator(
           onRefresh: _refreshAll,

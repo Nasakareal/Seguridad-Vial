@@ -53,6 +53,7 @@ class AppRoutes {
   static const String dispositivosCreate = '/dispositivos/create';
 
   static const String feed = '/feed';
+  static const String offlineSyncErrors = '/offline-sync/errors';
 
   static const String pendientesCortes = '/pendientes/cortes';
   static const String pendientesCorteShow = '/pendientes/cortes/show';

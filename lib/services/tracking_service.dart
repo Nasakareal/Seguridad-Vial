@@ -36,8 +36,8 @@ class TrackingService {
       final logged = await AuthService.isLoggedIn();
       if (!logged) return false;
 
-      final isPerito = await AuthService.isPerito();
-      if (!isPerito) return false;
+      final canShareLocation = await AuthService.canShareLocationTracking();
+      if (!canShareLocation) return false;
 
       final accepted = await LocationDisclosure.isAccepted();
       if (!accepted) return false;
@@ -94,8 +94,8 @@ class TrackingService {
     _starting = true;
 
     try {
-      final isPerito = await AuthService.isPerito();
-      if (!isPerito) return false;
+      final canShareLocation = await AuthService.canShareLocationTracking();
+      if (!canShareLocation) return false;
 
       final accepted = await LocationDisclosure.isAccepted();
       if (!context.mounted) return false;
@@ -137,8 +137,8 @@ class TrackingService {
     _starting = true;
 
     try {
-      final isPerito = await AuthService.isPerito();
-      if (!isPerito) return false;
+      final canShareLocation = await AuthService.canShareLocationTracking();
+      if (!canShareLocation) return false;
 
       if (Platform.isAndroid) {
         final running = await isRunning();

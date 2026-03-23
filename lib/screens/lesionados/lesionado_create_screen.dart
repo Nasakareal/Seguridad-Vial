@@ -14,6 +14,7 @@ class _LesionadoCreateScreenState extends State<LesionadoCreateScreen> {
 
   final _formKey = GlobalKey<FormState>();
   bool _guardando = false;
+  bool _draftHydrated = false;
 
   // ===== Campos que TU backend espera =====
   final TextEditingController _nombreCtrl = TextEditingController();
@@ -48,6 +49,14 @@ class _LesionadoCreateScreenState extends State<LesionadoCreateScreen> {
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_draftHydrated) return;
+    _draftHydrated = true;
+    _hydrateDraftFromArgs();
+  }
+
+  @override
   void dispose() {
     _nombreCtrl.dispose();
     _edadCtrl.dispose();
@@ -66,6 +75,44 @@ class _LesionadoCreateScreenState extends State<LesionadoCreateScreen> {
 
   Uri _createUri() {
     return Uri.parse('$_baseUrl/lesionados');
+  }
+
+  void _hydrateDraftFromArgs() {
+    final args = ModalRoute.of(context)?.settings.arguments;
+    if (args is! Map || args['offlineDraft'] is! Map) return;
+
+    final draft = Map<String, dynamic>.from(args['offlineDraft'] as Map);
+    final body = draft['body'] is Map
+        ? Map<String, dynamic>.from(draft['body'] as Map)
+        : const <String, dynamic>{};
+
+    _nombreCtrl.text = (body['nombre'] ?? '').toString();
+    _edadCtrl.text = (body['edad'] ?? '').toString();
+
+    final sexo = (body['sexo'] ?? '').toString().trim();
+    _sexo = sexo.isEmpty ? null : sexo;
+
+    final tipoLesion = (body['tipo_lesion'] ?? '').toString().trim();
+    if (tipoLesion.isNotEmpty) {
+      _tipoLesion = tipoLesion;
+    }
+
+    _hospitalizado = _toBool(body['hospitalizado'], fallback: false);
+    _hospitalCtrl.text = (body['hospital'] ?? '').toString();
+
+    _atencionEnSitio = _toBool(body['atencion_en_sitio'], fallback: true);
+    _ambulanciaCtrl.text = (body['ambulancia'] ?? '').toString();
+    _paramedicoCtrl.text = (body['paramedico'] ?? '').toString();
+    _observacionesCtrl.text = (body['observaciones'] ?? '').toString();
+  }
+
+  bool _toBool(dynamic v, {bool fallback = false}) {
+    if (v == null) return fallback;
+    if (v is bool) return v;
+    final s = v.toString().trim().toLowerCase();
+    if (s == '1' || s == 'true' || s == 'si' || s == 'sí') return true;
+    if (s == '0' || s == 'false' || s == 'no') return false;
+    return fallback;
   }
 
   Future<void> _guardar() async {
@@ -88,8 +135,17 @@ class _LesionadoCreateScreenState extends State<LesionadoCreateScreen> {
 
     setState(() => _guardando = true);
 
+    final routeArgs = ModalRoute.of(context)?.settings.arguments;
+
     try {
-      final clientUuid = OfflineSyncService.newClientUuid();
+      final draftOpId = routeArgs is Map
+          ? (routeArgs['offlineDraft'] is Map
+                ? (routeArgs['offlineDraft'] as Map)['id']
+                : null)
+          : null;
+      final clientUuid = (draftOpId ?? '').toString().trim().isNotEmpty
+          ? (draftOpId ?? '').toString().trim()
+          : OfflineSyncService.newClientUuid();
       final body = <String, dynamic>{
         'client_uuid': clientUuid,
         if (hechoId > 0) 'hecho_id': hechoId,
@@ -170,9 +226,11 @@ class _LesionadoCreateScreenState extends State<LesionadoCreateScreen> {
                   margin: const EdgeInsets.only(bottom: 12),
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: Colors.orange.withOpacity(0.08),
+                    color: Colors.orange.withValues(alpha: 0.08),
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.orange.withOpacity(0.2)),
+                    border: Border.all(
+                      color: Colors.orange.withValues(alpha: 0.2),
+                    ),
                   ),
                   child: const Text(
                     'Este hecho todavía no tiene ID de servidor. El lesionado se guardará con el UUID local del hecho y se sincronizará cuando el hecho padre suba primero.',
@@ -217,8 +275,9 @@ class _LesionadoCreateScreenState extends State<LesionadoCreateScreen> {
                               if (t.isEmpty) return null;
                               final n = int.tryParse(t);
                               if (n == null) return 'Edad inválida';
-                              if (n < 0 || n > 120)
+                              if (n < 0 || n > 120) {
                                 return 'Edad fuera de rango';
+                              }
                               return null;
                             },
                           ),
@@ -394,7 +453,7 @@ class _CardShell extends StatelessWidget {
           BoxShadow(
             blurRadius: 14,
             offset: const Offset(0, 8),
-            color: Colors.black.withOpacity(.06),
+            color: Colors.black.withValues(alpha: .06),
           ),
         ],
       ),

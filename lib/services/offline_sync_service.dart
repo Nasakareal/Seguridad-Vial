@@ -150,6 +150,10 @@ class OfflineSyncService {
         successCodes: successCodes,
         errorParser: errorParser,
       );
+      await _removeOperationById(
+        ownerKey: ownerKey,
+        operationId: effectiveRequestId,
+      );
       unawaited(flushPending());
       return const OfflineActionResult.synced();
     } on _RetryableSyncException {
@@ -260,6 +264,10 @@ class OfflineSyncService {
         files: files,
         successCodes: successCodes,
         errorParser: errorParser,
+      );
+      await _removeOperationById(
+        ownerKey: ownerKey,
+        operationId: effectiveRequestId,
       );
       unawaited(flushPending());
       return const OfflineActionResult.synced();
@@ -475,11 +483,30 @@ class OfflineSyncService {
 
   static Future<void> _appendOperation(_QueuedOperation op) async {
     final queue = await _loadQueue();
-    final exists = queue.any((item) => item.id == op.id);
-    if (!exists) {
+    final index = queue.indexWhere(
+      (item) => item.id == op.id && item.ownerKey == op.ownerKey,
+    );
+    if (index >= 0) {
+      queue[index] = op;
+    } else {
       queue.add(op);
-      await _saveQueue(queue);
     }
+    await _saveQueue(queue);
+    await _refreshCounts();
+  }
+
+  static Future<void> _removeOperationById({
+    required String ownerKey,
+    required String operationId,
+  }) async {
+    final queue = await _loadQueue();
+    final nextQueue = queue
+        .where((item) => !(item.ownerKey == ownerKey && item.id == operationId))
+        .toList();
+
+    if (nextQueue.length == queue.length) return;
+
+    await _saveQueue(nextQueue);
     await _refreshCounts();
   }
 

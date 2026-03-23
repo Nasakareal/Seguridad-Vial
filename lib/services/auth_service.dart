@@ -241,6 +241,9 @@ class AuthService {
   }
 
   static Future<bool> isAgenteUpec() async {
+    final roleId = await getRoleId();
+    if (roleId == 11) return true;
+
     final role = await getRole();
     final normalized = role?.trim().toLowerCase() ?? '';
     if (normalized.contains('upec')) {
@@ -251,8 +254,13 @@ class AuthService {
     return perms.any((perm) => perm.contains('upec'));
   }
 
+  static Future<bool> canShareLocationTracking() async {
+    if (await isPerito()) return true;
+    return await isAgenteUpec();
+  }
+
   static Future<bool> shouldAskLocation() async {
-    return await isPerito();
+    return await canShareLocationTracking();
   }
 
   static Future<List<String>> getPermissions() async {
