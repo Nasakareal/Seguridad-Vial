@@ -13,6 +13,7 @@ import '../../services/auth_service.dart';
 import '../../services/tracking_service.dart';
 import '../../services/app_version_service.dart';
 import '../../services/accidentes_service.dart';
+import '../../services/hecho_share_service.dart';
 
 import '../../widgets/app_drawer.dart';
 import '../../widgets/header_card.dart';
@@ -284,13 +285,6 @@ class _AccidentesScreenState extends State<AccidentesScreen>
     return cleaned;
   }
 
-  bool _whatsappYaEnviado(Map<String, dynamic> hecho) {
-    final v = hecho['whatsapp_sent_at'];
-    if (v == null) return false;
-    final s = v.toString().trim();
-    return s.isNotEmpty && s != 'null';
-  }
-
   int? _hechoIdFromMap(Map<String, dynamic> hecho) {
     final id = hecho['id'];
     if (id == null) return null;
@@ -436,66 +430,20 @@ class _AccidentesScreenState extends State<AccidentesScreen>
     }
   }
 
-  Future<bool> _confirmarEnviarWhatsapp() async {
-    final res = await showDialog<bool>(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Confirmar'),
-        content: const Text('¿Enviar este hecho al grupo de WhatsApp?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancelar'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Enviar'),
-          ),
-        ],
-      ),
-    );
-
-    return res == true;
-  }
-
-  Future<void> _enviarWhatsapp(int hechoId) async {
+  Future<void> _compartirWhatsapp(int hechoId) async {
     if (_enviandoWhatsapp.contains(hechoId)) return;
-
-    final okConfirm = await _confirmarEnviarWhatsapp();
-    if (!okConfirm) return;
 
     setState(() => _enviandoWhatsapp.add(hechoId));
 
     try {
-      final message = await AccidentesService.enviarWhatsapp(hechoId: hechoId);
-
-      if (!mounted) return;
-
-      final idx = _hechos.indexWhere((h) {
-        final id = h['id'];
-        final hid = (id is int) ? id : int.tryParse('$id');
-        return hid == hechoId;
-      });
-
-      if (idx != -1) {
-        final updated = Map<String, dynamic>.from(_hechos[idx]);
-        updated['whatsapp_sent_at'] =
-            updated['whatsapp_sent_at'] ?? DateTime.now().toIso8601String();
-        final newList = List<Map<String, dynamic>>.from(_hechos);
-        newList[idx] = updated;
-        setState(() => _hechos = newList);
-      }
-
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(message)));
+      await HechoShareService.compartirEnWhatsapp(hechoId: hechoId);
     } catch (e) {
       if (!mounted) return;
       showDialog(
         context: context,
         builder: (_) => AlertDialog(
           title: const Text('Error'),
-          content: Text('No se pudo enviar a WhatsApp.\n\n$e'),
+          content: Text('No se pudo compartir el hecho.\n\n$e'),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(),
@@ -601,7 +549,6 @@ class _AccidentesScreenState extends State<AccidentesScreen>
                     final isDownloading =
                         hechoId != null && _descargando.contains(hechoId);
 
-                    final yaEnviado = _whatsappYaEnviado(hecho);
                     final isSending =
                         hechoId != null && _enviandoWhatsapp.contains(hechoId);
 
@@ -619,16 +566,14 @@ class _AccidentesScreenState extends State<AccidentesScreen>
                       fotoConvenio: fotoConvenio,
                       isDownloading: isDownloading,
                       isSending: isSending,
-                      yaEnviado: yaEnviado,
                       onTapShow: () => _abrirShow(hecho),
                       onTapEdit: () => _abrirEdit(hecho),
                       onDownload: (hechoId == null || isDownloading)
                           ? null
                           : () => _descargarReporte(hechoId),
-                      onEnviarWhatsapp:
-                          (hechoId == null || yaEnviado || isSending)
+                      onEnviarWhatsapp: (hechoId == null || isSending)
                           ? null
-                          : () => _enviarWhatsapp(hechoId),
+                          : () => _compartirWhatsapp(hechoId),
                     );
                   },
                 ),

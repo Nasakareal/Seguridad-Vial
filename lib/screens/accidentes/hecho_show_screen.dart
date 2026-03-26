@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 import '../../services/auth_service.dart';
 import '../../services/tracking_service.dart';
 import '../../services/app_version_service.dart';
+import '../../services/hecho_share_service.dart';
 
 import '../../widgets/app_drawer.dart';
 import '../../widgets/header_card.dart';
@@ -34,6 +35,7 @@ class _HechoShowScreenState extends State<HechoShowScreen>
   bool _busy = false;
   bool _initialized = false;
   int _hechoId = 0;
+  bool _sharingWhatsapp = false;
 
   Future<void> _bootstrapTrackingStatusOnly() async {
     if (_bootstrapped) return;
@@ -173,6 +175,33 @@ class _HechoShowScreenState extends State<HechoShowScreen>
     if (!mounted) return;
     await _bootstrapTrackingStatusOnly();
     await _cargarHecho(hechoId);
+  }
+
+  Future<void> _compartirWhatsapp(int hechoId) async {
+    if (_sharingWhatsapp || hechoId <= 0) return;
+
+    setState(() => _sharingWhatsapp = true);
+
+    try {
+      await HechoShareService.compartirEnWhatsapp(hechoId: hechoId);
+    } catch (e) {
+      if (!mounted) return;
+      showDialog(
+        context: context,
+        builder: (_) => AlertDialog(
+          title: const Text('Error'),
+          content: Text('No se pudo compartir el hecho.\n\n$e'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Cerrar'),
+            ),
+          ],
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _sharingWhatsapp = false);
+    }
   }
 
   Widget _section({
@@ -444,7 +473,9 @@ class _HechoShowScreenState extends State<HechoShowScreen>
                     Text(_error!, textAlign: TextAlign.center),
                     const SizedBox(height: 12),
                     ElevatedButton(
-                      onPressed: hechoId > 0 ? () => _cargarHecho(hechoId) : null,
+                      onPressed: hechoId > 0
+                          ? () => _cargarHecho(hechoId)
+                          : null,
                       child: const Text('Reintentar'),
                     ),
                   ],
@@ -470,12 +501,13 @@ class _HechoShowScreenState extends State<HechoShowScreen>
                       fotosVehiculos: fotosVehiculos,
                       fotoConvenio: fotoConvenio,
                       isDownloading: false,
-                      isSending: false,
-                      yaEnviado: false,
+                      isSending: _sharingWhatsapp,
                       onTapShow: () {},
                       onTapEdit: () => _goEdit(hechoId),
                       onDownload: null,
-                      onEnviarWhatsapp: null,
+                      onEnviarWhatsapp: hechoId > 0
+                          ? () => _compartirWhatsapp(hechoId)
+                          : null,
                     ),
 
                     _quickActions(hechoId),

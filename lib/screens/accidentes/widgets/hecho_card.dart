@@ -20,7 +20,6 @@ class HechoCard extends StatelessWidget {
 
   final bool isDownloading;
   final bool isSending;
-  final bool yaEnviado;
 
   final VoidCallback onTapShow;
   final VoidCallback onTapEdit;
@@ -42,7 +41,6 @@ class HechoCard extends StatelessWidget {
     required this.fotoConvenio,
     required this.isDownloading,
     required this.isSending,
-    required this.yaEnviado,
     required this.onTapShow,
     required this.onTapEdit,
     required this.onDownload,
@@ -81,7 +79,10 @@ class HechoCard extends StatelessWidget {
                     Text('Situación: $situacion'),
                     Text('Perito: $perito'),
                     PhotoBlock(label: 'Foto del hecho', url: fotoHecho),
-                    PhotoBlock(label: 'Foto de la situacion', url: fotoSituacion),
+                    PhotoBlock(
+                      label: 'Foto de la situacion',
+                      url: fotoSituacion,
+                    ),
                     if (fotosVehiculos.isNotEmpty)
                       Padding(
                         padding: const EdgeInsets.only(top: 10),
@@ -105,35 +106,45 @@ class HechoCard extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    SizedBox(
-                      height: 36,
-                      child: ElevatedButton(
-                        onPressed: onEnviarWhatsapp,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: yaEnviado
-                              ? Colors.grey
-                              : Colors.green,
-                          padding: const EdgeInsets.symmetric(horizontal: 10),
+                    if (onEnviarWhatsapp != null || isSending) ...[
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: Container(
+                          width: 44,
+                          height: 44,
+                          decoration: BoxDecoration(
+                            color: const Color(0x1425D366),
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(
+                              color: const Color(0xFF25D366),
+                              width: 1.1,
+                            ),
+                          ),
+                          child: isSending
+                              ? const Center(
+                                  child: SizedBox(
+                                    height: 18,
+                                    width: 18,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: Color(0xFF25D366),
+                                    ),
+                                  ),
+                                )
+                              : IconButton(
+                                  onPressed: onEnviarWhatsapp,
+                                  tooltip: 'Compartir por WhatsApp',
+                                  padding: EdgeInsets.zero,
+                                  icon: const Icon(
+                                    Icons.chat_bubble_rounded,
+                                    color: Color(0xFF25D366),
+                                    size: 22,
+                                  ),
+                                ),
                         ),
-                        child: isSending
-                            ? const SizedBox(
-                                height: 18,
-                                width: 18,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: Colors.white,
-                                ),
-                              )
-                            : Text(
-                                yaEnviado ? 'Enviado' : 'Enviar',
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w800,
-                                ),
-                              ),
                       ),
-                    ),
-                    const SizedBox(height: 6),
+                      const SizedBox(height: 6),
+                    ],
                     Row(
                       mainAxisAlignment: MainAxisAlignment.end,
                       children: [
