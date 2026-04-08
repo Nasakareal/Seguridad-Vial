@@ -23,20 +23,50 @@ class HechoNativeShareData {
         ? Map<String, dynamic>.from(raw['data'] as Map)
         : raw;
 
+    final texto = ((source['texto'] ?? source['message'] ?? '').toString())
+        .trim();
+    final foto = ((source['foto'] ?? '').toString()).trim();
+
+    final media = <String>[];
+
+    final fotosRaw = source['fotos'];
+    if (fotosRaw is List) {
+      for (final item in fotosRaw) {
+        final s = (item ?? '').toString().trim();
+        if (s.isNotEmpty) {
+          media.add(s);
+        }
+      }
+    }
+
     final mediaRaw = source['media'];
-    final media = mediaRaw is List
-        ? mediaRaw
-              .map((e) => (e ?? '').toString().trim())
-              .where((e) => e.isNotEmpty)
-              .toList()
-        : <String>[];
+    if (mediaRaw is List) {
+      for (final item in mediaRaw) {
+        final s = (item ?? '').toString().trim();
+        if (s.isNotEmpty) {
+          media.add(s);
+        }
+      }
+    }
+
+    if (media.isEmpty && foto.isNotEmpty) {
+      media.add(foto);
+    }
+
+    final uniq = <String>{};
+    final cleaned = <String>[];
+    for (final item in media) {
+      if (uniq.add(item)) {
+        cleaned.add(item);
+      }
+    }
 
     final rawHechoId = source['hecho_id'] ?? raw['hecho_id'];
 
     return HechoNativeShareData(
       title: ((source['title'] ?? 'Hecho de tránsito').toString()).trim(),
-      message: ((source['message'] ?? '').toString()).trim(),
-      media: media,
+      message: texto,
+      media: cleaned,
       hechoId: int.tryParse('${rawHechoId ?? ''}'),
     );
   }
@@ -117,50 +147,28 @@ class AccidentesService {
       throw Exception('Sesión inválida. Vuelve a iniciar sesión.');
     }
 
+    final uri = Uri.parse(
+      '${AuthService.baseUrl}/hechos/$hechoId/native-share',
+    );
+
     final headers = <String, String>{
       'Accept': 'application/json',
       'Content-Type': 'application/json',
       'Authorization': 'Bearer $token',
     };
 
-    http.Response? lastResponse;
-    String? lastError;
+    final resp = await http.get(uri, headers: headers);
 
-    for (final path in [
-      '/hechos/$hechoId/native-share',
-      '/hechos/$hechoId/native_share',
-      '/hechos/$hechoId/nativeShare',
-    ]) {
-      final uri = Uri.parse('${AuthService.baseUrl}$path');
-
-      for (final method in ['GET', 'POST']) {
-        final resp = method == 'GET'
-            ? await http.get(uri, headers: headers)
-            : await http.post(uri, headers: headers);
-
-        lastResponse = resp;
-
-        if (resp.statusCode == 200) {
-          final raw = jsonDecode(resp.body);
-          if (raw is! Map<String, dynamic>) {
-            throw Exception('Respuesta inválida del servidor.');
-          }
-          return HechoNativeShareData.fromJson(raw);
-        }
-
-        if (resp.statusCode != 404 && resp.statusCode != 405) {
-          lastError = _parseBackendError(resp.body, resp.statusCode);
-        }
-      }
+    if (resp.statusCode != 200) {
+      throw Exception(_parseBackendError(resp.body, resp.statusCode));
     }
 
-    throw Exception(
-      lastError ??
-          _parseBackendError(
-            lastResponse?.body ?? '',
-            lastResponse?.statusCode ?? 500,
-          ),
-    );
+    final raw = jsonDecode(resp.body);
+    if (raw is! Map<String, dynamic>) {
+      throw Exception('Respuesta inválida del servidor.');
+    }
+
+    return HechoNativeShareData.fromJson(raw);
   }
 
   static Future<Uri> fetchWhatsappUri({required int hechoId}) async {
@@ -175,43 +183,25 @@ class AccidentesService {
       'Authorization': 'Bearer $token',
     };
 
-    http.Response? lastResponse;
-    String? lastError;
+    final uri = Uri.parse(
+      '${AuthService.baseUrl}/hechos/$hechoId/whatsapp-link',
+    );
 
-    for (final path in ['/hechos/$hechoId/whatsapp']) {
-      final uri = Uri.parse('${AuthService.baseUrl}$path');
+    final resp = await http.get(uri, headers: headers);
 
-      for (final method in ['GET', 'POST']) {
-        final resp = method == 'GET'
-            ? await http.get(uri, headers: headers)
-            : await http.post(uri, headers: headers);
+    if (resp.statusCode != 200) {
+      throw Exception(_parseBackendError(resp.body, resp.statusCode));
+    }
 
-        lastResponse = resp;
-
-        if (resp.statusCode == 200) {
-          final raw = jsonDecode(resp.body);
-          if (raw is Map && raw['wa_url'] is String) {
-            final url = (raw['wa_url'] as String).trim();
-            if (url.isNotEmpty) {
-              return Uri.parse(url);
-            }
-          }
-          throw Exception('El servidor no devolvió el enlace de WhatsApp.');
-        }
-
-        if (resp.statusCode != 404 && resp.statusCode != 405) {
-          lastError = _parseBackendError(resp.body, resp.statusCode);
-        }
+    final raw = jsonDecode(resp.body);
+    if (raw is Map && raw['wa_url'] is String) {
+      final url = (raw['wa_url'] as String).trim();
+      if (url.isNotEmpty) {
+        return Uri.parse(url);
       }
     }
 
-    throw Exception(
-      lastError ??
-          _parseBackendError(
-            lastResponse?.body ?? '',
-            lastResponse?.statusCode ?? 500,
-          ),
-    );
+    throw Exception('El servidor no devolvió el enlace de WhatsApp.');
   }
 
   static String _parseBackendError(String body, int statusCode) {
@@ -219,11 +209,6 @@ class AccidentesService {
       final raw = jsonDecode(body);
 
       if (raw is Map<String, dynamic>) {
-        if (raw['message'] is String) {
-          final msg = (raw['message'] as String).trim();
-          if (msg.isNotEmpty) return msg;
-        }
-
         final errors = raw['errors'];
         if (errors is Map) {
           final sb = StringBuffer();
@@ -235,9 +220,30 @@ class AccidentesService {
           final out = sb.toString().trim();
           if (out.isNotEmpty) return out;
         }
+
+        if (raw['message'] is String) {
+          final msg = _friendlyKnownBackendMessage(raw['message'] as String);
+          if (msg.isNotEmpty) return msg;
+        }
       }
     } catch (_) {}
 
+    final rawFriendly = _friendlyKnownBackendMessage(body);
+    if (rawFriendly.isNotEmpty) return rawFriendly;
+
     return 'Error HTTP $statusCode';
+  }
+
+  static String _friendlyKnownBackendMessage(String rawMessage) {
+    final msg = rawMessage.trim();
+    if (msg.isEmpty) return '';
+
+    final lower = msg.toLowerCase();
+    if (lower.contains('hechos_folio_c5i_unique') ||
+        (lower.contains('duplicate entry') && lower.contains('folio_c5i'))) {
+      return 'Ese folio C5i ya está registrado. Usa uno diferente.';
+    }
+
+    return msg;
   }
 }

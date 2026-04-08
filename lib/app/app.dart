@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 
 import '../core/globals.dart';
+import '../core/platform_support.dart';
 import '../widgets/alerts_listener.dart';
 import '../widgets/offline_sync_listener.dart';
 
@@ -24,7 +25,11 @@ class SeguridadVialApp extends StatelessWidget {
         fontFamily: 'Roboto',
       ),
       builder: (context, child) {
-        return WithForegroundTask(child: child ?? const SizedBox.shrink());
+        final appChild = child ?? const SizedBox.shrink();
+        if (!supportsForegroundTaskShell) {
+          return appChild;
+        }
+        return WithForegroundTask(child: appChild);
       },
       home: const PushNavBinder(
         child: AlertsListener(child: OfflineSyncListener(child: AuthGate())),

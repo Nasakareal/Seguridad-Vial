@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 
-import '../../services/actividades_service.dart';
 import '../../models/actividad.dart';
+import '../../services/actividad_share_service.dart';
+import '../../services/actividades_service.dart';
+import '../../widgets/safe_network_image.dart';
 
 class ActividadShowScreen extends StatefulWidget {
   const ActividadShowScreen({super.key});
@@ -10,10 +12,13 @@ class ActividadShowScreen extends StatefulWidget {
   State<ActividadShowScreen> createState() => _ActividadShowScreenState();
 }
 
-class _ActividadShowScreenState extends State<ActividadShowScreen> {
+class _ActividadShowScreenState extends State<ActividadShowScreen>
+    with WidgetsBindingObserver {
   bool _loading = true;
+  bool _sharing = false;
   String? _error;
   Actividad? _actividad;
+  bool _bootstrapped = false;
 
   int? _idFromArgs() {
     final args = ModalRoute.of(context)?.settings.arguments;
@@ -28,7 +33,23 @@ class _ActividadShowScreenState extends State<ActividadShowScreen> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+    if (_bootstrapped) return;
+    _bootstrapped = true;
+    WidgetsBinding.instance.addObserver(this);
     _load();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) async {
+    if (state == AppLifecycleState.resumed) {
+      await ActividadShareService.onAppResumed();
+    }
   }
 
   Future<void> _load() async {
@@ -62,6 +83,101 @@ class _ActividadShowScreenState extends State<ActividadShowScreen> {
     }
   }
 
+  Future<void> _shareWhatsapp() async {
+    final a = _actividad;
+    if (a == null || _sharing) return;
+
+    setState(() => _sharing = true);
+    try {
+      await ActividadShareService.compartirEnWhatsapp(actividadId: a.id);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('No se pudo compartir.\n$e')),
+      );
+    } finally {
+      if (mounted) setState(() => _sharing = false);
+    }
+  }
+
+  String _displayDate(String? value) => (value ?? '').trim().isEmpty ? '—' : value!.trim();
+
+  String _displayText(String? value) {
+    final text = (value ?? '').trim();
+    return text.isEmpty ? '—' : text;
+  }
+
+  Widget _photoCarousel(Actividad a) {
+    final photos = a.allPhotoPaths;
+    if (photos.isEmpty) {
+      return const Text('Sin foto.');
+    }
+
+    return SizedBox(
+      height: 220,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: photos.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 10),
+        itemBuilder: (context, index) {
+          final url = ActividadesService.toPublicUrl(photos[index]);
+          return ClipRRect(
+            borderRadius: BorderRadius.circular(14),
+            child: AspectRatio(
+              aspectRatio: 16 / 9,
+              child: SafeNetworkImage(
+                url,
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => Container(
+                  width: 260,
+                  color: Colors.grey.shade200,
+                  child: const Center(
+                    child: Text('No se pudo cargar la imagen.'),
+                  ),
+                ),
+                loadingBuilder: (context, progress) {
+                  return Container(
+                    width: 260,
+                    color: Colors.grey.shade200,
+                    alignment: Alignment.center,
+                    child: const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  );
+                },
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _sectionText(String title, String? value) {
+    final text = (value ?? '').trim();
+    if (text.isEmpty) return const SizedBox.shrink();
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: TextStyle(
+              fontWeight: FontWeight.w800,
+              color: Colors.blue.shade900,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(text),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final a = _actividad;
@@ -73,6 +189,20 @@ class _ActividadShowScreenState extends State<ActividadShowScreen> {
         backgroundColor: Colors.blue,
         title: const Text('Detalle de actividad'),
         actions: [
+          IconButton(
+            tooltip: 'Compartir por WhatsApp',
+            onPressed: _sharing ? null : _shareWhatsapp,
+            icon: _sharing
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  )
+                : const Icon(Icons.share),
+          ),
           IconButton(icon: const Icon(Icons.refresh), onPressed: _load),
         ],
       ),
@@ -99,60 +229,91 @@ class _ActividadShowScreenState extends State<ActividadShowScreen> {
                 )
               else ...[
                 _card(
-                  title: 'Información',
+                  title: 'Resumen',
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       _kv('ID', '#${a.id}'),
-                      _kv('Categoría', a.categoria?.nombre ?? '—'),
-                      _kv('Subcategoría', a.subcategoria?.nombre ?? '—'),
-                      _kv('Nombre', a.nombre),
-                      _kv('Cantidad', a.cantidad.toString()),
-                      _kv('Creado', a.createdAt?.toString() ?? '—'),
+                      _kv('Categoria', a.categoria?.nombre ?? '—'),
+                      _kv('Subcategoria', a.subcategoria?.nombre ?? '—'),
+                      _kv('Capturo', a.nombre),
+                      _kv('Fecha', _displayDate(a.fecha)),
+                      _kv('Hora', _displayDate(a.hora)),
+                      _kv('Unidad', a.unidad?.nombre ?? '—'),
+                      _kv('Delegacion', a.delegacion?.nombre ?? '—'),
+                      _kv('Destacamento', a.destacamento?.nombre ?? '—'),
                     ],
                   ),
                 ),
                 const SizedBox(height: 12),
-                _card(title: 'Foto', child: _photoBlock(a)),
+                _card(
+                  title: 'Ubicacion',
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _kv('Lugar', _displayText(a.lugar)),
+                      _kv('Municipio', _displayText(a.municipio)),
+                      _kv('Carretera', _displayText(a.carretera)),
+                      _kv('Tramo', _displayText(a.tramo)),
+                      _kv('Kilometro', _displayText(a.kilometro)),
+                      _kv('Latitud', a.lat?.toString() ?? '—'),
+                      _kv('Longitud', a.lng?.toString() ?? '—'),
+                      _kv('Coordenadas', _displayText(a.coordenadasTexto)),
+                      _kv(
+                        'Fuente ubicacion',
+                        _displayText(a.fuenteUbicacion),
+                      ),
+                      _kv('Nota geo', _displayText(a.notaGeo)),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+                _card(
+                  title: 'Contenido',
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _sectionText('Asunto', a.motivo),
+                      _sectionText('Narrativa', a.narrativa),
+                      _sectionText('Acciones realizadas', a.accionesRealizadas),
+                      _sectionText('Observaciones', a.observaciones),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+                _card(
+                  title: 'Totales',
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _kv(
+                        'Personas alcanzadas',
+                        a.personasAlcanzadas.toString(),
+                      ),
+                      _kv(
+                        'Personas participantes',
+                        a.personasParticipantes.toString(),
+                      ),
+                      _kv(
+                        'Personas detenidas',
+                        a.personasDetenidas.toString(),
+                      ),
+                      _sectionText(
+                        'Elementos participantes',
+                        a.elementosParticipantesTexto,
+                      ),
+                      _sectionText(
+                        'Patrullas participantes',
+                        a.patrullasParticipantesTexto,
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+                _card(title: 'Fotos', child: _photoCarousel(a)),
               ],
             ],
           ),
-        ),
-      ),
-    );
-  }
-
-  Widget _photoBlock(Actividad a) {
-    final p = (a.fotoPath ?? '').trim();
-    if (p.isEmpty) {
-      return const Text('Sin foto.');
-    }
-
-    final url = ActividadesService.toPublicUrl(p);
-
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(14),
-      child: AspectRatio(
-        aspectRatio: 16 / 9,
-        child: Image.network(
-          url,
-          fit: BoxFit.cover,
-          errorBuilder: (_, __, ___) => Container(
-            color: Colors.grey.shade200,
-            child: const Center(child: Text('No se pudo cargar la imagen.')),
-          ),
-          loadingBuilder: (context, child, progress) {
-            if (progress == null) return child;
-            return Container(
-              color: Colors.grey.shade200,
-              alignment: Alignment.center,
-              child: const SizedBox(
-                width: 18,
-                height: 18,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              ),
-            );
-          },
         ),
       ),
     );
@@ -168,7 +329,7 @@ class _ActividadShowScreenState extends State<ActividadShowScreen> {
           BoxShadow(
             blurRadius: 14,
             offset: const Offset(0, 8),
-            color: Colors.black.withOpacity(.06),
+            color: Colors.black.withValues(alpha: .06),
           ),
         ],
       ),
@@ -193,7 +354,7 @@ class _ActividadShowScreenState extends State<ActividadShowScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SizedBox(
-            width: 110,
+            width: 130,
             child: Text(
               '$k:',
               style: TextStyle(

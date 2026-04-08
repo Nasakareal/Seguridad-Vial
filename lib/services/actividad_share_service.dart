@@ -5,41 +5,26 @@ import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-import 'accidentes_service.dart';
+import 'actividades_service.dart';
 import 'auth_service.dart';
 
-class HechoShareService {
+class ActividadShareService {
   static List<XFile> _pendingImages = <XFile>[];
   static bool _awaitingReturnFromWhatsappText = false;
   static bool _sendingImagesNow = false;
 
-  static Future<void> compartirEnWhatsapp({required int hechoId}) async {
-    final payload = await AccidentesService.fetchNativeShareData(
-      hechoId: hechoId,
+  static Future<void> compartirEnWhatsapp({required int actividadId}) async {
+    final payload = await ActividadesService.fetchShareData(
+      actividadId: actividadId,
     );
+    await _compartirPayload(payload);
+  }
 
-    final texto = payload.message.trim();
-    final fotos = payload.media
-        .map((e) => _toAbsoluteUrl(e))
-        .where((e) => e.isNotEmpty)
-        .toList();
-
-    final archivos = await _descargarArchivosTemporales(fotos);
-
-    if (texto.isNotEmpty) {
-      _pendingImages = archivos;
-      _awaitingReturnFromWhatsappText = archivos.isNotEmpty;
-
-      await _abrirTextoEnWhatsapp(texto);
-      return;
-    }
-
-    if (archivos.isNotEmpty) {
-      await _compartirSoloImagenes(archivos);
-      return;
-    }
-
-    await _abrirWhatsappDesdeBackend(hechoId);
+  static Future<void> compartirTotalesEnWhatsapp({
+    required DateTime fecha,
+  }) async {
+    final payload = await ActividadesService.fetchShareTotalsData(fecha: fecha);
+    await _compartirPayload(payload);
   }
 
   static Future<void> onAppResumed() async {
@@ -64,9 +49,33 @@ class HechoShareService {
     }
   }
 
+  static Future<void> _compartirPayload(ActividadNativeShareData payload) async {
+    final texto = payload.message.trim();
+    final fotos = payload.media
+        .map((e) => ActividadesService.toPublicUrl(e))
+        .where((e) => e.isNotEmpty)
+        .toList();
+
+    final archivos = await _descargarArchivosTemporales(fotos);
+
+    if (texto.isNotEmpty) {
+      _pendingImages = archivos;
+      _awaitingReturnFromWhatsappText = archivos.isNotEmpty;
+
+      await _abrirTextoEnWhatsapp(texto);
+      return;
+    }
+
+    if (archivos.isNotEmpty) {
+      await _compartirSoloImagenes(archivos);
+      return;
+    }
+
+    throw Exception('No hay informacion disponible para compartir.');
+  }
+
   static Future<void> _abrirTextoEnWhatsapp(String texto) async {
     final uri = Uri.parse('https://wa.me/?text=${Uri.encodeComponent(texto)}');
-
     final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
 
     if (!opened) {
@@ -76,25 +85,7 @@ class HechoShareService {
 
   static Future<void> _compartirSoloImagenes(List<XFile> archivos) async {
     if (archivos.isEmpty) return;
-
     await Share.shareXFiles(archivos);
-  }
-
-  static String _toAbsoluteUrl(String pathOrUrl) {
-    final p = pathOrUrl.trim();
-    if (p.isEmpty) return '';
-
-    final lower = p.toLowerCase();
-    if (lower.startsWith('http://') || lower.startsWith('https://')) {
-      return p;
-    }
-
-    final root = AuthService.baseUrl.replaceFirst(RegExp(r'/api/?$'), '');
-
-    if (p.startsWith('/storage/')) return '$root$p';
-    if (p.startsWith('storage/')) return '$root/$p';
-
-    return '$root/storage/$p';
   }
 
   static Future<List<XFile>> _descargarArchivosTemporales(
@@ -129,7 +120,7 @@ class HechoShareService {
         );
 
         final path =
-            '${dir.path}/hecho_${DateTime.now().millisecondsSinceEpoch}_$i.$ext';
+            '${dir.path}/actividad_${DateTime.now().millisecondsSinceEpoch}_$i.$ext';
 
         if (usados.add(path)) {
           final file = File(path);
@@ -160,14 +151,5 @@ class HechoShareService {
     if (cleanUrl.endsWith('.jpg')) return 'jpg';
 
     return 'jpg';
-  }
-
-  static Future<void> _abrirWhatsappDesdeBackend(int hechoId) async {
-    final uri = await AccidentesService.fetchWhatsappUri(hechoId: hechoId);
-    final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
-
-    if (!opened) {
-      throw Exception('No se pudo abrir WhatsApp en este dispositivo.');
-    }
   }
 }

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../widgets/safe_network_image.dart';
+
 class PhotosStrip extends StatelessWidget {
   final List<String> urls;
   const PhotosStrip({super.key, required this.urls});
@@ -29,7 +31,7 @@ class PhotosStrip extends StatelessWidget {
                       builder: (_) => Dialog(
                         insetPadding: const EdgeInsets.all(16),
                         child: InteractiveViewer(
-                          child: Image.network(
+                          child: SafeNetworkImage(
                             u,
                             fit: BoxFit.contain,
                             errorBuilder: (_, __, ___) => const Padding(
@@ -41,15 +43,14 @@ class PhotosStrip extends StatelessWidget {
                       ),
                     );
                   },
-                  child: Image.network(
+                  child: SafeNetworkImage(
                     u,
                     fit: BoxFit.cover,
                     errorBuilder: (_, __, ___) => Container(
                       color: Colors.grey.shade200,
                       child: const Icon(Icons.broken_image),
                     ),
-                    loadingBuilder: (context, child, progress) {
-                      if (progress == null) return child;
+                    loadingBuilder: (context, progress) {
                       return Container(
                         color: Colors.grey.shade200,
                         alignment: Alignment.center,

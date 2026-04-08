@@ -16,11 +16,6 @@ class HechosFormService {
     try {
       final raw = jsonDecode(body);
       if (raw is Map<String, dynamic>) {
-        final msg = (raw['message'] is String)
-            ? (raw['message'] as String).trim()
-            : '';
-        if (msg.isNotEmpty) return msg;
-
         final errors = raw['errors'];
         if (errors is Map) {
           final sb = StringBuffer();
@@ -30,9 +25,25 @@ class HechosFormService {
           final out = sb.toString().trim();
           if (out.isNotEmpty) return out;
         }
+
+        final msg = (raw['message'] is String)
+            ? (raw['message'] as String).trim()
+            : '';
+        final friendlyMsg = _friendlyKnownBackendMessage(msg);
+        if (friendlyMsg.isNotEmpty) return friendlyMsg;
       }
     } catch (_) {}
+
+    final rawFriendly = _friendlyKnownBackendMessage(body);
+    if (rawFriendly.isNotEmpty) return rawFriendly;
+
     return 'Error HTTP $statusCode';
+  }
+
+  static String cleanExceptionMessage(Object error) {
+    final raw = error.toString().trim();
+    if (raw.isEmpty) return 'Ocurrió un error inesperado.';
+    return raw.replaceFirst(RegExp(r'^Exception:\s*'), '').trim();
   }
 
   static String ymd(DateTime d) =>
@@ -40,6 +51,42 @@ class HechosFormService {
 
   static String horaStr(TimeOfDay t) =>
       '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
+
+  static TimeOfDay currentTime() {
+    final now = DateTime.now();
+    return TimeOfDay(hour: now.hour, minute: now.minute);
+  }
+
+  static String normalizeMunicipio(String value) {
+    final cleaned = _collapseSpaces(value);
+    if (cleaned.isEmpty) return '';
+
+    final key = _normalizeKey(cleaned);
+    if (key.isEmpty) return cleaned;
+
+    const aliasesMorelia = <String>{
+      'MORELIA',
+      'MODELIA',
+      'MOELIA',
+      'MOLELIA',
+      'MOLERIA',
+      'MORELAI',
+      'MOREILA',
+      'MORELILA',
+    };
+
+    final looksLikeMorelia =
+        aliasesMorelia.contains(key) ||
+        (key.length >= 6 &&
+            key.length <= 8 &&
+            _levenshtein(key, 'MORELIA') <= 2);
+
+    if (looksLikeMorelia) {
+      return 'Morelia';
+    }
+
+    return _toTitleCase(cleaned);
+  }
 
   static String buildOficio(DictamenItem d) {
     final num = (d.numeroDictamen ?? '').trim();
@@ -92,7 +139,7 @@ class HechosFormService {
       return 'La unidad no puede exceder 50 caracteres.';
     }
     if (_trimmedLength(data.calle) > 255) {
-      return 'La calle no puede exceder 255 caracteres.';
+      return 'El lugar no puede exceder 255 caracteres.';
     }
     if (_trimmedLength(data.colonia) > 255) {
       return 'La colonia no puede exceder 255 caracteres.';
@@ -260,7 +307,7 @@ class HechosFormService {
       'calle': d.calle.trim(),
       'colonia': d.colonia.trim(),
       'entre_calles': d.entreCalles.trim(),
-      'municipio': d.municipio.trim(),
+      'municipio': normalizeMunicipio(d.municipio),
       'tipo_hecho': d.tipoHecho ?? '',
       'superficie_via': HechosCatalogos.normalizeSuperficieVia(
         d.superficieVia!,
@@ -338,12 +385,93 @@ class HechosFormService {
       if ((d.fuenteUbicacion ?? '').trim().isNotEmpty) {
         fields['fuente_ubicacion'] = d.fuenteUbicacion!.trim();
       }
+      if ((d.ubicacionFormateada ?? '').trim().isNotEmpty) {
+        fields['ubicacion_formateada'] = d.ubicacionFormateada!.trim();
+      }
+      if ((d.placeId ?? '').trim().isNotEmpty) {
+        fields['place_id'] = d.placeId!.trim();
+      }
     }
 
     return fields;
   }
 
   static int _trimmedLength(String value) => value.trim().length;
+
+  static String _collapseSpaces(String value) =>
+      value.trim().replaceAll(RegExp(r'\s+'), ' ');
+
+  static String _normalizeKey(String value) {
+    return value
+        .toUpperCase()
+        .replaceAll('Á', 'A')
+        .replaceAll('É', 'E')
+        .replaceAll('Í', 'I')
+        .replaceAll('Ó', 'O')
+        .replaceAll('Ú', 'U')
+        .replaceAll('Ü', 'U')
+        .replaceAll('Ñ', 'N')
+        .replaceAll(RegExp(r'[^A-Z]'), '');
+  }
+
+  static String _toTitleCase(String value) {
+    return _collapseSpaces(value)
+        .split(' ')
+        .where((part) => part.isNotEmpty)
+        .map((part) {
+          if (part.length == 1) return part.toUpperCase();
+          final lower = part.toLowerCase();
+          return lower[0].toUpperCase() + lower.substring(1);
+        })
+        .join(' ');
+  }
+
+  static int _levenshtein(String a, String b) {
+    if (a == b) return 0;
+    if (a.isEmpty) return b.length;
+    if (b.isEmpty) return a.length;
+
+    var previous = List<int>.generate(b.length + 1, (i) => i);
+    for (var i = 0; i < a.length; i += 1) {
+      final current = List<int>.filled(b.length + 1, 0);
+      current[0] = i + 1;
+
+      for (var j = 0; j < b.length; j += 1) {
+        final cost = a[i] == b[j] ? 0 : 1;
+        current[j + 1] = [
+          current[j] + 1,
+          previous[j + 1] + 1,
+          previous[j] + cost,
+        ].reduce((x, y) => x < y ? x : y);
+      }
+
+      previous = current;
+    }
+
+    return previous[b.length];
+  }
+
+  static String _friendlyKnownBackendMessage(String rawMessage) {
+    final msg = rawMessage.trim();
+    if (msg.isEmpty) return '';
+
+    final lower = msg.toLowerCase();
+
+    if (lower.contains('hechos_folio_c5i_unique') ||
+        (lower.contains('duplicate entry') && lower.contains('folio_c5i')) ||
+        (lower.contains('duplicate entry') &&
+            lower.contains('mor') &&
+            lower.contains('insert into `hechos`'))) {
+      return 'Ese folio C5i ya está registrado. Usa uno diferente.';
+    }
+
+    if (lower.contains('device_tokens_token_unique') ||
+        lower.contains('duplicate entry')) {
+      return 'Ese registro ya existe en el servidor.';
+    }
+
+    return msg;
+  }
 
   static Future<String?> _validateImageFile({
     required File? file,

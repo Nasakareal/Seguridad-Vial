@@ -7,6 +7,135 @@ import 'package:image_picker/image_picker.dart';
 import '../../core/guardianes_camino/guardianes_camino_dispositivos_catalogos.dart';
 import '../../services/guardianes_camino_dispositivo_form_service.dart';
 
+enum _DynamicFieldKind { integer, decimal, text, select }
+
+class _DynamicFieldOption {
+  final String value;
+  final String label;
+
+  const _DynamicFieldOption({required this.value, required this.label});
+}
+
+class _DynamicFieldSpec {
+  final String label;
+  final _DynamicFieldKind kind;
+  final String defaultValue;
+  final String? hint;
+  final int? minLines;
+  final int? maxLines;
+  final List<_DynamicFieldOption> options;
+
+  const _DynamicFieldSpec({
+    required this.label,
+    required this.kind,
+    this.defaultValue = '',
+    this.hint,
+    this.minLines,
+    this.maxLines,
+    this.options = const <_DynamicFieldOption>[],
+  });
+}
+
+const Map<String, _DynamicFieldSpec> _dynamicFieldSpecs =
+    <String, _DynamicFieldSpec>{
+      'vehiculos_inspeccionados': _DynamicFieldSpec(
+        label: 'Vehículos inspeccionados',
+        kind: _DynamicFieldKind.integer,
+        defaultValue: '0',
+      ),
+      'personas_inspeccionadas': _DynamicFieldSpec(
+        label: 'Personas inspeccionadas',
+        kind: _DynamicFieldKind.integer,
+        defaultValue: '0',
+      ),
+      'vehiculos_impactados': _DynamicFieldSpec(
+        label: 'Vehículos impactados',
+        kind: _DynamicFieldKind.integer,
+        defaultValue: '0',
+      ),
+      'personas_impactadas': _DynamicFieldSpec(
+        label: 'Personas impactadas',
+        kind: _DynamicFieldKind.integer,
+        defaultValue: '0',
+      ),
+      'estado_fuerza_participante': _DynamicFieldSpec(
+        label: 'Estado de fuerza participante',
+        kind: _DynamicFieldKind.integer,
+        defaultValue: '0',
+      ),
+      'kilometros_recorridos': _DynamicFieldSpec(
+        label: 'Kilómetros recorridos',
+        kind: _DynamicFieldKind.decimal,
+        defaultValue: '0',
+      ),
+      'crps_participantes': _DynamicFieldSpec(
+        label: 'CRPS participantes',
+        kind: _DynamicFieldKind.text,
+        hint: 'Ejemplo: 25-1234 y 22-5678',
+      ),
+      'prox_empresas': _DynamicFieldSpec(
+        label: 'Empresas',
+        kind: _DynamicFieldKind.integer,
+        defaultValue: '0',
+      ),
+      'prox_tiendas_conveniencia': _DynamicFieldSpec(
+        label: 'Tiendas de conveniencia',
+        kind: _DynamicFieldKind.integer,
+        defaultValue: '0',
+      ),
+      'prox_escuelas': _DynamicFieldSpec(
+        label: 'Escuelas',
+        kind: _DynamicFieldKind.integer,
+        defaultValue: '0',
+      ),
+      'prox_hospitales': _DynamicFieldSpec(
+        label: 'Hospitales',
+        kind: _DynamicFieldKind.integer,
+        defaultValue: '0',
+      ),
+      'tipo_acompanamiento': _DynamicFieldSpec(
+        label: 'Tipo de acompañamiento',
+        kind: _DynamicFieldKind.select,
+        hint: 'Selecciona una opción',
+        options: <_DynamicFieldOption>[
+          _DynamicFieldOption(value: 'ESCOLTA', label: 'Escolta'),
+          _DynamicFieldOption(value: 'CARAVANA', label: 'Caravana'),
+          _DynamicFieldOption(value: 'EMERGENCIA', label: 'Emergencia'),
+          _DynamicFieldOption(value: 'OTRO', label: 'Otro'),
+        ],
+      ),
+      'tipo_abanderamiento': _DynamicFieldSpec(
+        label: 'Tipo de abanderamiento',
+        kind: _DynamicFieldKind.select,
+        hint: 'Selecciona una opción',
+        options: <_DynamicFieldOption>[
+          _DynamicFieldOption(value: 'SINIESTROS', label: 'Siniestros'),
+          _DynamicFieldOption(value: 'EVENTOS', label: 'Eventos'),
+          _DynamicFieldOption(value: 'OTRO', label: 'Otro'),
+        ],
+      ),
+      'tipo_auxilio_vial': _DynamicFieldSpec(
+        label: 'Tipo de auxilio vial',
+        kind: _DynamicFieldKind.select,
+        hint: 'Selecciona una opción',
+        options: <_DynamicFieldOption>[
+          _DynamicFieldOption(value: 'FALLA MECANICA', label: 'Falla mecánica'),
+          _DynamicFieldOption(value: 'PEATON', label: 'Peatón'),
+          _DynamicFieldOption(value: 'OTRO', label: 'Otro'),
+        ],
+      ),
+      'folio_atendido': _DynamicFieldSpec(
+        label: 'N° folio atendido',
+        kind: _DynamicFieldKind.text,
+      ),
+      'motivo_folio': _DynamicFieldSpec(
+        label: 'Motivo del folio',
+        kind: _DynamicFieldKind.text,
+        minLines: 3,
+        maxLines: 4,
+      ),
+    };
+
 class DispositivoFormScreen extends StatefulWidget {
   final GuardianesCaminoCatalogoLocal catalogo;
 
@@ -46,7 +175,7 @@ class _DispositivoFormScreenState extends State<DispositivoFormScreen> {
   late final Map<String, TextEditingController> _dynamicControllers =
       <String, TextEditingController>{
         for (final field in widget.catalogo.campos)
-          field: TextEditingController(text: '0'),
+          field: TextEditingController(text: _specForField(field).defaultValue),
       };
 
   DateTime _fecha = DateTime.now();
@@ -61,8 +190,13 @@ class _DispositivoFormScreenState extends State<DispositivoFormScreen> {
   bool _resolvingLocation = false;
   List<File> _fotos = <File>[];
 
-  bool get _showApoyoUsuario =>
-      widget.catalogo.nombre.toUpperCase().contains('CABALLEROS');
+  bool get _showApoyoUsuario {
+    final nombre = widget.catalogo.nombre.toUpperCase();
+    return nombre.contains('ACOMPAÑAMIENTOS') ||
+        nombre.contains('ABANDERAMIENTOS') ||
+        nombre.contains('AUXILIOS VIALES') ||
+        nombre.contains('CABALLEROS DEL CAMINO');
+  }
 
   @override
   void dispose() {
@@ -107,25 +241,9 @@ class _DispositivoFormScreenState extends State<DispositivoFormScreen> {
     return '$h:$m';
   }
 
-  String _labelForField(String field) {
-    const labels = <String, String>{
-      'cantidad': 'Cantidad',
-      'vehiculos_inspeccionados': 'Vehículos inspeccionados',
-      'personas_inspeccionadas': 'Personas inspeccionadas',
-      'vehiculos_impactados': 'Vehículos impactados',
-      'personas_impactadas': 'Personas impactadas',
-      'estado_fuerza_participante': 'Estado de fuerza participante',
-      'crps_participantes': 'CRPS participantes',
-      'kilometros_recorridos': 'Kilómetros recorridos',
-      'acompanamientos': 'Acompañamientos',
-      'abanderamientos': 'Abanderamientos',
-      'auxilios_viales': 'Auxilios viales',
-      'prox_empresas': 'Empresas visitadas',
-      'prox_tiendas_conveniencia': 'Tiendas de conveniencia',
-      'prox_escuelas': 'Escuelas',
-      'prox_hospitales': 'Hospitales',
-    };
-    return labels[field] ?? field;
+  _DynamicFieldSpec _specForField(String field) {
+    return _dynamicFieldSpecs[field] ??
+        _DynamicFieldSpec(label: field, kind: _DynamicFieldKind.text);
   }
 
   InputDecoration _dec(String label, {String? hint}) {
@@ -136,6 +254,54 @@ class _DispositivoFormScreenState extends State<DispositivoFormScreen> {
       fillColor: Colors.white,
       border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
       contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+    );
+  }
+
+  Widget _buildDynamicField(String field) {
+    final spec = _specForField(field);
+    final controller = _dynamicControllers[field]!;
+
+    if (spec.kind == _DynamicFieldKind.select) {
+      final currentValue = controller.text.trim();
+
+      return DropdownButtonFormField<String>(
+        value: currentValue.isEmpty ? null : currentValue,
+        items: [
+          DropdownMenuItem<String>(
+            value: '',
+            child: Text(spec.hint ?? 'Selecciona una opción'),
+          ),
+          ...spec.options.map(
+            (option) => DropdownMenuItem<String>(
+              value: option.value,
+              child: Text(option.label),
+            ),
+          ),
+        ],
+        onChanged: (value) {
+          setState(() {
+            controller.text = value?.trim() ?? '';
+          });
+        },
+        decoration: _dec(spec.label),
+      );
+    }
+
+    final keyboardType = switch (spec.kind) {
+      _DynamicFieldKind.decimal => const TextInputType.numberWithOptions(
+        decimal: true,
+      ),
+      _DynamicFieldKind.integer => TextInputType.number,
+      _DynamicFieldKind.text => TextInputType.text,
+      _DynamicFieldKind.select => TextInputType.text,
+    };
+
+    return TextFormField(
+      controller: controller,
+      keyboardType: keyboardType,
+      minLines: spec.minLines,
+      maxLines: spec.maxLines,
+      decoration: _dec(spec.label, hint: spec.hint),
     );
   }
 
@@ -491,15 +657,7 @@ class _DispositivoFormScreenState extends State<DispositivoFormScreen> {
                   children: widget.catalogo.campos.map((field) {
                     return Padding(
                       padding: const EdgeInsets.only(bottom: 12),
-                      child: TextFormField(
-                        controller: _dynamicControllers[field],
-                        keyboardType: field == 'kilometros_recorridos'
-                            ? const TextInputType.numberWithOptions(
-                                decimal: true,
-                              )
-                            : TextInputType.number,
-                        decoration: _dec(_labelForField(field)),
-                      ),
+                      child: _buildDynamicField(field),
                     );
                   }).toList(),
                 ),

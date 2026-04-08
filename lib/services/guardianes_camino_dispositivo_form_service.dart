@@ -2,7 +2,6 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
 
 import '../core/guardianes_camino/guardianes_camino_dispositivos_catalogos.dart';
 import 'auth_service.dart';
@@ -116,35 +115,6 @@ class GuardianesCaminoDispositivoFormService {
     return 'Error HTTP $statusCode';
   }
 
-  static Future<Map<String, dynamic>> _fetchMe() async {
-    final token = await AuthService.getToken();
-    if (token == null || token.isEmpty) {
-      throw Exception('Sesión inválida. Vuelve a iniciar sesión.');
-    }
-
-    final resp = await http.get(
-      Uri.parse('${AuthService.baseUrl}/me'),
-      headers: {'Accept': 'application/json', 'Authorization': 'Bearer $token'},
-    );
-
-    if (resp.statusCode < 200 || resp.statusCode >= 300) {
-      throw Exception(parseBackendError(resp.body, resp.statusCode));
-    }
-
-    final raw = jsonDecode(resp.body);
-    if (raw is Map<String, dynamic>) {
-      if (raw['user'] is Map) {
-        return Map<String, dynamic>.from(raw['user'] as Map);
-      }
-      if (raw['data'] is Map) {
-        return Map<String, dynamic>.from(raw['data'] as Map);
-      }
-      return raw;
-    }
-
-    throw Exception('Respuesta inválida al obtener usuario actual.');
-  }
-
   static Future<String?> validateBeforeSubmit({
     required GuardianesCaminoDispositivoFormPayload payload,
   }) async {
@@ -170,7 +140,6 @@ class GuardianesCaminoDispositivoFormService {
   static Future<OfflineActionResult> create({
     required GuardianesCaminoDispositivoFormPayload payload,
   }) async {
-    final me = await _fetchMe();
     final clientUuid = OfflineSyncService.newClientUuid();
 
     int? asInt(dynamic value) => int.tryParse('${value ?? ''}');
@@ -232,12 +201,36 @@ class GuardianesCaminoDispositivoFormService {
       fields['acompanantes_cantidad'] = acompanantes;
     }
 
-    final unidadId =
-        asInt(me['unidad_id'] ?? me['unidad_org_id'] ?? me['unidad']) ?? 0;
-    final delegacionId = asInt(me['delegacion_id']);
-    final destacamentoId = asInt(me['destacamento_id']);
+    var unidadId = await AuthService.getUnidadId();
+    var delegacionId = await AuthService.getDelegacionId();
+    var destacamentoId = await AuthService.getDestacamentoId();
 
-    if (unidadId > 0) fields['unidad_org_id'] = '$unidadId';
+    if ((unidadId ?? 0) <= 0 ||
+        ((delegacionId ?? 0) <= 0 && (destacamentoId ?? 0) <= 0)) {
+      final me = await AuthService.getCurrentUserPayload(refresh: true);
+      unidadId ??= await AuthService.getUnidadId();
+      delegacionId ??= await AuthService.getDelegacionId();
+      destacamentoId ??= await AuthService.getDestacamentoId();
+      unidadId ??= asInt(
+        me?['unidad_id'] ?? me?['unidad_org_id'] ?? me?['unidad'],
+      );
+      delegacionId ??= asInt(me?['delegacion_id'] ?? me?['delegacion']);
+      destacamentoId ??= asInt(me?['destacamento_id'] ?? me?['destacamento']);
+    }
+
+    if ((unidadId ?? 0) <= 0) {
+      throw Exception(
+        'Tu sesión no tiene una unidad asignada. Conéctate una vez para actualizar tus datos.',
+      );
+    }
+
+    if ((delegacionId ?? 0) <= 0 && (destacamentoId ?? 0) <= 0) {
+      throw Exception(
+        'Tu sesión no tiene delegación ni destacamento guardados. Conéctate una vez para actualizar tus datos.',
+      );
+    }
+
+    if ((unidadId ?? 0) > 0) fields['unidad_org_id'] = '$unidadId';
     if ((delegacionId ?? 0) > 0) fields['delegacion_id'] = '$delegacionId';
     if ((destacamentoId ?? 0) > 0) {
       fields['destacamento_id'] = '$destacamentoId';

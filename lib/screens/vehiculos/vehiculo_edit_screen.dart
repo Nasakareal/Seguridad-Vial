@@ -45,6 +45,7 @@ class _VehiculoEditScreenState extends State<VehiculoEditScreen> {
   int? _gruaIdPendiente;
   int? _corralonGruaIdPendiente;
 
+  String? _gruaNombreCargado;
   String? _corralonNombreCargado;
 
   static const String _baseApi = 'https://seguridadvial-mich.com/api';
@@ -255,6 +256,96 @@ class _VehiculoEditScreenState extends State<VehiculoEditScreen> {
     return _canonFromList(carroceria, opts);
   }
 
+  String _normalizaNombreCatalogo(String? value) {
+    final text = (value ?? '').trim();
+    if (text.isEmpty) return '';
+
+    return text
+        .toUpperCase()
+        .replaceAll('Á', 'A')
+        .replaceAll('À', 'A')
+        .replaceAll('Ä', 'A')
+        .replaceAll('Â', 'A')
+        .replaceAll('É', 'E')
+        .replaceAll('È', 'E')
+        .replaceAll('Ë', 'E')
+        .replaceAll('Ê', 'E')
+        .replaceAll('Í', 'I')
+        .replaceAll('Ì', 'I')
+        .replaceAll('Ï', 'I')
+        .replaceAll('Î', 'I')
+        .replaceAll('Ó', 'O')
+        .replaceAll('Ò', 'O')
+        .replaceAll('Ö', 'O')
+        .replaceAll('Ô', 'O')
+        .replaceAll('Ú', 'U')
+        .replaceAll('Ù', 'U')
+        .replaceAll('Ü', 'U')
+        .replaceAll('Û', 'U')
+        .replaceAll('Ñ', 'N')
+        .replaceAll(RegExp(r'[^A-Z0-9]+'), ' ')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+  }
+
+  String? _textoCatalogoDesde(dynamic value) {
+    final text = (value ?? '').toString().trim();
+    if (text.isEmpty) return null;
+
+    final normalized = _normalizaNombreCatalogo(text);
+    if (normalized.isEmpty ||
+        normalized == 'NULL' ||
+        normalized == 'NA' ||
+        normalized == 'N A' ||
+        normalized == 'NO' ||
+        normalized == 'NINGUNO' ||
+        normalized == 'NO APLICA' ||
+        normalized == 'SIN GRUA' ||
+        normalized == 'SIN CORRALON') {
+      return null;
+    }
+
+    return text;
+  }
+
+  dynamic _valorEnRuta(dynamic source, List<String> path) {
+    dynamic current = source;
+    for (final segment in path) {
+      if (current is Map && current.containsKey(segment)) {
+        current = current[segment];
+        continue;
+      }
+      return null;
+    }
+    return current;
+  }
+
+  String? _primerTextoEnRutas(
+    Map<String, dynamic> source,
+    List<List<String>> paths,
+  ) {
+    for (final path in paths) {
+      final value = _textoCatalogoDesde(_valorEnRuta(source, path));
+      if (value != null) return value;
+    }
+    return null;
+  }
+
+  int? _primerEnteroEnRutas(
+    Map<String, dynamic> source,
+    List<List<String>> paths,
+  ) {
+    for (final path in paths) {
+      final raw = _valorEnRuta(source, path);
+      if (raw == null) continue;
+      if (raw is int && raw > 0) return raw;
+
+      final value = int.tryParse(raw.toString().trim());
+      if (value != null && value > 0) return value;
+    }
+    return null;
+  }
+
   bool _gruaIdExisteEnLista(int? id) {
     if (id == null) return false;
     for (final g in _gruas) {
@@ -265,14 +356,12 @@ class _VehiculoEditScreenState extends State<VehiculoEditScreen> {
   }
 
   int? _idGruaPorNombre(String? nombre) {
-    final n = (nombre ?? '').trim();
+    final n = _normalizaNombreCatalogo(nombre);
     if (n.isEmpty) return null;
     for (final g in _gruas) {
       final gid = int.tryParse((g['id'] ?? '').toString());
-      final nom = (g['nombre'] ?? '').toString().trim();
-      if (gid != null &&
-          nom.isNotEmpty &&
-          nom.toUpperCase() == n.toUpperCase()) {
+      final nom = _normalizaNombreCatalogo((g['nombre'] ?? '').toString());
+      if (gid != null && nom.isNotEmpty && nom == n) {
         return gid;
       }
     }
@@ -369,11 +458,20 @@ class _VehiculoEditScreenState extends State<VehiculoEditScreen> {
 
         _aplicarPendientesSiSePuede();
 
-        if (_corralonGruaIdSeleccionada == null &&
-            _corralonGruaIdPendiente == null) {
-          _corralonGruaIdSeleccionada = _idGruaPorNombre(
-            _corralonNombreCargado,
-          );
+        if (_gruaIdSeleccionada == null) {
+          final gruaIdByNombre = _idGruaPorNombre(_gruaNombreCargado);
+          if (gruaIdByNombre != null) {
+            _gruaIdSeleccionada = gruaIdByNombre;
+            _gruaIdPendiente = null;
+          }
+        }
+
+        if (_corralonGruaIdSeleccionada == null) {
+          final corralonIdByNombre = _idGruaPorNombre(_corralonNombreCargado);
+          if (corralonIdByNombre != null) {
+            _corralonGruaIdSeleccionada = corralonIdByNombre;
+            _corralonGruaIdPendiente = null;
+          }
         }
       });
     } catch (e) {
@@ -429,7 +527,10 @@ class _VehiculoEditScreenState extends State<VehiculoEditScreen> {
     _antecedenteVehiculo = (data['antecedente_vehiculo'] == true);
 
     final tipoGeneralApi = (data['tipo_general'] ?? '').toString().trim();
-    final carroceriaApi = (data['tipo'] ?? '').toString().trim();
+    final carroceriaApiRaw = (data['tipo'] ?? '').toString().trim();
+    final carroceriaApi = VehiculoTaxonomia.normalizeCarroceria(
+      carroceriaApiRaw,
+    );
 
     final tipoGeneralTmp =
         (tipoGeneralApi.isNotEmpty &&
@@ -449,11 +550,26 @@ class _VehiculoEditScreenState extends State<VehiculoEditScreen> {
         ? null
         : _canonEstadoValueFromApi(estadoApi);
 
-    final gruaIdApi = int.tryParse((data['grua_id'] ?? '').toString());
+    final gruaIdApi = _primerEnteroEnRutas(data, [
+      ['grua_id'],
+      ['gruaId'],
+      ['servicio', 'grua_id'],
+      ['grua', 'id'],
+      ['servicio', 'grua', 'id'],
+    ]);
+    _gruaNombreCargado = _primerTextoEnRutas(data, [
+      ['grua_nombre'],
+      ['grua'],
+      ['servicio', 'grua_nombre'],
+      ['grua', 'nombre'],
+      ['servicio', 'grua', 'nombre'],
+    ]);
+    final gruaIdByNombre = _idGruaPorNombre(_gruaNombreCargado);
+
     _gruaIdSeleccionada = null;
     _gruaIdPendiente = null;
 
-    if (gruaIdApi != null && gruaIdApi > 0) {
+    if (gruaIdApi != null) {
       if (_gruaIdExisteEnLista(gruaIdApi)) {
         _gruaIdSeleccionada = gruaIdApi;
       } else {
@@ -461,15 +577,41 @@ class _VehiculoEditScreenState extends State<VehiculoEditScreen> {
       }
     }
 
-    _corralonNombreCargado = (data['corralon'] ?? '').toString().trim();
+    if (_gruaIdSeleccionada == null && gruaIdByNombre != null) {
+      _gruaIdSeleccionada = gruaIdByNombre;
+      _gruaIdPendiente = null;
+    }
+
+    final corralonIdApi = _primerEnteroEnRutas(data, [
+      ['corralon_id'],
+      ['corralonGruaId'],
+      ['corralon_grua_id'],
+      ['servicio', 'corralon_id'],
+      ['corralon', 'id'],
+      ['servicio', 'corralon', 'id'],
+    ]);
+    _corralonNombreCargado = _primerTextoEnRutas(data, [
+      ['corralon_nombre'],
+      ['corralon'],
+      ['servicio', 'corralon_nombre'],
+      ['corralon', 'nombre'],
+      ['servicio', 'corralon', 'nombre'],
+    ]);
     final corralonIdByNombre = _idGruaPorNombre(_corralonNombreCargado);
 
-    if (corralonIdByNombre != null &&
-        _gruaIdExisteEnLista(corralonIdByNombre)) {
+    _corralonGruaIdSeleccionada = null;
+    _corralonGruaIdPendiente = null;
+
+    if (corralonIdApi != null) {
+      if (_gruaIdExisteEnLista(corralonIdApi)) {
+        _corralonGruaIdSeleccionada = corralonIdApi;
+      } else {
+        _corralonGruaIdPendiente = corralonIdApi;
+      }
+    }
+
+    if (_corralonGruaIdSeleccionada == null && corralonIdByNombre != null) {
       _corralonGruaIdSeleccionada = corralonIdByNombre;
-      _corralonGruaIdPendiente = null;
-    } else {
-      _corralonGruaIdSeleccionada = null;
       _corralonGruaIdPendiente = null;
     }
 
@@ -479,8 +621,20 @@ class _VehiculoEditScreenState extends State<VehiculoEditScreen> {
 
       _aplicarPendientesSiSePuede();
 
+      if (_gruaIdSeleccionada == null && !_cargandoGruas) {
+        final gruaIdByNombre = _idGruaPorNombre(_gruaNombreCargado);
+        if (gruaIdByNombre != null) {
+          _gruaIdSeleccionada = gruaIdByNombre;
+          _gruaIdPendiente = null;
+        }
+      }
+
       if (_corralonGruaIdSeleccionada == null && !_cargandoGruas) {
-        _corralonGruaIdSeleccionada = _idGruaPorNombre(_corralonNombreCargado);
+        final corralonIdByNombre = _idGruaPorNombre(_corralonNombreCargado);
+        if (corralonIdByNombre != null) {
+          _corralonGruaIdSeleccionada = corralonIdByNombre;
+          _corralonGruaIdPendiente = null;
+        }
       }
     });
   }

@@ -1,3 +1,6 @@
+import 'dart:io' show Platform;
+
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 import '../core/globals.dart';
@@ -23,6 +26,10 @@ const AndroidNotificationChannel svGuardiaChannel = AndroidNotificationChannel(
 );
 
 Future<void> initLocalNotifications() async {
+  if (kIsWeb || !(Platform.isAndroid || Platform.isIOS || Platform.isMacOS)) {
+    return;
+  }
+
   const androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
 
   const iosInit = DarwinInitializationSettings(
@@ -43,6 +50,16 @@ Future<void> initLocalNotifications() async {
       if (data.isNotEmpty) handlePushTap(data);
     },
   );
+
+  final launchDetails = await localNotifications
+      .getNotificationAppLaunchDetails();
+  final launchData = safeDecodePayload(
+    launchDetails?.notificationResponse?.payload,
+  );
+  if (launchDetails?.didNotificationLaunchApp == true &&
+      launchData.isNotEmpty) {
+    queuePushTap(launchData);
+  }
 
   final androidPlugin = localNotifications
       .resolvePlatformSpecificImplementation<

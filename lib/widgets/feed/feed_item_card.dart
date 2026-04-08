@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../models/feed_item.dart';
+import '../safe_network_image.dart';
 
 class FeedItemCard extends StatelessWidget {
   final FeedItem item;
@@ -49,7 +50,7 @@ class FeedItemCard extends StatelessWidget {
               BoxShadow(
                 blurRadius: 14,
                 offset: const Offset(0, 8),
-                color: Colors.black.withOpacity(.06),
+                color: Colors.black.withValues(alpha: .06),
               ),
             ],
           ),
@@ -59,7 +60,7 @@ class FeedItemCard extends StatelessWidget {
                 width: 46,
                 height: 46,
                 decoration: BoxDecoration(
-                  color: Colors.blue.withOpacity(.10),
+                  color: Colors.blue.withValues(alpha: .10),
                   borderRadius: BorderRadius.circular(14),
                 ),
                 child: Icon(_icon, color: Colors.blue, size: 24),
@@ -124,7 +125,7 @@ class FeedItemCard extends StatelessWidget {
               if (fotoUrl != null)
                 ClipRRect(
                   borderRadius: BorderRadius.circular(12),
-                  child: Image.network(
+                  child: SafeNetworkImage(
                     fotoUrl,
                     width: 60,
                     height: 60,

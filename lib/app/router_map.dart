@@ -52,6 +52,10 @@ import '../screens/actividades/actividad_edit_screen.dart';
 import '../screens/actividades/actividad_show_screen.dart';
 import '../screens/dispositivos/dispositivo_create_screen.dart';
 import '../screens/dispositivos/dispositivos_screen.dart';
+import '../screens/vialidades_urbanas/vialidades_urbanas_create_screen.dart';
+import '../screens/vialidades_urbanas/vialidades_urbanas_dispositivo_form_screen.dart';
+import '../screens/vialidades_urbanas/vialidades_urbanas_dispositivo_show_screen.dart';
+import '../screens/vialidades_urbanas/vialidades_urbanas_screen.dart';
 
 import '../screens/pendientes/pendientes_cortes_screen.dart';
 import '../screens/pendientes/pendiente_corte_show_screen.dart';
@@ -113,6 +117,9 @@ final Map<String, WidgetBuilder> appRoutesMap = {
   AppRoutes.actividadesEdit: (context) => const ActividadEditScreen(),
   AppRoutes.dispositivos: (context) => const DispositivosScreen(),
   AppRoutes.dispositivosCreate: (context) => const DispositivoCreateScreen(),
+  AppRoutes.vialidadesUrbanas: (context) => const VialidadesUrbanasScreen(),
+  AppRoutes.vialidadesUrbanasCreate: (context) =>
+      const VialidadesUrbanasCreateScreen(),
 
   AppRoutes.pendientesCortes: (context) => const PendientesCortesScreen(),
   AppRoutes.pendientesCorteShow: (context) => const PendienteCorteShowScreen(),
@@ -124,6 +131,18 @@ int? _readHechoIdFromArgs(Object? args) {
   if (args is String) return int.tryParse(args);
   if (args is Map) {
     final raw = args['id'];
+    if (raw is int) return raw;
+    if (raw is String) return int.tryParse(raw);
+  }
+  return null;
+}
+
+int? _readDispositivoIdFromArgs(Object? args) {
+  if (args == null) return null;
+  if (args is int) return args;
+  if (args is String) return int.tryParse(args);
+  if (args is Map) {
+    final raw = args['dispositivoId'] ?? args['id'];
     if (raw is int) return raw;
     if (raw is String) return int.tryParse(raw);
   }
@@ -147,6 +166,66 @@ Route<dynamic>? onGenerateRoute(RouteSettings settings) {
 
     return MaterialPageRoute(
       builder: (_) => EditHechoScreen(hechoId: id),
+      settings: settings,
+    );
+  }
+
+  if (name == AppRoutes.vialidadesUrbanasDispositivoShow) {
+    final id = _readDispositivoIdFromArgs(settings.arguments);
+    if (id == null) {
+      return MaterialPageRoute(
+        builder: (_) => const _UnknownArgsScreen(
+          routeName: '/vialidades-urbanas/dispositivo/show',
+          message: 'sin dispositivoId',
+        ),
+        settings: settings,
+      );
+    }
+
+    return MaterialPageRoute(
+      builder: (_) => VialidadesUrbanasDispositivoShowScreen(dispositivoId: id),
+      settings: settings,
+    );
+  }
+
+  if (name == AppRoutes.vialidadesUrbanasDispositivoCreate) {
+    final id = _readDispositivoIdFromArgs(settings.arguments);
+    if (id == null) {
+      return MaterialPageRoute(
+        builder: (_) => const _UnknownArgsScreen(
+          routeName: '/vialidades-urbanas/dispositivo/create',
+          message: 'sin dispositivoId',
+        ),
+        settings: settings,
+      );
+    }
+
+    return MaterialPageRoute(
+      builder: (_) => VialidadesUrbanasDispositivoFormScreen(
+        dispositivoId: id,
+        isEditing: false,
+      ),
+      settings: settings,
+    );
+  }
+
+  if (name == AppRoutes.vialidadesUrbanasDispositivoEdit) {
+    final id = _readDispositivoIdFromArgs(settings.arguments);
+    if (id == null) {
+      return MaterialPageRoute(
+        builder: (_) => const _UnknownArgsScreen(
+          routeName: '/vialidades-urbanas/dispositivo/edit',
+          message: 'sin dispositivoId',
+        ),
+        settings: settings,
+      );
+    }
+
+    return MaterialPageRoute(
+      builder: (_) => VialidadesUrbanasDispositivoFormScreen(
+        dispositivoId: id,
+        isEditing: true,
+      ),
       settings: settings,
     );
   }

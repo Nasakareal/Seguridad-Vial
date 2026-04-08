@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 
 import '../../services/auth_service.dart';
+import '../../widgets/safe_network_image.dart';
 
 class VehiculosScreen extends StatefulWidget {
   const VehiculosScreen({super.key});
@@ -72,11 +73,11 @@ class _VehiculosScreenState extends State<VehiculosScreen> {
   }
 
   Uri _vehiculosUri() => Uri.parse(
-      'https://seguridadvial-mich.com/api/hechos/$_hechoId/vehiculos',
+    'https://seguridadvial-mich.com/api/hechos/$_hechoId/vehiculos',
   );
 
   Uri _fotoApiUri(int vehiculoId) => Uri.parse(
-      'https://seguridadvial-mich.com/api/hechos/$_hechoId/vehiculos/$vehiculoId/foto',
+    'https://seguridadvial-mich.com/api/hechos/$_hechoId/vehiculos/$vehiculoId/foto',
   );
 
   Future<void> _cargarVehiculos() async {
@@ -202,7 +203,7 @@ class _VehiculosScreenState extends State<VehiculosScreen> {
                     borderRadius: BorderRadius.circular(12),
                     child: AspectRatio(
                       aspectRatio: 16 / 9,
-                      child: Image.network(
+                      child: SafeNetworkImage(
                         url,
                         fit: BoxFit.cover,
                         errorBuilder: (_, __, ___) => const Center(

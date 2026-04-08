@@ -44,6 +44,8 @@ class HechoFormData {
   String? calidadGeo;
   String? notaGeo;
   String? fuenteUbicacion;
+  String? ubicacionFormateada;
+  String? placeId;
 
   int? dictamenId;
 

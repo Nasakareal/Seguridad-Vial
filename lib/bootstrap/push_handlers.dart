@@ -8,6 +8,8 @@ import '../core/safe_payload.dart';
 import '../firebase_options.dart';
 import '../app/routes.dart';
 
+Map<String, dynamic>? _pendingPushTapData;
+
 @pragma('vm:entry-point')
 Future<void> firebaseMessagingBackgroundHandler(message) async {
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
@@ -34,10 +36,10 @@ Future<void> openMapsFromData(Map<String, dynamic> data) async {
 
     final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
     if (!ok) {
-      bootFatal.value = 'No se pudo abrir Google Maps: $uri';
+      reportAppIssue('No se pudo abrir Google Maps: $uri');
     }
   } catch (e, st) {
-    bootFatal.value = 'openMaps ERROR: $e\n\n$st';
+    reportAppIssue('openMaps ERROR: $e\n\n$st');
   }
 }
 
@@ -60,8 +62,20 @@ void handlePushTap(Map<String, dynamic> data) {
       );
     }
   } catch (e, st) {
-    bootFatal.value = 'handlePushTap ERROR: $e\n\n$st';
+    reportAppIssue('handlePushTap ERROR: $e\n\n$st');
   }
+}
+
+void queuePushTap(Map<String, dynamic> data) {
+  if (data.isEmpty) return;
+  _pendingPushTapData = Map<String, dynamic>.from(data);
+}
+
+void flushPendingPushTap() {
+  final pending = _pendingPushTapData;
+  if (pending == null || pending.isEmpty) return;
+  _pendingPushTapData = null;
+  handlePushTap(pending);
 }
 
 String payloadFromData(Map<String, dynamic> data) {

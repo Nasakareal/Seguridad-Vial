@@ -1,19 +1,18 @@
 import 'package:flutter/material.dart';
 
-import '../../services/auth_service.dart';
-import '../../services/tracking_service.dart';
-import '../../services/app_version_service.dart';
-import '../../services/actividades_service.dart';
-
+import '../../app/routes.dart';
 import '../../models/actividad.dart';
 import '../../models/actividad_categoria.dart';
 import '../../models/actividad_subcategoria.dart';
-
+import '../../services/actividad_share_service.dart';
+import '../../services/actividades_service.dart';
+import '../../services/app_version_service.dart';
+import '../../services/auth_service.dart';
+import '../../services/tracking_service.dart';
 import '../../widgets/app_drawer.dart';
 import '../../widgets/header_card.dart';
-
+import '../../widgets/safe_network_image.dart';
 import '../login_screen.dart';
-import '../../app/routes.dart';
 
 class ActividadesScreen extends StatefulWidget {
   const ActividadesScreen({super.key});
@@ -27,6 +26,7 @@ class _ActividadesScreenState extends State<ActividadesScreen>
   bool _trackingOn = false;
   bool _bootstrapped = false;
   bool _busy = false;
+  bool _sharingTotals = false;
 
   DateTime _selectedDate = DateTime.now();
 
@@ -78,6 +78,7 @@ class _ActividadesScreenState extends State<ActividadesScreen>
   void didChangeAppLifecycleState(AppLifecycleState state) async {
     if (state == AppLifecycleState.resumed) {
       final running = await TrackingService.isRunning();
+      await ActividadShareService.onAppResumed();
       if (!mounted) return;
       setState(() => _trackingOn = running);
     }
@@ -109,8 +110,12 @@ class _ActividadesScreenState extends State<ActividadesScreen>
     );
   }
 
-  void _go(BuildContext context, String route, {Object? args}) {
-    Navigator.pushNamed(context, route, arguments: args);
+  Future<void> _go(BuildContext context, String route, {Object? args}) async {
+    final changed = await Navigator.pushNamed(context, route, arguments: args);
+    if (!mounted) return;
+    if (changed == true) {
+      await _load();
+    }
   }
 
   String _fmtYmd(DateTime d) {
@@ -177,9 +182,8 @@ class _ActividadesScreenState extends State<ActividadesScreen>
         _subcategoriaId = null;
       });
 
-      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('No se pudieron cargar subcategorías.\n$e')),
+        SnackBar(content: Text('No se pudieron cargar subcategorias.\n$e')),
       );
     }
   }
@@ -195,7 +199,7 @@ class _ActividadesScreenState extends State<ActividadesScreen>
     try {
       final items = await ActividadesService.fetchIndex(
         date: _selectedDate,
-        perPage: 50,
+        perPage: 20,
         actividadCategoriaId: _categoriaId,
         actividadSubcategoriaId: _subcategoriaId,
         q: _qCtrl.text,
@@ -213,6 +217,24 @@ class _ActividadesScreenState extends State<ActividadesScreen>
         _loading = false;
         _error = 'No se pudieron obtener las actividades.\n$e';
       });
+    }
+  }
+
+  Future<void> _shareTotals() async {
+    if (_sharingTotals) return;
+
+    setState(() => _sharingTotals = true);
+    try {
+      await ActividadShareService.compartirTotalesEnWhatsapp(
+        fecha: _selectedDate,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('No se pudo compartir totales.\n$e')),
+      );
+    } finally {
+      if (mounted) setState(() => _sharingTotals = false);
     }
   }
 
@@ -304,6 +326,17 @@ class _ActividadesScreenState extends State<ActividadesScreen>
             ),
             const SizedBox(width: 8),
             IconButton(
+              tooltip: 'Compartir totales',
+              onPressed: _sharingTotals ? null : _shareTotals,
+              icon: _sharingTotals
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.share),
+            ),
+            IconButton(
               tooltip: 'Actualizar',
               onPressed: _load,
               icon: const Icon(Icons.refresh),
@@ -316,7 +349,7 @@ class _ActividadesScreenState extends State<ActividadesScreen>
           textInputAction: TextInputAction.search,
           onSubmitted: (_) => _load(),
           decoration: InputDecoration(
-            hintText: 'Buscar por nombre…',
+            hintText: 'Buscar por nombre, lugar, municipio...',
             prefixIcon: const Icon(Icons.search),
             filled: true,
             fillColor: Colors.white,
@@ -336,7 +369,7 @@ class _ActividadesScreenState extends State<ActividadesScreen>
                 items: [
                   const DropdownMenuItem<int>(
                     value: null,
-                    child: Text('Categoría (todas)'),
+                    child: Text('Categoria (todas)'),
                   ),
                   ..._categorias.map(
                     (c) => DropdownMenuItem<int>(
@@ -378,7 +411,7 @@ class _ActividadesScreenState extends State<ActividadesScreen>
                 items: [
                   const DropdownMenuItem<int>(
                     value: null,
-                    child: Text('Subcategoría (todas)'),
+                    child: Text('Subcategoria (todas)'),
                   ),
                   ..._subcategorias.map(
                     (s) => DropdownMenuItem<int>(
@@ -411,8 +444,8 @@ class _ActividadesScreenState extends State<ActividadesScreen>
   }
 
   Widget _thumb(Actividad a) {
-    final p = (a.fotoPath ?? '').trim();
-    if (p.isEmpty) {
+    final photos = a.allPhotoPaths;
+    if (photos.isEmpty) {
       return Container(
         width: 58,
         height: 58,
@@ -425,11 +458,11 @@ class _ActividadesScreenState extends State<ActividadesScreen>
       );
     }
 
-    final url = ActividadesService.toPublicUrl(p);
+    final url = ActividadesService.toPublicUrl(photos.first);
 
     return ClipRRect(
       borderRadius: BorderRadius.circular(12),
-      child: Image.network(
+      child: SafeNetworkImage(
         url,
         width: 58,
         height: 58,
@@ -440,8 +473,7 @@ class _ActividadesScreenState extends State<ActividadesScreen>
           color: Colors.grey.shade200,
           child: const Icon(Icons.broken_image),
         ),
-        loadingBuilder: (context, child, progress) {
-          if (progress == null) return child;
+        loadingBuilder: (context, progress) {
           return Container(
             width: 58,
             height: 58,
@@ -456,6 +488,19 @@ class _ActividadesScreenState extends State<ActividadesScreen>
         },
       ),
     );
+  }
+
+  String _subtitle(Actividad a) {
+    final parts = <String>[
+      if ((a.subcategoria?.nombre ?? '').trim().isNotEmpty)
+        a.subcategoria!.nombre,
+      if ((a.municipio ?? '').trim().isNotEmpty) a.municipio!.trim(),
+      if ((a.fecha ?? '').trim().isNotEmpty) a.fecha!.trim(),
+      if ((a.hora ?? '').trim().isNotEmpty) a.hora!.trim(),
+    ];
+
+    if (parts.isNotEmpty) return parts.join(' • ');
+    return a.nombre;
   }
 
   @override
@@ -524,7 +569,6 @@ class _ActividadesScreenState extends State<ActividadesScreen>
                   itemBuilder: (context, i) {
                     final a = _items[i];
                     final cat = a.categoria?.nombre ?? '—';
-                    final sub = a.subcategoria?.nombre;
 
                     return Card(
                       margin: const EdgeInsets.only(bottom: 12),
@@ -534,37 +578,52 @@ class _ActividadesScreenState extends State<ActividadesScreen>
                       child: ListTile(
                         leading: _thumb(a),
                         title: Text('#${a.id} • $cat'),
-                        subtitle: Text(
-                          sub == null || sub.trim().isEmpty
-                              ? a.nombre
-                              : '${a.nombre} • $sub',
-                        ),
+                        subtitle: Text(_subtitle(a)),
                         onTap: () => _go(
                           context,
                           AppRoutes.actividadesShow,
                           args: {'actividad_id': a.id},
                         ),
                         trailing: PopupMenuButton<String>(
-                          onSelected: (v) {
+                          onSelected: (v) async {
                             if (v == 'show') {
-                              _go(
+                              await _go(
                                 context,
                                 AppRoutes.actividadesShow,
                                 args: {'actividad_id': a.id},
                               );
                             } else if (v == 'edit') {
-                              _go(
+                              await _go(
                                 context,
                                 AppRoutes.actividadesEdit,
                                 args: {'actividad_id': a.id},
                               );
+                            } else if (v == 'share') {
+                              try {
+                                await ActividadShareService.compartirEnWhatsapp(
+                                  actividadId: a.id,
+                                );
+                              } catch (e) {
+                                if (!context.mounted) return;
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text(
+                                      'No se pudo compartir la actividad.\n$e',
+                                    ),
+                                  ),
+                                );
+                              }
                             } else if (v == 'delete') {
-                              _confirmDelete(a);
+                              await _confirmDelete(a);
                             }
                           },
                           itemBuilder: (_) => const [
                             PopupMenuItem(value: 'show', child: Text('Ver')),
                             PopupMenuItem(value: 'edit', child: Text('Editar')),
+                            PopupMenuItem(
+                              value: 'share',
+                              child: Text('Compartir WhatsApp'),
+                            ),
                             PopupMenuItem(
                               value: 'delete',
                               child: Text('Eliminar'),

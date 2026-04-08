@@ -6,12 +6,14 @@ class UbicacionCard extends StatefulWidget {
   final HechoFormData data;
   final bool disabled;
   final VoidCallback onChanged;
+  final Future<String?> Function()? onLocationCaptured;
 
   const UbicacionCard({
     super.key,
     required this.data,
     required this.disabled,
     required this.onChanged,
+    this.onLocationCaptured,
   });
 
   @override
@@ -37,7 +39,21 @@ class _UbicacionCardState extends State<UbicacionCard> {
       if (!mounted) return;
       widget.onChanged();
 
-      final detalle = widget.data.hasCoords
+      String? autoFillMessage;
+      if (widget.data.hasCoords && widget.onLocationCaptured != null) {
+        try {
+          autoFillMessage = await widget.onLocationCaptured!();
+        } catch (_) {
+          autoFillMessage =
+              'Ubicación lista, pero no se pudo autocompletar la dirección.';
+        }
+      }
+
+      if (!mounted) return;
+
+      final detalle = (autoFillMessage ?? '').trim().isNotEmpty
+          ? autoFillMessage!.trim()
+          : widget.data.hasCoords
           ? 'Ubicación lista: ${widget.data.lat}, ${widget.data.lng}'
           : (res.notaGeo?.trim().isNotEmpty ?? false)
           ? res.notaGeo!
@@ -62,7 +78,9 @@ class _UbicacionCardState extends State<UbicacionCard> {
       ..lng = null
       ..calidadGeo = null
       ..notaGeo = null
-      ..fuenteUbicacion = null;
+      ..fuenteUbicacion = null
+      ..ubicacionFormateada = null
+      ..placeId = null;
     widget.onChanged();
   }
 

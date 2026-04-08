@@ -16,6 +16,7 @@ class _OfflineFailedOperationsScreenState
     extends State<OfflineFailedOperationsScreen> {
   bool _loading = true;
   bool _retrying = false;
+  final Set<String> _deletingIds = <String>{};
   String? _error;
   List<Map<String, dynamic>> _items = const [];
   int _pendingItems = 0;
@@ -114,6 +115,76 @@ class _OfflineFailedOperationsScreenState
     await _load();
   }
 
+  Future<void> _deleteOperation(Map<String, dynamic> op) async {
+    final operationId = (op['id'] ?? '').toString().trim();
+    if (operationId.isEmpty || _deletingIds.contains(operationId)) return;
+
+    final ownerKey = await AuthService.getSessionOwnerKey();
+    if ((ownerKey ?? '').trim().isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No se pudo identificar la sesión actual.'),
+        ),
+      );
+      return;
+    }
+
+    if (!mounted) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Borrar registro offline'),
+          content: Text(
+            '¿Seguro que quieres borrar "${_titleFor(op)}"? '
+            'También se eliminarán sus dependencias offline si existen.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Cancelar'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              style: FilledButton.styleFrom(
+                backgroundColor: Colors.red,
+                foregroundColor: Colors.white,
+              ),
+              child: const Text('Borrar'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmed != true) return;
+
+    if (!mounted) return;
+    setState(() => _deletingIds.add(operationId));
+
+    try {
+      await OfflineSyncService.discardOperation(
+        ownerKey: ownerKey!.trim(),
+        operationId: operationId,
+      );
+      await _load();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Registro offline eliminado.')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('No se pudo borrar: $e')));
+    } finally {
+      if (mounted) {
+        setState(() => _deletingIds.remove(operationId));
+      }
+    }
+  }
+
   _OfflineDestination? _destinationFor(Map<String, dynamic> op) {
     final label = (op['label'] ?? '').toString().trim().toLowerCase();
     final method = (op['method'] ?? '').toString().trim().toUpperCase();
@@ -127,6 +198,15 @@ class _OfflineFailedOperationsScreenState
         (fields['_method'] ?? '').toString().trim().toUpperCase() != 'PUT') {
       return _OfflineDestination(
         route: AppRoutes.accidentesCreate,
+        arguments: {'offlineDraft': op},
+      );
+    }
+
+    if (label == 'actividad' &&
+        url.endsWith('/actividades') &&
+        (fields['_method'] ?? '').toString().trim().toUpperCase() != 'PUT') {
+      return _OfflineDestination(
+        route: AppRoutes.actividadesCreate,
         arguments: {'offlineDraft': op},
       );
     }
@@ -212,6 +292,37 @@ class _OfflineFailedOperationsScreenState
       if (nombre.isNotEmpty) return nombre;
     }
 
+    if (label == 'Actividad') {
+      final isUpdate =
+          (fields['_method'] ?? '').toString().trim().toUpperCase() == 'PUT';
+      final categoriaId = (fields['actividad_categoria_id'] ?? '')
+          .toString()
+          .trim();
+      final subcategoriaId = (fields['actividad_subcategoria_id'] ?? '')
+          .toString()
+          .trim();
+      final motivo = (fields['motivo'] ?? '').toString().trim();
+      final lugar = (fields['lugar'] ?? '').toString().trim();
+      final fecha = (fields['fecha'] ?? '').toString().trim();
+      final actividadId = _actividadIdFromOperation(op);
+
+      final parts = <String>[
+        if (actividadId > 0) '#$actividadId',
+        if (motivo.isNotEmpty) motivo,
+        if (lugar.isNotEmpty) lugar,
+        if (fecha.isNotEmpty) fecha,
+        if (subcategoriaId.isNotEmpty) 'Subcat. $subcategoriaId',
+        if (categoriaId.isNotEmpty) 'Cat. $categoriaId',
+      ];
+
+      if (parts.isNotEmpty) {
+        final prefix = isUpdate ? 'Actividad editada' : 'Actividad';
+        return '$prefix ${parts.join(' · ')}';
+      }
+
+      return isUpdate ? 'Actividad editada' : 'Actividad';
+    }
+
     return label;
   }
 
@@ -255,6 +366,24 @@ class _OfflineFailedOperationsScreenState
       }
     }
 
+    if (label == 'Actividad') {
+      final lugar = (fields['lugar'] ?? '').toString().trim();
+      final municipio = (fields['municipio'] ?? '').toString().trim();
+      final fecha = (fields['fecha'] ?? '').toString().trim();
+      final hora = (fields['hora'] ?? '').toString().trim();
+      final fotos = _countFilesForField(op, 'fotos[]');
+      final parts = <String>[
+        lugar,
+        municipio,
+        fecha,
+        hora,
+        if (fotos > 0) '$fotos foto(s)',
+      ].where((item) => item.isNotEmpty).toList();
+      if (parts.isNotEmpty) {
+        return parts.join(' · ');
+      }
+    }
+
     if (dependsOn.isNotEmpty) {
       return 'Depende de ${_shortId(dependsOn)}';
     }
@@ -266,6 +395,26 @@ class _OfflineFailedOperationsScreenState
     final clean = value.trim();
     if (clean.length <= 10) return clean;
     return clean.substring(clean.length - 10);
+  }
+
+  int _actividadIdFromOperation(Map<String, dynamic> op) {
+    final url = (op['url'] ?? '').toString().trim();
+    final match = RegExp(r'/actividades/(\d+)$').firstMatch(url);
+    if (match == null) return 0;
+    return int.tryParse(match.group(1) ?? '') ?? 0;
+  }
+
+  int _countFilesForField(Map<String, dynamic> op, String fieldName) {
+    final files = op['files'];
+    if (files is! List) return 0;
+
+    var total = 0;
+    for (final item in files.whereType<Map>()) {
+      if ((item['field'] ?? '').toString().trim() == fieldName) {
+        total += 1;
+      }
+    }
+    return total;
   }
 
   String _formatDate(String raw) {
@@ -371,9 +520,13 @@ class _OfflineFailedOperationsScreenState
                   return Padding(
                     padding: const EdgeInsets.only(bottom: 12),
                     child: _OperationCard(
+                      operationId: (op['id'] ?? '').toString().trim(),
                       title: _titleFor(op),
                       subtitle: _subtitleFor(op),
                       isFailed: _isFailed(op),
+                      isDeleting: _deletingIds.contains(
+                        (op['id'] ?? '').toString().trim(),
+                      ),
                       createdAt: _formatDate(
                         (op['created_at'] ?? '').toString(),
                       ),
@@ -386,6 +539,7 @@ class _OfflineFailedOperationsScreenState
                               .trim(),
                       actionLabel: canCorrect ? _actionLabelFor(op) : null,
                       onAction: canCorrect ? () => _openCorrection(op) : null,
+                      onDelete: () => _deleteOperation(op),
                     ),
                   );
                 }),
@@ -398,22 +552,28 @@ class _OfflineFailedOperationsScreenState
 }
 
 class _OperationCard extends StatelessWidget {
+  final String operationId;
   final String title;
   final String subtitle;
   final bool isFailed;
+  final bool isDeleting;
   final String createdAt;
   final String detail;
   final String? actionLabel;
   final VoidCallback? onAction;
+  final VoidCallback? onDelete;
 
   const _OperationCard({
+    required this.operationId,
     required this.title,
     required this.subtitle,
     required this.isFailed,
+    required this.isDeleting,
     required this.createdAt,
     required this.detail,
     required this.actionLabel,
     required this.onAction,
+    required this.onDelete,
   });
 
   @override
@@ -510,14 +670,38 @@ class _OperationCard extends StatelessWidget {
               ),
             ),
           ),
-          if (actionLabel != null && onAction != null) ...[
+          if ((actionLabel != null && onAction != null) ||
+              onDelete != null) ...[
             const SizedBox(height: 12),
             Align(
               alignment: Alignment.centerRight,
-              child: FilledButton.icon(
-                onPressed: onAction,
-                icon: const Icon(Icons.edit_outlined),
-                label: Text(actionLabel!),
+              child: Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                alignment: WrapAlignment.end,
+                children: [
+                  if (actionLabel != null && onAction != null)
+                    FilledButton.icon(
+                      onPressed: isDeleting ? null : onAction,
+                      icon: const Icon(Icons.edit_outlined),
+                      label: Text(actionLabel!),
+                    ),
+                  if (onDelete != null)
+                    OutlinedButton.icon(
+                      onPressed: isDeleting ? null : onDelete,
+                      icon: isDeleting
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.delete_outline),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.red.shade700,
+                      ),
+                      label: Text(isDeleting ? 'Borrando...' : 'Borrar'),
+                    ),
+                ],
               ),
             ),
           ],

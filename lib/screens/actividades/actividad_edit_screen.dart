@@ -3,10 +3,11 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
-import '../../services/actividades_service.dart';
 import '../../models/actividad.dart';
 import '../../models/actividad_categoria.dart';
 import '../../models/actividad_subcategoria.dart';
+import '../../services/actividades_service.dart';
+import '../../widgets/safe_network_image.dart';
 
 class ActividadEditScreen extends StatefulWidget {
   const ActividadEditScreen({super.key});
@@ -27,8 +28,28 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
 
   int? _categoriaId;
   int? _subcategoriaId;
-
   File? _fotoNueva;
+
+  final _fechaCtrl = TextEditingController();
+  final _horaCtrl = TextEditingController();
+  final _lugarCtrl = TextEditingController();
+  final _municipioCtrl = TextEditingController();
+  final _latCtrl = TextEditingController();
+  final _lngCtrl = TextEditingController();
+  final _coordenadasCtrl = TextEditingController();
+  final _fuenteUbicacionCtrl = TextEditingController();
+  final _notaGeoCtrl = TextEditingController();
+  final _motivoCtrl = TextEditingController();
+  final _narrativaCtrl = TextEditingController();
+  final _accionesCtrl = TextEditingController();
+  final _observacionesCtrl = TextEditingController();
+  final _personasAlcanzadasCtrl = TextEditingController();
+  final _personasParticipantesCtrl = TextEditingController();
+  final _personasDetenidasCtrl = TextEditingController();
+  final _elementosCtrl = TextEditingController();
+  final _patrullasCtrl = TextEditingController();
+
+  bool _bootstrapped = false;
 
   int? _idFromArgs() {
     final args = ModalRoute.of(context)?.settings.arguments;
@@ -43,7 +64,32 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+    if (_bootstrapped) return;
+    _bootstrapped = true;
     _bootstrap();
+  }
+
+  @override
+  void dispose() {
+    _fechaCtrl.dispose();
+    _horaCtrl.dispose();
+    _lugarCtrl.dispose();
+    _municipioCtrl.dispose();
+    _latCtrl.dispose();
+    _lngCtrl.dispose();
+    _coordenadasCtrl.dispose();
+    _fuenteUbicacionCtrl.dispose();
+    _notaGeoCtrl.dispose();
+    _motivoCtrl.dispose();
+    _narrativaCtrl.dispose();
+    _accionesCtrl.dispose();
+    _observacionesCtrl.dispose();
+    _personasAlcanzadasCtrl.dispose();
+    _personasParticipantesCtrl.dispose();
+    _personasDetenidasCtrl.dispose();
+    _elementosCtrl.dispose();
+    _patrullasCtrl.dispose();
+    super.dispose();
   }
 
   Future<void> _bootstrap() async {
@@ -67,19 +113,18 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
 
       if (!mounted) return;
 
+      _fillControllers(a);
+
       setState(() {
         _categorias = cats;
         _actividad = a;
-
         _categoriaId = a.actividadCategoriaId;
         _subcategoriaId = a.actividadSubcategoriaId;
-
         _loading = false;
       });
 
       if (_categoriaId != null) {
         await _loadSubcategorias(_categoriaId!);
-        if (mounted) setState(() {});
       }
     } catch (e) {
       if (!mounted) return;
@@ -90,6 +135,29 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
     }
   }
 
+  void _fillControllers(Actividad a) {
+    _fechaCtrl.text = a.fecha ?? '';
+    _horaCtrl.text = a.hora == null
+        ? ''
+        : a.hora!.substring(0, a.hora!.length >= 5 ? 5 : a.hora!.length);
+    _lugarCtrl.text = a.lugar ?? '';
+    _municipioCtrl.text = a.municipio ?? '';
+    _latCtrl.text = a.lat?.toString() ?? '';
+    _lngCtrl.text = a.lng?.toString() ?? '';
+    _coordenadasCtrl.text = a.coordenadasTexto ?? '';
+    _fuenteUbicacionCtrl.text = a.fuenteUbicacion ?? '';
+    _notaGeoCtrl.text = a.notaGeo ?? '';
+    _motivoCtrl.text = a.motivo ?? '';
+    _narrativaCtrl.text = a.narrativa ?? '';
+    _accionesCtrl.text = a.accionesRealizadas ?? '';
+    _observacionesCtrl.text = a.observaciones ?? '';
+    _personasAlcanzadasCtrl.text = a.personasAlcanzadas.toString();
+    _personasParticipantesCtrl.text = a.personasParticipantes.toString();
+    _personasDetenidasCtrl.text = a.personasDetenidas.toString();
+    _elementosCtrl.text = a.elementosParticipantesTexto ?? '';
+    _patrullasCtrl.text = a.patrullasParticipantesTexto ?? '';
+  }
+
   Future<void> _loadSubcategorias(int categoriaId) async {
     try {
       final subs = await ActividadesService.fetchSubcategorias(categoriaId);
@@ -97,12 +165,15 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
 
       setState(() {
         _subcategorias = subs;
-        if (_subcategoriaId != null) {
-          final exists = subs.any((s) => s.id == _subcategoriaId);
-          if (!exists) _subcategoriaId = null;
+        if (_subcategoriaId != null &&
+            !subs.any((s) => s.id == _subcategoriaId)) {
+          _subcategoriaId = null;
+        }
+        if (_subcategoriaId == null && subs.length == 1) {
+          _subcategoriaId = subs.first.id;
         }
       });
-    } catch (e) {
+    } catch (_) {
       if (!mounted) return;
       setState(() {
         _subcategorias = [];
@@ -111,17 +182,44 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
     }
   }
 
-  Future<void> _pickImage() async {
+  Future<void> _pickImage(ImageSource source) async {
     final picker = ImagePicker();
-    final x = await picker.pickImage(
-      source: ImageSource.camera,
-      imageQuality: 85,
-    );
+    final x = await picker.pickImage(source: source, imageQuality: 85);
     if (x == null) return;
 
     setState(() {
       _fotoNueva = File(x.path);
     });
+  }
+
+  String? _trim(TextEditingController ctrl) {
+    final value = ctrl.text.trim();
+    return value.isEmpty ? null : value;
+  }
+
+  ActividadUpsertData _buildPayload() {
+    return ActividadUpsertData(
+      actividadCategoriaId: _categoriaId ?? 0,
+      actividadSubcategoriaId: _subcategoriaId,
+      fecha: _trim(_fechaCtrl),
+      hora: _trim(_horaCtrl),
+      lugar: _trim(_lugarCtrl),
+      municipio: _trim(_municipioCtrl),
+      lat: _trim(_latCtrl),
+      lng: _trim(_lngCtrl),
+      coordenadasTexto: _trim(_coordenadasCtrl),
+      fuenteUbicacion: _trim(_fuenteUbicacionCtrl),
+      notaGeo: _trim(_notaGeoCtrl),
+      motivo: _trim(_motivoCtrl),
+      narrativa: _trim(_narrativaCtrl),
+      accionesRealizadas: _trim(_accionesCtrl),
+      observaciones: _trim(_observacionesCtrl),
+      personasAlcanzadas: _trim(_personasAlcanzadasCtrl),
+      personasParticipantes: _trim(_personasParticipantesCtrl),
+      personasDetenidas: _trim(_personasDetenidasCtrl),
+      elementosParticipantesTexto: _trim(_elementosCtrl),
+      patrullasParticipantesTexto: _trim(_patrullasCtrl),
+    );
   }
 
   Future<void> _submit() async {
@@ -131,7 +229,20 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
     if (a == null) return;
 
     if (_categoriaId == null || _categoriaId! <= 0) {
-      setState(() => _error = 'Selecciona una categoría.');
+      setState(() => _error = 'Selecciona una categoria.');
+      return;
+    }
+
+    if (_subcategorias.isEmpty) {
+      setState(
+        () => _error =
+            'La categoria seleccionada no tiene subcategorias disponibles.',
+      );
+      return;
+    }
+
+    if (_subcategoriaId == null || _subcategoriaId! <= 0) {
+      setState(() => _error = 'Selecciona una subcategoria.');
       return;
     }
 
@@ -141,8 +252,7 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
     try {
       final result = await ActividadesService.update(
         id: a.id,
-        actividadCategoriaId: _categoriaId!,
-        actividadSubcategoriaId: _subcategoriaId,
+        data: _buildPayload(),
         foto: _fotoNueva,
       );
 
@@ -159,6 +269,31 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
     }
   }
 
+  InputDecoration _dec(String label, {String? hint}) {
+    return InputDecoration(
+      labelText: label,
+      hintText: hint,
+      filled: true,
+      fillColor: Colors.white,
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+    );
+  }
+
+  Widget _textField(
+    TextEditingController controller,
+    String label, {
+    String? hint,
+    int maxLines = 1,
+    TextInputType? keyboardType,
+  }) {
+    return TextField(
+      controller: controller,
+      maxLines: maxLines,
+      keyboardType: keyboardType,
+      decoration: _dec(label, hint: hint),
+    );
+  }
+
   Widget _currentPhoto(Actividad a) {
     if (_fotoNueva != null) {
       return ClipRRect(
@@ -170,8 +305,8 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
       );
     }
 
-    final p = (a.fotoPath ?? '').trim();
-    if (p.isEmpty) {
+    final photoPaths = a.allPhotoPaths;
+    if (photoPaths.isEmpty) {
       return Container(
         height: 160,
         decoration: BoxDecoration(
@@ -191,21 +326,20 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
       );
     }
 
-    final url = ActividadesService.toPublicUrl(p);
+    final url = ActividadesService.toPublicUrl(photoPaths.first);
 
     return ClipRRect(
       borderRadius: BorderRadius.circular(14),
       child: AspectRatio(
         aspectRatio: 16 / 9,
-        child: Image.network(
+        child: SafeNetworkImage(
           url,
           fit: BoxFit.cover,
           errorBuilder: (_, __, ___) => Container(
             color: Colors.grey.shade200,
             child: const Center(child: Text('No se pudo cargar la imagen.')),
           ),
-          loadingBuilder: (context, child, progress) {
-            if (progress == null) return child;
+          loadingBuilder: (context, progress) {
             return Container(
               color: Colors.grey.shade200,
               alignment: Alignment.center,
@@ -244,7 +378,7 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
                 padding: EdgeInsets.only(top: 60),
                 child: Center(child: CircularProgressIndicator()),
               )
-            else if (_error != null)
+            else if (_error != null && a == null)
               Text(_error!)
             else if (a == null)
               const Text('Sin datos.')
@@ -253,16 +387,16 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: Colors.red.withOpacity(.08),
+                    color: Colors.red.withValues(alpha: .08),
                     borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: Colors.red.withOpacity(.2)),
+                    border: Border.all(color: Colors.red.withValues(alpha: .2)),
                   ),
                   child: Text(_error!),
                 ),
               if (_error != null) const SizedBox(height: 12),
 
               _card(
-                title: 'Datos',
+                title: 'Clasificacion',
                 child: Column(
                   children: [
                     DropdownButtonFormField<int>(
@@ -270,7 +404,7 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
                       items: [
                         const DropdownMenuItem<int>(
                           value: null,
-                          child: Text('Seleccione categoría…'),
+                          child: Text('Seleccione categoria...'),
                         ),
                         ..._categorias.map(
                           (c) => DropdownMenuItem<int>(
@@ -289,21 +423,19 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
                           await _loadSubcategorias(v);
                         }
                       },
-                      decoration: InputDecoration(
-                        filled: true,
-                        fillColor: Colors.white,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                      ),
+                      decoration: _dec('Categoria'),
                     ),
                     const SizedBox(height: 12),
                     DropdownButtonFormField<int>(
                       value: _subcategoriaId,
                       items: [
-                        const DropdownMenuItem<int>(
+                        DropdownMenuItem<int>(
                           value: null,
-                          child: Text('Subcategoría (opcional)…'),
+                          child: Text(
+                            _subcategorias.isEmpty
+                                ? 'No hay subcategorias disponibles'
+                                : 'Seleccione subcategoria...',
+                          ),
                         ),
                         ..._subcategorias.map(
                           (s) => DropdownMenuItem<int>(
@@ -312,14 +444,156 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
                           ),
                         ),
                       ],
-                      onChanged: (v) => setState(() => _subcategoriaId = v),
-                      decoration: InputDecoration(
-                        filled: true,
-                        fillColor: Colors.white,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(14),
+                      onChanged: _subcategorias.isEmpty
+                          ? null
+                          : (v) => setState(() => _subcategoriaId = v),
+                      decoration: _dec('Subcategoria'),
+                    ),
+                    if (_categoriaId != null && _subcategorias.isEmpty) ...[
+                      const SizedBox(height: 8),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          'No puedes guardar la actividad hasta que esa categoria tenga subcategorias en el servidor.',
+                          style: TextStyle(
+                            color: Colors.red.shade700,
+                            fontSize: 12,
+                          ),
                         ),
                       ),
+                    ],
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 12),
+
+              _card(
+                title: 'Ubicacion y tiempo',
+                child: Column(
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _textField(
+                            _fechaCtrl,
+                            'Fecha',
+                            hint: 'YYYY-MM-DD',
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: _textField(_horaCtrl, 'Hora', hint: 'HH:mm'),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    _textField(_lugarCtrl, 'Lugar'),
+                    const SizedBox(height: 12),
+                    _textField(_municipioCtrl, 'Municipio'),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _textField(
+                            _latCtrl,
+                            'Latitud',
+                            keyboardType: const TextInputType.numberWithOptions(
+                              decimal: true,
+                              signed: true,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: _textField(
+                            _lngCtrl,
+                            'Longitud',
+                            keyboardType: const TextInputType.numberWithOptions(
+                              decimal: true,
+                              signed: true,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    _textField(_coordenadasCtrl, 'Coordenadas texto'),
+                    const SizedBox(height: 12),
+                    _textField(_fuenteUbicacionCtrl, 'Fuente de ubicacion'),
+                    const SizedBox(height: 12),
+                    _textField(_notaGeoCtrl, 'Nota geo'),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 12),
+
+              _card(
+                title: 'Contenido',
+                child: Column(
+                  children: [
+                    _textField(_motivoCtrl, 'Asunto o motivo', maxLines: 2),
+                    const SizedBox(height: 12),
+                    _textField(_narrativaCtrl, 'Narrativa', maxLines: 4),
+                    const SizedBox(height: 12),
+                    _textField(
+                      _accionesCtrl,
+                      'Acciones realizadas',
+                      maxLines: 4,
+                    ),
+                    const SizedBox(height: 12),
+                    _textField(
+                      _observacionesCtrl,
+                      'Observaciones',
+                      maxLines: 3,
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 12),
+
+              _card(
+                title: 'Totales y participantes',
+                child: Column(
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _textField(
+                            _personasAlcanzadasCtrl,
+                            'Personas alcanzadas',
+                            keyboardType: TextInputType.number,
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: _textField(
+                            _personasParticipantesCtrl,
+                            'Personas participantes',
+                            keyboardType: TextInputType.number,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    _textField(
+                      _personasDetenidasCtrl,
+                      'Personas detenidas',
+                      keyboardType: TextInputType.number,
+                    ),
+                    const SizedBox(height: 12),
+                    _textField(
+                      _elementosCtrl,
+                      'Elementos participantes',
+                      maxLines: 3,
+                    ),
+                    const SizedBox(height: 12),
+                    _textField(
+                      _patrullasCtrl,
+                      'Patrullas participantes',
+                      maxLines: 3,
                     ),
                   ],
                 ),
@@ -337,9 +611,21 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
                       children: [
                         Expanded(
                           child: ElevatedButton.icon(
-                            onPressed: _saving ? null : _pickImage,
+                            onPressed: _saving
+                                ? null
+                                : () => _pickImage(ImageSource.gallery),
+                            icon: const Icon(Icons.photo_library),
+                            label: const Text('Galeria'),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: ElevatedButton.icon(
+                            onPressed: _saving
+                                ? null
+                                : () => _pickImage(ImageSource.camera),
                             icon: const Icon(Icons.camera_alt),
-                            label: const Text('Cambiar foto'),
+                            label: const Text('Camara'),
                           ),
                         ),
                       ],
@@ -380,7 +666,7 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
           BoxShadow(
             blurRadius: 14,
             offset: const Offset(0, 8),
-            color: Colors.black.withOpacity(.06),
+            color: Colors.black.withValues(alpha: .06),
           ),
         ],
       ),

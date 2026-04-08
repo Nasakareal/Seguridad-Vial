@@ -84,6 +84,8 @@ class _AccidentesScreenState extends State<AccidentesScreen>
   void didChangeAppLifecycleState(AppLifecycleState state) async {
     if (state == AppLifecycleState.resumed) {
       final running = await TrackingService.isRunning();
+      await HechoShareService.onAppResumed();
+
       if (!mounted) return;
       setState(() => _trackingOn = running);
     }

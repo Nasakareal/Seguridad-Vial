@@ -19,6 +19,7 @@ class AppDrawer extends StatelessWidget {
   static const String permDictamenes = 'ver dictamenes';
   static const String permHechos = 'ver hechos';
   static const String permOperativosCarreteras = 'ver operativos carreteras';
+  static const String permOperativosVialidades = 'ver operativos vialidades';
   static const String permActividades = 'ver actividades';
   static const String permGruas = 'ver gruas';
   static const String permMapa = 'ver mapa';
@@ -28,6 +29,7 @@ class AppDrawer extends StatelessWidget {
     BuildContext context,
     String route, {
     String? requiredPerm,
+    int? requiredUnitId,
     Object? arguments,
   }) async {
     final navigator = Navigator.of(context);
@@ -37,10 +39,34 @@ class AppDrawer extends StatelessWidget {
     Navigator.pop(context);
 
     if (requiredPerm != null && requiredPerm.trim().isNotEmpty) {
-      final ok = await AuthService.can(requiredPerm);
+      var ok = await AuthService.can(requiredPerm);
+      if (!ok) {
+        await AuthService.refreshCurrentUserAccess();
+        ok = await AuthService.can(requiredPerm);
+      }
+
       if (!ok) {
         messenger.showSnackBar(
           const SnackBar(content: Text('No tienes permiso para acceder.')),
+        );
+        return;
+      }
+    }
+
+    if (requiredUnitId != null) {
+      var hasUnitAccess = requiredUnitId == 5
+          ? await AuthService.isVialidadesUrbanasUser()
+          : (await AuthService.getUnidadId()) == requiredUnitId;
+      if (!hasUnitAccess) {
+        await AuthService.refreshCurrentUserAccess();
+        hasUnitAccess = requiredUnitId == 5
+            ? await AuthService.isVialidadesUrbanasUser()
+            : (await AuthService.getUnidadId()) == requiredUnitId;
+      }
+
+      if (!hasUnitAccess) {
+        messenger.showSnackBar(
+          const SnackBar(content: Text('No tienes acceso a este modulo.')),
         );
         return;
       }
@@ -66,6 +92,25 @@ class AppDrawer extends StatelessWidget {
   bool _allowed(Set<String> perms, String? requiredPerm) {
     if (requiredPerm == null || requiredPerm.trim().isEmpty) return true;
     return perms.contains(requiredPerm.trim().toLowerCase());
+  }
+
+  Future<_DrawerAccess> _loadAccess() async {
+    var permissions = await AuthService.getPermissions();
+    var unidadId = await AuthService.getUnidadId();
+    var canSeeVialidadesUrbanas = await AuthService.isVialidadesUrbanasUser();
+
+    if (!canSeeVialidadesUrbanas || permissions.isEmpty) {
+      await AuthService.refreshCurrentUserAccess();
+      permissions = await AuthService.getPermissions();
+      unidadId = await AuthService.getUnidadId();
+      canSeeVialidadesUrbanas = await AuthService.isVialidadesUrbanasUser();
+    }
+
+    return _DrawerAccess(
+      perms: permissions.map((e) => e.trim().toLowerCase()).toSet(),
+      unidadId: unidadId,
+      canSeeVialidadesUrbanas: canSeeVialidadesUrbanas,
+    );
   }
 
   @override
@@ -128,17 +173,22 @@ class AppDrawer extends StatelessWidget {
             ),
           ),
           Expanded(
-            child: FutureBuilder<List<String>>(
-              future: AuthService.getPermissions(),
+            child: FutureBuilder<_DrawerAccess>(
+              future: _loadAccess(),
               builder: (context, snap) {
-                final perms = (snap.data ?? <String>[])
-                    .map((e) => e.trim().toLowerCase())
-                    .toSet();
+                if (snap.connectionState == ConnectionState.waiting &&
+                    !snap.hasData) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+
+                final perms = snap.data?.perms ?? <String>{};
                 final canSeeDispositivos =
                     _allowed(perms, permOperativosCarreteras) ||
                     perms.contains('crear operativos carreteras') ||
                     perms.contains('editar operativos carreteras') ||
                     perms.contains('eliminar operativos carreteras');
+                final canSeeVialidadesUrbanas =
+                    snap.data?.canSeeVialidadesUrbanas ?? false;
 
                 return ListView(
                   padding: EdgeInsets.zero,
@@ -235,6 +285,23 @@ class AppDrawer extends StatelessWidget {
                         ],
                       ),
 
+                    if (canSeeVialidadesUrbanas)
+                      _DrawerGroup(
+                        icon: Icons.add_road,
+                        label: 'Vialidades Urbanas',
+                        children: [
+                          _DrawerSubItem(
+                            icon: Icons.list_alt,
+                            label: 'Dispositivos',
+                            onTap: () => _nav(
+                              context,
+                              AppRoutes.vialidadesUrbanas,
+                              requiredUnitId: 5,
+                            ),
+                          ),
+                        ],
+                      ),
+
                     if (_allowed(perms, permGruas))
                       _DrawerItem(
                         icon: Icons.local_shipping,
@@ -304,6 +371,18 @@ class AppDrawer extends StatelessWidget {
       ),
     );
   }
+}
+
+class _DrawerAccess {
+  final Set<String> perms;
+  final int? unidadId;
+  final bool canSeeVialidadesUrbanas;
+
+  const _DrawerAccess({
+    required this.perms,
+    required this.unidadId,
+    required this.canSeeVialidadesUrbanas,
+  });
 }
 
 class _DrawerItem extends StatelessWidget {

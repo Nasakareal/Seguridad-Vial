@@ -72,6 +72,8 @@ class _CreateHechoScreenState extends State<CreateHechoScreen> {
     _data.calidadGeo = _blankToNull(fields['calidad_geo']);
     _data.notaGeo = _blankToNull(fields['nota_geo']);
     _data.fuenteUbicacion = _blankToNull(fields['fuente_ubicacion']);
+    _data.ubicacionFormateada = _blankToNull(fields['ubicacion_formateada']);
+    _data.placeId = _blankToNull(fields['place_id']);
     _data.dictamenId = int.tryParse((fields['dictamen_id'] ?? '').trim());
 
     _initialFotoLugar = _fileForField(files, 'foto_lugar');

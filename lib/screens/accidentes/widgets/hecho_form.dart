@@ -5,8 +5,10 @@ import 'package:image_picker/image_picker.dart';
 import '../../../core/hechos/hechos_catalogos.dart';
 import '../../../models/dictamen_item.dart';
 import '../../../models/hecho_form_data.dart';
+import '../../../services/auth_service.dart';
 import '../../../services/hechos_form_service.dart';
 import '../../../services/offline_sync_service.dart';
+import '../../../services/reverse_geocode_service.dart';
 import 'ubicacion_card.dart';
 import 'photo_card.dart';
 import 'danos_patrimoniales_card.dart';
@@ -46,6 +48,7 @@ class HechoForm extends StatefulWidget {
 class _HechoFormState extends State<HechoForm> {
   final _formKey = GlobalKey<FormState>();
   bool _submitting = false;
+  bool _isPerito = false;
 
   TimeOfDay? _hora;
   DateTime? _fecha;
@@ -76,6 +79,7 @@ class _HechoFormState extends State<HechoForm> {
   void initState() {
     super.initState();
     _syncFromData();
+    _loadRoleFlags();
   }
 
   @override
@@ -110,6 +114,19 @@ class _HechoFormState extends State<HechoForm> {
 
     _fotoLugar ??= widget.initialFotoLugar;
     _fotoSituacion ??= widget.initialFotoSituacion;
+  }
+
+  Future<void> _loadRoleFlags() async {
+    final isPerito = await AuthService.isPerito();
+    if (!mounted) return;
+
+    setState(() {
+      _isPerito = isPerito;
+      if (_isPerito) {
+        _hora = HechosFormService.currentTime();
+        widget.data.hora = _hora;
+      }
+    });
   }
 
   @override
@@ -219,8 +236,68 @@ class _HechoFormState extends State<HechoForm> {
     });
   }
 
+  void _setControllerText(TextEditingController controller, String value) {
+    controller.value = TextEditingValue(
+      text: value,
+      selection: TextSelection.collapsed(offset: value.length),
+    );
+  }
+
+  Future<String?> _autofillAddressFromCoords() async {
+    final lat = widget.data.lat;
+    final lng = widget.data.lng;
+    if (lat == null || lng == null) return null;
+
+    try {
+      final result = await ReverseGeocodeService.lookup(lat: lat, lng: lng);
+      if (!mounted) return null;
+
+      var changed = false;
+
+      final municipio = result.municipio == null
+          ? null
+          : HechosFormService.normalizeMunicipio(result.municipio!);
+      if (municipio != null && municipio.trim().isNotEmpty) {
+        widget.data.municipio = municipio;
+        _setControllerText(_municipioCtrl, municipio);
+        changed = true;
+      }
+
+      final calle = result.calle?.trim();
+      if (calle != null && calle.isNotEmpty) {
+        widget.data.calle = calle;
+        _setControllerText(_calleCtrl, calle);
+        changed = true;
+      }
+
+      final colonia = result.colonia?.trim();
+      if (colonia != null && colonia.isNotEmpty) {
+        widget.data.colonia = colonia;
+        _setControllerText(_coloniaCtrl, colonia);
+        changed = true;
+      }
+
+      widget.data.ubicacionFormateada = result.ubicacionFormateada;
+      widget.data.placeId = result.placeId;
+
+      if (changed) {
+        setState(() {});
+        return 'Ubicación lista y dirección autocompletada.';
+      }
+
+      return 'Ubicación lista. No se encontró una dirección útil para autocompletar.';
+    } catch (_) {
+      return 'Ubicación lista, pero no se pudo autocompletar la dirección.';
+    }
+  }
+
   Future<bool> _validateBusinessRules() async {
     final d = widget.data;
+
+    if (_isPerito) {
+      _hora = HechosFormService.currentTime();
+      d.hora = _hora;
+    }
 
     if (_hora == null ||
         _fecha == null ||
@@ -268,7 +345,7 @@ class _HechoFormState extends State<HechoForm> {
     d.calle = _calleCtrl.text;
     d.colonia = _coloniaCtrl.text;
     d.entreCalles = _entreCtrl.text;
-    d.municipio = _municipioCtrl.text;
+    d.municipio = HechosFormService.normalizeMunicipio(_municipioCtrl.text);
 
     d.vehiculosMp = _vehMpCtrl.text;
     d.personasMp = _persMpCtrl.text;
@@ -276,7 +353,7 @@ class _HechoFormState extends State<HechoForm> {
     d.propiedadesAfectadas = _propsCtrl.text;
     d.montoDanos = _montoCtrl.text;
 
-    d.hora = _hora;
+    d.hora = _isPerito ? HechosFormService.currentTime() : _hora;
     d.fecha = _fecha;
   }
 
@@ -311,9 +388,9 @@ class _HechoFormState extends State<HechoForm> {
       Navigator.pop(context, true);
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Fallo: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(HechosFormService.cleanExceptionMessage(e))),
+      );
     } finally {
       if (mounted) setState(() => _submitting = false);
     }
@@ -363,6 +440,7 @@ class _HechoFormState extends State<HechoForm> {
             data: d,
             disabled: _submitting,
             onChanged: () => setState(() {}),
+            onLocationCaptured: _autofillAddressFromCoords,
           ),
           const SizedBox(height: 12),
 
@@ -438,9 +516,14 @@ class _HechoFormState extends State<HechoForm> {
             children: [
               Expanded(
                 child: InkWell(
-                  onTap: _submitting ? null : _pickHora,
+                  onTap: (_submitting || _isPerito) ? null : _pickHora,
                   child: InputDecorator(
-                    decoration: _dec('Hora *'),
+                    decoration: _dec(_isPerito ? 'Hora (automática)' : 'Hora *')
+                        .copyWith(
+                          helperText: _isPerito
+                              ? 'Para perito se usa la hora actual del servidor.'
+                              : null,
+                        ),
                     child: Text(
                       _hora != null
                           ? HechosFormService.horaStr(_hora!)
@@ -485,8 +568,8 @@ class _HechoFormState extends State<HechoForm> {
           const SizedBox(height: 12),
           TextFormField(
             controller: _calleCtrl,
-            decoration: _dec('Calle *'),
-            validator: (v) => _requiredMaxValidator(v, 255, 'Calle'),
+            decoration: _dec('Lugar *'),
+            validator: (v) => _requiredMaxValidator(v, 255, 'Lugar'),
           ),
           const SizedBox(height: 8),
           TextFormField(

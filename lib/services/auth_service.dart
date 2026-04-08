@@ -15,6 +15,11 @@ class AuthService {
   static const String _permsKey = 'auth_perms';
   static const String _userIdKey = 'auth_user_id';
   static const String _userEmailKey = 'auth_user_email';
+  static const String _userNameKey = 'auth_user_name';
+  static const String _userPayloadKey = 'auth_user_payload';
+  static const String _unidadIdKey = 'auth_unidad_id';
+  static const String _delegacionIdKey = 'auth_delegacion_id';
+  static const String _destacamentoIdKey = 'auth_destacamento_id';
   static const String _sessionOwnerKeyKey = 'auth_session_owner_key';
 
   static String get baseUrl => _baseUrl;
@@ -114,6 +119,16 @@ class AuthService {
       await prefs.setString(_tokenKey, token.toString());
       await prefs.setString(_userEmailKey, normalizedEmail);
 
+      final userPayload = _extractUserPayload(data);
+      await _storeUserSnapshot(prefs, userPayload);
+
+      final userName = _extractUserName(data['user']) ?? _extractUserName(data);
+      if (userName != null && userName.trim().isNotEmpty) {
+        await prefs.setString(_userNameKey, userName.trim());
+      } else {
+        await prefs.remove(_userNameKey);
+      }
+
       final user = data['user'];
       final dynamic rawUserId = user is Map
           ? (user['id'] ?? user['user_id'])
@@ -192,6 +207,74 @@ class AuthService {
     return prefs.getString(_userEmailKey);
   }
 
+  static Future<String?> getUserName({bool refreshIfMissing = true}) async {
+    final prefs = await SharedPreferences.getInstance();
+    final stored = prefs.getString(_userNameKey)?.trim() ?? '';
+    if (stored.isNotEmpty) {
+      return stored;
+    }
+
+    if (!refreshIfMissing) return null;
+
+    try {
+      final refreshed = await _refreshCurrentUserProfile();
+      final name = _extractUserName(refreshed)?.trim() ?? '';
+      if (name.isNotEmpty) {
+        return name;
+      }
+    } catch (_) {}
+
+    return null;
+  }
+
+  static Future<Map<String, dynamic>?> getStoredUserPayload() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_userPayloadKey)?.trim() ?? '';
+    if (raw.isEmpty) return null;
+
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is Map<String, dynamic>) {
+        return decoded;
+      }
+      if (decoded is Map) {
+        return Map<String, dynamic>.from(decoded);
+      }
+    } catch (_) {}
+
+    return null;
+  }
+
+  static Future<Map<String, dynamic>?> getCurrentUserPayload({
+    bool refresh = false,
+  }) async {
+    if (!refresh) {
+      final stored = await getStoredUserPayload();
+      if (stored != null) return stored;
+    }
+
+    try {
+      return await _refreshCurrentUserProfile();
+    } catch (_) {
+      return await getStoredUserPayload();
+    }
+  }
+
+  static Future<int?> getUnidadId() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getInt(_unidadIdKey);
+  }
+
+  static Future<int?> getDelegacionId() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getInt(_delegacionIdKey);
+  }
+
+  static Future<int?> getDestacamentoId() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getInt(_destacamentoIdKey);
+  }
+
   static Future<String?> getSessionOwnerKey() async {
     final prefs = await SharedPreferences.getInstance();
 
@@ -266,6 +349,42 @@ class AuthService {
   static Future<List<String>> getPermissions() async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getStringList(_permsKey) ?? <String>[];
+  }
+
+  static Future<void> refreshCurrentUserAccess() async {
+    try {
+      await _refreshCurrentUserProfile();
+    } catch (_) {}
+
+    try {
+      await refreshPermissions();
+    } catch (_) {}
+  }
+
+  static Future<bool> isVialidadesUrbanasUser({bool refresh = false}) async {
+    if (refresh) {
+      await refreshCurrentUserAccess();
+    }
+
+    final unidadId = await getUnidadId();
+    if (unidadId == 5) {
+      return true;
+    }
+
+    final perms = await getPermissions();
+    final normalizedPerms = perms
+        .map((perm) => perm.trim().toLowerCase())
+        .where((perm) => perm.isNotEmpty)
+        .toSet();
+    if (normalizedPerms.contains('ver operativos vialidades') ||
+        normalizedPerms.contains('crear operativos vialidades') ||
+        normalizedPerms.contains('editar operativos vialidades') ||
+        normalizedPerms.contains('eliminar operativos vialidades')) {
+      return true;
+    }
+
+    final payload = await getCurrentUserPayload(refresh: false);
+    return _payloadMatchesVialidadesUrbanas(payload);
   }
 
   static Future<List<String>> refreshPermissions() async {
@@ -347,7 +466,258 @@ class AuthService {
     await prefs.remove(_permsKey);
     await prefs.remove(_userIdKey);
     await prefs.remove(_userEmailKey);
+    await prefs.remove(_userNameKey);
+    await prefs.remove(_userPayloadKey);
+    await prefs.remove(_unidadIdKey);
+    await prefs.remove(_delegacionIdKey);
+    await prefs.remove(_destacamentoIdKey);
     await prefs.remove(_sessionOwnerKeyKey);
+  }
+
+  static Future<Map<String, dynamic>> _refreshCurrentUserProfile() async {
+    final token = await getToken();
+    if (token == null || token.trim().isEmpty) {
+      throw Exception('Sesión inválida.');
+    }
+
+    final response = await http
+        .get(
+          Uri.parse('$_baseUrl/me'),
+          headers: {
+            'Authorization': 'Bearer $token',
+            'Accept': 'application/json',
+          },
+        )
+        .timeout(const Duration(seconds: 10));
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception('No se pudo obtener el usuario actual.');
+    }
+
+    final raw = jsonDecode(response.body);
+    final payload = _extractUserPayload(raw);
+    if (payload == null) {
+      throw Exception('Respuesta inválida al obtener usuario actual.');
+    }
+
+    final prefs = await SharedPreferences.getInstance();
+    await _storeUserSnapshot(prefs, payload);
+
+    final name = _extractUserName(payload)?.trim() ?? '';
+    if (name.isNotEmpty) {
+      await prefs.setString(_userNameKey, name);
+    }
+
+    final email = _extractUserEmail(payload)?.trim().toLowerCase() ?? '';
+    if (email.isNotEmpty) {
+      await prefs.setString(_userEmailKey, email);
+    }
+
+    final userId = int.tryParse('${payload['id'] ?? payload['user_id'] ?? ''}');
+    if (userId != null && userId > 0) {
+      await prefs.setInt(_userIdKey, userId);
+    }
+
+    return payload;
+  }
+
+  static Map<String, dynamic>? _extractUserPayload(dynamic raw) {
+    if (raw is Map<String, dynamic>) {
+      if (raw['user'] is Map) {
+        return Map<String, dynamic>.from(raw['user'] as Map);
+      }
+      if (raw['data'] is Map) {
+        return Map<String, dynamic>.from(raw['data'] as Map);
+      }
+      return raw;
+    }
+    return null;
+  }
+
+  static String? _extractUserName(dynamic raw) {
+    if (raw is! Map) return null;
+    final candidates = <dynamic>[
+      raw['name'],
+      raw['nombre'],
+      raw['full_name'],
+      raw['display_name'],
+    ];
+    for (final candidate in candidates) {
+      final text = candidate?.toString().trim() ?? '';
+      if (text.isNotEmpty) return text;
+    }
+    return null;
+  }
+
+  static String? _extractUserEmail(dynamic raw) {
+    if (raw is! Map) return null;
+    final candidates = <dynamic>[raw['email'], raw['correo']];
+    for (final candidate in candidates) {
+      final text = candidate?.toString().trim() ?? '';
+      if (text.isNotEmpty) return text;
+    }
+    return null;
+  }
+
+  static Future<void> _storeUserSnapshot(
+    SharedPreferences prefs,
+    Map<String, dynamic>? payload,
+  ) async {
+    if (payload == null || payload.isEmpty) {
+      await prefs.remove(_userPayloadKey);
+      await prefs.remove(_unidadIdKey);
+      await prefs.remove(_delegacionIdKey);
+      await prefs.remove(_destacamentoIdKey);
+      return;
+    }
+
+    await prefs.setString(_userPayloadKey, jsonEncode(payload));
+
+    await _storeNullableInt(prefs, _unidadIdKey, _extractUnidadId(payload));
+    await _storeNullableInt(
+      prefs,
+      _delegacionIdKey,
+      _extractDelegacionId(payload),
+    );
+    await _storeNullableInt(
+      prefs,
+      _destacamentoIdKey,
+      _extractDestacamentoId(payload),
+    );
+  }
+
+  static Future<void> _storeNullableInt(
+    SharedPreferences prefs,
+    String key,
+    int? value,
+  ) async {
+    if (value != null && value > 0) {
+      await prefs.setInt(key, value);
+      return;
+    }
+
+    await prefs.remove(key);
+  }
+
+  static int? _extractUnidadId(Map<String, dynamic> payload) {
+    return _readNullableInt(payload['unidad_id']) ??
+        _readNullableInt(payload['unidad_org_id']) ??
+        _readNestedId(payload['unidad_principal']) ??
+        _readNestedId(payload['unidadPrincipal']) ??
+        _readNestedId(payload['unidad']);
+  }
+
+  static bool _payloadMatchesVialidadesUrbanas(Map<String, dynamic>? payload) {
+    if (payload == null || payload.isEmpty) {
+      return false;
+    }
+
+    final candidates = <dynamic>[
+      payload['unidad'],
+      payload['unidad_principal'],
+      payload['unidadPrincipal'],
+      payload['unidad_nombre'],
+      payload['unidadName'],
+      payload['unidad_label'],
+      payload['area'],
+      payload['areas'],
+      payload['unidades'],
+      payload['roles'],
+    ];
+
+    for (final candidate in candidates) {
+      if (_dynamicContainsVialidadesUrbanas(candidate)) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  static bool _dynamicContainsVialidadesUrbanas(dynamic raw) {
+    if (raw == null) {
+      return false;
+    }
+
+    if (_readNullableInt(raw) == 5) {
+      return true;
+    }
+
+    if (raw is String) {
+      final normalized = _normalizeUnitText(raw);
+      return normalized.contains('VIALIDADES URBANAS') ||
+          normalized.contains('PROTECCION A VIALIDADES URBANAS') ||
+          normalized.contains('PROTECCION EN VIALIDADES URBANAS');
+    }
+
+    if (raw is Map) {
+      final id = _readNullableInt(
+        raw['id'] ?? raw['value'] ?? raw['unidad_id'],
+      );
+      if (id == 5) {
+        return true;
+      }
+
+      final names = <dynamic>[
+        raw['name'],
+        raw['nombre'],
+        raw['label'],
+        raw['descripcion'],
+        raw['title'],
+      ];
+
+      for (final value in names) {
+        if (_dynamicContainsVialidadesUrbanas(value)) {
+          return true;
+        }
+      }
+
+      return false;
+    }
+
+    if (raw is Iterable) {
+      for (final item in raw) {
+        if (_dynamicContainsVialidadesUrbanas(item)) {
+          return true;
+        }
+      }
+    }
+
+    return false;
+  }
+
+  static String _normalizeUnitText(String raw) {
+    return raw
+        .toUpperCase()
+        .replaceAll('Á', 'A')
+        .replaceAll('É', 'E')
+        .replaceAll('Í', 'I')
+        .replaceAll('Ó', 'O')
+        .replaceAll('Ú', 'U')
+        .replaceAll('Ñ', 'N');
+  }
+
+  static int? _extractDelegacionId(Map<String, dynamic> payload) {
+    return _readNullableInt(payload['delegacion_id']) ??
+        _readNestedId(payload['delegacion']);
+  }
+
+  static int? _extractDestacamentoId(Map<String, dynamic> payload) {
+    return _readNullableInt(payload['destacamento_id']) ??
+        _readNestedId(payload['destacamento']);
+  }
+
+  static int? _readNestedId(dynamic raw) {
+    if (raw is Map) {
+      return _readNullableInt(raw['id'] ?? raw['value']);
+    }
+
+    return _readNullableInt(raw);
+  }
+
+  static int? _readNullableInt(dynamic value) {
+    final parsed = int.tryParse('${value ?? ''}');
+    return parsed != null && parsed > 0 ? parsed : null;
   }
 
   static String _buildSessionOwnerKey({

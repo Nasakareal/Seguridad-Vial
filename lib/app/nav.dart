@@ -4,8 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 import '../core/globals.dart';
+import '../core/platform_support.dart';
 import '../bootstrap/push_handlers.dart';
-import '../bootstrap/local_notifications.dart';
 
 class PushNavBinder extends StatefulWidget {
   final Widget child;
@@ -22,6 +22,14 @@ class _PushNavBinderState extends State<PushNavBinder> {
   @override
   void initState() {
     super.initState();
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      flushPendingPushTap();
+    });
+
+    if (!supportsPushMessaging) {
+      return;
+    }
 
     FirebaseMessaging.instance.getInitialMessage().then((msg) {
       if (msg == null) return;
@@ -40,30 +48,33 @@ class _PushNavBinderState extends State<PushNavBinder> {
           message.data.map((k, v) => MapEntry(k.toString(), v)),
         );
 
-        await localNotifications.show(
-          DateTime.now().millisecondsSinceEpoch ~/ 1000,
-          title,
-          body,
-          const NotificationDetails(
-            android: AndroidNotificationDetails(
-              'SV_ALERTAS',
-              'Alertas de Hechos',
-              channelDescription: 'Notificaciones de 48h / 72h y recordatorios',
-              importance: Importance.high,
-              priority: Priority.high,
-              playSound: true,
-              enableVibration: true,
+        if (supportsLocalNotifications) {
+          await localNotifications.show(
+            DateTime.now().millisecondsSinceEpoch ~/ 1000,
+            title,
+            body,
+            const NotificationDetails(
+              android: AndroidNotificationDetails(
+                'SV_ALERTAS',
+                'Alertas de Hechos',
+                channelDescription:
+                    'Notificaciones de 48h / 72h y recordatorios',
+                importance: Importance.high,
+                priority: Priority.high,
+                playSound: true,
+                enableVibration: true,
+              ),
+              iOS: DarwinNotificationDetails(
+                presentAlert: true,
+                presentBadge: true,
+                presentSound: true,
+              ),
             ),
-            iOS: DarwinNotificationDetails(
-              presentAlert: true,
-              presentBadge: true,
-              presentSound: true,
-            ),
-          ),
-          payload: payload,
-        );
+            payload: payload,
+          );
+        }
       } catch (e, st) {
-        bootFatal.value = 'onMessage ERROR: $e\n\n$st';
+        reportAppIssue('onMessage ERROR: $e\n\n$st');
       }
     });
 
@@ -74,7 +85,7 @@ class _PushNavBinderState extends State<PushNavBinder> {
         final data = message.data.map((k, v) => MapEntry(k.toString(), v));
         handlePushTap(data);
       } catch (e, st) {
-        bootFatal.value = 'onMessageOpenedApp ERROR: $e\n\n$st';
+        reportAppIssue('onMessageOpenedApp ERROR: $e\n\n$st');
       }
     });
   }

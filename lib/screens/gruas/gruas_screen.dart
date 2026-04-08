@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import 'package:fl_chart/fl_chart.dart';
 
 import '../../services/auth_service.dart';
+import '../../services/gruas_share_service.dart';
 
 // CAMBIO: ahora importamos el SHOW
 import '../../screens/vehiculos/vehiculo_show_screen.dart';
@@ -374,6 +375,97 @@ class _GruasScreenState extends State<GruasScreen> {
     );
   }
 
+  String _periodoShareLabel() {
+    if (_modoDia) {
+      return 'Día ${_fmtShort(_selectedDay)}';
+    }
+
+    return 'Semana ${_fmtShort(_start)} - ${_fmtShort(_end)}';
+  }
+
+  String _textoVehiculoParaShare(Map<String, dynamic> v, int index) {
+    final placas = (v['placas'] ?? '').toString().trim();
+    final marca = (v['marca'] ?? '').toString().trim();
+    final linea = (v['linea'] ?? '').toString().trim();
+    final modelo = (v['modelo'] ?? '').toString().trim();
+    final color = (v['color'] ?? '').toString().trim();
+    final tipo = (v['tipo_vehiculo'] ?? v['tipo'] ?? '').toString().trim();
+    final aseguradora = (v['aseguradora'] ?? '').toString().trim();
+    final tieneSeguro = _toInt(v['tiene_seguro']) == 1;
+    final servicioId = _toInt(v['servicio_id']);
+    final vehiculoId = _toInt(v['vehiculo_id']);
+    final hechoId = _toInt(v['hecho_id']);
+    final fecha = (v['fecha_servicio'] ?? '').toString().trim();
+
+    final descripcion = [
+      marca,
+      linea,
+      modelo,
+    ].where((s) => s.trim().isNotEmpty).join(' ');
+
+    final lineas = <String>[
+      '$index.',
+      'Placas: ${placas.isNotEmpty ? placas : 'Sin placas'}',
+      if (descripcion.isNotEmpty) 'Vehículo: $descripcion',
+      if (tipo.isNotEmpty) 'Tipo: $tipo',
+      if (color.isNotEmpty) 'Color: $color',
+      if (aseguradora.isNotEmpty) 'Aseguradora: $aseguradora',
+      'Seguro: ${tieneSeguro ? 'Sí' : 'No'}',
+      if (servicioId > 0) 'Servicio: #$servicioId',
+      if (vehiculoId > 0) 'Vehículo ID: #$vehiculoId',
+      if (hechoId > 0) 'Hecho: #$hechoId',
+      if (fecha.isNotEmpty) 'Fecha: $fecha',
+    ];
+
+    return lineas.join('\n');
+  }
+
+  String _buildGruaShareText(Map<String, dynamic> g) {
+    final nombre = (g['nombre'] ?? 'Sin nombre').toString().trim();
+    final conteo = _toInt(g['servicios_semana']);
+    final vehiculos = (g['vehiculos'] is List)
+        ? (g['vehiculos'] as List)
+              .whereType<Map>()
+              .map((m) => Map<String, dynamic>.from(m))
+              .toList()
+        : <Map<String, dynamic>>[];
+
+    final lineas = <String>[
+      'Grúa: $nombre',
+      'Periodo: ${_periodoShareLabel()}',
+      _modoDia
+          ? 'Servicios del día: $conteo'
+          : 'Servicios de la semana: $conteo',
+    ];
+
+    if (vehiculos.isEmpty) {
+      lineas.add('');
+      lineas.add('Sin vehículos/servicios registrados en este periodo.');
+      return lineas.join('\n');
+    }
+
+    lineas.add('');
+    lineas.add('Vehículos remolcados:');
+
+    for (var i = 0; i < vehiculos.length; i++) {
+      lineas.add('');
+      lineas.add(_textoVehiculoParaShare(vehiculos[i], i + 1));
+    }
+
+    return lineas.join('\n');
+  }
+
+  Future<void> _compartirGruaEnWhatsapp(Map<String, dynamic> g) async {
+    final texto = _buildGruaShareText(g);
+
+    try {
+      await GruasShareService.compartirTextoEnWhatsapp(texto: texto);
+    } catch (e) {
+      if (!mounted) return;
+      _showInfo('No se pudo compartir la información de la grúa.\n\n$e');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final rango = _rangoLabel();
@@ -727,10 +819,28 @@ class _GruasScreenState extends State<GruasScreen> {
                   ? 'Servicios (día): $conteo'
                   : 'Servicios (semana): $conteo',
             ),
-            trailing: IconButton(
-              tooltip: 'Ocultar esta grúa',
-              onPressed: () => _toggleHidden(gruaId),
-              icon: const Icon(Icons.visibility_off),
+            trailing: SizedBox(
+              width: 96,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    tooltip: 'Compartir por WhatsApp',
+                    onPressed: () => _compartirGruaEnWhatsapp(g),
+                    icon: Image.asset(
+                      'assets/icon/whatsapp_share.png',
+                      width: 22,
+                      height: 22,
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: 'Ocultar esta grúa',
+                    onPressed: () => _toggleHidden(gruaId),
+                    icon: const Icon(Icons.visibility_off),
+                  ),
+                ],
+              ),
             ),
             children: [
               if (vehiculos.isEmpty)
@@ -776,7 +886,11 @@ class _GruasScreenState extends State<GruasScreen> {
                         if (marca.isNotEmpty ||
                             linea.isNotEmpty ||
                             modelo.isNotEmpty)
-                          '${[marca, linea, modelo].where((s) => s.isNotEmpty).join(' ')}',
+                          [
+                            marca,
+                            linea,
+                            modelo,
+                          ].where((s) => s.isNotEmpty).join(' '),
                         if (color.isNotEmpty) color,
                         if (aseguradora.isNotEmpty) 'Aseg: $aseguradora',
                         'Seguro: ${tieneSeguro ? 'SÍ' : 'NO'}',

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
 import '../../services/auth_service.dart';
+import '../../widgets/safe_network_image.dart';
 
 class VehiculoShowScreen extends StatefulWidget {
   const VehiculoShowScreen({super.key});
@@ -194,7 +195,7 @@ class _VehiculoShowScreenState extends State<VehiculoShowScreen> {
       borderRadius: BorderRadius.circular(12),
       child: AspectRatio(
         aspectRatio: 16 / 9,
-        child: Image.network(
+        child: SafeNetworkImage(
           _fotoUrl!,
           fit: BoxFit.cover,
           errorBuilder: (_, __, ___) {
@@ -203,8 +204,7 @@ class _VehiculoShowScreenState extends State<VehiculoShowScreen> {
               child: const Center(child: Text('No se pudo cargar la foto')),
             );
           },
-          loadingBuilder: (context, child, progress) {
-            if (progress == null) return child;
+          loadingBuilder: (context, progress) {
             return Container(
               color: Colors.black12,
               child: const Center(child: CircularProgressIndicator()),
@@ -216,7 +216,7 @@ class _VehiculoShowScreenState extends State<VehiculoShowScreen> {
   }
 
   Widget _conductorCard(Map<String, dynamic> c) {
-    String _s(String key) {
+    String textValue(String key) {
       final v = (c[key] ?? '').toString().trim();
       return v.isEmpty ? 'N/A' : v;
     }
@@ -229,19 +229,19 @@ class _VehiculoShowScreenState extends State<VehiculoShowScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              _s('nombre'),
+              textValue('nombre'),
               style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 8),
-            _kv('Teléfono', _s('telefono')),
-            _kv('Domicilio', _s('domicilio')),
-            _kv('Sexo', _s('sexo')),
-            _kv('Ocupación', _s('ocupacion')),
-            _kv('Edad', _s('edad')),
-            _kv('Licencia', _s('tipo_licencia')),
-            _kv('Estado licencia', _s('estado_licencia')),
-            _kv('No. licencia', _s('numero_licencia')),
-            _kv('Vigencia', _s('vigencia_licencia')),
+            _kv('Teléfono', textValue('telefono')),
+            _kv('Domicilio', textValue('domicilio')),
+            _kv('Sexo', textValue('sexo')),
+            _kv('Ocupación', textValue('ocupacion')),
+            _kv('Edad', textValue('edad')),
+            _kv('Licencia', textValue('tipo_licencia')),
+            _kv('Estado licencia', textValue('estado_licencia')),
+            _kv('No. licencia', textValue('numero_licencia')),
+            _kv('Vigencia', textValue('vigencia_licencia')),
             _kv('Permanente', (c['permanente'] == true) ? 'Sí' : 'No'),
             _kv('Cinturón', (c['cinturon'] == true) ? 'Sí' : 'No'),
             _kv('Antecedente', (c['antecedentes'] == true) ? 'Sí' : 'No'),
@@ -322,7 +322,7 @@ class _VehiculoShowScreenState extends State<VehiculoShowScreen> {
                   if (_conductores.isEmpty)
                     const Text('Sin conductor registrado.')
                   else
-                    ..._conductores.map(_conductorCard).toList(),
+                    ..._conductores.map(_conductorCard),
                 ],
               ),
             ),

@@ -29,6 +29,10 @@ class _BootAppState extends State<BootApp> {
       },
     );
 
+    if (ok) {
+      markAppBootCompleted();
+    }
+
     if (!mounted) return;
     setState(() => ready = ok);
   }

@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
 import '../../services/auth_service.dart';
+import '../../widgets/safe_network_image.dart';
 
 class HechosBusquedaScreen extends StatefulWidget {
   const HechosBusquedaScreen({super.key});
@@ -107,8 +108,9 @@ class _HechosBusquedaScreenState extends State<HechosBusquedaScreen> {
         context,
       ).showSnackBar(SnackBar(content: Text('No se pudo buscar: $e')));
     } finally {
-      if (!mounted) return;
-      setState(() => _cargando = false);
+      if (mounted) {
+        setState(() => _cargando = false);
+      }
     }
   }
 
@@ -136,8 +138,9 @@ class _HechosBusquedaScreenState extends State<HechosBusquedaScreen> {
         context,
       ).showSnackBar(SnackBar(content: Text('No se pudo cargar más: $e')));
     } finally {
-      if (!mounted) return;
-      setState(() => _cargandoMas = false);
+      if (mounted) {
+        setState(() => _cargandoMas = false);
+      }
     }
   }
 
@@ -347,7 +350,7 @@ class _HechosBusquedaScreenState extends State<HechosBusquedaScreen> {
     final url = _fotoFromRow(row);
     if (url == null || url.isEmpty) {
       return CircleAvatar(
-        backgroundColor: Colors.blue.withOpacity(.12),
+        backgroundColor: Colors.blue.withValues(alpha: .12),
         child: const Icon(Icons.photo, color: Colors.blue),
       );
     }
@@ -358,17 +361,16 @@ class _HechosBusquedaScreenState extends State<HechosBusquedaScreen> {
         width: 56,
         height: 56,
         color: Colors.grey.shade200,
-        child: Image.network(
+        child: SafeNetworkImage(
           url,
           fit: BoxFit.cover,
           errorBuilder: (_, __, ___) {
             return CircleAvatar(
-              backgroundColor: Colors.blue.withOpacity(.12),
+              backgroundColor: Colors.blue.withValues(alpha: .12),
               child: const Icon(Icons.broken_image, color: Colors.blue),
             );
           },
-          loadingBuilder: (context, child, progress) {
-            if (progress == null) return child;
+          loadingBuilder: (context, progress) {
             return Center(
               child: SizedBox(
                 width: 18,

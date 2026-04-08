@@ -16,7 +16,14 @@ class PushService {
   static String? _lastSubmittedToken;
   static String? _lastSubmittedOwnerKey;
 
+  static bool get isSupportedPlatform {
+    if (kIsWeb) return false;
+    return Platform.isAndroid || Platform.isIOS || Platform.isMacOS;
+  }
+
   static Future<void> ensurePermissions() async {
+    if (!isSupportedPlatform) return;
+
     try {
       final messaging = FirebaseMessaging.instance;
       await messaging.requestPermission(
@@ -34,6 +41,7 @@ class PushService {
   }
 
   static void listenTokenRefresh() {
+    if (!isSupportedPlatform) return;
     if (_refreshListenerInstalled) return;
     _refreshListenerInstalled = true;
 
@@ -43,6 +51,7 @@ class PushService {
   }
 
   static Future<void> registerDeviceToken({String reason = 'manual'}) async {
+    if (!isSupportedPlatform) return;
     if (_registering) return;
 
     final last = _lastSuccessAt;
@@ -115,10 +124,14 @@ class PushService {
     if (Platform.isIOS) return 'ios';
     if (Platform.isAndroid) return 'android';
     if (Platform.isMacOS) return 'macos';
+    if (Platform.isWindows) return 'windows';
+    if (Platform.isLinux) return 'linux';
     return 'unknown';
   }
 
   static Future<String?> _getFcmTokenSafely({required Duration maxWait}) async {
+    if (!isSupportedPlatform) return null;
+
     final messaging = FirebaseMessaging.instance;
 
     final start = DateTime.now();

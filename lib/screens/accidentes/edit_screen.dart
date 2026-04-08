@@ -180,6 +180,8 @@ class _EditHechoScreenState extends State<EditHechoScreen> {
     d.calidadGeo = _asString(raw['calidad_geo']);
     d.notaGeo = _asString(raw['nota_geo']);
     d.fuenteUbicacion = _asString(raw['fuente_ubicacion']);
+    d.ubicacionFormateada = _asString(raw['ubicacion_formateada']);
+    d.placeId = _asString(raw['place_id']);
 
     d.dictamenId = _asInt(raw['dictamen_id']);
     d.hasFotoSituacionActual =

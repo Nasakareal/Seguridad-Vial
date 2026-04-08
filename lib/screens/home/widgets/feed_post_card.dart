@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../models/feed_item.dart';
+import '../../../widgets/safe_network_image.dart';
 
 class FeedPostCard extends StatelessWidget {
   final FeedItem item;
@@ -21,10 +22,10 @@ class FeedPostCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final resumen = (item.resumen ?? '').trim();
+    final resumen = item.resumen.trim();
     final subtitle = resumen.isNotEmpty ? resumen : 'Publicación';
 
-    final userName = (item.userName ?? '').trim();
+    final userName = item.userName.trim();
     final user = userName.isNotEmpty ? userName : 'Usuario';
 
     final rawFoto = (item.fotoUrl ?? '').trim();
@@ -44,7 +45,7 @@ class FeedPostCard extends StatelessWidget {
               BoxShadow(
                 blurRadius: 14,
                 offset: const Offset(0, 8),
-                color: Colors.black.withOpacity(.06),
+                color: Colors.black.withValues(alpha: .06),
               ),
             ],
           ),
@@ -60,7 +61,7 @@ class FeedPostCard extends StatelessWidget {
                       width: 44,
                       height: 44,
                       decoration: BoxDecoration(
-                        color: Colors.blue.withOpacity(.10),
+                        color: Colors.blue.withValues(alpha: .10),
                         borderRadius: BorderRadius.circular(14),
                       ),
                       child: Icon(_icon, color: Colors.blue, size: 24),
@@ -151,15 +152,13 @@ class BigFeedImage extends StatelessWidget {
       color: Colors.grey.shade100,
       child: AspectRatio(
         aspectRatio: 1,
-        child: Image.network(
+        child: SafeNetworkImage(
           url,
           fit: BoxFit.contain,
           alignment: Alignment.center,
           filterQuality: FilterQuality.medium,
-          loadingBuilder: (context, child, progress) {
-            if (progress == null) return child;
-            return const Center(child: CircularProgressIndicator());
-          },
+          loadingBuilder: (context, progress) =>
+              const Center(child: CircularProgressIndicator()),
           errorBuilder: (_, __, ___) => Center(
             child: Icon(
               Icons.broken_image,

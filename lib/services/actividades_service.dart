@@ -10,6 +10,134 @@ import '../models/actividad_subcategoria.dart';
 import 'auth_service.dart';
 import 'offline_sync_service.dart';
 
+class ActividadUpsertData {
+  final String? clientUuid;
+  final int actividadCategoriaId;
+  final int? actividadSubcategoriaId;
+  final String? fecha;
+  final String? hora;
+  final String? lugar;
+  final String? municipio;
+  final String? carretera;
+  final String? tramo;
+  final String? kilometro;
+  final String? lat;
+  final String? lng;
+  final String? coordenadasTexto;
+  final String? fuenteUbicacion;
+  final String? notaGeo;
+  final String? motivo;
+  final String? narrativa;
+  final String? accionesRealizadas;
+  final String? observaciones;
+  final String? personasAlcanzadas;
+  final String? personasParticipantes;
+  final String? personasDetenidas;
+  final String? elementosParticipantesTexto;
+  final String? patrullasParticipantesTexto;
+  final String? destacamentoId;
+
+  const ActividadUpsertData({
+    this.clientUuid,
+    required this.actividadCategoriaId,
+    this.actividadSubcategoriaId,
+    this.fecha,
+    this.hora,
+    this.lugar,
+    this.municipio,
+    this.carretera,
+    this.tramo,
+    this.kilometro,
+    this.lat,
+    this.lng,
+    this.coordenadasTexto,
+    this.fuenteUbicacion,
+    this.notaGeo,
+    this.motivo,
+    this.narrativa,
+    this.accionesRealizadas,
+    this.observaciones,
+    this.personasAlcanzadas,
+    this.personasParticipantes,
+    this.personasDetenidas,
+    this.elementosParticipantesTexto,
+    this.patrullasParticipantesTexto,
+    this.destacamentoId,
+  });
+
+  Map<String, String> toFields() {
+    final fields = <String, String>{
+      'actividad_categoria_id': actividadCategoriaId.toString(),
+    };
+
+    void add(String key, String? value) {
+      if (value == null) return;
+      final trimmed = value.trim();
+      if (trimmed.isEmpty) return;
+      fields[key] = trimmed;
+    }
+
+    if (actividadSubcategoriaId != null && actividadSubcategoriaId! > 0) {
+      fields['actividad_subcategoria_id'] = actividadSubcategoriaId.toString();
+    }
+
+    add('client_uuid', clientUuid);
+    add('fecha', fecha);
+    add('hora', hora);
+    add('lugar', lugar);
+    add('municipio', municipio);
+    add('lat', lat);
+    add('lng', lng);
+    add('coordenadas_texto', coordenadasTexto);
+    add('fuente_ubicacion', fuenteUbicacion);
+    add('nota_geo', notaGeo);
+    add('motivo', motivo);
+    add('narrativa', narrativa);
+    add('acciones_realizadas', accionesRealizadas);
+    add('observaciones', observaciones);
+    add('personas_alcanzadas', personasAlcanzadas);
+    add('personas_participantes', personasParticipantes);
+    add('personas_detenidas', personasDetenidas);
+    add('elementos_participantes_texto', elementosParticipantesTexto);
+    add('patrullas_participantes_texto', patrullasParticipantesTexto);
+
+    return fields;
+  }
+}
+
+class ActividadNativeShareData {
+  final String message;
+  final List<String> media;
+
+  const ActividadNativeShareData({required this.message, required this.media});
+
+  factory ActividadNativeShareData.fromJson(Map<String, dynamic> raw) {
+    final source = raw['data'] is Map
+        ? Map<String, dynamic>.from(raw['data'] as Map)
+        : raw;
+
+    final texto = ((source['texto'] ?? source['message'] ?? '').toString())
+        .trim();
+
+    final media = <String>[];
+
+    void addMedia(dynamic listLike) {
+      if (listLike is! List) return;
+      for (final item in listLike) {
+        final s = (item ?? '').toString().trim();
+        if (s.isNotEmpty && !media.contains(s)) {
+          media.add(s);
+        }
+      }
+    }
+
+    addMedia(source['fotos']);
+    addMedia(source['media']);
+
+    return ActividadNativeShareData(message: texto, media: media);
+  }
+}
+
 class ActividadesService {
   static String get _base => '${AuthService.baseUrl}/actividades';
   static const String _categoriasCacheKey = 'actividades_categorias_cache_v1';
@@ -35,7 +163,7 @@ class ActividadesService {
   static Future<Map<String, String>> _headersJson() async {
     final token = await AuthService.getToken();
     if (token == null || token.isEmpty) {
-      throw Exception('Sesión inválida. Vuelve a iniciar sesión.');
+      throw Exception('Sesion invalida. Vuelve a iniciar sesion.');
     }
 
     return <String, String>{
@@ -50,11 +178,6 @@ class ActividadesService {
       final raw = jsonDecode(body);
 
       if (raw is Map<String, dynamic>) {
-        if (raw['message'] is String) {
-          final msg = (raw['message'] as String).trim();
-          if (msg.isNotEmpty) return msg;
-        }
-
         final errors = raw['errors'];
         if (errors is Map) {
           final sb = StringBuffer();
@@ -65,6 +188,11 @@ class ActividadesService {
           });
           final out = sb.toString().trim();
           if (out.isNotEmpty) return out;
+        }
+
+        if (raw['message'] is String) {
+          final msg = (raw['message'] as String).trim();
+          if (msg.isNotEmpty) return msg;
         }
       }
     } catch (_) {}
@@ -106,7 +234,7 @@ class ActividadesService {
 
   static Future<List<Actividad>> fetchIndex({
     required DateTime date,
-    int perPage = 50,
+    int perPage = 20,
     int? actividadCategoriaId,
     int? actividadSubcategoriaId,
     String? q,
@@ -114,7 +242,7 @@ class ActividadesService {
     final headers = await _headersJson();
 
     final qp = <String, String>{
-      'per_page': perPage.clamp(1, 50).toString(),
+      'per_page': perPage.clamp(1, 20).toString(),
       'date': _fmtYmd(date),
     };
 
@@ -159,7 +287,7 @@ class ActividadesService {
       return Actividad.fromJson(raw);
     }
 
-    throw Exception('Respuesta inválida del servidor.');
+    throw Exception('Respuesta invalida del servidor.');
   }
 
   static Future<List<ActividadCategoria>> fetchCategorias() async {
@@ -226,23 +354,64 @@ class ActividadesService {
     }
   }
 
-  static Future<OfflineActionResult> create({
-    required int actividadCategoriaId,
-    int? actividadSubcategoriaId,
-    required File foto,
+  static Future<ActividadNativeShareData> fetchShareData({
+    required int actividadId,
   }) async {
+    final headers = await _headersJson();
+    final uri = Uri.parse('$_base/$actividadId/compartir');
+
+    final resp = await http.get(uri, headers: headers);
+    if (resp.statusCode < 200 || resp.statusCode >= 300) {
+      throw Exception(_parseBackendError(resp.body, resp.statusCode));
+    }
+
+    final raw = jsonDecode(resp.body);
+    if (raw is! Map<String, dynamic>) {
+      throw Exception('Respuesta invalida del servidor.');
+    }
+
+    return ActividadNativeShareData.fromJson(raw);
+  }
+
+  static Future<ActividadNativeShareData> fetchShareTotalsData({
+    required DateTime fecha,
+  }) async {
+    final headers = await _headersJson();
+    final uri = Uri.parse(
+      '$_base/compartir-totales-whatsapp',
+    ).replace(queryParameters: {'fecha': _fmtYmd(fecha)});
+
+    final resp = await http.get(uri, headers: headers);
+    if (resp.statusCode < 200 || resp.statusCode >= 300) {
+      throw Exception(_parseBackendError(resp.body, resp.statusCode));
+    }
+
+    final raw = jsonDecode(resp.body);
+    if (raw is! Map<String, dynamic>) {
+      throw Exception('Respuesta invalida del servidor.');
+    }
+
+    return ActividadNativeShareData.fromJson(raw);
+  }
+
+  static Future<OfflineActionResult> create({
+    required ActividadUpsertData data,
+    required List<File> fotos,
+  }) async {
+    final clientUuid = _ensureClientUuid(data.clientUuid);
+    final fields = data.toFields()..['client_uuid'] = clientUuid;
+    final uploads = <OfflineUploadFile>[
+      for (final foto in fotos)
+        OfflineUploadFile(field: 'fotos[]', path: foto.path),
+    ];
+
     return OfflineSyncService.submitMultipart(
       label: 'Actividad',
       method: 'POST',
       uri: Uri.parse(_base),
-      fields: <String, String>{
-        'actividad_categoria_id': actividadCategoriaId.toString(),
-        if (actividadSubcategoriaId != null && actividadSubcategoriaId > 0)
-          'actividad_subcategoria_id': actividadSubcategoriaId.toString(),
-      },
-      files: <OfflineUploadFile>[
-        OfflineUploadFile(field: 'foto', path: foto.path),
-      ],
+      fields: fields,
+      files: uploads,
+      requestId: clientUuid,
       successCodes: const <int>{200, 201},
       errorParser: _parseBackendError,
     );
@@ -250,20 +419,16 @@ class ActividadesService {
 
   static Future<OfflineActionResult> update({
     required int id,
-    required int actividadCategoriaId,
-    int? actividadSubcategoriaId,
+    required ActividadUpsertData data,
     File? foto,
   }) async {
+    final fields = data.toFields()..['_method'] = 'PUT';
+
     return OfflineSyncService.submitMultipart(
       label: 'Actividad',
       method: 'POST',
       uri: Uri.parse('$_base/$id'),
-      fields: <String, String>{
-        '_method': 'PUT',
-        'actividad_categoria_id': actividadCategoriaId.toString(),
-        if (actividadSubcategoriaId != null && actividadSubcategoriaId > 0)
-          'actividad_subcategoria_id': actividadSubcategoriaId.toString(),
-      },
+      fields: fields,
       files: <OfflineUploadFile>[
         if (foto != null) OfflineUploadFile(field: 'foto', path: foto.path),
       ],
@@ -288,6 +453,12 @@ class ActividadesService {
     final m = d.month.toString().padLeft(2, '0');
     final day = d.day.toString().padLeft(2, '0');
     return '$y-$m-$day';
+  }
+
+  static String _ensureClientUuid(String? clientUuid) {
+    final current = (clientUuid ?? '').trim();
+    if (current.isNotEmpty) return current;
+    return OfflineSyncService.newClientUuid();
   }
 
   static List<Map<String, dynamic>> _extractListFromResponse(dynamic raw) {
@@ -319,8 +490,9 @@ class ActividadesService {
   static Future<List<Map<String, dynamic>>> _loadCache(String key) async {
     final prefs = await SharedPreferences.getInstance();
     final raw = prefs.getString(key);
-    if (raw == null || raw.trim().isEmpty)
+    if (raw == null || raw.trim().isEmpty) {
       return const <Map<String, dynamic>>[];
+    }
 
     try {
       final decoded = jsonDecode(raw);

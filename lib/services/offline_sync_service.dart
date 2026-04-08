@@ -77,6 +77,26 @@ class OfflineSyncService {
     announcements.value = null;
   }
 
+  static String _queuedRetryMessage(String detail) {
+    final trimmed = detail.trim();
+    if (trimmed.isEmpty) {
+      return 'Guardado pendiente. Se sincronizara automaticamente.';
+    }
+
+    final lower = trimmed.toLowerCase();
+    final looksLikeConnectivityIssue =
+        lower.contains('sin conexión') ||
+        lower.contains('sin conexion') ||
+        lower.contains('no fue posible conectar') ||
+        lower.contains('tiempo de espera');
+
+    if (looksLikeConnectivityIssue) {
+      return 'Guardado sin conexión. Se sincronizará automáticamente.';
+    }
+
+    return 'Guardado pendiente por error del servidor. Se reintentará automáticamente.\n$trimmed';
+  }
+
   static Future<OfflineActionResult> submitJson({
     required String label,
     required String method,
@@ -156,7 +176,8 @@ class OfflineSyncService {
       );
       unawaited(flushPending());
       return const OfflineActionResult.synced();
-    } on _RetryableSyncException {
+    } on _RetryableSyncException catch (e) {
+      final queuedMessage = _queuedRetryMessage(e.message);
       final op = _QueuedOperation(
         id: effectiveRequestId,
         ownerKey: ownerKey,
@@ -173,14 +194,14 @@ class OfflineSyncService {
         createdAt: DateTime.now().toUtc(),
         nextAttemptAt: null,
         state: _QueuedOperationState.pending,
-        lastError: null,
+        lastError: e.message,
       );
 
       await _appendOperation(op);
       if (announceOnQueue) {
-        _announce('Guardado sin conexión. Se sincronizará automáticamente.');
+        _announce(queuedMessage);
       }
-      return const OfflineActionResult.queued();
+      return OfflineActionResult.queued(message: queuedMessage);
     } on _PermanentSyncException catch (e) {
       throw Exception(e.message);
     }
@@ -271,7 +292,8 @@ class OfflineSyncService {
       );
       unawaited(flushPending());
       return const OfflineActionResult.synced();
-    } on _RetryableSyncException {
+    } on _RetryableSyncException catch (e) {
+      final queuedMessage = _queuedRetryMessage(e.message);
       final storedFiles = await _stashFilesForQueue(effectiveRequestId, files);
       final op = _QueuedOperation(
         id: effectiveRequestId,
@@ -289,14 +311,14 @@ class OfflineSyncService {
         createdAt: DateTime.now().toUtc(),
         nextAttemptAt: null,
         state: _QueuedOperationState.pending,
-        lastError: null,
+        lastError: e.message,
       );
 
       await _appendOperation(op);
       if (announceOnQueue) {
-        _announce('Guardado sin conexión. Se sincronizará automáticamente.');
+        _announce(queuedMessage);
       }
-      return const OfflineActionResult.queued();
+      return OfflineActionResult.queued(message: queuedMessage);
     } on _PermanentSyncException catch (e) {
       throw Exception(e.message);
     }
@@ -479,6 +501,47 @@ class OfflineSyncService {
   static Future<List<Map<String, dynamic>>> loadQueueSnapshot() async {
     final queue = await _loadQueue();
     return queue.map((op) => op.toJson()).toList();
+  }
+
+  static Future<void> discardOperation({
+    required String ownerKey,
+    required String operationId,
+  }) async {
+    final queue = await _loadQueue();
+    final idsToRemove = <String>{operationId};
+
+    var changed = true;
+    while (changed) {
+      changed = false;
+      for (final item in queue) {
+        if (item.ownerKey != ownerKey) continue;
+        final dependencyId = item.dependsOnOperationId;
+        if (dependencyId == null || dependencyId.isEmpty) continue;
+        if (idsToRemove.contains(item.id)) continue;
+        if (idsToRemove.contains(dependencyId)) {
+          idsToRemove.add(item.id);
+          changed = true;
+        }
+      }
+    }
+
+    final toCleanup = queue
+        .where((item) => item.ownerKey == ownerKey && idsToRemove.contains(item.id))
+        .toList();
+
+    if (toCleanup.isEmpty) return;
+
+    final nextQueue = queue
+        .where((item) => !(item.ownerKey == ownerKey && idsToRemove.contains(item.id)))
+        .toList();
+
+    await _saveQueue(nextQueue);
+
+    for (final item in toCleanup) {
+      await _cleanupOperationArtifacts(item);
+    }
+
+    await _refreshCounts();
   }
 
   static Future<void> _appendOperation(_QueuedOperation op) async {

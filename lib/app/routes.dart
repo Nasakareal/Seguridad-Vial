@@ -51,6 +51,14 @@ class AppRoutes {
 
   static const String dispositivos = '/dispositivos';
   static const String dispositivosCreate = '/dispositivos/create';
+  static const String vialidadesUrbanas = '/vialidades-urbanas';
+  static const String vialidadesUrbanasCreate = '/vialidades-urbanas/create';
+  static const String vialidadesUrbanasDispositivoShow =
+      '/vialidades-urbanas/dispositivo/show';
+  static const String vialidadesUrbanasDispositivoCreate =
+      '/vialidades-urbanas/dispositivo/create';
+  static const String vialidadesUrbanasDispositivoEdit =
+      '/vialidades-urbanas/dispositivo/edit';
 
   static const String feed = '/feed';
   static const String offlineSyncErrors = '/offline-sync/errors';

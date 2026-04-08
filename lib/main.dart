@@ -11,7 +11,7 @@ Future<void> main() async {
       runApp(const BootApp());
     },
     (error, stack) {
-      bootFatal.value = 'ZONED: $error\n\n$stack';
+      reportAppIssue('ZONED: $error\n\n$stack');
     },
   );
 }
