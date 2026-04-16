@@ -4,6 +4,7 @@ import '../../models/actividad.dart';
 import '../../services/actividad_share_service.dart';
 import '../../services/actividades_service.dart';
 import '../../widgets/safe_network_image.dart';
+import 'widgets/actividad_vehiculo_modal.dart';
 
 class ActividadShowScreen extends StatefulWidget {
   const ActividadShowScreen({super.key});
@@ -92,15 +93,16 @@ class _ActividadShowScreenState extends State<ActividadShowScreen>
       await ActividadShareService.compartirEnWhatsapp(actividadId: a.id);
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('No se pudo compartir.\n$e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('No se pudo compartir.\n$e')));
     } finally {
       if (mounted) setState(() => _sharing = false);
     }
   }
 
-  String _displayDate(String? value) => (value ?? '').trim().isEmpty ? '—' : value!.trim();
+  String _displayDate(String? value) =>
+      (value ?? '').trim().isEmpty ? '—' : value!.trim();
 
   String _displayText(String? value) {
     final text = (value ?? '').trim();
@@ -259,10 +261,7 @@ class _ActividadShowScreenState extends State<ActividadShowScreen>
                       _kv('Latitud', a.lat?.toString() ?? '—'),
                       _kv('Longitud', a.lng?.toString() ?? '—'),
                       _kv('Coordenadas', _displayText(a.coordenadasTexto)),
-                      _kv(
-                        'Fuente ubicacion',
-                        _displayText(a.fuenteUbicacion),
-                      ),
+                      _kv('Fuente ubicacion', _displayText(a.fuenteUbicacion)),
                       _kv('Nota geo', _displayText(a.notaGeo)),
                     ],
                   ),
@@ -294,10 +293,7 @@ class _ActividadShowScreenState extends State<ActividadShowScreen>
                         'Personas participantes',
                         a.personasParticipantes.toString(),
                       ),
-                      _kv(
-                        'Personas detenidas',
-                        a.personasDetenidas.toString(),
-                      ),
+                      _kv('Personas detenidas', a.personasDetenidas.toString()),
                       _sectionText(
                         'Elementos participantes',
                         a.elementosParticipantesTexto,
@@ -308,6 +304,20 @@ class _ActividadShowScreenState extends State<ActividadShowScreen>
                       ),
                     ],
                   ),
+                ),
+                const SizedBox(height: 12),
+                _card(
+                  title: 'Vehiculos relacionados',
+                  child: a.vehiculos.isEmpty
+                      ? const Text('No hay vehiculos vinculados.')
+                      : Column(
+                          children: a.vehiculos
+                              .map(
+                                (vehiculo) =>
+                                    ActividadVehiculoCard(vehiculo: vehiculo),
+                              )
+                              .toList(),
+                        ),
                 ),
                 const SizedBox(height: 12),
                 _card(title: 'Fotos', child: _photoCarousel(a)),

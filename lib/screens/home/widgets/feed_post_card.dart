@@ -11,12 +11,16 @@ class FeedPostCard extends StatelessWidget {
   String get _typeLabel {
     if (item.type == FeedItemType.hecho) return 'SINIESTRO';
     if (item.type == FeedItemType.actividad) return 'PROXIMIDAD SOCIAL';
+    if (item.type == FeedItemType.carreteras) return 'CARRETERAS';
+    if (item.type == FeedItemType.vialidades) return 'VIALIDADES';
     return 'PUBLICACIÓN';
   }
 
   IconData get _icon {
     if (item.type == FeedItemType.hecho) return Icons.car_crash;
     if (item.type == FeedItemType.actividad) return Icons.camera_alt;
+    if (item.type == FeedItemType.carreteras) return Icons.add_road;
+    if (item.type == FeedItemType.vialidades) return Icons.traffic;
     return Icons.feed;
   }
 

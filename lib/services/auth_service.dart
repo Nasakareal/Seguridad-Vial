@@ -502,6 +502,7 @@ class AuthService {
 
     final prefs = await SharedPreferences.getInstance();
     await _storeUserSnapshot(prefs, payload);
+    await _storeRoleSnapshot(prefs, raw, payload);
 
     final name = _extractUserName(payload)?.trim() ?? '';
     if (name.isNotEmpty) {
@@ -532,6 +533,59 @@ class AuthService {
       return raw;
     }
     return null;
+  }
+
+  static Future<void> _storeRoleSnapshot(
+    SharedPreferences prefs,
+    dynamic raw,
+    Map<String, dynamic>? payload,
+  ) async {
+    String? role;
+    int? roleId;
+
+    void readRole(dynamic value) {
+      if (value is Map) {
+        final name = value['name']?.toString().trim() ?? '';
+        if (name.isNotEmpty) role ??= name;
+        roleId ??= int.tryParse(value['id']?.toString() ?? '');
+        return;
+      }
+
+      final text = value?.toString().trim() ?? '';
+      if (text.isNotEmpty) role ??= text;
+    }
+
+    void readRoles(dynamic value) {
+      if (value is! List || value.isEmpty) return;
+      readRole(value.first);
+    }
+
+    if (raw is Map) {
+      readRole(raw['role']);
+      readRoles(raw['roles']);
+      roleId ??= int.tryParse(raw['role_id']?.toString() ?? '');
+
+      final user = raw['user'];
+      if (user is Map) {
+        readRole(user['role']);
+        readRoles(user['roles']);
+        roleId ??= int.tryParse(user['role_id']?.toString() ?? '');
+      }
+    }
+
+    if (payload != null) {
+      readRole(payload['role']);
+      readRoles(payload['roles']);
+      roleId ??= int.tryParse(payload['role_id']?.toString() ?? '');
+    }
+
+    if (role != null && role!.trim().isNotEmpty) {
+      await prefs.setString(_roleKey, role!.trim());
+    }
+
+    if (roleId != null && roleId! > 0) {
+      await prefs.setInt(_roleIdKey, roleId!);
+    }
   }
 
   static String? _extractUserName(dynamic raw) {

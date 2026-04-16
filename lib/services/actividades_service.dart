@@ -36,6 +36,7 @@ class ActividadUpsertData {
   final String? elementosParticipantesTexto;
   final String? patrullasParticipantesTexto;
   final String? destacamentoId;
+  final List<ActividadVehiculo> vehiculos;
 
   const ActividadUpsertData({
     this.clientUuid,
@@ -63,6 +64,7 @@ class ActividadUpsertData {
     this.elementosParticipantesTexto,
     this.patrullasParticipantesTexto,
     this.destacamentoId,
+    this.vehiculos = const <ActividadVehiculo>[],
   });
 
   Map<String, String> toFields() {
@@ -100,6 +102,16 @@ class ActividadUpsertData {
     add('personas_detenidas', personasDetenidas);
     add('elementos_participantes_texto', elementosParticipantesTexto);
     add('patrullas_participantes_texto', patrullasParticipantesTexto);
+
+    for (var index = 0; index < vehiculos.length; index += 1) {
+      final vehiculo = vehiculos[index].toApiJson();
+      vehiculo.forEach((key, value) {
+        if (value == null) return;
+        final text = value.toString().trim();
+        if (text.isEmpty) return;
+        fields['vehiculos[$index][$key]'] = text;
+      });
+    }
 
     return fields;
   }
@@ -417,6 +429,40 @@ class ActividadesService {
     );
   }
 
+  static Future<Actividad> storeVehiculo({
+    required int actividadId,
+    required ActividadVehiculo vehiculo,
+  }) async {
+    final headers = await _headersJson();
+    final uri = Uri.parse('$_base/$actividadId/vehiculos');
+    final resp = await http.post(
+      uri,
+      headers: headers,
+      body: jsonEncode(vehiculo.toApiJson()),
+    );
+
+    if (resp.statusCode < 200 || resp.statusCode >= 300) {
+      throw Exception(_parseBackendError(resp.body, resp.statusCode));
+    }
+
+    return _decodeActividadResponse(resp.body);
+  }
+
+  static Future<Actividad> destroyVehiculo({
+    required int actividadId,
+    required int vehiculoId,
+  }) async {
+    final headers = await _headersJson();
+    final uri = Uri.parse('$_base/$actividadId/vehiculos/$vehiculoId');
+    final resp = await http.delete(uri, headers: headers);
+
+    if (resp.statusCode < 200 || resp.statusCode >= 300) {
+      throw Exception(_parseBackendError(resp.body, resp.statusCode));
+    }
+
+    return _decodeActividadResponse(resp.body);
+  }
+
   static Future<OfflineActionResult> update({
     required int id,
     required ActividadUpsertData data,
@@ -459,6 +505,20 @@ class ActividadesService {
     final current = (clientUuid ?? '').trim();
     if (current.isNotEmpty) return current;
     return OfflineSyncService.newClientUuid();
+  }
+
+  static Actividad _decodeActividadResponse(String body) {
+    final raw = jsonDecode(body);
+
+    if (raw is Map<String, dynamic> && raw['data'] is Map) {
+      return Actividad.fromJson(Map<String, dynamic>.from(raw['data']));
+    }
+
+    if (raw is Map<String, dynamic>) {
+      return Actividad.fromJson(raw);
+    }
+
+    throw Exception('Respuesta invalida del servidor.');
   }
 
   static List<Map<String, dynamic>> _extractListFromResponse(dynamic raw) {

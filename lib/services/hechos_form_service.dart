@@ -153,6 +153,12 @@ class HechosFormService {
     if (_trimmedLength(data.propiedadesAfectadas) > 2000) {
       return 'Propiedades afectadas no puede exceder 2000 caracteres.';
     }
+    if (data.responsable.trim().isEmpty) {
+      return 'Captura quién es responsable.';
+    }
+    if (_trimmedLength(data.responsable) > 255) {
+      return 'El responsable no puede exceder 255 caracteres.';
+    }
 
     final situacion = (data.situacion ?? '').trim().toUpperCase();
 
@@ -320,6 +326,7 @@ class HechosFormService {
       ),
       'checaron_antecedentes': d.checaronAntecedentes ? '1' : '0',
       'causas': HechosCatalogos.normalizeCausa(d.causa!),
+      'responsable': d.responsable.trim(),
       'colision_camino': HechosCatalogos.normalizeColisionCamino(
         d.colisionCamino!,
       ),

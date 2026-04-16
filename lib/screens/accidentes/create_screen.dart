@@ -60,6 +60,7 @@ class _CreateHechoScreenState extends State<CreateHechoScreen> {
     _data.controlTransito = _blankToNull(fields['control_transito']);
     _data.checaronAntecedentes = _isTrue(fields['checaron_antecedentes']);
     _data.causa = _blankToNull(fields['causas']);
+    _data.responsable = (fields['responsable'] ?? '').trim();
     _data.colisionCamino = _blankToNull(fields['colision_camino']);
     _data.situacion = _blankToNull(fields['situacion']);
     _data.vehiculosMp = (fields['vehiculos_mp'] ?? '').trim();

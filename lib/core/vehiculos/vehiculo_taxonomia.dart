@@ -29,6 +29,7 @@ class VehiculoTaxonomia {
       'Torton',
       'Rabón',
       'Tracto',
+      'Redilas',
     ],
 
     'motocicleta': [

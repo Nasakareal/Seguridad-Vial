@@ -22,7 +22,11 @@ class ActividadFoto {
   final int? orden;
   final String? fotoPath;
 
-  const ActividadFoto({required this.id, required this.orden, required this.fotoPath});
+  const ActividadFoto({
+    required this.id,
+    required this.orden,
+    required this.fotoPath,
+  });
 
   factory ActividadFoto.fromJson(Map<String, dynamic> json) {
     return ActividadFoto(
@@ -39,6 +43,132 @@ class ActividadFoto {
     'id': id,
     'orden': orden,
     'foto_path': fotoPath,
+  };
+}
+
+class ActividadVehiculo {
+  final int? id;
+  final String? clientUuid;
+  final String marca;
+  final String? modelo;
+  final String? tipoGeneral;
+  final String tipo;
+  final String linea;
+  final String color;
+  final String? placas;
+  final String? estadoPlacas;
+  final String? serie;
+  final int capacidadPersonas;
+  final String tipoServicio;
+  final String? tarjetaCirculacionNombre;
+  final String? grua;
+  final String? corralon;
+  final String? aseguradora;
+  final bool antecedenteVehiculo;
+  final double? montoDanos;
+  final String? partesDanadas;
+
+  const ActividadVehiculo({
+    this.id,
+    this.clientUuid,
+    required this.marca,
+    this.modelo,
+    this.tipoGeneral,
+    required this.tipo,
+    required this.linea,
+    required this.color,
+    this.placas,
+    this.estadoPlacas,
+    this.serie,
+    required this.capacidadPersonas,
+    required this.tipoServicio,
+    this.tarjetaCirculacionNombre,
+    this.grua,
+    this.corralon,
+    this.aseguradora,
+    required this.antecedenteVehiculo,
+    this.montoDanos,
+    this.partesDanadas,
+  });
+
+  factory ActividadVehiculo.fromJson(Map<String, dynamic> json) {
+    return ActividadVehiculo(
+      id: _asNullableInt(json['id']),
+      clientUuid: _asNullableString(json['client_uuid']),
+      marca: _asNullableString(json['marca']) ?? '',
+      modelo: _asNullableString(json['modelo']),
+      tipoGeneral: _asNullableString(json['tipo_general']),
+      tipo: _asNullableString(json['tipo']) ?? '',
+      linea: _asNullableString(json['linea']) ?? '',
+      color: _asNullableString(json['color']) ?? '',
+      placas: _asNullableString(json['placas']),
+      estadoPlacas: _asNullableString(json['estado_placas']),
+      serie: _asNullableString(json['serie']),
+      capacidadPersonas: _asInt(json['capacidad_personas']),
+      tipoServicio: _asNullableString(json['tipo_servicio']) ?? '',
+      tarjetaCirculacionNombre: _asNullableString(
+        json['tarjeta_circulacion_nombre'],
+      ),
+      grua: _asNullableString(json['grua']),
+      corralon: _asNullableString(json['corralon']),
+      aseguradora: _asNullableString(json['aseguradora']),
+      antecedenteVehiculo: _asBool(json['antecedente_vehiculo']),
+      montoDanos: _asNullableDouble(json['monto_danos']),
+      partesDanadas: _asNullableString(json['partes_danadas']),
+    );
+  }
+
+  Map<String, dynamic> toApiJson() {
+    final data = <String, dynamic>{
+      'marca': marca,
+      'modelo': modelo,
+      'tipo': tipo,
+      'linea': linea,
+      'color': color,
+      'placas': placas,
+      'estado_placas': estadoPlacas,
+      'serie': serie,
+      'capacidad_personas': capacidadPersonas,
+      'tipo_servicio': tipoServicio,
+      'tarjeta_circulacion_nombre': tarjetaCirculacionNombre,
+      'grua': grua,
+      'corralon': corralon,
+      'aseguradora': aseguradora,
+      'antecedente_vehiculo': antecedenteVehiculo ? 1 : 0,
+      'monto_danos': montoDanos ?? 0,
+      'partes_danadas': partesDanadas,
+    };
+
+    data.removeWhere((_, value) {
+      if (value == null) return true;
+      if (value is String && value.trim().isEmpty) return true;
+      return false;
+    });
+
+    return data;
+  }
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'client_uuid': clientUuid,
+    'marca': marca,
+    'modelo': modelo,
+    'tipo_general': tipoGeneral,
+    'tipo': tipo,
+    'linea': linea,
+    'color': color,
+    'placas': placas,
+    'estado_placas': estadoPlacas,
+    'serie': serie,
+    'capacidad_personas': capacidadPersonas,
+    'tipo_servicio': tipoServicio,
+    'tarjeta_circulacion_nombre': tarjetaCirculacionNombre,
+    'grua': grua,
+    'corralon': corralon,
+    'aseguradora': aseguradora,
+    'antecedente_vehiculo': antecedenteVehiculo,
+    'monto_danos': montoDanos,
+    'partes_danadas': partesDanadas,
   };
 }
 
@@ -81,6 +211,7 @@ class Actividad {
   final ActividadRef? delegacion;
   final ActividadRef? destacamento;
   final List<ActividadFoto> fotos;
+  final List<ActividadVehiculo> vehiculos;
 
   const Actividad({
     required this.id,
@@ -121,6 +252,7 @@ class Actividad {
     required this.delegacion,
     required this.destacamento,
     required this.fotos,
+    required this.vehiculos,
   });
 
   factory Actividad.fromJson(Map<String, dynamic> json) {
@@ -130,6 +262,7 @@ class Actividad {
     final delegacion = json['delegacion'];
     final destacamento = json['destacamento'];
     final fotosRaw = json['fotos'];
+    final vehiculosRaw = json['vehiculos'];
 
     return Actividad(
       id: _asInt(json['id']),
@@ -191,9 +324,20 @@ class Actividad {
       fotos: (fotosRaw is List)
           ? fotosRaw
                 .whereType<Map>()
-                .map((e) => ActividadFoto.fromJson(Map<String, dynamic>.from(e)))
+                .map(
+                  (e) => ActividadFoto.fromJson(Map<String, dynamic>.from(e)),
+                )
                 .toList()
           : const <ActividadFoto>[],
+      vehiculos: (vehiculosRaw is List)
+          ? vehiculosRaw
+                .whereType<Map>()
+                .map(
+                  (e) =>
+                      ActividadVehiculo.fromJson(Map<String, dynamic>.from(e)),
+                )
+                .toList()
+          : const <ActividadVehiculo>[],
     );
   }
 
@@ -254,6 +398,7 @@ class Actividad {
     'delegacion': delegacion?.toJson(),
     'destacamento': destacamento?.toJson(),
     'fotos': fotos.map((e) => e.toJson()).toList(),
+    'vehiculos': vehiculos.map((e) => e.toJson()).toList(),
   };
 }
 
@@ -273,6 +418,13 @@ double? _asNullableDouble(dynamic v) {
   if (v is double) return v;
   if (v is int) return v.toDouble();
   return double.tryParse(v.toString());
+}
+
+bool _asBool(dynamic v) {
+  if (v is bool) return v;
+  if (v is num) return v != 0;
+  final raw = v?.toString().trim().toLowerCase() ?? '';
+  return raw == '1' || raw == 'true' || raw == 'si' || raw == 'sí';
 }
 
 String? _asNullableString(dynamic v) {

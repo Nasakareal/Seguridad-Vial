@@ -17,6 +17,7 @@ class AppDrawer extends StatelessWidget {
   static const String permBusqueda = 'ver busqueda';
   static const String permEstadisticas = 'ver estadisticas';
   static const String permDictamenes = 'ver dictamenes';
+  static const String permPuestasDisposicion = 'ver puestas a disposicion';
   static const String permHechos = 'ver hechos';
   static const String permOperativosCarreteras = 'ver operativos carreteras';
   static const String permOperativosVialidades = 'ver operativos vialidades';
@@ -98,18 +99,21 @@ class AppDrawer extends StatelessWidget {
     var permissions = await AuthService.getPermissions();
     var unidadId = await AuthService.getUnidadId();
     var canSeeVialidadesUrbanas = await AuthService.isVialidadesUrbanasUser();
+    var isSuperadmin = await AuthService.isSuperadmin();
 
     if (!canSeeVialidadesUrbanas || permissions.isEmpty) {
       await AuthService.refreshCurrentUserAccess();
       permissions = await AuthService.getPermissions();
       unidadId = await AuthService.getUnidadId();
       canSeeVialidadesUrbanas = await AuthService.isVialidadesUrbanasUser();
+      isSuperadmin = await AuthService.isSuperadmin();
     }
 
     return _DrawerAccess(
       perms: permissions.map((e) => e.trim().toLowerCase()).toSet(),
       unidadId: unidadId,
       canSeeVialidadesUrbanas: canSeeVialidadesUrbanas,
+      isSuperadmin: isSuperadmin,
     );
   }
 
@@ -189,6 +193,15 @@ class AppDrawer extends StatelessWidget {
                     perms.contains('eliminar operativos carreteras');
                 final canSeeVialidadesUrbanas =
                     snap.data?.canSeeVialidadesUrbanas ?? false;
+                final unidadId = snap.data?.unidadId;
+                final isSuperadmin = snap.data?.isSuperadmin ?? false;
+                final canSeePuestas =
+                    _allowed(perms, permPuestasDisposicion) ||
+                    isSuperadmin ||
+                    unidadId != null;
+                final canSeeDictamenes =
+                    isSuperadmin ||
+                    (_allowed(perms, permDictamenes) && unidadId == 1);
 
                 return ListView(
                   padding: EdgeInsets.zero,
@@ -222,15 +235,38 @@ class AppDrawer extends StatelessWidget {
                         ),
                       ),
 
-                    if (_allowed(perms, permDictamenes))
-                      _DrawerItem(
-                        icon: Icons.description,
-                        label: 'Dictámenes',
-                        onTap: () => _nav(
-                          context,
-                          AppRoutes.dictamenes,
-                          requiredPerm: permDictamenes,
-                        ),
+                    if (canSeePuestas || canSeeDictamenes)
+                      _DrawerGroup(
+                        icon: Icons.gavel,
+                        label: 'Puestas a disposición',
+                        children: [
+                          if (canSeePuestas)
+                            _DrawerSubItem(
+                              icon: Icons.folder_open,
+                              label: 'Listado de puestas',
+                              onTap: () =>
+                                  _nav(context, AppRoutes.puestasDisposicion),
+                            ),
+                          if (canSeePuestas)
+                            _DrawerSubItem(
+                              icon: Icons.add_circle_outline,
+                              label: 'Crear puesta',
+                              onTap: () => _nav(
+                                context,
+                                AppRoutes.puestasDisposicionCreate,
+                              ),
+                            ),
+                          if (canSeeDictamenes)
+                            _DrawerSubItem(
+                              icon: Icons.description,
+                              label: 'Listado de dictámenes',
+                              onTap: () => _nav(
+                                context,
+                                AppRoutes.dictamenes,
+                                requiredPerm: permDictamenes,
+                              ),
+                            ),
+                        ],
                       ),
 
                     const Divider(height: 24),
@@ -377,11 +413,13 @@ class _DrawerAccess {
   final Set<String> perms;
   final int? unidadId;
   final bool canSeeVialidadesUrbanas;
+  final bool isSuperadmin;
 
   const _DrawerAccess({
     required this.perms,
     required this.unidadId,
     required this.canSeeVialidadesUrbanas,
+    required this.isSuperadmin,
   });
 }
 

@@ -8,6 +8,7 @@ import '../../models/actividad_categoria.dart';
 import '../../models/actividad_subcategoria.dart';
 import '../../services/actividades_service.dart';
 import '../../widgets/safe_network_image.dart';
+import 'widgets/actividad_vehiculo_modal.dart';
 
 class ActividadEditScreen extends StatefulWidget {
   const ActividadEditScreen({super.key});
@@ -264,6 +265,84 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _error = 'No se pudo actualizar.\n$e');
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  Future<void> _agregarVehiculo() async {
+    final a = _actividad;
+    if (a == null || _saving) return;
+
+    final vehiculo = await showActividadVehiculoModal(context);
+    if (vehiculo == null || !mounted) return;
+
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
+
+    try {
+      final updated = await ActividadesService.storeVehiculo(
+        actividadId: a.id,
+        vehiculo: vehiculo,
+      );
+      if (!mounted) return;
+      setState(() => _actividad = updated);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Vehiculo agregado correctamente.')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _error = 'No se pudo agregar el vehiculo.\n$e');
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  Future<void> _quitarVehiculo(ActividadVehiculo vehiculo) async {
+    final a = _actividad;
+    final vehiculoId = vehiculo.id;
+    if (a == null || vehiculoId == null || _saving) return;
+
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Desvincular vehiculo'),
+        content: const Text('¿Desvincular este vehiculo de la actividad?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancelar'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Desvincular'),
+          ),
+        ],
+      ),
+    );
+
+    if (ok != true || !mounted) return;
+
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
+
+    try {
+      final updated = await ActividadesService.destroyVehiculo(
+        actividadId: a.id,
+        vehiculoId: vehiculoId,
+      );
+      if (!mounted) return;
+      setState(() => _actividad = updated);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Vehiculo desvinculado correctamente.')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _error = 'No se pudo desvincular el vehiculo.\n$e');
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -595,6 +674,60 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
                       'Patrullas participantes',
                       maxLines: 3,
                     ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 12),
+
+              _card(
+                title: 'Vehiculos relacionados',
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            'Total: ${a.vehiculos.length}',
+                            style: TextStyle(
+                              color: Colors.grey.shade700,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ),
+                        ElevatedButton.icon(
+                          onPressed: _saving ? null : _agregarVehiculo,
+                          icon: const Icon(Icons.add),
+                          label: const Text('Agregar vehiculo'),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    if (a.vehiculos.isEmpty)
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.blue.withValues(alpha: .06),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: Colors.blue.withValues(alpha: .16),
+                          ),
+                        ),
+                        child: const Text(
+                          'No hay vehiculos vinculados a esta actividad.',
+                        ),
+                      )
+                    else
+                      ...a.vehiculos.map((vehiculo) {
+                        return ActividadVehiculoCard(
+                          vehiculo: vehiculo,
+                          onRemove: _saving || vehiculo.id == null
+                              ? null
+                              : () => _quitarVehiculo(vehiculo),
+                        );
+                      }),
                   ],
                 ),
               ),

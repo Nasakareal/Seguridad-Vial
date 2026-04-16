@@ -14,6 +14,10 @@ class FeedItemCard extends StatelessWidget {
         return Icons.car_crash;
       case FeedItemType.actividad:
         return Icons.photo_camera;
+      case FeedItemType.carreteras:
+        return Icons.add_road;
+      case FeedItemType.vialidades:
+        return Icons.traffic;
     }
   }
 
@@ -23,6 +27,10 @@ class FeedItemCard extends StatelessWidget {
         return 'SINIESTRO';
       case FeedItemType.actividad:
         return 'PROXIMIDAD SOCIAL';
+      case FeedItemType.carreteras:
+        return 'CARRETERAS';
+      case FeedItemType.vialidades:
+        return 'VIALIDADES';
     }
   }
 

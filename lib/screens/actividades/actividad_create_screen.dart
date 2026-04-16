@@ -3,11 +3,13 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
+import '../../models/actividad.dart';
 import '../../models/actividad_categoria.dart';
 import '../../models/actividad_subcategoria.dart';
 import '../../services/actividades_service.dart';
 import '../../services/auth_service.dart';
 import '../../services/geo_service.dart';
+import 'widgets/actividad_vehiculo_modal.dart';
 
 class ActividadCreateScreen extends StatefulWidget {
   const ActividadCreateScreen({super.key});
@@ -31,6 +33,7 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
   int? _categoriaId;
   int? _subcategoriaId;
   final List<File> _fotos = [];
+  final List<ActividadVehiculo> _vehiculos = [];
 
   final _fechaCtrl = TextEditingController();
   final _horaCtrl = TextEditingController();
@@ -208,6 +211,9 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
     _fotos
       ..clear()
       ..addAll(_filesForDraft(files));
+    _vehiculos
+      ..clear()
+      ..addAll(_vehiculosFromFields(fields));
 
     if (_latCtrl.text.trim().isNotEmpty && _lngCtrl.text.trim().isNotEmpty) {
       _locationStatus = 'Ubicacion recuperada del borrador offline.';
@@ -246,6 +252,62 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
       restored.add(file);
     }
     return restored;
+  }
+
+  List<ActividadVehiculo> _vehiculosFromFields(Map<String, String> fields) {
+    final grouped = <int, Map<String, String>>{};
+    final pattern = RegExp(r'^vehiculos\[(\d+)\]\[([^\]]+)\]$');
+
+    for (final entry in fields.entries) {
+      final match = pattern.firstMatch(entry.key);
+      if (match == null) continue;
+
+      final index = int.tryParse(match.group(1) ?? '');
+      final field = match.group(2);
+      if (index == null || field == null) continue;
+
+      grouped.putIfAbsent(index, () => <String, String>{})[field] = entry.value;
+    }
+
+    final indexes = grouped.keys.toList()..sort();
+
+    return indexes
+        .map((index) => _vehiculoFromMap(grouped[index] ?? const {}))
+        .where((vehiculo) => vehiculo.marca.trim().isNotEmpty)
+        .toList();
+  }
+
+  ActividadVehiculo _vehiculoFromMap(Map<String, String> data) {
+    String? str(String key) {
+      final clean = (data[key] ?? '').trim();
+      return clean.isEmpty ? null : clean;
+    }
+
+    bool boolValue(String key) {
+      final raw = (data[key] ?? '').trim().toLowerCase();
+      return raw == '1' || raw == 'true' || raw == 'si' || raw == 'sí';
+    }
+
+    return ActividadVehiculo(
+      marca: str('marca') ?? '',
+      modelo: str('modelo'),
+      tipoGeneral: str('tipo_general'),
+      tipo: str('tipo') ?? '',
+      linea: str('linea') ?? '',
+      color: str('color') ?? '',
+      placas: str('placas'),
+      estadoPlacas: str('estado_placas'),
+      serie: str('serie'),
+      capacidadPersonas: int.tryParse(str('capacidad_personas') ?? '') ?? 0,
+      tipoServicio: str('tipo_servicio') ?? 'PARTICULAR',
+      tarjetaCirculacionNombre: str('tarjeta_circulacion_nombre'),
+      grua: str('grua'),
+      corralon: str('corralon'),
+      aseguradora: str('aseguradora'),
+      antecedenteVehiculo: boolValue('antecedente_vehiculo'),
+      montoDanos: double.tryParse(str('monto_danos') ?? ''),
+      partesDanadas: str('partes_danadas'),
+    );
   }
 
   String? _firstNonEmpty(List<String?> values) {
@@ -351,7 +413,19 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
       personasDetenidas: _trim(_personasDetenidasCtrl),
       elementosParticipantesTexto: _trim(_elementosCtrl),
       patrullasParticipantesTexto: _trim(_patrullasCtrl),
+      vehiculos: List<ActividadVehiculo>.from(_vehiculos),
     );
+  }
+
+  Future<void> _agregarVehiculo() async {
+    final vehiculo = await showActividadVehiculoModal(context);
+    if (vehiculo == null || !mounted) return;
+
+    setState(() => _vehiculos.add(vehiculo));
+  }
+
+  void _quitarVehiculo(int index) {
+    setState(() => _vehiculos.removeAt(index));
   }
 
   Future<void> _submit() async {
@@ -767,6 +841,60 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
                     'Patrullas participantes',
                     maxLines: 3,
                   ),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 12),
+
+            _card(
+              title: 'Vehiculos relacionados',
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'Total: ${_vehiculos.length}',
+                          style: TextStyle(
+                            color: Colors.grey.shade700,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                      ElevatedButton.icon(
+                        onPressed: _saving ? null : _agregarVehiculo,
+                        icon: const Icon(Icons.add),
+                        label: const Text('Agregar vehiculo'),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  if (_vehiculos.isEmpty)
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.blue.withValues(alpha: .06),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: Colors.blue.withValues(alpha: .16),
+                        ),
+                      ),
+                      child: const Text(
+                        'No hay vehiculos agregados para esta actividad.',
+                      ),
+                    )
+                  else
+                    ..._vehiculos.asMap().entries.map((entry) {
+                      return ActividadVehiculoCard(
+                        vehiculo: entry.value,
+                        onRemove: _saving
+                            ? null
+                            : () => _quitarVehiculo(entry.key),
+                      );
+                    }),
                 ],
               ),
             ),

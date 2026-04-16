@@ -1,4 +1,4 @@
-enum FeedItemType { hecho, actividad }
+enum FeedItemType { hecho, actividad, carreteras, vialidades }
 
 class FeedItem {
   final FeedItemType type;
@@ -9,6 +9,7 @@ class FeedItem {
   final String? fotoUrl;
   final DateTime? createdAt;
   final String? showUrl;
+  final int? unidadId;
 
   const FeedItem({
     required this.type,
@@ -19,11 +20,14 @@ class FeedItem {
     required this.fotoUrl,
     required this.createdAt,
     required this.showUrl,
+    required this.unidadId,
   });
 
   static FeedItemType _parseType(dynamic v) {
     final s = (v ?? '').toString().trim().toUpperCase();
     if (s == 'HECHO') return FeedItemType.hecho;
+    if (s == 'CARRETERAS') return FeedItemType.carreteras;
+    if (s == 'VIALIDADES') return FeedItemType.vialidades;
     return FeedItemType.actividad;
   }
 
@@ -55,6 +59,7 @@ class FeedItem {
       fotoUrl: (json['foto_url'] == null) ? null : json['foto_url'].toString(),
       createdAt: _parseDate(json['created_at']),
       showUrl: (json['show_url'] == null) ? null : json['show_url'].toString(),
+      unidadId: json['unidad_id'] == null ? null : _asInt(json['unidad_id']),
     );
   }
 }

@@ -44,6 +44,9 @@ class AppRoutes {
   static const String dictamenesShow = '/dictamenes/show';
   static const String dictamenesBuscar = '/dictamenes/buscar';
 
+  static const String puestasDisposicion = '/puestas-disposicion';
+  static const String puestasDisposicionCreate = '/puestas-disposicion/create';
+
   static const String actividades = '/actividades';
   static const String actividadesCreate = '/actividades/create';
   static const String actividadesShow = '/actividades/show';

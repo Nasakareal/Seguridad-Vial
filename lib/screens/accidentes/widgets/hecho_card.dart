@@ -49,6 +49,8 @@ class HechoCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final responsable = (hecho['responsable'] ?? '').toString().trim();
+
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -78,6 +80,8 @@ class HechoCard extends StatelessWidget {
                     Text('Ubicación: $ubicacion'),
                     Text('Situación: $situacion'),
                     Text('Perito: $perito'),
+                    if (responsable.isNotEmpty)
+                      Text('Responsable: $responsable'),
                     PhotoBlock(label: 'Foto del hecho', url: fotoHecho),
                     PhotoBlock(
                       label: 'Foto de la situacion',

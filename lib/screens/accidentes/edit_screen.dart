@@ -158,6 +158,8 @@ class _EditHechoScreenState extends State<EditHechoScreen> {
       HechosCatalogos.causasUi,
     );
 
+    d.responsable = _asString(raw['responsable']) ?? '';
+
     d.colisionCamino = _pickMatchingValue(
       _asString(raw['colision_camino']),
       HechosCatalogos.colisionCaminoUi,

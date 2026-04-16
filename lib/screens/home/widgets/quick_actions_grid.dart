@@ -4,13 +4,11 @@ class QuickActionsGrid extends StatelessWidget {
   final bool canAccidentes;
   final bool canGruas;
   final bool canMapa;
-  final bool canSustento;
   final bool canBuscar;
 
   final VoidCallback onAccidentes;
   final VoidCallback onGruas;
   final VoidCallback onMapa;
-  final VoidCallback onSustentoLegal;
   final VoidCallback onBuscar;
 
   const QuickActionsGrid({
@@ -18,12 +16,10 @@ class QuickActionsGrid extends StatelessWidget {
     required this.canAccidentes,
     required this.canGruas,
     required this.canMapa,
-    required this.canSustento,
     required this.canBuscar,
     required this.onAccidentes,
     required this.onGruas,
     required this.onMapa,
-    required this.onSustentoLegal,
     required this.onBuscar,
   });
 
@@ -90,24 +86,6 @@ class QuickActionsGrid extends StatelessWidget {
       rows.add(Row(children: row2));
     }
 
-    final row3 = <Widget>[];
-    if (canSustento) {
-      row3.add(
-        Expanded(
-          child: _QuickCard(
-            icon: Icons.gavel,
-            title: 'Sustento Legal',
-            subtitle: 'Catálogo y consulta',
-            onTap: onSustentoLegal,
-          ),
-        ),
-      );
-    }
-    if (row3.isNotEmpty) {
-      if (rows.isNotEmpty) rows.add(const SizedBox(height: 12));
-      rows.add(Row(children: row3));
-    }
-
     if (rows.isEmpty) return const SizedBox.shrink();
     return Column(children: rows);
   }
@@ -143,7 +121,7 @@ class _QuickCard extends StatelessWidget {
               BoxShadow(
                 blurRadius: 14,
                 offset: const Offset(0, 8),
-                color: Colors.black.withOpacity(.06),
+                color: Colors.black.withValues(alpha: .06),
               ),
             ],
           ),
@@ -153,7 +131,7 @@ class _QuickCard extends StatelessWidget {
                 width: 44,
                 height: 44,
                 decoration: BoxDecoration(
-                  color: Colors.blue.withOpacity(.10),
+                  color: Colors.blue.withValues(alpha: .10),
                   borderRadius: BorderRadius.circular(14),
                 ),
                 child: Icon(icon, color: Colors.blue, size: 26),

@@ -29,6 +29,7 @@ class HechoFormData {
   bool checaronAntecedentes = false;
 
   String? causa;
+  String responsable = '';
   String? colisionCamino;
   String? situacion;
 

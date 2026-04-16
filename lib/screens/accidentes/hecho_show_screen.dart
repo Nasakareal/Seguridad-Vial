@@ -383,6 +383,11 @@ class _HechoShowScreenState extends State<HechoShowScreen>
       ),
       _KV('Causas', HechoShowHelpers.safeText(h['causas']), full: true),
       _KV(
+        'Responsable',
+        HechoShowHelpers.safeText(h['responsable']),
+        full: true,
+      ),
+      _KV(
         'Colisión/camino',
         HechoShowHelpers.safeText(h['colision_camino']),
         full: true,

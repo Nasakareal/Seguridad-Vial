@@ -44,6 +44,8 @@ import '../screens/dictamenes/dictamenes_screen.dart';
 import '../screens/dictamenes/dictamen_create_screen.dart';
 import '../screens/dictamenes/dictamen_show_screen.dart';
 import '../screens/dictamenes/dictamen_busqueda_screen.dart';
+import '../screens/puestas_disposicion/puesta_disposicion_create_screen.dart';
+import '../screens/puestas_disposicion/puestas_disposicion_screen.dart';
 import '../screens/offline/offline_failed_operations_screen.dart';
 
 import '../screens/actividades/actividades_screen.dart';
@@ -108,6 +110,9 @@ final Map<String, WidgetBuilder> appRoutesMap = {
   AppRoutes.dictamenesCreate: (context) => const DictamenCreateScreen(),
   AppRoutes.dictamenesShow: (context) => const DictamenShowScreen(),
   AppRoutes.dictamenesBuscar: (context) => const DictamenesBusquedaScreen(),
+  AppRoutes.puestasDisposicion: (context) => const PuestasDisposicionScreen(),
+  AppRoutes.puestasDisposicionCreate: (context) =>
+      const PuestaDisposicionCreateScreen(),
   AppRoutes.offlineSyncErrors: (context) =>
       const OfflineFailedOperationsScreen(),
 

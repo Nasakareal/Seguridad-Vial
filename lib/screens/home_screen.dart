@@ -5,6 +5,7 @@ import 'package:seguridad_vial_app/app/routes.dart';
 
 import '../services/auth_service.dart';
 import '../services/app_version_service.dart';
+import '../services/feed_service.dart';
 import '../services/push_service.dart';
 
 import '../widgets/app_drawer.dart';
@@ -249,10 +250,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         final canMapa =
             !loadingPerms &&
             _permsCtrl.allowed(HomePermissionsController.permMapa);
-        final canSustento =
-            !loadingPerms &&
-            _permsCtrl.allowed(HomePermissionsController.permSustento);
-
         return ValueListenableBuilder<bool>(
           valueListenable: _trackingCtrl.trackingOn,
           builder: (context, trackingOn, __) {
@@ -304,13 +301,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                 canAccidentes: canHechos,
                                 canGruas: canGruas,
                                 canMapa: canMapa,
-                                canSustento: canSustento,
                                 onAccidentes: () =>
                                     _go(context, AppRoutes.accidentes),
                                 onGruas: () => _go(context, AppRoutes.gruas),
                                 onMapa: () => _go(context, AppRoutes.mapa),
-                                onSustentoLegal: () =>
-                                    _go(context, AppRoutes.sustentoLegal),
                                 onBuscar: () =>
                                     _go(context, AppRoutes.hechosBuscar),
                               ),
@@ -385,6 +379,50 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                   ),
                                 ],
                               ),
+                              ValueListenableBuilder<bool>(
+                                valueListenable: _feedCtrl.puedeFiltrarUnidades,
+                                builder: (context, puedeFiltrar, _) {
+                                  if (!puedeFiltrar) {
+                                    return const SizedBox.shrink();
+                                  }
+
+                                  return ValueListenableBuilder<
+                                    List<FeedUnidad>
+                                  >(
+                                    valueListenable:
+                                        _feedCtrl.unidadesDisponibles,
+                                    builder: (context, unidades, __) {
+                                      if (unidades.isEmpty) {
+                                        return const SizedBox.shrink();
+                                      }
+
+                                      return ValueListenableBuilder<int?>(
+                                        valueListenable:
+                                            _feedCtrl.selectedUnidadId,
+                                        builder: (context, selectedId, ___) {
+                                          return Padding(
+                                            padding: const EdgeInsets.only(
+                                              top: 10,
+                                            ),
+                                            child: _FeedUnidadFilter(
+                                              unidades: unidades,
+                                              selectedUnidadId: selectedId,
+                                              onChanged: (unidadId) async {
+                                                _feedCtrl.setUnidadFilter(
+                                                  unidadId,
+                                                );
+                                                await _feedCtrl.load(
+                                                  reset: true,
+                                                );
+                                              },
+                                            ),
+                                          );
+                                        },
+                                      );
+                                    },
+                                  );
+                                },
+                              ),
                               const SizedBox(height: 10),
                             ],
                           ),
@@ -437,6 +475,61 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           },
         );
       },
+    );
+  }
+}
+
+class _FeedUnidadFilter extends StatelessWidget {
+  final List<FeedUnidad> unidades;
+  final int? selectedUnidadId;
+  final ValueChanged<int?> onChanged;
+
+  const _FeedUnidadFilter({
+    required this.unidades,
+    required this.selectedUnidadId,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final unique = <int, FeedUnidad>{};
+    for (final unidad in unidades) {
+      unique[unidad.id] = unidad;
+    }
+    final items = unique.values.toList()..sort((a, b) => a.id.compareTo(b.id));
+    final ids = items.map((unidad) => unidad.id).toSet();
+    final selected = ids.contains(selectedUnidadId) ? selectedUnidadId! : 0;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<int>(
+          isExpanded: true,
+          value: selected,
+          icon: const Icon(Icons.keyboard_arrow_down),
+          items: [
+            const DropdownMenuItem<int>(
+              value: 0,
+              child: Text(
+                'Todas las unidades',
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            for (final unidad in items)
+              DropdownMenuItem<int>(
+                value: unidad.id,
+                child: Text(unidad.nombre, overflow: TextOverflow.ellipsis),
+              ),
+          ],
+          onChanged: (value) => onChanged(value == 0 ? null : value),
+        ),
+      ),
     );
   }
 }

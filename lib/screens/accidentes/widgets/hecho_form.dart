@@ -66,6 +66,7 @@ class _HechoFormState extends State<HechoForm> {
   final _vehMpCtrl = TextEditingController();
   final _persMpCtrl = TextEditingController();
 
+  final _responsableCtrl = TextEditingController();
   final _propsCtrl = TextEditingController();
   final _montoCtrl = TextEditingController();
 
@@ -109,6 +110,7 @@ class _HechoFormState extends State<HechoForm> {
     _vehMpCtrl.text = d.vehiculosMp;
     _persMpCtrl.text = d.personasMp;
 
+    _responsableCtrl.text = d.responsable;
     _propsCtrl.text = d.propiedadesAfectadas;
     _montoCtrl.text = d.montoDanos;
 
@@ -141,6 +143,7 @@ class _HechoFormState extends State<HechoForm> {
     _municipioCtrl.dispose();
     _vehMpCtrl.dispose();
     _persMpCtrl.dispose();
+    _responsableCtrl.dispose();
     _propsCtrl.dispose();
     _montoCtrl.dispose();
     super.dispose();
@@ -350,6 +353,7 @@ class _HechoFormState extends State<HechoForm> {
     d.vehiculosMp = _vehMpCtrl.text;
     d.personasMp = _persMpCtrl.text;
 
+    d.responsable = _responsableCtrl.text;
     d.propiedadesAfectadas = _propsCtrl.text;
     d.montoDanos = _montoCtrl.text;
 
@@ -714,6 +718,14 @@ class _HechoFormState extends State<HechoForm> {
                 .toList(),
             onChanged: _submitting ? null : (v) => setState(() => d.causa = v),
             validator: (v) => v == null ? 'Requerido' : null,
+          ),
+
+          const SizedBox(height: 12),
+          TextFormField(
+            controller: _responsableCtrl,
+            decoration: _dec('Responsable *'),
+            textCapitalization: TextCapitalization.characters,
+            validator: (v) => _requiredMaxValidator(v, 255, 'Responsable'),
           ),
 
           const SizedBox(height: 12),

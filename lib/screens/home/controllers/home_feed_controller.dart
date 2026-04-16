@@ -8,6 +8,10 @@ class HomeFeedController {
   final ValueNotifier<bool> loadingMore = ValueNotifier<bool>(false);
   final ValueNotifier<bool> hasMore = ValueNotifier<bool>(true);
   final ValueNotifier<String?> error = ValueNotifier<String?>(null);
+  final ValueNotifier<bool> puedeFiltrarUnidades = ValueNotifier<bool>(false);
+  final ValueNotifier<int?> selectedUnidadId = ValueNotifier<int?>(null);
+  final ValueNotifier<List<FeedUnidad>> unidadesDisponibles =
+      ValueNotifier<List<FeedUnidad>>(<FeedUnidad>[]);
 
   final ValueNotifier<DateTime> selectedDate = ValueNotifier<DateTime>(
     DateTime.now(),
@@ -25,6 +29,12 @@ class HomeFeedController {
     selectedDate.value = onlyDate(d);
   }
 
+  void setUnidadFilter(int? unidadId) {
+    selectedUnidadId.value = (unidadId != null && unidadId > 0)
+        ? unidadId
+        : null;
+  }
+
   Future<void> load({required bool reset}) async {
     if (loadingFeed.value) return;
 
@@ -40,17 +50,20 @@ class HomeFeedController {
     try {
       final limit = (_pageSize * _page).clamp(1, 50);
 
-      final items = await FeedService.fetchFeed(
+      final response = await FeedService.fetchFeed(
         limit: limit,
         date: onlyDate(selectedDate.value),
+        unidadId: selectedUnidadId.value,
       );
+      _syncMetadata(response);
+      final items = response.items;
 
       final current = feed.value;
-      final existingIds = current.map((e) => e.id).toSet();
+      final existingIds = current.map(_feedKey).toSet();
 
       final newOnes = <FeedItem>[];
       for (final it in items) {
-        if (!existingIds.contains(it.id)) newOnes.add(it);
+        if (!existingIds.contains(_feedKey(it))) newOnes.add(it);
       }
 
       if (reset) {
@@ -87,17 +100,20 @@ class HomeFeedController {
       final nextPage = _page + 1;
       final nextLimit = (_pageSize * nextPage).clamp(1, 50);
 
-      final items = await FeedService.fetchFeed(
+      final response = await FeedService.fetchFeed(
         limit: nextLimit,
         date: onlyDate(selectedDate.value),
+        unidadId: selectedUnidadId.value,
       );
+      _syncMetadata(response);
+      final items = response.items;
 
       final current = feed.value;
-      final existingIds = current.map((e) => e.id).toSet();
+      final existingIds = current.map(_feedKey).toSet();
 
       final newOnes = <FeedItem>[];
       for (final it in items) {
-        if (!existingIds.contains(it.id)) newOnes.add(it);
+        if (!existingIds.contains(_feedKey(it))) newOnes.add(it);
       }
 
       if (newOnes.isNotEmpty) {
@@ -119,7 +135,22 @@ class HomeFeedController {
     loadingMore.dispose();
     hasMore.dispose();
     error.dispose();
+    puedeFiltrarUnidades.dispose();
+    selectedUnidadId.dispose();
+    unidadesDisponibles.dispose();
     selectedDate.dispose();
     feed.dispose();
   }
+
+  void _syncMetadata(FeedResponse response) {
+    puedeFiltrarUnidades.value = response.puedeFiltrarUnidades;
+    if (selectedUnidadId.value == null &&
+        response.unidadesFiltrables.isNotEmpty) {
+      unidadesDisponibles.value = List<FeedUnidad>.from(
+        response.unidadesFiltrables,
+      );
+    }
+  }
+
+  String _feedKey(FeedItem item) => '${item.type.name}:${item.id}';
 }
