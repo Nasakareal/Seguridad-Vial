@@ -47,6 +47,12 @@ class HechoForm extends StatefulWidget {
 
 class _HechoFormState extends State<HechoForm> {
   final _formKey = GlobalKey<FormState>();
+  final _horaFieldKey = GlobalKey();
+  final _fechaFieldKey = GlobalKey();
+  final _fotoLugarKey = GlobalKey();
+  final _fotoSituacionKey = GlobalKey();
+  final _danosKey = GlobalKey();
+  final _folioFieldKey = GlobalKey();
   bool _submitting = false;
   bool _isPerito = false;
 
@@ -66,7 +72,6 @@ class _HechoFormState extends State<HechoForm> {
   final _vehMpCtrl = TextEditingController();
   final _persMpCtrl = TextEditingController();
 
-  final _responsableCtrl = TextEditingController();
   final _propsCtrl = TextEditingController();
   final _montoCtrl = TextEditingController();
 
@@ -110,7 +115,6 @@ class _HechoFormState extends State<HechoForm> {
     _vehMpCtrl.text = d.vehiculosMp;
     _persMpCtrl.text = d.personasMp;
 
-    _responsableCtrl.text = d.responsable;
     _propsCtrl.text = d.propiedadesAfectadas;
     _montoCtrl.text = d.montoDanos;
 
@@ -143,7 +147,6 @@ class _HechoFormState extends State<HechoForm> {
     _municipioCtrl.dispose();
     _vehMpCtrl.dispose();
     _persMpCtrl.dispose();
-    _responsableCtrl.dispose();
     _propsCtrl.dispose();
     _montoCtrl.dispose();
     super.dispose();
@@ -154,7 +157,15 @@ class _HechoFormState extends State<HechoForm> {
 
   String? _safeDropdownValue(String? value, List<String> options) {
     if (value == null) return null;
-    return options.contains(value) ? value : null;
+    final clean = value.trim();
+    if (options.contains(clean)) return clean;
+
+    final normalized = HechosCatalogos.removeAccents(clean);
+    for (final option in options) {
+      if (HechosCatalogos.removeAccents(option) == normalized) return option;
+    }
+
+    return null;
   }
 
   String? _requiredValidator(String? value) {
@@ -189,6 +200,53 @@ class _HechoFormState extends State<HechoForm> {
     final parsed = int.tryParse(txt);
     if (parsed == null) return '$label inválido';
     if (parsed < 0) return '$label no puede ser negativo';
+    return null;
+  }
+
+  Future<void> _scrollToContext(BuildContext targetContext) {
+    return Scrollable.ensureVisible(
+      targetContext,
+      duration: const Duration(milliseconds: 450),
+      curve: Curves.easeOutCubic,
+      alignment: 0.12,
+    );
+  }
+
+  Future<void> _scrollToKey(GlobalKey key) async {
+    await Future<void>.delayed(const Duration(milliseconds: 60));
+    if (!mounted) return;
+    final targetContext = key.currentContext;
+    if (targetContext == null) return;
+    if (!targetContext.mounted) return;
+    await _scrollToContext(targetContext);
+  }
+
+  Future<void> _scrollToFirstInvalidField(
+    Iterable<FormFieldState<Object?>> invalidFields,
+  ) async {
+    await Future<void>.delayed(const Duration(milliseconds: 60));
+    if (!mounted) return;
+    final firstInvalid = invalidFields.isEmpty ? null : invalidFields.first;
+    final targetContext = firstInvalid?.context;
+    if (targetContext == null) return;
+    if (!targetContext.mounted) return;
+
+    await _scrollToContext(targetContext);
+  }
+
+  GlobalKey? _keyForBusinessRuleMessage(String message) {
+    final lower = message.toLowerCase();
+    if (lower.contains('foto de situación') ||
+        lower.contains('foto de situacion')) {
+      return _fotoSituacionKey;
+    }
+    if (lower.contains('foto del lugar')) return _fotoLugarKey;
+    if (lower.contains('folio')) return _folioFieldKey;
+    if (lower.contains('daños patrimoniales') ||
+        lower.contains('propiedades afectadas') ||
+        lower.contains('monto')) {
+      return _danosKey;
+    }
     return null;
   }
 
@@ -302,9 +360,25 @@ class _HechoFormState extends State<HechoForm> {
       d.hora = _hora;
     }
 
-    if (_hora == null ||
-        _fecha == null ||
-        d.sector == null ||
+    if (_hora == null) {
+      await _scrollToKey(_horaFieldKey);
+      if (!mounted) return false;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Selecciona la hora.')));
+      return false;
+    }
+
+    if (_fecha == null) {
+      await _scrollToKey(_fechaFieldKey);
+      if (!mounted) return false;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Selecciona la fecha.')));
+      return false;
+    }
+
+    if (d.sector == null ||
         d.tipoHecho == null ||
         d.superficieVia == null ||
         d.tiempo == null ||
@@ -327,6 +401,10 @@ class _HechoFormState extends State<HechoForm> {
       fotoSituacion: _fotoSituacion,
     );
     if (offlineError != null) {
+      final targetKey = _keyForBusinessRuleMessage(offlineError);
+      if (targetKey != null) {
+        await _scrollToKey(targetKey);
+      }
       if (!mounted) return false;
       ScaffoldMessenger.of(
         context,
@@ -353,7 +431,9 @@ class _HechoFormState extends State<HechoForm> {
     d.vehiculosMp = _vehMpCtrl.text;
     d.personasMp = _persMpCtrl.text;
 
-    d.responsable = _responsableCtrl.text;
+    d.responsable =
+        _safeDropdownValue(d.responsable, HechosCatalogos.responsablesUi) ??
+        d.responsable;
     d.propiedadesAfectadas = _propsCtrl.text;
     d.montoDanos = _montoCtrl.text;
 
@@ -364,8 +444,13 @@ class _HechoFormState extends State<HechoForm> {
   Future<void> _submit() async {
     if (_submitting) return;
 
-    final valid = _formKey.currentState?.validate() ?? false;
-    if (!valid) return;
+    final invalidFields =
+        _formKey.currentState?.validateGranularly() ??
+        const <FormFieldState<Object?>>{};
+    if (invalidFields.isNotEmpty) {
+      await _scrollToFirstInvalidField(invalidFields);
+      return;
+    }
 
     _syncToData();
     if (!await _validateBusinessRules()) return;
@@ -392,9 +477,15 @@ class _HechoFormState extends State<HechoForm> {
       Navigator.pop(context, true);
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(HechosFormService.cleanExceptionMessage(e))),
-      );
+      final message = HechosFormService.cleanExceptionMessage(e);
+      final targetKey = _keyForBusinessRuleMessage(message);
+      if (targetKey != null) {
+        await _scrollToKey(targetKey);
+      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(message)));
     } finally {
       if (mounted) setState(() => _submitting = false);
     }
@@ -431,6 +522,10 @@ class _HechoFormState extends State<HechoForm> {
       d.colisionCamino,
       HechosCatalogos.colisionCaminoUi,
     );
+    final responsableValue = _safeDropdownValue(
+      d.responsable,
+      HechosCatalogos.responsablesUi,
+    );
     final situacionValue = _safeDropdownValue(
       d.situacion,
       HechosCatalogos.situaciones,
@@ -449,6 +544,7 @@ class _HechoFormState extends State<HechoForm> {
           const SizedBox(height: 12),
 
           DanosPatrimonialesCard(
+            key: _danosKey,
             data: d,
             disabled: _submitting,
             propsCtrl: _propsCtrl,
@@ -458,6 +554,7 @@ class _HechoFormState extends State<HechoForm> {
           const SizedBox(height: 12),
 
           PhotoCard(
+            key: _fotoLugarKey,
             title: 'Foto del hecho (opcional)',
             file: _fotoLugar,
             disabled: _submitting,
@@ -465,6 +562,7 @@ class _HechoFormState extends State<HechoForm> {
             onClear: () => setState(() => _fotoLugar = null),
           ),
           PhotoCard(
+            key: _fotoSituacionKey,
             title: 'Foto de la situación (opcional)',
             file: _fotoSituacion,
             disabled: _submitting,
@@ -477,6 +575,7 @@ class _HechoFormState extends State<HechoForm> {
             children: [
               Expanded(
                 child: TextFormField(
+                  key: _folioFieldKey,
                   controller: _folioCtrl,
                   decoration: _dec('Folio C5i *'),
                   validator: (v) => _requiredMaxValidator(v, 20, 'Folio C5i'),
@@ -519,6 +618,7 @@ class _HechoFormState extends State<HechoForm> {
           Row(
             children: [
               Expanded(
+                key: _horaFieldKey,
                 child: InkWell(
                   onTap: (_submitting || _isPerito) ? null : _pickHora,
                   child: InputDecorator(
@@ -538,6 +638,7 @@ class _HechoFormState extends State<HechoForm> {
               ),
               const SizedBox(width: 8),
               Expanded(
+                key: _fechaFieldKey,
                 child: InkWell(
                   onTap: _submitting ? null : _pickFecha,
                   child: InputDecorator(
@@ -721,11 +822,17 @@ class _HechoFormState extends State<HechoForm> {
           ),
 
           const SizedBox(height: 12),
-          TextFormField(
-            controller: _responsableCtrl,
+          DropdownButtonFormField<String>(
+            isExpanded: true,
             decoration: _dec('Responsable *'),
-            textCapitalization: TextCapitalization.characters,
-            validator: (v) => _requiredMaxValidator(v, 255, 'Responsable'),
+            value: responsableValue,
+            items: HechosCatalogos.responsablesUi
+                .map((v) => DropdownMenuItem(value: v, child: Text(v)))
+                .toList(),
+            onChanged: _submitting
+                ? null
+                : (v) => setState(() => d.responsable = v ?? ''),
+            validator: (v) => v == null ? 'Requerido' : null,
           ),
 
           const SizedBox(height: 12),

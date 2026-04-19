@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../app/routes.dart';
 import '../../models/hecho_form_data.dart';
+import '../../services/auth_service.dart';
 import '../../services/offline_sync_service.dart';
 import '../../services/hechos_form_service.dart';
 import 'widgets/hecho_form.dart';
@@ -22,6 +23,23 @@ class _CreateHechoScreenState extends State<CreateHechoScreen> {
   File? _initialFotoLugar;
   File? _initialFotoSituacion;
   bool _draftHydrated = false;
+  bool _checkingAccess = true;
+  bool _canCreateHechos = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadAccess();
+  }
+
+  Future<void> _loadAccess() async {
+    final canCreate = await AuthService.canCreateHechos(refresh: true);
+    if (!mounted) return;
+    setState(() {
+      _canCreateHechos = canCreate;
+      _checkingAccess = false;
+    });
+  }
 
   @override
   void didChangeDependencies() {
@@ -148,8 +166,22 @@ class _CreateHechoScreenState extends State<CreateHechoScreen> {
       context,
     ).showSnackBar(SnackBar(content: Text(result.message)));
 
+    if (!result.queued) {
+      final hechoId = HechosFormService.hechoIdFromCreateResult(result);
+      if (hechoId != null && hechoId > 0) {
+        Navigator.pushReplacementNamed(
+          context,
+          AppRoutes.accidentesShow,
+          arguments: {'hechoId': hechoId},
+        );
+      } else {
+        Navigator.pop(context, true);
+      }
+      return;
+    }
+
     final clientUuid = data.clientUuid?.trim() ?? '';
-    if (!result.queued || clientUuid.isEmpty) {
+    if (clientUuid.isEmpty) {
       Navigator.pop(context, true);
       return;
     }
@@ -221,6 +253,30 @@ class _CreateHechoScreenState extends State<CreateHechoScreen> {
   @override
   Widget build(BuildContext context) {
     final bottomSafe = MediaQuery.of(context).padding.bottom;
+
+    if (_checkingAccess) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Crear Hecho')),
+        body: const Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    if (!_canCreateHechos) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Crear Hecho')),
+        body: const SafeArea(
+          child: Center(
+            child: Padding(
+              padding: EdgeInsets.all(24),
+              child: Text(
+                'Tu unidad no tiene habilitada la captura de hechos.',
+                textAlign: TextAlign.center,
+              ),
+            ),
+          ),
+        ),
+      );
+    }
 
     return Scaffold(
       appBar: AppBar(title: const Text('Crear Hecho')),

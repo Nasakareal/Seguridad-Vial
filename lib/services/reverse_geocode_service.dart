@@ -78,15 +78,7 @@ class ReverseGeocodeService {
         : const <String, dynamic>{};
     final displayName = _cleanText(raw['display_name']);
 
-    final municipio = _firstText(address, <String>[
-      'city',
-      'town',
-      'municipality',
-      'county',
-      'city_district',
-      'village',
-      'state_district',
-    ]);
+    final municipio = _extractMunicipio(address, displayName: displayName);
 
     final calle = _firstText(address, <String>[
       'road',
@@ -127,6 +119,7 @@ class ReverseGeocodeService {
       'residential',
       'city_district',
       'district',
+      'municipality',
       'hamlet',
     ]);
     final cleanedDirect = _cleanAreaName(direct);
@@ -143,10 +136,14 @@ class ReverseGeocodeService {
       _normalizeToken(address['country']),
       _normalizeToken(address['postcode']),
       _normalizeToken(address['road']),
-      _normalizeToken(address['city']),
-      _normalizeToken(address['town']),
-      _normalizeToken(address['municipality']),
     }..removeWhere((item) => item.isEmpty);
+
+    for (final key in <String>['city', 'town', 'county', 'municipality']) {
+      final value = _cleanAreaName(address[key]);
+      if (_isKnownMunicipio(value)) {
+        ignored.add(_normalizeToken(value));
+      }
+    }
 
     final parts = displayName
         .split(',')
@@ -162,6 +159,38 @@ class ReverseGeocodeService {
     }
 
     return null;
+  }
+
+  static String? _extractMunicipio(
+    Map<String, dynamic> address, {
+    required String? displayName,
+  }) {
+    final candidates = <String>[
+      'city',
+      'town',
+      'county',
+      'municipality',
+      'village',
+      'state_district',
+      'city_district',
+    ];
+
+    for (final key in candidates) {
+      final value = _cleanText(address[key]);
+      final canonical = _canonicalMunicipio(value);
+      if (canonical != null) return canonical;
+    }
+
+    final displayParts = (displayName ?? '')
+        .split(',')
+        .map((part) => _cleanText(part))
+        .whereType<String>();
+    for (final part in displayParts) {
+      final canonical = _canonicalMunicipio(part);
+      if (canonical != null) return canonical;
+    }
+
+    return _firstText(address, candidates);
   }
 
   static String? _firstText(Map<String, dynamic> source, List<String> keys) {
@@ -223,6 +252,16 @@ class ReverseGeocodeService {
     return true;
   }
 
+  static bool _isKnownMunicipio(String? value) {
+    return _canonicalMunicipio(value) != null;
+  }
+
+  static String? _canonicalMunicipio(String? value) {
+    final token = _normalizeToken(value);
+    if (token.isEmpty) return null;
+    return _municipiosMichoacan[token];
+  }
+
   static String _normalizeToken(dynamic value) {
     final text = _cleanText(value) ?? '';
     return text
@@ -236,4 +275,126 @@ class ReverseGeocodeService {
         .replaceAll('Ñ', 'N')
         .replaceAll(RegExp(r'[^A-Z0-9]'), '');
   }
+
+  static const Map<String, String> _municipiosMichoacan = {
+    'ACUITZIO': 'ACUITZIO',
+    'AGUILILLA': 'AGUILILLA',
+    'ALVAROOBREGON': 'ALVARO OBREGON',
+    'ANGAMACUTIRO': 'ANGAMACUTIRO',
+    'ANGANGUEO': 'ANGANGUEO',
+    'APATZINGAN': 'APATZINGAN',
+    'APORO': 'APORO',
+    'AQUILA': 'AQUILA',
+    'ARIO': 'ARIO',
+    'ARTEAGA': 'ARTEAGA',
+    'BRISENAS': 'BRISENAS',
+    'BUENAVISTA': 'BUENAVISTA',
+    'CARACUARO': 'CARACUARO',
+    'COAHUAYANA': 'COAHUAYANA',
+    'COALCOMANDEVAZQUEZPALLARES': 'COALCOMAN DE VAZQUEZ PALLARES',
+    'COENEO': 'COENEO',
+    'CONTEPEC': 'CONTEPEC',
+    'COPANDARO': 'COPANDARO',
+    'COTIJA': 'COTIJA',
+    'CUITZEO': 'CUITZEO',
+    'CHARAPAN': 'CHARAPAN',
+    'CHARO': 'CHARO',
+    'CHAVINDA': 'CHAVINDA',
+    'CHERAN': 'CHERAN',
+    'CHILCHOTA': 'CHILCHOTA',
+    'CHINICUILA': 'CHINICUILA',
+    'CHUCANDIRO': 'CHUCANDIRO',
+    'CHURINTZIO': 'CHURINTZIO',
+    'CHURUMUCO': 'CHURUMUCO',
+    'ECUANDUREO': 'ECUANDUREO',
+    'EPITACIOHUERTA': 'EPITACIO HUERTA',
+    'ERONGARICUARO': 'ERONGARICUARO',
+    'GABRIELZAMORA': 'GABRIEL ZAMORA',
+    'HIDALGO': 'HIDALGO',
+    'LAHUACANA': 'LA HUACANA',
+    'HUANDACAREO': 'HUANDACAREO',
+    'HUANIQUEO': 'HUANIQUEO',
+    'HUETAMO': 'HUETAMO',
+    'HUIRAMBA': 'HUIRAMBA',
+    'INDAPARAPEO': 'INDAPARAPEO',
+    'IRIMBO': 'IRIMBO',
+    'IXTLAN': 'IXTLAN',
+    'JACONA': 'JACONA',
+    'JIMENEZ': 'JIMENEZ',
+    'JIQUILPAN': 'JIQUILPAN',
+    'JOSE SIXTO VERDUZCO': 'JOSE SIXTO VERDUZCO',
+    'JOSESIXTOVERDUZCO': 'JOSE SIXTO VERDUZCO',
+    'JUAREZ': 'JUAREZ',
+    'JUNGAPEO': 'JUNGAPEO',
+    'LAGUNILLAS': 'LAGUNILLAS',
+    'MADERO': 'MADERO',
+    'MARAVATIO': 'MARAVATIO',
+    'MARCOSCASTELLANOS': 'MARCOS CASTELLANOS',
+    'LAZARO CARDENAS': 'LAZARO CARDENAS',
+    'LAZAROCARDENAS': 'LAZARO CARDENAS',
+    'MORELIA': 'MORELIA',
+    'MORELOS': 'MORELOS',
+    'MUGICA': 'MUGICA',
+    'NAHUATZEN': 'NAHUATZEN',
+    'NOCUPETARO': 'NOCUPETARO',
+    'NUEVOPARANGARICUTIRO': 'NUEVO PARANGARICUTIRO',
+    'NUEVOURECHO': 'NUEVO URECHO',
+    'NUMARAN': 'NUMARAN',
+    'OCAMPO': 'OCAMPO',
+    'PAJACUARAN': 'PAJACUARAN',
+    'PANINDICUARO': 'PANINDICUARO',
+    'PARACUARO': 'PARACUARO',
+    'PARACHO': 'PARACHO',
+    'PATZCUARO': 'PATZCUARO',
+    'PENJAMILLO': 'PENJAMILLO',
+    'PERIBAN': 'PERIBAN',
+    'LAPIEDAD': 'LA PIEDAD',
+    'PUREPERO': 'PUREPERO',
+    'PURUANDIRO': 'PURUANDIRO',
+    'QUERENDARO': 'QUERENDARO',
+    'QUIROGA': 'QUIROGA',
+    'COJUMATLAN DE REGULES': 'COJUMATLAN DE REGULES',
+    'COJUMATLANDEREGULES': 'COJUMATLAN DE REGULES',
+    'LOSCREYES': 'LOS REYES',
+    'SAHUAYO': 'SAHUAYO',
+    'SANLUCAS': 'SAN LUCAS',
+    'SANTACLARA': 'SANTA CLARA',
+    'SALVADORESCALANTE': 'SALVADOR ESCALANTE',
+    'SENGUIO': 'SENGUIO',
+    'SUSUPUATO': 'SUSUPUATO',
+    'TACAMBARO': 'TACAMBARO',
+    'TANCITARO': 'TANCITARO',
+    'TANGAMANDAPIO': 'TANGAMANDAPIO',
+    'TANGANCICUARO': 'TANGANCICUARO',
+    'TANHUATO': 'TANHUATO',
+    'TARETAN': 'TARETAN',
+    'TARIMBARO': 'TARIMBARO',
+    'TEPALCATEPEC': 'TEPALCATEPEC',
+    'TINGAMBATO': 'TINGAMBATO',
+    'TINGUINDIN': 'TINGUINDIN',
+    'TIQUICHEODE NICOLAS ROMERO': 'TIQUICHEO DE NICOLAS ROMERO',
+    'TIQUICHEODENICOLASROMERO': 'TIQUICHEO DE NICOLAS ROMERO',
+    'TLALPUJAHUA': 'TLALPUJAHUA',
+    'TLAZAZALCA': 'TLAZAZALCA',
+    'TOCUMBO': 'TOCUMBO',
+    'TUMBISCATIO': 'TUMBISCATIO',
+    'TURICATO': 'TURICATO',
+    'TUXPAN': 'TUXPAN',
+    'TUZANTLA': 'TUZANTLA',
+    'TZINTZUNTZAN': 'TZINTZUNTZAN',
+    'TZITZIO': 'TZITZIO',
+    'URUAPAN': 'URUAPAN',
+    'VENUSTIANOCARRANZA': 'VENUSTIANO CARRANZA',
+    'VILLAMAR': 'VILLAMAR',
+    'VISTAHERMOSA': 'VISTA HERMOSA',
+    'YURECUARO': 'YURECUARO',
+    'ZACAPU': 'ZACAPU',
+    'ZAMORA': 'ZAMORA',
+    'ZINAPARO': 'ZINAPARO',
+    'ZINAPECUARO': 'ZINAPECUARO',
+    'ZIRACUARETIRO': 'ZIRACUARETIRO',
+    'ZITACUARO': 'ZITACUARO',
+    'JOSEMARIA MORELOS': 'JOSE MARIA MORELOS',
+    'JOSEMARIAMORELOS': 'JOSE MARIA MORELOS',
+  };
 }

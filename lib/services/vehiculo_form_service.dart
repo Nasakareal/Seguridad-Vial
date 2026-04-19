@@ -1,6 +1,218 @@
+import 'dart:convert';
+
+import '../core/vehiculos/estados_republica.dart';
+import '../core/vehiculos/vehiculo_taxonomia.dart';
 import 'offline_sync_service.dart';
 
+class VehiculoQrData {
+  final String rawText;
+  final String? marca;
+  final String? linea;
+  final String? modelo;
+  final String? color;
+  final String? placas;
+  final String? estadoPlacas;
+  final String? serie;
+  final String? tipoServicio;
+  final String? tarjetaCirculacionNombre;
+  final String? tipoGeneral;
+  final String? tipoCarroceria;
+
+  const VehiculoQrData({
+    required this.rawText,
+    this.marca,
+    this.linea,
+    this.modelo,
+    this.color,
+    this.placas,
+    this.estadoPlacas,
+    this.serie,
+    this.tipoServicio,
+    this.tarjetaCirculacionNombre,
+    this.tipoGeneral,
+    this.tipoCarroceria,
+  });
+
+  bool get hasAnyValue {
+    return <String?>[
+      marca,
+      linea,
+      modelo,
+      color,
+      placas,
+      estadoPlacas,
+      serie,
+      tipoServicio,
+      tarjetaCirculacionNombre,
+      tipoGeneral,
+      tipoCarroceria,
+    ].any((value) => (value ?? '').trim().isNotEmpty);
+  }
+}
+
 class VehiculoFormService {
+  static VehiculoQrData parseTarjetaCirculacionQr(String raw) {
+    final rawText = raw.trim();
+    if (rawText.isEmpty) return const VehiculoQrData(rawText: '');
+
+    final pairs = _extractQrPairs(rawText);
+
+    final marca = _upper(
+      _pickValue(pairs, const [
+        'marca',
+        'marca vehiculo',
+        'marca del vehiculo',
+        'brand',
+      ]),
+    );
+
+    final modeloCandidate = _pickValue(pairs, const [
+      'modelo',
+      'modelo vehiculo',
+      'mod',
+    ]);
+    final anioCandidate = _pickValue(pairs, const [
+      'anio',
+      'año',
+      'ano',
+      'ano modelo',
+      'año modelo',
+      'year',
+    ]);
+
+    final modelo = _modelYear(anioCandidate) ?? _modelYear(modeloCandidate);
+    final lineaFromModelo = _lineaFromModeloField(modeloCandidate);
+
+    final linea =
+        _upper(
+          _pickValue(pairs, const [
+            'linea',
+            'línea',
+            'submarca',
+            'version',
+            'versión',
+            'descripcion',
+          ]),
+        ) ??
+        _upper(lineaFromModelo);
+
+    final color = _upper(
+      _pickValue(pairs, const [
+        'color',
+        'color vehiculo',
+        'color del vehiculo',
+      ]),
+    );
+
+    final placas = normalizePlacas(
+      _pickValue(pairs, const [
+            'placa',
+            'placas',
+            'placa vehiculo',
+            'placas vehiculo',
+            'matricula',
+            'matrícula',
+            'lamina',
+            'lámina',
+            'numero placa',
+            'número placa',
+          ]) ??
+          _looseMatch(
+            rawText,
+            RegExp(
+              r'(?:placas?|matr[ií]cula|l[aá]mina)\s*[:#\-]?\s*([A-Z0-9\-\s]{5,15})',
+              caseSensitive: false,
+            ),
+          ) ??
+          '',
+    );
+
+    final serie = normalizeSerie(
+      _pickValue(pairs, const [
+            'serie',
+            'no serie',
+            'número de serie',
+            'numero de serie',
+            'niv',
+            'vin',
+            'nvi',
+            'num serie',
+            'numero identificacion vehicular',
+            'número identificación vehicular',
+          ]) ??
+          _looseMatch(
+            rawText,
+            RegExp(
+              r'(?:niv|vin|serie)\s*[:#\-]?\s*([A-HJ-NPR-Z0-9]{6,17})',
+              caseSensitive: false,
+            ),
+          ) ??
+          '',
+    );
+
+    final estadoPlacas = EstadosRepublica.valueFromAny(
+      _pickValue(pairs, const [
+        'estado placas',
+        'entidad placas',
+        'entidad',
+        'estado',
+        'entidad federativa',
+        'expedido en',
+      ]),
+    );
+
+    final tipoServicio = _normalizeTipoServicio(
+      _pickValue(pairs, const [
+        'servicio',
+        'tipo servicio',
+        'tipo de servicio',
+        'uso',
+        'clase servicio',
+      ]),
+    );
+
+    final propietario = _title(
+      _pickValue(pairs, const [
+        'propietario',
+        'nombre propietario',
+        'nombre del propietario',
+        'nombre',
+        'razon social',
+        'razón social',
+        'titular',
+      ]),
+    );
+
+    final rawTipo = _pickValue(pairs, const [
+      'tipo',
+      'clase',
+      'tipo vehiculo',
+      'tipo de vehiculo',
+      'clase vehiculo',
+      'carroceria',
+      'carrocería',
+    ]);
+    final tipoGeneral = _inferTipoGeneral(rawTipo, linea);
+    final tipoCarroceria = _inferTipoCarroceria(rawTipo);
+    final effectiveTipoGeneral =
+        tipoGeneral ?? _inferTipoGeneral(tipoCarroceria, linea);
+
+    return VehiculoQrData(
+      rawText: rawText,
+      marca: marca,
+      linea: linea,
+      modelo: modelo,
+      color: color,
+      placas: placas.isEmpty ? null : placas,
+      estadoPlacas: estadoPlacas,
+      serie: serie,
+      tipoServicio: tipoServicio,
+      tarjetaCirculacionNombre: propietario,
+      tipoGeneral: effectiveTipoGeneral,
+      tipoCarroceria: tipoCarroceria,
+    );
+  }
+
   static String normalizePlacas(String value) {
     return value.trim().toUpperCase().replaceAll(RegExp(r'[\s\-\._,]'), '');
   }
@@ -14,7 +226,19 @@ class VehiculoFormService {
   }
 
   static String? normalizeEstadoPlacas(String? value) {
-    final cleaned = (value ?? '').trim().toUpperCase();
+    final canonical = EstadosRepublica.valueFromAny(value);
+    final source = canonical ?? value ?? '';
+    final cleaned = source
+        .trim()
+        .toUpperCase()
+        .replaceAll('Á', 'A')
+        .replaceAll('É', 'E')
+        .replaceAll('Í', 'I')
+        .replaceAll('Ó', 'O')
+        .replaceAll('Ú', 'U')
+        .replaceAll('Ü', 'U')
+        .replaceAll('Ñ', 'N')
+        .replaceAll(RegExp(r'[^A-Z0-9]'), '');
     return cleaned.isEmpty ? null : cleaned;
   }
 
@@ -143,11 +367,8 @@ class VehiculoFormService {
       if (estadoClean == null) {
         return 'Si capturas placas, también debes capturar el estado de placas.';
       }
-      if (estadoClean.length > 15) {
-        return 'Estado de placas inválido: máximo 15 caracteres.';
-      }
-      if (!RegExp(r'^[A-Z]{3,15}$').hasMatch(estadoClean)) {
-        return 'Estado de placas inválido: escribe solo letras.';
+      if (EstadosRepublica.valueFromAny(estadoClean) == null) {
+        return 'Estado de placas inválido: selecciona una opción válida.';
       }
     }
 
@@ -443,4 +664,391 @@ class VehiculoFormService {
         .replaceAll(RegExp(r'\s+'), ' ');
     return cleaned;
   }
+
+  static Map<String, String> _extractQrPairs(String raw) {
+    final pairs = <String, String>{};
+    final jsonPairs = _tryExtractJsonPairs(raw);
+    pairs.addAll(jsonPairs);
+
+    final text = raw.replaceAll('\r', '\n');
+    final lines = text
+        .split('\n')
+        .map((line) => line.trim())
+        .where((line) => line.isNotEmpty)
+        .toList();
+
+    for (var index = 0; index < lines.length; index += 1) {
+      final line = lines[index];
+      _putLooseLinePair(pairs, line);
+
+      final label = _labelOnlyKey(line);
+      if (label == null) continue;
+
+      final nextValue = _nextLineValue(lines, index);
+      if (nextValue == null) continue;
+      _putPair(pairs, label, nextValue);
+    }
+
+    final segments = text.split(RegExp(r'[\n|;]+'));
+    for (final segment in segments) {
+      final item = segment.trim();
+      if (item.isEmpty) continue;
+
+      final match = RegExp(
+        r'^([^:=#]{2,50})\s*[:=#]\s*(.+)$',
+        dotAll: true,
+      ).firstMatch(item);
+      if (match == null) continue;
+
+      _putPair(pairs, match.group(1), match.group(2));
+    }
+
+    final inlineMatches = RegExp(
+      r'([A-Za-zÁÉÍÓÚÜÑáéíóúüñ0-9 _\-/\.]{2,50})\s*[:=#]\s*([^|;\n\r]+)',
+      multiLine: true,
+    ).allMatches(text);
+    for (final match in inlineMatches) {
+      _putPair(pairs, match.group(1), match.group(2));
+    }
+
+    return pairs;
+  }
+
+  static void _putLooseLinePair(Map<String, String> pairs, String line) {
+    if (RegExp(r'[:=#]').hasMatch(line)) return;
+
+    final parts = line
+        .trim()
+        .split(RegExp(r'\s+'))
+        .where((part) => part.trim().isNotEmpty)
+        .toList();
+    if (parts.length < 2) return;
+
+    final maxKeyParts = parts.length - 1 < 4 ? parts.length - 1 : 4;
+    for (var count = maxKeyParts; count >= 1; count -= 1) {
+      final keyCandidate = parts.take(count).join(' ');
+      final key = _normalizeQrKey(keyCandidate);
+      if (!_knownQrKeys.contains(key)) continue;
+
+      final value = parts.skip(count).join(' ');
+      _putPair(pairs, keyCandidate, value);
+      return;
+    }
+  }
+
+  static String? _labelOnlyKey(String line) {
+    final cleaned = line.trim().replaceFirst(RegExp(r'[:=#]\s*$'), '').trim();
+    if (cleaned.isEmpty || RegExp(r'[:=#]').hasMatch(cleaned)) return null;
+    final key = _normalizeQrKey(cleaned);
+    return _knownQrKeys.contains(key) ? cleaned : null;
+  }
+
+  static String? _nextLineValue(List<String> lines, int currentIndex) {
+    final nextIndex = currentIndex + 1;
+    if (nextIndex >= lines.length) return null;
+
+    final next = lines[nextIndex].trim();
+    if (next.isEmpty) return null;
+    if (_labelOnlyKey(next) != null) return null;
+    if (RegExp(r'^[^:=#]{2,50}\s*[:=#]').hasMatch(next)) return null;
+    return next;
+  }
+
+  static Map<String, String> _tryExtractJsonPairs(String raw) {
+    try {
+      final decoded = _jsonDecode(raw);
+      final pairs = <String, String>{};
+      void walk(dynamic value, [String prefix = '']) {
+        if (value is Map) {
+          for (final entry in value.entries) {
+            final key = prefix.isEmpty
+                ? entry.key.toString()
+                : '$prefix ${entry.key}';
+            walk(entry.value, key);
+          }
+          return;
+        }
+        if (value is List) {
+          for (var i = 0; i < value.length; i += 1) {
+            walk(value[i], prefix);
+          }
+          return;
+        }
+        _putPair(pairs, prefix, value?.toString());
+      }
+
+      walk(decoded);
+      return pairs;
+    } catch (_) {
+      return const <String, String>{};
+    }
+  }
+
+  static dynamic _jsonDecode(String raw) {
+    return jsonDecode(raw);
+  }
+
+  static void _putPair(Map<String, String> pairs, String? key, String? value) {
+    final cleanKey = _normalizeQrKey(key ?? '');
+    final cleanValue = _cleanQrValue(value ?? '');
+    if (cleanKey.isEmpty || cleanValue.isEmpty) return;
+    pairs.putIfAbsent(cleanKey, () => cleanValue);
+  }
+
+  static String? _pickValue(Map<String, String> pairs, List<String> aliases) {
+    final normalizedAliases = aliases.map(_normalizeQrKey).toList();
+    for (final alias in normalizedAliases) {
+      final exact = pairs[alias];
+      if ((exact ?? '').trim().isNotEmpty) return exact;
+    }
+
+    for (final entry in pairs.entries) {
+      for (final alias in normalizedAliases) {
+        if (entry.key == alias ||
+            entry.key.endsWith(alias) ||
+            entry.key.contains(alias)) {
+          return entry.value;
+        }
+      }
+    }
+
+    return null;
+  }
+
+  static String _normalizeQrKey(String value) {
+    return _removeAccents(
+      value,
+    ).toUpperCase().replaceAll(RegExp(r'[^A-Z0-9]+'), '');
+  }
+
+  static String _cleanQrValue(String value) {
+    var cleaned = value
+        .trim()
+        .replaceAll(RegExp(r'^\s*["“”]+|["“”]+\s*$'), '')
+        .replaceAll(RegExp(r'\s+'), ' ');
+    cleaned = cleaned.replaceAll(RegExp(r'^[\-:=>#\s]+'), '').trim();
+    return cleaned;
+  }
+
+  static String? _looseMatch(String raw, RegExp regex) {
+    final match = regex.firstMatch(raw);
+    return _cleanQrValue(match?.group(1) ?? '');
+  }
+
+  static String? _upper(String? value) {
+    final cleaned = _cleanQrValue(value ?? '');
+    if (cleaned.isEmpty) return null;
+    return _removeAccents(cleaned).toUpperCase();
+  }
+
+  static String? _title(String? value) {
+    final cleaned = _cleanQrValue(value ?? '');
+    if (cleaned.isEmpty) return null;
+    final parts = cleaned
+        .split(RegExp(r'\s+'))
+        .where((part) => part.trim().isNotEmpty);
+    return parts
+        .map((part) {
+          if (part.length == 1) return part.toUpperCase();
+          final lower = part.toLowerCase();
+          return lower[0].toUpperCase() + lower.substring(1);
+        })
+        .join(' ');
+  }
+
+  static String? _modelYear(String? value) {
+    final cleaned = _cleanQrValue(value ?? '');
+    if (cleaned.isEmpty) return null;
+    final match = RegExp(r'(19|20)\d{2}').firstMatch(cleaned);
+    return match?.group(0);
+  }
+
+  static String? _lineaFromModeloField(String? value) {
+    var cleaned = _cleanQrValue(value ?? '');
+    if (cleaned.isEmpty) return null;
+
+    final year = _modelYear(cleaned);
+    if (year != null) {
+      cleaned = cleaned
+          .replaceFirst(year, '')
+          .replaceAll(RegExp(r'[\-_/|,;]+'), ' ')
+          .replaceAll(RegExp(r'\s+'), ' ')
+          .trim();
+    }
+
+    if (cleaned.isEmpty) return null;
+    if (RegExp(r'^(19|20)\d{2}$').hasMatch(cleaned)) return null;
+    return cleaned;
+  }
+
+  static String? _normalizeTipoServicio(String? value) {
+    final normalized = _upper(value);
+    if (normalized == null) return null;
+    if (normalized.contains('PUBLIC')) return 'PÚBLICO';
+    if (normalized.contains('PARTICULAR') || normalized.contains('PRIVAD')) {
+      return 'PARTICULAR';
+    }
+    if (normalized.contains('OFICIAL') || normalized.contains('GOBIERNO')) {
+      return 'OFICIAL';
+    }
+    return normalized;
+  }
+
+  static String? _inferTipoGeneral(String? rawTipo, String? linea) {
+    final source = _removeAccents(
+      '${rawTipo ?? ''} ${linea ?? ''}',
+    ).toUpperCase();
+    if (source.trim().isEmpty) return null;
+
+    if (source.contains('MOTO')) return 'motocicleta';
+    if (source.contains('BICI')) return 'bicicleta';
+    if (source.contains('REMOLQUE') || source.contains('DOLLY')) {
+      return 'remolque';
+    }
+    if (source.contains('TRACTO') ||
+        source.contains('TORTON') ||
+        source.contains('RABON') ||
+        source.contains('CAMION')) {
+      return 'camion';
+    }
+    if (source.contains('PICK') ||
+        source.contains('CAMIONETA') ||
+        source.contains('VAGONETA') ||
+        source.contains('SUV') ||
+        source.contains('VAN')) {
+      return 'camioneta';
+    }
+    if (source.contains('SEDAN') ||
+        source.contains('HATCH') ||
+        source.contains('COUPE') ||
+        source.contains('AUTOMOVIL') ||
+        source.contains('AUTO')) {
+      return 'automovil';
+    }
+    if (source.contains('TRACTOR') ||
+        source.contains('EXCAV') ||
+        source.contains('CARGADOR') ||
+        source.contains('MAQUIN')) {
+      return 'maquinaria';
+    }
+    return null;
+  }
+
+  static String? _inferTipoCarroceria(String? rawTipo) {
+    final cleaned = _cleanQrValue(rawTipo ?? '');
+    if (cleaned.isEmpty) return null;
+
+    final normalized = _removeAccents(cleaned).toUpperCase();
+    for (final options in VehiculoTaxonomia.carrocerias.values) {
+      for (final option in options) {
+        final optionNormalized = _removeAccents(option).toUpperCase();
+        if (normalized == optionNormalized ||
+            normalized.contains(optionNormalized) ||
+            optionNormalized.contains(normalized)) {
+          return option;
+        }
+      }
+    }
+
+    final guessed = VehiculoTaxonomia.normalizeCarroceria(cleaned);
+    for (final options in VehiculoTaxonomia.carrocerias.values) {
+      if (options.contains(guessed)) return guessed;
+    }
+
+    return null;
+  }
+
+  static String _removeAccents(String value) {
+    return value
+        .replaceAll('á', 'a')
+        .replaceAll('é', 'e')
+        .replaceAll('í', 'i')
+        .replaceAll('ó', 'o')
+        .replaceAll('ú', 'u')
+        .replaceAll('ü', 'u')
+        .replaceAll('ñ', 'n')
+        .replaceAll('Á', 'A')
+        .replaceAll('É', 'E')
+        .replaceAll('Í', 'I')
+        .replaceAll('Ó', 'O')
+        .replaceAll('Ú', 'U')
+        .replaceAll('Ü', 'U')
+        .replaceAll('Ñ', 'N');
+  }
+
+  static final Set<String> _knownQrKeys = _knownQrAliases
+      .map(_normalizeQrKey)
+      .toSet();
+
+  static const List<String> _knownQrAliases = [
+    'marca',
+    'marca vehiculo',
+    'marca del vehiculo',
+    'brand',
+    'modelo',
+    'modelo vehiculo',
+    'mod',
+    'anio',
+    'año',
+    'ano',
+    'ano modelo',
+    'año modelo',
+    'year',
+    'linea',
+    'línea',
+    'submarca',
+    'version',
+    'versión',
+    'descripcion',
+    'color',
+    'color vehiculo',
+    'color del vehiculo',
+    'placa',
+    'placas',
+    'placa vehiculo',
+    'placas vehiculo',
+    'matricula',
+    'matrícula',
+    'lamina',
+    'lámina',
+    'numero placa',
+    'número placa',
+    'serie',
+    'no serie',
+    'número de serie',
+    'numero de serie',
+    'niv',
+    'vin',
+    'nvi',
+    'num serie',
+    'numero identificacion vehicular',
+    'número identificación vehicular',
+    'motor',
+    'estado placas',
+    'entidad placas',
+    'entidad',
+    'estado',
+    'entidad federativa',
+    'expedido en',
+    'servicio',
+    'tipo servicio',
+    'tipo de servicio',
+    'uso',
+    'clase servicio',
+    'propietario',
+    'nombre propietario',
+    'nombre del propietario',
+    'nombre',
+    'razon social',
+    'razón social',
+    'titular',
+    'curp',
+    'tipo',
+    'clase',
+    'tipo vehiculo',
+    'tipo de vehiculo',
+    'clase vehiculo',
+    'carroceria',
+    'carrocería',
+  ];
 }

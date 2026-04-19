@@ -32,6 +32,10 @@ class EstadosRepublica {
     {'value': 'VERACRUZ', 'label': 'Veracruz'},
     {'value': 'YUCATAN', 'label': 'Yucatán'},
     {'value': 'ZACATECAS', 'label': 'Zacatecas'},
+    {'value': 'CALIFORNIA_USA', 'label': 'California (EUA)'},
+    {'value': 'ARIZONA_USA', 'label': 'Arizona (EUA)'},
+    {'value': 'NUEVO_MEXICO_USA', 'label': 'Nuevo México (EUA)'},
+    {'value': 'TEXAS_USA', 'label': 'Texas (EUA)'},
   ];
 
   static const List<String> values = [
@@ -67,13 +71,17 @@ class EstadosRepublica {
     'VERACRUZ',
     'YUCATAN',
     'ZACATECAS',
+    'CALIFORNIA_USA',
+    'ARIZONA_USA',
+    'NUEVO_MEXICO_USA',
+    'TEXAS_USA',
   ];
 
   static String? labelFromValue(String? value) {
-    if (value == null || value.trim().isEmpty) return null;
-    final v = value.trim().toUpperCase();
+    final canonical = valueFromAny(value);
+    if (canonical == null) return null;
     for (final e in estados) {
-      if ((e['value'] ?? '') == v) return e['label'];
+      if ((e['value'] ?? '') == canonical) return e['label'];
     }
     return null;
   }
@@ -90,7 +98,7 @@ class EstadosRepublica {
 
     String norm(String x) {
       var t = x.toUpperCase().trim();
-      t = t.replaceAll(RegExp(r'[\s\-\._,]+'), '_');
+      t = t.replaceAll(RegExp(r'[\s\-\._,()]+'), '_');
       t = t.replaceAll('Á', 'A');
       t = t.replaceAll('É', 'E');
       t = t.replaceAll('Í', 'I');
@@ -115,6 +123,45 @@ class EstadosRepublica {
     if (n == 'BAJACALIFORNIA') return 'BAJA_CALIFORNIA';
     if (n == 'BAJACALIFORNIASUR') return 'BAJA_CALIFORNIA_SUR';
     if (n == 'QUINTANAROO') return 'QUINTANA_ROO';
+    if (n == 'CALIFORNIA' ||
+        n == 'CALIFORNIA_USA' ||
+        n == 'CALIFORNIA_EUA' ||
+        n == 'CALIFORNIAUSA' ||
+        n == 'CALIFORNIAEUA' ||
+        n == 'CA') {
+      return 'CALIFORNIA_USA';
+    }
+    if (n == 'ARIZONA' ||
+        n == 'ARIZONA_USA' ||
+        n == 'ARIZONA_EUA' ||
+        n == 'ARIZONAUSA' ||
+        n == 'ARIZONAEUA' ||
+        n == 'AZ') {
+      return 'ARIZONA_USA';
+    }
+    if (n == 'NUEVO_MEXICO' ||
+        n == 'NEW_MEXICO' ||
+        n == 'NUEVO_MEXICO_USA' ||
+        n == 'NEW_MEXICO_USA' ||
+        n == 'NUEVO_MEXICO_EUA' ||
+        n == 'NEW_MEXICO_EUA' ||
+        n == 'NUEVOMEXICO' ||
+        n == 'NEWMEXICO' ||
+        n == 'NUEVOMEXICOUSA' ||
+        n == 'NEWMEXICOUSA' ||
+        n == 'NUEVOMEXICOEUA' ||
+        n == 'NEWMEXICOEUA' ||
+        n == 'NM') {
+      return 'NUEVO_MEXICO_USA';
+    }
+    if (n == 'TEXAS' ||
+        n == 'TEXAS_USA' ||
+        n == 'TEXAS_EUA' ||
+        n == 'TEXASUSA' ||
+        n == 'TEXASEUA' ||
+        n == 'TX') {
+      return 'TEXAS_USA';
+    }
 
     for (final e in estados) {
       final ev = (e['value'] ?? '');

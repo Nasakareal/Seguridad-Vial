@@ -40,6 +40,45 @@ class HechosFormService {
     return 'Error HTTP $statusCode';
   }
 
+  static int? hechoIdFromCreateResult(OfflineActionResult result) {
+    final body = result.responseBody?.trim() ?? '';
+    if (body.isEmpty) return null;
+
+    try {
+      final raw = jsonDecode(body);
+      if (raw is! Map<String, dynamic>) return null;
+
+      int? readId(dynamic value) {
+        if (value == null) return null;
+        if (value is int && value > 0) return value;
+        if (value is num && value > 0) return value.toInt();
+        final parsed = int.tryParse(value.toString());
+        return parsed != null && parsed > 0 ? parsed : null;
+      }
+
+      int? fromMap(Map map) {
+        for (final key in const ['id', 'hecho_id']) {
+          final id = readId(map[key]);
+          if (id != null) return id;
+        }
+        return null;
+      }
+
+      final direct = fromMap(raw);
+      if (direct != null) return direct;
+
+      for (final key in const ['hecho', 'data']) {
+        final nested = raw[key];
+        if (nested is Map) {
+          final id = fromMap(nested);
+          if (id != null) return id;
+        }
+      }
+    } catch (_) {}
+
+    return null;
+  }
+
   static String cleanExceptionMessage(Object error) {
     final raw = error.toString().trim();
     if (raw.isEmpty) return 'Ocurrió un error inesperado.';

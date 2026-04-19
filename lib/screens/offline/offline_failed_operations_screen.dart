@@ -21,6 +21,7 @@ class _OfflineFailedOperationsScreenState
   List<Map<String, dynamic>> _items = const [];
   int _pendingItems = 0;
   int _failedItems = 0;
+  bool _canCreateHechos = false;
 
   @override
   void initState() {
@@ -37,6 +38,7 @@ class _OfflineFailedOperationsScreenState
 
     try {
       final ownerKey = await AuthService.getSessionOwnerKey();
+      final canCreateHechos = await AuthService.canCreateHechos(refresh: true);
       final snapshot = await OfflineSyncService.loadQueueSnapshot();
       final items = snapshot.where((op) {
         final state = (op['state'] ?? '').toString();
@@ -65,6 +67,7 @@ class _OfflineFailedOperationsScreenState
         _items = items;
         _pendingItems = pending;
         _failedItems = failed;
+        _canCreateHechos = canCreateHechos;
         _loading = false;
       });
     } catch (e) {
@@ -196,6 +199,7 @@ class _OfflineFailedOperationsScreenState
     if (label == 'hecho' &&
         url.endsWith('/hechos') &&
         (fields['_method'] ?? '').toString().trim().toUpperCase() != 'PUT') {
+      if (!_canCreateHechos) return null;
       return _OfflineDestination(
         route: AppRoutes.accidentesCreate,
         arguments: {'offlineDraft': op},

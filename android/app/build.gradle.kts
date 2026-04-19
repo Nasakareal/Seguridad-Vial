@@ -17,7 +17,7 @@ FileInputStream(keystorePropertiesFile).use { keystoreProperties.load(it) }
 
 android {
     namespace = "com.nasaka.seguridad_vial_app"
-    compileSdk = flutter.compileSdkVersion
+    compileSdk = 36
 
     ndkVersion = "27.0.12077973"
 

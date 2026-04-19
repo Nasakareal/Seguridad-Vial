@@ -80,6 +80,8 @@ class HechosCatalogos {
     'Falla mecánica',
     'Condiciones de la vía',
     'No calcular dimensiones',
+    'Pérdida de control',
+    'No ceder el paso al peatón',
   ];
 
   static const List<String> colisionCaminoUi = [
@@ -88,6 +90,15 @@ class HechosCatalogos {
     'Objeto fijo',
     'Peatón',
     'Bicicleta',
+  ];
+
+  static const List<String> responsablesUi = [
+    'Vehículo A',
+    'Vehículo B',
+    'Vehículo C',
+    'Vehículo D',
+    'Vehículo E',
+    'Vehículo F',
   ];
 
   // -----------------------------

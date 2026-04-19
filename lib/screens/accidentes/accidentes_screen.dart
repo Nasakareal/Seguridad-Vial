@@ -43,6 +43,10 @@ class _AccidentesScreenState extends State<AccidentesScreen>
   bool _trackingOn = false;
   bool _bootstrapped = false;
   bool _busy = false;
+  bool _canCreateHechos = false;
+  bool _canEditAnyHecho = false;
+  bool _hechosModuleExcluded = false;
+  int? _currentUserId;
 
   @override
   void initState() {
@@ -65,6 +69,11 @@ class _AccidentesScreenState extends State<AccidentesScreen>
       } catch (_) {}
 
       try {
+        await _loadCreateAccess(refresh: true);
+        if (!mounted) return;
+      } catch (_) {}
+
+      try {
         await _obtenerHechos();
         if (!mounted) return;
       } catch (_) {}
@@ -80,11 +89,37 @@ class _AccidentesScreenState extends State<AccidentesScreen>
     setState(() => _trackingOn = running);
   }
 
+  Future<void> _loadCreateAccess({bool refresh = false}) async {
+    final canCreate = await AuthService.canCreateHechos(refresh: refresh);
+    final canEdit = await AuthService.can('editar hechos');
+    final excluded = await AuthService.isHechosModuleExcludedUser();
+    final userId = await AuthService.getUserId();
+    final role = (await AuthService.getRole())?.trim().toLowerCase() ?? '';
+    final canEditAny =
+        canEdit &&
+        !excluded &&
+        const {
+          'superadmin',
+          'administrador',
+          'administrativo',
+          'subdirector',
+        }.contains(role);
+
+    if (!mounted) return;
+    setState(() {
+      _canCreateHechos = canCreate;
+      _canEditAnyHecho = canEditAny;
+      _hechosModuleExcluded = excluded;
+      _currentUserId = userId;
+    });
+  }
+
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) async {
     if (state == AppLifecycleState.resumed) {
       final running = await TrackingService.isRunning();
       await HechoShareService.onAppResumed();
+      await _loadCreateAccess(refresh: true);
 
       if (!mounted) return;
       setState(() => _trackingOn = running);
@@ -292,6 +327,32 @@ class _AccidentesScreenState extends State<AccidentesScreen>
     if (id == null) return null;
     if (id is int) return id;
     return int.tryParse('$id');
+  }
+
+  int? _intFrom(dynamic value) {
+    if (value == null) return null;
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    return int.tryParse(value.toString());
+  }
+
+  bool _boolFrom(dynamic value) {
+    if (value is bool) return value;
+    final s = (value ?? '').toString().trim().toLowerCase();
+    return s == '1' || s == 'true' || s == 'si' || s == 'sí';
+  }
+
+  bool _puedeEditarHecho(Map<String, dynamic> hecho) {
+    if (_hechosModuleExcluded) return false;
+
+    if (hecho.containsKey('puede_editar')) {
+      return _boolFrom(hecho['puede_editar']);
+    }
+
+    if (_canEditAnyHecho) return true;
+
+    final createdBy = _intFrom(hecho['created_by'] ?? hecho['createdBy']);
+    return _currentUserId != null && createdBy == _currentUserId;
   }
 
   Future<void> _obtenerHechos() async {
@@ -569,7 +630,9 @@ class _AccidentesScreenState extends State<AccidentesScreen>
                       isDownloading: isDownloading,
                       isSending: isSending,
                       onTapShow: () => _abrirShow(hecho),
-                      onTapEdit: () => _abrirEdit(hecho),
+                      onTapEdit: _puedeEditarHecho(hecho)
+                          ? () => _abrirEdit(hecho)
+                          : null,
                       onDownload: (hechoId == null || isDownloading)
                           ? null
                           : () => _descargarReporte(hechoId),
@@ -583,12 +646,14 @@ class _AccidentesScreenState extends State<AccidentesScreen>
           ),
         ),
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () =>
-            Navigator.pushNamed(context, AppRoutes.accidentesCreate),
-        tooltip: 'Crear nuevo hecho',
-        child: const Icon(Icons.add),
-      ),
+      floatingActionButton: _canCreateHechos
+          ? FloatingActionButton(
+              onPressed: () =>
+                  Navigator.pushNamed(context, AppRoutes.accidentesCreate),
+              tooltip: 'Crear nuevo hecho',
+              child: const Icon(Icons.add),
+            )
+          : null,
     );
   }
 }

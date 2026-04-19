@@ -15,14 +15,17 @@ class OfflineActionResult {
   final bool synced;
   final bool queued;
   final String message;
+  final String? responseBody;
 
   const OfflineActionResult.synced({
     this.message = 'Sincronizado correctamente.',
+    this.responseBody,
   }) : synced = true,
        queued = false;
 
   const OfflineActionResult.queued({
     this.message = 'Guardado sin conexión. Se sincronizará automáticamente.',
+    this.responseBody,
   }) : synced = false,
        queued = true;
 }
@@ -162,7 +165,7 @@ class OfflineSyncService {
     }
 
     try {
-      await _performJsonRequest(
+      final response = await _performJsonRequest(
         requestId: effectiveRequestId,
         method: method,
         uri: uri,
@@ -175,7 +178,7 @@ class OfflineSyncService {
         operationId: effectiveRequestId,
       );
       unawaited(flushPending());
-      return const OfflineActionResult.synced();
+      return OfflineActionResult.synced(responseBody: response.body);
     } on _RetryableSyncException catch (e) {
       final queuedMessage = _queuedRetryMessage(e.message);
       final op = _QueuedOperation(
@@ -277,7 +280,7 @@ class OfflineSyncService {
     }
 
     try {
-      await _performMultipartRequest(
+      final response = await _performMultipartRequest(
         requestId: effectiveRequestId,
         method: method,
         uri: uri,
@@ -291,7 +294,7 @@ class OfflineSyncService {
         operationId: effectiveRequestId,
       );
       unawaited(flushPending());
-      return const OfflineActionResult.synced();
+      return OfflineActionResult.synced(responseBody: response.body);
     } on _RetryableSyncException catch (e) {
       final queuedMessage = _queuedRetryMessage(e.message);
       final storedFiles = await _stashFilesForQueue(effectiveRequestId, files);
@@ -526,13 +529,18 @@ class OfflineSyncService {
     }
 
     final toCleanup = queue
-        .where((item) => item.ownerKey == ownerKey && idsToRemove.contains(item.id))
+        .where(
+          (item) => item.ownerKey == ownerKey && idsToRemove.contains(item.id),
+        )
         .toList();
 
     if (toCleanup.isEmpty) return;
 
     final nextQueue = queue
-        .where((item) => !(item.ownerKey == ownerKey && idsToRemove.contains(item.id)))
+        .where(
+          (item) =>
+              !(item.ownerKey == ownerKey && idsToRemove.contains(item.id)),
+        )
         .toList();
 
     await _saveQueue(nextQueue);
@@ -644,7 +652,7 @@ class OfflineSyncService {
     );
   }
 
-  static Future<void> _performJsonRequest({
+  static Future<http.Response> _performJsonRequest({
     required String requestId,
     required String method,
     required Uri uri,
@@ -702,6 +710,7 @@ class OfflineSyncService {
         successCodes: successCodes,
         errorParser: errorParser,
       );
+      return response;
     } on TimeoutException {
       throw const _RetryableSyncException(
         'Tiempo de espera agotado al sincronizar.',
@@ -715,7 +724,7 @@ class OfflineSyncService {
     }
   }
 
-  static Future<void> _performMultipartRequest({
+  static Future<http.Response> _performMultipartRequest({
     required String requestId,
     required String method,
     required Uri uri,
@@ -764,6 +773,7 @@ class OfflineSyncService {
         successCodes: successCodes,
         errorParser: errorParser,
       );
+      return response;
     } on TimeoutException {
       throw const _RetryableSyncException(
         'Tiempo de espera agotado al sincronizar.',

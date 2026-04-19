@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 
 import '../../services/auth_service.dart';
 import '../../core/vehiculos/vehiculo_taxonomia.dart';
+import '../../core/vehiculos/aseguradoras_vehiculo.dart';
 import '../../core/vehiculos/estados_republica.dart';
 import '../../services/offline_sync_service.dart';
 import '../../services/vehiculo_form_service.dart';
@@ -108,6 +109,14 @@ class _VehiculoEditScreenState extends State<VehiculoEditScreen> {
   }
 
   String _t(TextEditingController c) => c.text.trim();
+
+  String _aseguradoraDropdownValue() {
+    return AseguradorasVehiculo.valueFromAny(_t(_aseguradoraCtrl)) ?? '';
+  }
+
+  void _setAseguradora(String? value) {
+    _aseguradoraCtrl.text = value ?? '';
+  }
 
   int? _toIntOrNull(String s) {
     final v = s.trim();
@@ -396,16 +405,7 @@ class _VehiculoEditScreenState extends State<VehiculoEditScreen> {
   }
 
   String? _canonEstadoValueFromApi(String? apiValue) {
-    final v = (apiValue ?? '').trim().toUpperCase();
-    if (v.isEmpty) return null;
-
-    for (final e in EstadosRepublica.estados) {
-      final value = (e['value'] ?? '').trim().toUpperCase();
-      final label = (e['label'] ?? '').trim().toUpperCase();
-      if (value == v || label == v) return e['value'];
-    }
-
-    return null;
+    return EstadosRepublica.valueFromAny(apiValue);
   }
 
   Future<void> _init() async {
@@ -521,7 +521,11 @@ class _VehiculoEditScreenState extends State<VehiculoEditScreen> {
     _tipoServicioCtrl.text = (data['tipo_servicio'] ?? 'PARTICULAR').toString();
     _tarjetaCirculacionNombreCtrl.text =
         (data['tarjeta_circulacion_nombre'] ?? '').toString();
-    _aseguradoraCtrl.text = (data['aseguradora'] ?? '').toString();
+    _aseguradoraCtrl.text =
+        AseguradorasVehiculo.valueFromAny(
+          (data['aseguradora'] ?? '').toString(),
+        ) ??
+        '';
     _montoDanosCtrl.text = (data['monto_danos'] ?? '').toString();
     _partesDanadasCtrl.text = (data['partes_danadas'] ?? '').toString();
     _antecedenteVehiculo = (data['antecedente_vehiculo'] == true);
@@ -786,6 +790,7 @@ class _VehiculoEditScreenState extends State<VehiculoEditScreen> {
       _tipoGeneralSeleccionado,
     );
     final tienePlacas = _limpiaPlacas(_t(_placasCtrl)).isNotEmpty;
+    final aseguradoraSeleccionada = _aseguradoraDropdownValue();
 
     if (!tienePlacas && _estadoPlacasSeleccionado != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -1099,18 +1104,26 @@ class _VehiculoEditScreenState extends State<VehiculoEditScreen> {
                                 setState(() => _corralonGruaIdSeleccionada = v),
                           ),
                     const SizedBox(height: 10),
-                    TextFormField(
-                      controller: _aseguradoraCtrl,
+                    DropdownButtonFormField<String>(
+                      value: aseguradoraSeleccionada,
                       decoration: const InputDecoration(
                         labelText: 'Aseguradora (opcional)',
                         prefixIcon: Icon(Icons.security),
                       ),
-                      validator: (v) =>
-                          VehiculoFormService.validateOptionalText(
-                            v,
-                            max: 100,
-                            label: 'Aseguradora',
-                          ),
+                      items: [
+                        const DropdownMenuItem<String>(
+                          value: '',
+                          child: Text('Ninguna'),
+                        ),
+                        ...AseguradorasVehiculo.opciones.map((aseguradora) {
+                          return DropdownMenuItem<String>(
+                            value: aseguradora,
+                            child: Text(aseguradora),
+                          );
+                        }),
+                      ],
+                      onChanged: (value) =>
+                          setState(() => _setAseguradora(value)),
                     ),
                     const SizedBox(height: 10),
                     TextFormField(

@@ -1,9 +1,12 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:mobile_scanner/mobile_scanner.dart';
 
 import '../../services/auth_service.dart';
 import '../../core/vehiculos/vehiculo_taxonomia.dart';
+import '../../core/vehiculos/aseguradoras_vehiculo.dart';
 import '../../core/vehiculos/estados_republica.dart';
 import '../../services/offline_sync_service.dart';
 import '../../services/vehiculo_form_service.dart';
@@ -106,6 +109,14 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
   }
 
   String _t(TextEditingController c) => c.text.trim();
+
+  String _aseguradoraDropdownValue() {
+    return AseguradorasVehiculo.valueFromAny(_t(_aseguradoraCtrl)) ?? '';
+  }
+
+  void _setAseguradora(String? value) {
+    _aseguradoraCtrl.text = value ?? '';
+  }
 
   int? _toIntOrNull(String s) {
     final v = s.trim();
@@ -284,14 +295,17 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
     _tipoServicioCtrl.text = (body['tipo_servicio'] ?? 'PARTICULAR').toString();
     _tarjetaCirculacionNombreCtrl.text =
         (body['tarjeta_circulacion_nombre'] ?? '').toString();
-    _aseguradoraCtrl.text = (body['aseguradora'] ?? '').toString();
+    _aseguradoraCtrl.text =
+        AseguradorasVehiculo.valueFromAny(
+          (body['aseguradora'] ?? '').toString(),
+        ) ??
+        '';
     _montoDanosCtrl.text = (body['monto_danos'] ?? '').toString();
     _partesDanadasCtrl.text = (body['partes_danadas'] ?? '').toString();
     _antecedenteVehiculo = _toBool(body['antecedente_vehiculo']);
-    _estadoPlacasSeleccionado =
-        (body['estado_placas'] ?? '').toString().trim().isEmpty
-        ? null
-        : (body['estado_placas'] ?? '').toString().trim();
+    _estadoPlacasSeleccionado = EstadosRepublica.valueFromAny(
+      (body['estado_placas'] ?? '').toString(),
+    );
     _tipoCarroceriaSeleccionada = (body['tipo'] ?? '').toString().trim().isEmpty
         ? null
         : (body['tipo'] ?? '').toString().trim();
@@ -339,6 +353,108 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
       }
     }
     return null;
+  }
+
+  Future<void> _scanTarjetaCirculacion() async {
+    final raw = await Navigator.push<String>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => const _TarjetaCirculacionScannerScreen(),
+      ),
+    );
+    final text = raw?.trim() ?? '';
+    if (text.isEmpty || !mounted) return;
+
+    final parsed = VehiculoFormService.parseTarjetaCirculacionQr(text);
+    final applied = _applyTarjetaCirculacionData(parsed);
+
+    if (!mounted) return;
+    if (applied > 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Se llenaron $applied campos desde el QR.')),
+      );
+      return;
+    }
+
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('QR leído'),
+        content: const Text(
+          'No pude identificar campos del vehículo en este QR. Puedes capturar manualmente o compartirnos un ejemplo del texto crudo para ajustar el lector.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cerrar'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  int _applyTarjetaCirculacionData(VehiculoQrData parsed) {
+    var applied = 0;
+
+    bool setText(TextEditingController controller, String? value) {
+      final cleaned = (value ?? '').trim();
+      if (cleaned.isEmpty || controller.text.trim() == cleaned) return false;
+      controller.text = cleaned;
+      return true;
+    }
+
+    setState(() {
+      if (setText(_marcaCtrl, parsed.marca)) applied += 1;
+      if (setText(_lineaCtrl, parsed.linea)) applied += 1;
+      if (setText(_modeloCtrl, parsed.modelo)) applied += 1;
+      if (setText(_colorCtrl, parsed.color)) applied += 1;
+      if (setText(_placasCtrl, parsed.placas)) applied += 1;
+      if (setText(_serieCtrl, parsed.serie)) applied += 1;
+      if (setText(_tipoServicioCtrl, parsed.tipoServicio)) applied += 1;
+      if (setText(
+        _tarjetaCirculacionNombreCtrl,
+        parsed.tarjetaCirculacionNombre,
+      )) {
+        applied += 1;
+      }
+
+      final estado = parsed.estadoPlacas;
+      if ((estado ?? '').trim().isNotEmpty &&
+          _estadoPlacasSeleccionado != estado) {
+        _estadoPlacasSeleccionado = estado;
+        applied += 1;
+      }
+
+      final tipoGeneral = parsed.tipoGeneral;
+      if (_isTipoGeneralDisponible(tipoGeneral) &&
+          _tipoGeneralSeleccionado != tipoGeneral) {
+        _tipoGeneralSeleccionado = tipoGeneral;
+        applied += 1;
+      }
+
+      final tipoCarroceria = parsed.tipoCarroceria;
+      if (_isCarroceriaDisponible(_tipoGeneralSeleccionado, tipoCarroceria) &&
+          _tipoCarroceriaSeleccionada != tipoCarroceria) {
+        _tipoCarroceriaSeleccionada = tipoCarroceria;
+        applied += 1;
+      }
+    });
+
+    return applied;
+  }
+
+  bool _isTipoGeneralDisponible(String? value) {
+    final current = (value ?? '').trim();
+    if (current.isEmpty) return false;
+    return VehiculoTaxonomia.tiposGenerales.any(
+      (item) => item['value'] == current,
+    );
+  }
+
+  bool _isCarroceriaDisponible(String? tipoGeneral, String? carroceria) {
+    final current = (carroceria ?? '').trim();
+    if (current.isEmpty) return false;
+    return _carroceriasDeTipoGeneral(tipoGeneral).contains(current);
   }
 
   Future<void> _guardar({
@@ -500,6 +616,7 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
       _tipoGeneralSeleccionado,
     );
     final tienePlacas = _t(_placasCtrl).isNotEmpty;
+    final aseguradoraSeleccionada = _aseguradoraDropdownValue();
 
     if (!tienePlacas && _estadoPlacasSeleccionado != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -537,6 +654,12 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
                     'Este hecho todavía no tiene ID de servidor. El vehículo se guardará con el UUID local del hecho y se sincronizará en cuanto el hecho padre suba primero.',
                   ),
                 ),
+              OutlinedButton.icon(
+                onPressed: _saving ? null : _scanTarjetaCirculacion,
+                icon: const Icon(Icons.qr_code_scanner),
+                label: const Text('Escanear tarjeta de circulación'),
+              ),
+              const SizedBox(height: 10),
               TextFormField(
                 controller: _marcaCtrl,
                 decoration: const InputDecoration(
@@ -799,17 +922,25 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
                           setState(() => _corralonGruaIdSeleccionada = v),
                     ),
               const SizedBox(height: 10),
-              TextFormField(
-                controller: _aseguradoraCtrl,
+              DropdownButtonFormField<String>(
+                value: aseguradoraSeleccionada,
                 decoration: const InputDecoration(
                   labelText: 'Aseguradora (opcional)',
                   prefixIcon: Icon(Icons.security),
                 ),
-                validator: (v) => VehiculoFormService.validateOptionalText(
-                  v,
-                  max: 100,
-                  label: 'Aseguradora',
-                ),
+                items: [
+                  const DropdownMenuItem<String>(
+                    value: '',
+                    child: Text('Ninguna'),
+                  ),
+                  ...AseguradorasVehiculo.opciones.map((aseguradora) {
+                    return DropdownMenuItem<String>(
+                      value: aseguradora,
+                      child: Text(aseguradora),
+                    );
+                  }),
+                ],
+                onChanged: (value) => setState(() => _setAseguradora(value)),
               ),
               const SizedBox(height: 10),
               TextFormField(
@@ -864,6 +995,116 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _TarjetaCirculacionScannerScreen extends StatefulWidget {
+  const _TarjetaCirculacionScannerScreen();
+
+  @override
+  State<_TarjetaCirculacionScannerScreen> createState() =>
+      _TarjetaCirculacionScannerScreenState();
+}
+
+class _TarjetaCirculacionScannerScreenState
+    extends State<_TarjetaCirculacionScannerScreen> {
+  final MobileScannerController _controller = MobileScannerController(
+    formats: const <BarcodeFormat>[BarcodeFormat.qrCode],
+    detectionSpeed: DetectionSpeed.noDuplicates,
+    autoZoom: true,
+  );
+
+  bool _handled = false;
+
+  void _handleDetect(BarcodeCapture capture) {
+    if (_handled) return;
+
+    for (final barcode in capture.barcodes) {
+      final raw = barcode.rawValue?.trim() ?? '';
+      if (raw.isEmpty) continue;
+
+      _handled = true;
+      unawaited(_controller.stop());
+      if (!mounted) return;
+      Navigator.pop(context, raw);
+      return;
+    }
+  }
+
+  @override
+  void dispose() {
+    unawaited(_controller.dispose());
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      appBar: AppBar(
+        title: const Text('Escanear tarjeta'),
+        backgroundColor: Colors.black,
+        foregroundColor: Colors.white,
+        actions: [
+          IconButton(
+            tooltip: 'Linterna',
+            icon: const Icon(Icons.flashlight_on),
+            onPressed: () => _controller.toggleTorch(),
+          ),
+          IconButton(
+            tooltip: 'Cambiar cámara',
+            icon: const Icon(Icons.cameraswitch),
+            onPressed: () => _controller.switchCamera(),
+          ),
+        ],
+      ),
+      body: Stack(
+        children: [
+          MobileScanner(
+            controller: _controller,
+            onDetect: _handleDetect,
+            errorBuilder: (context, error) {
+              return Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Text(
+                    'No se pudo iniciar la cámara.\n\n$error',
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(color: Colors.white),
+                  ),
+                ),
+              );
+            },
+          ),
+          Center(
+            child: Container(
+              width: 260,
+              height: 260,
+              decoration: BoxDecoration(
+                border: Border.all(color: Colors.white, width: 3),
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+          ),
+          Align(
+            alignment: Alignment.bottomCenter,
+            child: Container(
+              width: double.infinity,
+              color: Colors.black.withValues(alpha: 0.72),
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
+              child: const Text(
+                'Apunta al QR de la tarjeta de circulación. Se llenarán los campos que se puedan reconocer.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

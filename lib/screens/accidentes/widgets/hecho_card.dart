@@ -22,7 +22,7 @@ class HechoCard extends StatelessWidget {
   final bool isSending;
 
   final VoidCallback onTapShow;
-  final VoidCallback onTapEdit;
+  final VoidCallback? onTapEdit;
   final VoidCallback? onDownload;
   final VoidCallback? onEnviarWhatsapp;
 
@@ -170,16 +170,17 @@ class HechoCard extends StatelessWidget {
                           ),
                           padding: EdgeInsets.zero,
                         ),
-                        IconButton(
-                          icon: const Icon(Icons.edit),
-                          tooltip: 'Editar',
-                          onPressed: onTapEdit,
-                          constraints: const BoxConstraints(
-                            minWidth: 40,
-                            minHeight: 40,
+                        if (onTapEdit != null)
+                          IconButton(
+                            icon: const Icon(Icons.edit),
+                            tooltip: 'Editar',
+                            onPressed: onTapEdit,
+                            constraints: const BoxConstraints(
+                              minWidth: 40,
+                              minHeight: 40,
+                            ),
+                            padding: EdgeInsets.zero,
                           ),
-                          padding: EdgeInsets.zero,
-                        ),
                       ],
                     ),
                   ],

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/hechos/hechos_catalogos.dart';
 import '../../models/hecho_form_data.dart';
+import '../../services/auth_service.dart';
 import '../../services/hechos_form_service.dart';
 import '../../services/hechos_service.dart';
 import 'widgets/hecho_form.dart';
@@ -19,6 +20,9 @@ class _EditHechoScreenState extends State<EditHechoScreen> {
   HechoFormData? _data;
   bool _loading = true;
   String? _error;
+  bool _canEditAnyHecho = false;
+  bool _hechosModuleExcluded = false;
+  int? _currentUserId;
 
   @override
   void initState() {
@@ -50,6 +54,39 @@ class _EditHechoScreenState extends State<EditHechoScreen> {
     if (v is bool) return v;
     final s = v.toString().trim().toLowerCase();
     return s == '1' || s == 'true' || s == 'si' || s == 'sí';
+  }
+
+  Future<void> _loadEditAccess() async {
+    final canEdit = await AuthService.can('editar hechos');
+    final excluded = await AuthService.isHechosModuleExcludedUser();
+    final userId = await AuthService.getUserId();
+    final role = (await AuthService.getRole())?.trim().toLowerCase() ?? '';
+    final canEditAny =
+        canEdit &&
+        !excluded &&
+        const {
+          'superadmin',
+          'administrador',
+          'administrativo',
+          'subdirector',
+        }.contains(role);
+
+    _canEditAnyHecho = canEditAny;
+    _hechosModuleExcluded = excluded;
+    _currentUserId = userId;
+  }
+
+  bool _puedeEditarHecho(Map<String, dynamic> raw) {
+    if (_hechosModuleExcluded) return false;
+
+    if (raw.containsKey('puede_editar')) {
+      return _asBool(raw['puede_editar']);
+    }
+
+    if (_canEditAnyHecho) return true;
+
+    final createdBy = _asInt(raw['created_by'] ?? raw['createdBy']);
+    return _currentUserId != null && createdBy == _currentUserId;
   }
 
   TimeOfDay? _parseHora(dynamic v) {
@@ -158,7 +195,12 @@ class _EditHechoScreenState extends State<EditHechoScreen> {
       HechosCatalogos.causasUi,
     );
 
-    d.responsable = _asString(raw['responsable']) ?? '';
+    d.responsable =
+        _pickMatchingValue(
+          _asString(raw['responsable']),
+          HechosCatalogos.responsablesUi,
+        ) ??
+        (_asString(raw['responsable']) ?? '');
 
     d.colisionCamino = _pickMatchingValue(
       _asString(raw['colision_camino']),
@@ -202,7 +244,18 @@ class _EditHechoScreenState extends State<EditHechoScreen> {
     });
 
     try {
+      await _loadEditAccess();
       final raw = await HechosService.fetchById(widget.hechoId);
+      if (!_puedeEditarHecho(raw)) {
+        if (!mounted) return;
+        setState(() {
+          _data = null;
+          _error = 'No tienes permiso para editar este hecho.';
+          _loading = false;
+        });
+        return;
+      }
+
       final mapped = _mapHecho(raw);
 
       if (!mounted) return;
@@ -240,7 +293,7 @@ class _EditHechoScreenState extends State<EditHechoScreen> {
         actions: [
           IconButton(
             tooltip: 'Vehículos',
-            onPressed: _loading ? null : _irVehiculos,
+            onPressed: _loading || _data == null ? null : _irVehiculos,
             icon: const Icon(Icons.directions_car),
           ),
           IconButton(

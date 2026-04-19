@@ -9,6 +9,7 @@ import '../screens/home_perito_screen.dart';
 
 import '../screens/accidentes/accidentes_screen.dart';
 import '../screens/accidentes/create_screen.dart';
+import '../screens/accidentes/croquis/croquis_screen.dart';
 import '../screens/accidentes/edit_screen.dart';
 import '../screens/accidentes/hecho_show_screen.dart';
 import '../screens/accidentes/pending_capture_screen.dart';
@@ -71,6 +72,7 @@ final Map<String, WidgetBuilder> appRoutesMap = {
   AppRoutes.accidentes: (context) => const AccidentesScreen(),
   AppRoutes.accidentesCreate: (context) => const CreateHechoScreen(),
   AppRoutes.accidentesShow: (context) => const HechoShowScreen(),
+  AppRoutes.accidentesCroquis: (context) => const CroquisScreen(),
   AppRoutes.pendingHechoCapture: (context) => const PendingHechoCaptureScreen(),
 
   AppRoutes.vehiculos: (context) => const VehiculosScreen(),

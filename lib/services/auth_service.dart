@@ -21,6 +21,8 @@ class AuthService {
   static const String _delegacionIdKey = 'auth_delegacion_id';
   static const String _destacamentoIdKey = 'auth_destacamento_id';
   static const String _sessionOwnerKeyKey = 'auth_session_owner_key';
+  static const int unidadVialidadesUrbanasId = 5;
+  static const int unidadCulturaVialId = 6;
 
   static String get baseUrl => _baseUrl;
 
@@ -121,6 +123,10 @@ class AuthService {
 
       final userPayload = _extractUserPayload(data);
       await _storeUserSnapshot(prefs, userPayload);
+      perms = await _filterHechosPermissionsForCurrentUser(
+        perms,
+        userPayload: userPayload,
+      );
 
       final userName = _extractUserName(data['user']) ?? _extractUserName(data);
       if (userName != null && userName.trim().isNotEmpty) {
@@ -348,7 +354,14 @@ class AuthService {
 
   static Future<List<String>> getPermissions() async {
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getStringList(_permsKey) ?? <String>[];
+    final stored = prefs.getStringList(_permsKey) ?? <String>[];
+    final filtered = await _filterHechosPermissionsForCurrentUser(stored);
+
+    if (!_sameStringSet(stored, filtered)) {
+      await prefs.setStringList(_permsKey, filtered);
+    }
+
+    return filtered;
   }
 
   static Future<void> refreshCurrentUserAccess() async {
@@ -387,6 +400,46 @@ class AuthService {
     return _payloadMatchesVialidadesUrbanas(payload);
   }
 
+  static Future<bool> canCreateHechos({bool refresh = false}) async {
+    if (refresh) {
+      await refreshCurrentUserAccess();
+    }
+
+    if (await isSuperadmin()) {
+      return true;
+    }
+
+    final unidadId = await getUnidadId();
+    if (_isHechosCreateExcludedUnitId(unidadId)) {
+      return false;
+    }
+
+    final payload = await getCurrentUserPayload(refresh: false);
+    if (_payloadMatchesHechosCreateExcludedUnit(payload)) {
+      return false;
+    }
+
+    return true;
+  }
+
+  static Future<bool> isHechosModuleExcludedUser({bool refresh = false}) async {
+    if (refresh) {
+      await refreshCurrentUserAccess();
+    }
+
+    if (await isSuperadmin()) {
+      return false;
+    }
+
+    final unidadId = await getUnidadId();
+    if (_isHechosCreateExcludedUnitId(unidadId)) {
+      return true;
+    }
+
+    final payload = await getCurrentUserPayload(refresh: false);
+    return _payloadMatchesHechosCreateExcludedUnit(payload);
+  }
+
   static Future<List<String>> refreshPermissions() async {
     final token = await getToken();
     if (token == null || token.trim().isEmpty) return await getPermissions();
@@ -412,6 +465,7 @@ class AuthService {
         .where((p) => p.isNotEmpty)
         .toSet()
         .toList();
+    perms = await _filterHechosPermissionsForCurrentUser(perms);
 
     final prefs = await SharedPreferences.getInstance();
     await prefs.setStringList(_permsKey, perms);
@@ -688,6 +742,143 @@ class AuthService {
     return false;
   }
 
+  static bool _payloadMatchesHechosCreateExcludedUnit(
+    Map<String, dynamic>? payload,
+  ) {
+    if (payload == null || payload.isEmpty) {
+      return false;
+    }
+
+    final directId =
+        _readNullableInt(payload['unidad_id']) ??
+        _readNullableInt(payload['unidad_org_id']);
+    if (_isHechosCreateExcludedUnitId(directId)) {
+      return true;
+    }
+
+    final candidates = <dynamic>[
+      payload['unidad'],
+      payload['unidad_principal'],
+      payload['unidadPrincipal'],
+      payload['unidad_nombre'],
+      payload['unidadName'],
+      payload['unidad_label'],
+      payload['area'],
+      payload['areas'],
+      payload['unidades'],
+      payload['roles'],
+    ];
+
+    for (final candidate in candidates) {
+      if (_dynamicContainsHechosCreateExcludedUnit(candidate)) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  static Future<List<String>> _filterHechosPermissionsForCurrentUser(
+    List<String> permissions, {
+    Map<String, dynamic>? userPayload,
+  }) async {
+    final normalized = permissions
+        .map((p) => p.trim().toLowerCase())
+        .where((p) => p.isNotEmpty)
+        .toSet();
+
+    final payload = userPayload ?? await getStoredUserPayload();
+    if (await isSuperadmin() || _payloadHasRole(payload, 'superadmin')) {
+      return normalized.toList();
+    }
+
+    final unidadId = await getUnidadId();
+    final exclude =
+        _isHechosCreateExcludedUnitId(unidadId) ||
+        _payloadMatchesHechosCreateExcludedUnit(payload);
+
+    if (!exclude) {
+      return normalized.toList();
+    }
+
+    const hidden = <String>{
+      'ver busqueda',
+      'ver hechos',
+      'crear hechos',
+      'editar hechos',
+      'eliminar hechos',
+      'ver vehiculos',
+      'crear vehiculos',
+      'editar vehiculos',
+      'eliminar vehiculos',
+      'ver lesionados',
+      'crear lesionados',
+      'editar lesionados',
+      'eliminar lesionados',
+    };
+
+    normalized.removeWhere(hidden.contains);
+    return normalized.toList();
+  }
+
+  static bool _sameStringSet(List<String> a, List<String> b) {
+    final aa = a.map((e) => e.trim().toLowerCase()).toSet();
+    final bb = b.map((e) => e.trim().toLowerCase()).toSet();
+
+    if (aa.length != bb.length) return false;
+    for (final value in aa) {
+      if (!bb.contains(value)) return false;
+    }
+    return true;
+  }
+
+  static bool _payloadHasRole(Map<String, dynamic>? payload, String roleName) {
+    if (payload == null || payload.isEmpty) {
+      return false;
+    }
+
+    return _dynamicContainsRole(payload['role'], roleName) ||
+        _dynamicContainsRole(payload['roles'], roleName);
+  }
+
+  static bool _dynamicContainsRole(dynamic raw, String roleName) {
+    final target = roleName.trim().toLowerCase();
+    if (raw == null || target.isEmpty) {
+      return false;
+    }
+
+    if (raw is String) {
+      return raw.trim().toLowerCase() == target;
+    }
+
+    if (raw is Map) {
+      final values = <dynamic>[
+        raw['name'],
+        raw['nombre'],
+        raw['slug'],
+        raw['label'],
+      ];
+
+      for (final value in values) {
+        if (_dynamicContainsRole(value, roleName)) {
+          return true;
+        }
+      }
+
+      return false;
+    }
+
+    if (raw is Iterable) {
+      for (final item in raw) {
+        if (_dynamicContainsRole(item, roleName)) {
+          return true;
+        }
+      }
+    }
+
+    return false;
+  }
+
   static bool _dynamicContainsVialidadesUrbanas(dynamic raw) {
     if (raw == null) {
       return false;
@@ -738,6 +929,66 @@ class AuthService {
     }
 
     return false;
+  }
+
+  static bool _dynamicContainsHechosCreateExcludedUnit(dynamic raw) {
+    if (raw == null) {
+      return false;
+    }
+
+    if (_isHechosCreateExcludedUnitId(_readNullableInt(raw))) {
+      return true;
+    }
+
+    if (raw is String) {
+      final normalized = _normalizeUnitText(raw);
+      return normalized.contains('VIALIDADES URBANAS') ||
+          normalized.contains('PROTECCION A VIALIDADES URBANAS') ||
+          normalized.contains('PROTECCION EN VIALIDADES URBANAS') ||
+          normalized.contains('FOMENTO A LA CULTURA VIAL') ||
+          normalized.contains('CULTURA VIAL');
+    }
+
+    if (raw is Map) {
+      final id = _readNullableInt(
+        raw['id'] ?? raw['value'] ?? raw['unidad_id'] ?? raw['unidad_org_id'],
+      );
+      if (_isHechosCreateExcludedUnitId(id)) {
+        return true;
+      }
+
+      final names = <dynamic>[
+        raw['name'],
+        raw['nombre'],
+        raw['label'],
+        raw['descripcion'],
+        raw['title'],
+        raw['slug'],
+      ];
+
+      for (final value in names) {
+        if (_dynamicContainsHechosCreateExcludedUnit(value)) {
+          return true;
+        }
+      }
+
+      return false;
+    }
+
+    if (raw is Iterable) {
+      for (final item in raw) {
+        if (_dynamicContainsHechosCreateExcludedUnit(item)) {
+          return true;
+        }
+      }
+    }
+
+    return false;
+  }
+
+  static bool _isHechosCreateExcludedUnitId(int? unidadId) {
+    return unidadId == unidadVialidadesUrbanasId ||
+        unidadId == unidadCulturaVialId;
   }
 
   static String _normalizeUnitText(String raw) {

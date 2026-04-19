@@ -36,6 +36,9 @@ class _HechoShowScreenState extends State<HechoShowScreen>
   bool _initialized = false;
   int _hechoId = 0;
   bool _sharingWhatsapp = false;
+  bool _canEditAnyHecho = false;
+  bool _hechosModuleExcluded = false;
+  int? _currentUserId;
 
   Future<void> _bootstrapTrackingStatusOnly() async {
     if (_bootstrapped) return;
@@ -70,6 +73,9 @@ class _HechoShowScreenState extends State<HechoShowScreen>
       await _bootstrapTrackingStatusOnly();
       if (!mounted) return;
 
+      await _loadEditAccess(refresh: true);
+      if (!mounted) return;
+
       if (_hechoId > 0) {
         await _cargarHecho(_hechoId);
       } else if (mounted) {
@@ -82,6 +88,7 @@ class _HechoShowScreenState extends State<HechoShowScreen>
   void didChangeAppLifecycleState(AppLifecycleState state) async {
     if (state == AppLifecycleState.resumed) {
       final running = await TrackingService.isRunning();
+      await _loadEditAccess(refresh: true);
       if (!mounted) return;
       setState(() => _trackingOn = running);
     }
@@ -163,8 +170,71 @@ class _HechoShowScreenState extends State<HechoShowScreen>
     }
   }
 
+  Future<void> _loadEditAccess({bool refresh = false}) async {
+    if (refresh) {
+      try {
+        await AuthService.refreshCurrentUserAccess();
+      } catch (_) {}
+    }
+
+    final canEdit = await AuthService.can('editar hechos');
+    final excluded = await AuthService.isHechosModuleExcludedUser();
+    final userId = await AuthService.getUserId();
+    final role = (await AuthService.getRole())?.trim().toLowerCase() ?? '';
+    final canEditAny =
+        canEdit &&
+        !excluded &&
+        const {
+          'superadmin',
+          'administrador',
+          'administrativo',
+          'subdirector',
+        }.contains(role);
+
+    if (!mounted) return;
+    setState(() {
+      _canEditAnyHecho = canEditAny;
+      _hechosModuleExcluded = excluded;
+      _currentUserId = userId;
+    });
+  }
+
+  int? _intFrom(dynamic value) {
+    if (value == null) return null;
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    return int.tryParse(value.toString());
+  }
+
+  bool _boolFrom(dynamic value) {
+    if (value is bool) return value;
+    final s = (value ?? '').toString().trim().toLowerCase();
+    return s == '1' || s == 'true' || s == 'si' || s == 'sí';
+  }
+
+  bool _puedeEditarHecho(Map<String, dynamic> hecho) {
+    if (_hechosModuleExcluded) return false;
+
+    if (hecho.containsKey('puede_editar')) {
+      return _boolFrom(hecho['puede_editar']);
+    }
+
+    if (_canEditAnyHecho) return true;
+
+    final createdBy = _intFrom(hecho['created_by'] ?? hecho['createdBy']);
+    return _currentUserId != null && createdBy == _currentUserId;
+  }
+
   Future<void> _goEdit(int hechoId) async {
     if (hechoId <= 0) return;
+    if (_hecho != null && !_puedeEditarHecho(_hecho!)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No tienes permiso para editar este hecho.'),
+        ),
+      );
+      return;
+    }
 
     await Navigator.pushNamed(
       context,
@@ -270,19 +340,36 @@ class _HechoShowScreenState extends State<HechoShowScreen>
               ],
             ),
             const SizedBox(height: 10),
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton.icon(
-                onPressed: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Pendiente: conectar descargo'),
-                    ),
-                  );
-                },
-                icon: const Icon(Icons.upload_file),
-                label: const Text('Descargo'),
-              ),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () {
+                      Navigator.pushNamed(
+                        context,
+                        AppRoutes.accidentesCroquis,
+                        arguments: {'hechoId': hechoId},
+                      );
+                    },
+                    icon: const Icon(Icons.draw),
+                    label: const Text('Croquis'),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Pendiente: conectar descargo'),
+                        ),
+                      );
+                    },
+                    icon: const Icon(Icons.upload_file),
+                    label: const Text('Descargo'),
+                  ),
+                ),
+              ],
             ),
           ],
         ),
@@ -295,6 +382,7 @@ class _HechoShowScreenState extends State<HechoShowScreen>
     final hechoId = _hechoId;
 
     final h = _hecho ?? {};
+    final puedeEditar = _hecho != null && _puedeEditarHecho(_hecho!);
 
     final folio = HechoShowHelpers.safeText(h['folio_c5i']);
     final fecha = HechoShowHelpers.safeText(h['fecha']);
@@ -433,11 +521,12 @@ class _HechoShowScreenState extends State<HechoShowScreen>
           },
         ),
         actions: [
-          IconButton(
-            tooltip: 'Editar',
-            icon: const Icon(Icons.edit),
-            onPressed: () => _goEdit(hechoId),
-          ),
+          if (puedeEditar)
+            IconButton(
+              tooltip: 'Editar',
+              icon: const Icon(Icons.edit),
+              onPressed: () => _goEdit(hechoId),
+            ),
           IconButton(
             tooltip: 'Buscar',
             icon: const Icon(Icons.search),
@@ -508,15 +597,17 @@ class _HechoShowScreenState extends State<HechoShowScreen>
                       isDownloading: false,
                       isSending: _sharingWhatsapp,
                       onTapShow: () {},
-                      onTapEdit: () => _goEdit(hechoId),
+                      onTapEdit: puedeEditar ? () => _goEdit(hechoId) : null,
                       onDownload: null,
                       onEnviarWhatsapp: hechoId > 0
                           ? () => _compartirWhatsapp(hechoId)
                           : null,
                     ),
 
-                    _quickActions(hechoId),
-                    const SizedBox(height: 12),
+                    if (puedeEditar) ...[
+                      _quickActions(hechoId),
+                      const SizedBox(height: 12),
+                    ],
 
                     _section(
                       title: 'Identificación',
