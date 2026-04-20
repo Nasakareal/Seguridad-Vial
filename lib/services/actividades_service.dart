@@ -9,6 +9,7 @@ import '../models/actividad_categoria.dart';
 import '../models/actividad_subcategoria.dart';
 import 'auth_service.dart';
 import 'offline_sync_service.dart';
+import 'photo_orientation_service.dart';
 
 class ActividadUpsertData {
   final String? clientUuid;
@@ -412,8 +413,11 @@ class ActividadesService {
   }) async {
     final clientUuid = _ensureClientUuid(data.clientUuid);
     final fields = data.toFields()..['client_uuid'] = clientUuid;
+    final landscapeFotos = await PhotoOrientationService.forceLandscapeAll(
+      fotos,
+    );
     final uploads = <OfflineUploadFile>[
-      for (final foto in fotos)
+      for (final foto in landscapeFotos)
         OfflineUploadFile(field: 'fotos[]', path: foto.path),
     ];
 
@@ -469,6 +473,9 @@ class ActividadesService {
     File? foto,
   }) async {
     final fields = data.toFields()..['_method'] = 'PUT';
+    final landscapeFoto = foto == null
+        ? null
+        : await PhotoOrientationService.forceLandscape(foto);
 
     return OfflineSyncService.submitMultipart(
       label: 'Actividad',
@@ -476,7 +483,8 @@ class ActividadesService {
       uri: Uri.parse('$_base/$id'),
       fields: fields,
       files: <OfflineUploadFile>[
-        if (foto != null) OfflineUploadFile(field: 'foto', path: foto.path),
+        if (landscapeFoto != null)
+          OfflineUploadFile(field: 'foto', path: landscapeFoto.path),
       ],
       successCodes: const <int>{200},
       errorParser: _parseBackendError,

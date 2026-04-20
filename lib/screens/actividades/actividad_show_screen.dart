@@ -274,8 +274,6 @@ class _ActividadShowScreenState extends State<ActividadShowScreen>
                     children: [
                       _sectionText('Asunto', a.motivo),
                       _sectionText('Narrativa', a.narrativa),
-                      _sectionText('Acciones realizadas', a.accionesRealizadas),
-                      _sectionText('Observaciones', a.observaciones),
                     ],
                   ),
                 ),

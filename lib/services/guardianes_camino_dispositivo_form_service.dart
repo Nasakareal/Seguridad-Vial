@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import '../core/guardianes_camino/guardianes_camino_dispositivos_catalogos.dart';
 import 'auth_service.dart';
 import 'offline_sync_service.dart';
+import 'photo_orientation_service.dart';
 
 class GuardianesCaminoDispositivoFormPayload {
   final GuardianesCaminoCatalogoLocal catalogo;
@@ -241,7 +242,11 @@ class GuardianesCaminoDispositivoFormService {
       if (value.isNotEmpty) fields[entry.key] = value;
     }
 
-    if (payload.fotos.isEmpty) {
+    final fotos = payload.fotos.isEmpty
+        ? const <File>[]
+        : await PhotoOrientationService.forceLandscapeAll(payload.fotos);
+
+    if (fotos.isEmpty) {
       return OfflineSyncService.submitJson(
         label: 'Dispositivo Guardianes del Camino',
         method: 'POST',
@@ -259,7 +264,7 @@ class GuardianesCaminoDispositivoFormService {
       uri: Uri.parse('${AuthService.baseUrl}/guardianes-camino/dispositivos'),
       fields: fields,
       files: <OfflineUploadFile>[
-        for (final foto in payload.fotos)
+        for (final foto in fotos)
           OfflineUploadFile(field: 'fotos[]', path: foto.path),
       ],
       requestId: clientUuid,

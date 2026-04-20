@@ -9,6 +9,7 @@ import '../../../services/auth_service.dart';
 import '../../../services/hechos_form_service.dart';
 import '../../../services/offline_sync_service.dart';
 import '../../../services/reverse_geocode_service.dart';
+import '../../../widgets/landscape_photo_crop_screen.dart';
 import 'ubicacion_card.dart';
 import 'photo_card.dart';
 import 'danos_patrimoniales_card.dart';
@@ -55,6 +56,8 @@ class _HechoFormState extends State<HechoForm> {
   final _folioFieldKey = GlobalKey();
   bool _submitting = false;
   bool _isPerito = false;
+  bool _loadingRoleFlags = true;
+  bool _usesRelaxedHechosRules = false;
 
   TimeOfDay? _hora;
   DateTime? _fecha;
@@ -124,10 +127,17 @@ class _HechoFormState extends State<HechoForm> {
 
   Future<void> _loadRoleFlags() async {
     final isPerito = await AuthService.isPerito();
+    final usesRelaxedHechosRules =
+        await AuthService.isHechosCaptureRelaxedUser();
     if (!mounted) return;
 
     setState(() {
       _isPerito = isPerito;
+      _loadingRoleFlags = false;
+      _usesRelaxedHechosRules = usesRelaxedHechosRules;
+      if (_usesRelaxedHechosRules) {
+        widget.data.sector = null;
+      }
       if (_isPerito) {
         _hora = HechosFormService.currentTime();
         widget.data.hora = _hora;
@@ -193,6 +203,7 @@ class _HechoFormState extends State<HechoForm> {
     String? value, {
     required String label,
     bool required = false,
+    int min = 0,
   }) {
     final txt = (value ?? '').trim();
     if (txt.isEmpty) return required ? 'Requerido' : null;
@@ -200,6 +211,7 @@ class _HechoFormState extends State<HechoForm> {
     final parsed = int.tryParse(txt);
     if (parsed == null) return '$label inválido';
     if (parsed < 0) return '$label no puede ser negativo';
+    if (required && parsed < min) return '$label debe ser mayor que cero';
     return null;
   }
 
@@ -284,11 +296,19 @@ class _HechoFormState extends State<HechoForm> {
     final x = await _picker.pickImage(
       source: ImageSource.gallery,
       imageQuality: 85,
+      maxWidth: 2000,
+      maxHeight: 2000,
     );
     if (x == null || !mounted) return;
 
+    final pickedFile = File(x.path);
+    final f = isLugar
+        ? await LandscapePhotoCropScreen.cropIfNeeded(context, pickedFile)
+        : pickedFile;
+    if (f == null) return;
+    if (!mounted) return;
+
     setState(() {
-      final f = File(x.path);
       if (isLugar) {
         _fotoLugar = f;
       } else {
@@ -378,7 +398,7 @@ class _HechoFormState extends State<HechoForm> {
       return false;
     }
 
-    if (d.sector == null ||
+    if ((!_usesRelaxedHechosRules && d.sector == null) ||
         d.tipoHecho == null ||
         d.superficieVia == null ||
         d.tiempo == null ||
@@ -495,6 +515,13 @@ class _HechoFormState extends State<HechoForm> {
   Widget build(BuildContext context) {
     final d = widget.data;
 
+    if (_loadingRoleFlags) {
+      return const Padding(
+        padding: EdgeInsets.only(top: 48),
+        child: Center(child: CircularProgressIndicator()),
+      );
+    }
+
     final sectorValue = _safeDropdownValue(
       d.sector,
       HechosCatalogos.sectoresUi,
@@ -577,8 +604,12 @@ class _HechoFormState extends State<HechoForm> {
                 child: TextFormField(
                   key: _folioFieldKey,
                   controller: _folioCtrl,
-                  decoration: _dec('Folio C5i *'),
-                  validator: (v) => _requiredMaxValidator(v, 20, 'Folio C5i'),
+                  decoration: _dec(
+                    _usesRelaxedHechosRules ? 'Folio C5i' : 'Folio C5i *',
+                  ),
+                  validator: (v) => _usesRelaxedHechosRules
+                      ? _maxLengthValidator(v, 20, 'Folio C5i')
+                      : _requiredMaxValidator(v, 20, 'Folio C5i'),
                 ),
               ),
               const SizedBox(width: 8),
@@ -653,22 +684,26 @@ class _HechoFormState extends State<HechoForm> {
               ),
             ],
           ),
-          const SizedBox(height: 8),
-          DropdownButtonFormField<String>(
-            isExpanded: true,
-            decoration: _dec('Sector *'),
-            value: sectorValue,
-            items: HechosCatalogos.sectoresUi
-                .map(
-                  (v) => DropdownMenuItem(
-                    value: v,
-                    child: Text(v, overflow: TextOverflow.ellipsis),
-                  ),
-                )
-                .toList(),
-            onChanged: _submitting ? null : (v) => setState(() => d.sector = v),
-            validator: (v) => v == null ? 'Requerido' : null,
-          ),
+          if (!_usesRelaxedHechosRules) ...[
+            const SizedBox(height: 8),
+            DropdownButtonFormField<String>(
+              isExpanded: true,
+              decoration: _dec('Sector *'),
+              value: sectorValue,
+              items: HechosCatalogos.sectoresUi
+                  .map(
+                    (v) => DropdownMenuItem(
+                      value: v,
+                      child: Text(v, overflow: TextOverflow.ellipsis),
+                    ),
+                  )
+                  .toList(),
+              onChanged: _submitting
+                  ? null
+                  : (v) => setState(() => d.sector = v),
+              validator: (v) => v == null ? 'Requerido' : null,
+            ),
+          ],
 
           const SizedBox(height: 12),
           TextFormField(
@@ -883,12 +918,17 @@ class _HechoFormState extends State<HechoForm> {
               Expanded(
                 child: TextFormField(
                   controller: _vehMpCtrl,
-                  decoration: _dec('Vehículos MP *'),
+                  decoration: _dec(
+                    d.situacion == 'TURNADO'
+                        ? 'Vehículos MP *'
+                        : 'Vehículos MP',
+                  ),
                   keyboardType: TextInputType.number,
                   validator: (v) => _nonNegativeIntValidator(
                     v,
                     label: 'Vehículos MP',
                     required: d.situacion == 'TURNADO',
+                    min: 1,
                   ),
                 ),
               ),
@@ -896,7 +936,9 @@ class _HechoFormState extends State<HechoForm> {
               Expanded(
                 child: TextFormField(
                   controller: _persMpCtrl,
-                  decoration: _dec('Personas MP *'),
+                  decoration: _dec(
+                    d.situacion == 'TURNADO' ? 'Personas MP *' : 'Personas MP',
+                  ),
                   keyboardType: TextInputType.number,
                   validator: (v) => _nonNegativeIntValidator(
                     v,

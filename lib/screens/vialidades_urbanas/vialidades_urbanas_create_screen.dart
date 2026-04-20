@@ -7,6 +7,7 @@ import '../../models/vialidades_urbanas_dispositivo.dart';
 import '../../services/auth_service.dart';
 import '../../services/vialidades_urbanas_form_service.dart';
 import '../../services/vialidades_urbanas_service.dart';
+import '../../widgets/landscape_photo_crop_screen.dart';
 
 class VialidadesUrbanasCreateScreen extends StatefulWidget {
   const VialidadesUrbanasCreateScreen({super.key});
@@ -211,9 +212,20 @@ class _VialidadesUrbanasCreateScreenState
   }
 
   Future<void> _pickPhoto(ImageSource source) async {
-    final picked = await _picker.pickImage(source: source, imageQuality: 85);
+    final picked = await _picker.pickImage(
+      source: source,
+      imageQuality: 85,
+      maxWidth: 2000,
+      maxHeight: 2000,
+    );
     if (picked == null || !mounted) return;
-    setState(() => _fotos = <File>[..._fotos, File(picked.path)]);
+    final file = await LandscapePhotoCropScreen.cropIfNeeded(
+      context,
+      File(picked.path),
+    );
+    if (file == null) return;
+    if (!mounted) return;
+    setState(() => _fotos = <File>[..._fotos, file]);
   }
 
   Future<void> _submit() async {

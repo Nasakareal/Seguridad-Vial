@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 
 import '../../services/auth_service.dart';
+import '../../widgets/landscape_photo_crop_screen.dart';
 import '../../widgets/safe_network_image.dart';
 
 class VehiculosScreen extends StatefulWidget {
@@ -261,10 +262,15 @@ class _VehiculosScreenState extends State<VehiculosScreen> {
       source: ImageSource.gallery,
       imageQuality: 85,
       maxWidth: 2000,
+      maxHeight: 2000,
     );
-    if (picked == null) return;
+    if (picked == null || !mounted) return;
 
-    final file = File(picked.path);
+    final file = await LandscapePhotoCropScreen.cropIfNeeded(
+      context,
+      File(picked.path),
+    );
+    if (file == null) return;
     final len = await file.length();
     const maxBytes = 2 * 1024 * 1024;
     if (len > maxBytes) {

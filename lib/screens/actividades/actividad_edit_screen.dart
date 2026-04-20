@@ -7,6 +7,7 @@ import '../../models/actividad.dart';
 import '../../models/actividad_categoria.dart';
 import '../../models/actividad_subcategoria.dart';
 import '../../services/actividades_service.dart';
+import '../../widgets/landscape_photo_crop_screen.dart';
 import '../../widgets/safe_network_image.dart';
 import 'widgets/actividad_vehiculo_modal.dart';
 
@@ -185,11 +186,23 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
 
   Future<void> _pickImage(ImageSource source) async {
     final picker = ImagePicker();
-    final x = await picker.pickImage(source: source, imageQuality: 85);
-    if (x == null) return;
+    final x = await picker.pickImage(
+      source: source,
+      imageQuality: 85,
+      maxWidth: 2000,
+      maxHeight: 2000,
+    );
+    if (x == null || !mounted) return;
+
+    final file = await LandscapePhotoCropScreen.cropIfNeeded(
+      context,
+      File(x.path),
+    );
+    if (file == null) return;
+    if (!mounted) return;
 
     setState(() {
-      _fotoNueva = File(x.path);
+      _fotoNueva = file;
     });
   }
 
@@ -213,8 +226,8 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
       notaGeo: _trim(_notaGeoCtrl),
       motivo: _trim(_motivoCtrl),
       narrativa: _trim(_narrativaCtrl),
-      accionesRealizadas: _trim(_accionesCtrl),
-      observaciones: _trim(_observacionesCtrl),
+      accionesRealizadas: null,
+      observaciones: null,
       personasAlcanzadas: _trim(_personasAlcanzadasCtrl),
       personasParticipantes: _trim(_personasParticipantesCtrl),
       personasDetenidas: _trim(_personasDetenidasCtrl),
@@ -244,6 +257,14 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
 
     if (_subcategoriaId == null || _subcategoriaId! <= 0) {
       setState(() => _error = 'Selecciona una subcategoria.');
+      return;
+    }
+
+    final personasAlcanzadas = int.tryParse(
+      _personasAlcanzadasCtrl.text.trim(),
+    );
+    if (personasAlcanzadas == null || personasAlcanzadas < 1) {
+      setState(() => _error = 'Captura al menos 1 persona alcanzada.');
       return;
     }
 
@@ -612,21 +633,9 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
                 title: 'Contenido',
                 child: Column(
                   children: [
-                    _textField(_motivoCtrl, 'Asunto o motivo', maxLines: 2),
+                    _textField(_motivoCtrl, 'Asunto', maxLines: 2),
                     const SizedBox(height: 12),
-                    _textField(_narrativaCtrl, 'Narrativa', maxLines: 4),
-                    const SizedBox(height: 12),
-                    _textField(
-                      _accionesCtrl,
-                      'Acciones realizadas',
-                      maxLines: 4,
-                    ),
-                    const SizedBox(height: 12),
-                    _textField(
-                      _observacionesCtrl,
-                      'Observaciones',
-                      maxLines: 3,
-                    ),
+                    _textField(_narrativaCtrl, 'Narrativa', maxLines: 6),
                   ],
                 ),
               ),
@@ -642,7 +651,7 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
                         Expanded(
                           child: _textField(
                             _personasAlcanzadasCtrl,
-                            'Personas alcanzadas',
+                            'Personas alcanzadas *',
                             keyboardType: TextInputType.number,
                           ),
                         ),

@@ -55,14 +55,10 @@ class AppDrawer extends StatelessWidget {
     }
 
     if (requiredUnitId != null) {
-      var hasUnitAccess = requiredUnitId == 5
-          ? await AuthService.isVialidadesUrbanasUser()
-          : (await AuthService.getUnidadId()) == requiredUnitId;
+      var hasUnitAccess = await _hasRequiredUnitAccess(requiredUnitId);
       if (!hasUnitAccess) {
         await AuthService.refreshCurrentUserAccess();
-        hasUnitAccess = requiredUnitId == 5
-            ? await AuthService.isVialidadesUrbanasUser()
-            : (await AuthService.getUnidadId()) == requiredUnitId;
+        hasUnitAccess = await _hasRequiredUnitAccess(requiredUnitId);
       }
 
       if (!hasUnitAccess) {
@@ -90,6 +86,17 @@ class AppDrawer extends StatelessWidget {
     navigator.pushNamed(route, arguments: arguments);
   }
 
+  Future<bool> _hasRequiredUnitAccess(int requiredUnitId) async {
+    if (requiredUnitId == AuthService.unidadVialidadesUrbanasId) {
+      return AuthService.isVialidadesUrbanasUser();
+    }
+    if (requiredUnitId == AuthService.unidadProteccionCarreterasId) {
+      return AuthService.isCarreterasUser();
+    }
+
+    return (await AuthService.getUnidadId()) == requiredUnitId;
+  }
+
   bool _allowed(Set<String> perms, String? requiredPerm) {
     if (requiredPerm == null || requiredPerm.trim().isEmpty) return true;
     return perms.contains(requiredPerm.trim().toLowerCase());
@@ -98,13 +105,15 @@ class AppDrawer extends StatelessWidget {
   Future<_DrawerAccess> _loadAccess() async {
     var permissions = await AuthService.getPermissions();
     var unidadId = await AuthService.getUnidadId();
+    var canSeeCarreteras = await AuthService.isCarreterasUser();
     var canSeeVialidadesUrbanas = await AuthService.isVialidadesUrbanasUser();
     var isSuperadmin = await AuthService.isSuperadmin();
 
-    if (!canSeeVialidadesUrbanas || permissions.isEmpty) {
+    if (permissions.isEmpty) {
       await AuthService.refreshCurrentUserAccess();
       permissions = await AuthService.getPermissions();
       unidadId = await AuthService.getUnidadId();
+      canSeeCarreteras = await AuthService.isCarreterasUser();
       canSeeVialidadesUrbanas = await AuthService.isVialidadesUrbanasUser();
       isSuperadmin = await AuthService.isSuperadmin();
     }
@@ -112,6 +121,7 @@ class AppDrawer extends StatelessWidget {
     return _DrawerAccess(
       perms: permissions.map((e) => e.trim().toLowerCase()).toSet(),
       unidadId: unidadId,
+      canSeeCarreteras: canSeeCarreteras,
       canSeeVialidadesUrbanas: canSeeVialidadesUrbanas,
       isSuperadmin: isSuperadmin,
     );
@@ -187,10 +197,11 @@ class AppDrawer extends StatelessWidget {
 
                 final perms = snap.data?.perms ?? <String>{};
                 final canSeeDispositivos =
-                    _allowed(perms, permOperativosCarreteras) ||
-                    perms.contains('crear operativos carreteras') ||
-                    perms.contains('editar operativos carreteras') ||
-                    perms.contains('eliminar operativos carreteras');
+                    (snap.data?.canSeeCarreteras ?? false) &&
+                    (_allowed(perms, permOperativosCarreteras) ||
+                        perms.contains('crear operativos carreteras') ||
+                        perms.contains('editar operativos carreteras') ||
+                        perms.contains('eliminar operativos carreteras'));
                 final canSeeVialidadesUrbanas =
                     snap.data?.canSeeVialidadesUrbanas ?? false;
                 final unidadId = snap.data?.unidadId;
@@ -316,7 +327,12 @@ class AppDrawer extends StatelessWidget {
                           _DrawerSubItem(
                             icon: Icons.list_alt,
                             label: 'Listado',
-                            onTap: () => _nav(context, AppRoutes.dispositivos),
+                            onTap: () => _nav(
+                              context,
+                              AppRoutes.dispositivos,
+                              requiredUnitId:
+                                  AuthService.unidadProteccionCarreterasId,
+                            ),
                           ),
                         ],
                       ),
@@ -412,12 +428,14 @@ class AppDrawer extends StatelessWidget {
 class _DrawerAccess {
   final Set<String> perms;
   final int? unidadId;
+  final bool canSeeCarreteras;
   final bool canSeeVialidadesUrbanas;
   final bool isSuperadmin;
 
   const _DrawerAccess({
     required this.perms,
     required this.unidadId,
+    required this.canSeeCarreteras,
     required this.canSeeVialidadesUrbanas,
     required this.isSuperadmin,
   });

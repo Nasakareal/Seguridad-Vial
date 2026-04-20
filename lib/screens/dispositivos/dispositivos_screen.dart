@@ -23,6 +23,7 @@ class _DispositivosScreenState extends State<DispositivosScreen>
   bool _bootstrapped = false;
   bool _busy = false;
   bool _loading = true;
+  bool _canUseDispositivos = false;
 
   String? _error;
 
@@ -132,6 +133,19 @@ class _DispositivosScreenState extends State<DispositivosScreen>
     });
 
     try {
+      final hasUnitAccess = await AuthService.isCarreterasUser(refresh: true);
+      final hasPermission = await AuthService.can('ver operativos carreteras');
+      if (!hasUnitAccess || !hasPermission) {
+        if (!mounted) return;
+        setState(() {
+          _items = const <GuardianesCaminoDispositivo>[];
+          _canUseDispositivos = false;
+          _loading = false;
+          _error = 'No tienes acceso al módulo de carreteras.';
+        });
+        return;
+      }
+
       final result = await GuardianesCaminoDispositivosService.fetchIndex(
         fecha: _selectedDate,
       );
@@ -139,12 +153,14 @@ class _DispositivosScreenState extends State<DispositivosScreen>
       if (!mounted) return;
       setState(() {
         _items = result.items;
+        _canUseDispositivos = true;
         _loading = false;
       });
     } catch (e) {
       if (!mounted) return;
       setState(() {
         _items = const <GuardianesCaminoDispositivo>[];
+        _canUseDispositivos = false;
         _loading = false;
         _error = 'No se pudieron cargar los dispositivos.\n$e';
       });
@@ -387,13 +403,15 @@ class _DispositivosScreenState extends State<DispositivosScreen>
           ),
         ),
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () =>
-            Navigator.pushNamed(context, AppRoutes.dispositivosCreate),
-        tooltip: 'Agregar dispositivo',
-        icon: const Icon(Icons.add),
-        label: const Text('Agregar'),
-      ),
+      floatingActionButton: _canUseDispositivos
+          ? FloatingActionButton.extended(
+              onPressed: () =>
+                  Navigator.pushNamed(context, AppRoutes.dispositivosCreate),
+              tooltip: 'Agregar dispositivo',
+              icon: const Icon(Icons.add),
+              label: const Text('Agregar'),
+            )
+          : null,
     );
   }
 }

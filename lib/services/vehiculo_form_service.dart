@@ -50,6 +50,34 @@ class VehiculoQrData {
   }
 }
 
+class ConductorLicenseQrData {
+  final String rawText;
+  final String? nombre;
+  final String? tipoLicencia;
+  final DateTime? expedicion;
+  final DateTime? vigencia;
+  final bool permanente;
+
+  const ConductorLicenseQrData({
+    required this.rawText,
+    this.nombre,
+    this.tipoLicencia,
+    this.expedicion,
+    this.vigencia,
+    this.permanente = false,
+  });
+
+  bool get hasAnyValue {
+    return <String?>[
+          nombre,
+          tipoLicencia,
+        ].any((value) => (value ?? '').trim().isNotEmpty) ||
+        expedicion != null ||
+        vigencia != null ||
+        permanente;
+  }
+}
+
 class VehiculoFormService {
   static VehiculoQrData parseTarjetaCirculacionQr(String raw) {
     final rawText = raw.trim();
@@ -210,6 +238,37 @@ class VehiculoFormService {
       tarjetaCirculacionNombre: propietario,
       tipoGeneral: effectiveTipoGeneral,
       tipoCarroceria: tipoCarroceria,
+    );
+  }
+
+  static ConductorLicenseQrData parseLicenciaConducirQr(String raw) {
+    final rawText = raw.trim();
+    if (rawText.isEmpty) return const ConductorLicenseQrData(rawText: '');
+
+    final dates = _licenseDates(rawText);
+    final header = _licenseTextBeforeDates(rawText);
+    final segments = _licenseHeaderSegments(header);
+
+    final nombre = segments.isNotEmpty
+        ? _upperLicenseValue(segments.first)
+        : null;
+    final tipoLicencia = segments.length > 1
+        ? _upperLicenseValue(segments[1])
+        : _inferLicenseType(rawText);
+
+    final expedicion = dates.isNotEmpty ? dates.first : null;
+    final vigencia = dates.isEmpty
+        ? null
+        : (dates.length > 1 ? dates.last : dates.first);
+    final permanente = vigencia != null && vigencia.year >= 2100;
+
+    return ConductorLicenseQrData(
+      rawText: rawText,
+      nombre: nombre,
+      tipoLicencia: tipoLicencia,
+      expedicion: expedicion,
+      vigencia: permanente ? null : vigencia,
+      permanente: permanente,
     );
   }
 
@@ -953,6 +1012,110 @@ class VehiculoFormService {
     final guessed = VehiculoTaxonomia.normalizeCarroceria(cleaned);
     for (final options in VehiculoTaxonomia.carrocerias.values) {
       if (options.contains(guessed)) return guessed;
+    }
+
+    return null;
+  }
+
+  static List<DateTime> _licenseDates(String raw) {
+    final dates = <DateTime>[];
+    final matches = RegExp(
+      r'\b(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})\b',
+    ).allMatches(raw);
+
+    for (final match in matches) {
+      final date = _parseLicenseDate(match.group(0) ?? '');
+      if (date != null) dates.add(date);
+    }
+
+    return dates;
+  }
+
+  static DateTime? _parseLicenseDate(String raw) {
+    final match = RegExp(
+      r'^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})$',
+    ).firstMatch(raw.trim());
+    if (match == null) return null;
+
+    final day = int.tryParse(match.group(1) ?? '');
+    final month = int.tryParse(match.group(2) ?? '');
+    var year = int.tryParse(match.group(3) ?? '');
+    if (day == null || month == null || year == null) return null;
+    if (year < 100) year += 2000;
+
+    final date = DateTime(year, month, day);
+    if (date.year != year || date.month != month || date.day != day) {
+      return null;
+    }
+    return date;
+  }
+
+  static String _licenseTextBeforeDates(String raw) {
+    final match = RegExp(
+      r'\b\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{2,4}\b',
+    ).firstMatch(raw);
+    if (match == null) return raw;
+    return raw.substring(0, match.start);
+  }
+
+  static List<String> _licenseHeaderSegments(String rawHeader) {
+    final coarse = rawHeader
+        .replaceAll('\r', '\n')
+        .split(RegExp(r'(?:\|+|//+|[\n;]+)'))
+        .map(_cleanLicenseSegment)
+        .where((part) => part.isNotEmpty)
+        .toList();
+
+    final expanded = <String>[];
+    for (final part in coarse) {
+      if (part.contains('/') && !_isLicenseDateLike(part)) {
+        expanded.addAll(
+          part
+              .split('/')
+              .map(_cleanLicenseSegment)
+              .where((item) => item.isNotEmpty),
+        );
+      } else {
+        expanded.add(part);
+      }
+    }
+
+    return expanded
+        .where((part) => !_isLicenseDateLike(part))
+        .where((part) => !RegExp(r'^\d+$').hasMatch(part))
+        .toList();
+  }
+
+  static String _cleanLicenseSegment(String value) {
+    return value
+        .trim()
+        .replaceAll(RegExp(r'^[\s:,\-_*]+|[\s:,\-_*]+$'), '')
+        .replaceAll(RegExp(r'\s+'), ' ');
+  }
+
+  static bool _isLicenseDateLike(String value) {
+    return _parseLicenseDate(value.trim()) != null;
+  }
+
+  static String? _upperLicenseValue(String value) {
+    final cleaned = _cleanLicenseSegment(value);
+    if (cleaned.isEmpty) return null;
+    return cleaned.toUpperCase();
+  }
+
+  static String? _inferLicenseType(String raw) {
+    final normalized = _removeAccents(raw).toUpperCase();
+    const knownTypes = <String>[
+      'MOTOCICLISTA',
+      'CHOFER',
+      'AUTOMOVILISTA',
+      'OPERADOR',
+      'SERVICIO PUBLICO',
+      'PARTICULAR',
+    ];
+
+    for (final type in knownTypes) {
+      if (normalized.contains(type)) return type;
     }
 
     return null;

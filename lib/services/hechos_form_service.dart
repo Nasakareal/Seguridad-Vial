@@ -8,6 +8,7 @@ import '../models/dictamen_item.dart';
 import '../models/hecho_form_data.dart';
 import 'auth_service.dart';
 import 'offline_sync_service.dart';
+import 'photo_orientation_service.dart';
 
 class HechosFormService {
   static const int _maxImageBytes = 5 * 1024 * 1024;
@@ -148,11 +149,14 @@ class HechosFormService {
     File? fotoLugar,
     File? fotoSituacion,
   }) async {
+    final usesRelaxedHechosRules =
+        await AuthService.isHechosCaptureRelaxedUser();
+
     if (data.hora == null || data.fecha == null) {
       return 'Completa la hora y la fecha.';
     }
 
-    if ((data.sector ?? '').trim().isEmpty ||
+    if ((!usesRelaxedHechosRules && (data.sector ?? '').trim().isEmpty) ||
         (data.tipoHecho ?? '').trim().isEmpty ||
         (data.superficieVia ?? '').trim().isEmpty ||
         (data.tiempo ?? '').trim().isEmpty ||
@@ -165,6 +169,9 @@ class HechosFormService {
       return 'Completa todos los campos obligatorios.';
     }
 
+    if (!usesRelaxedHechosRules && data.folioC5i.trim().isEmpty) {
+      return 'Captura el Folio C5i.';
+    }
     if (_trimmedLength(data.folioC5i) > 20) {
       return 'El Folio C5i no puede exceder 20 caracteres.';
     }
@@ -206,10 +213,11 @@ class HechosFormService {
       return 'Selecciona el dictamen.';
     }
 
-    if (situacion == 'RESUELTO' &&
+    if (!usesRelaxedHechosRules &&
+        {'RESUELTO', 'TURNADO'}.contains(situacion) &&
         fotoSituacion == null &&
         !data.hasFotoSituacionActual) {
-      return 'Para marcar el hecho como RESUELTO debes subir la foto de situación.';
+      return 'Para marcar el hecho como RESUELTO o TURNADO debes subir la foto de situación.';
     }
 
     final vehiculosMp = data.vehiculosMp.trim();
@@ -220,6 +228,9 @@ class HechosFormService {
       final parsed = int.tryParse(vehiculosMp);
       if (parsed == null) return 'En Vehículos MP solo se permiten números.';
       if (parsed < 0) return 'Vehículos MP no puede ser negativo.';
+      if (situacion == 'TURNADO' && parsed < 1) {
+        return 'Cuando el hecho está TURNADO, Vehículos MP debe ser mayor que cero.';
+      }
     }
 
     final personasMp = data.personasMp.trim();
@@ -285,8 +296,17 @@ class HechosFormService {
     File? fotoSituacion,
   }) async {
     final clientUuid = _ensureClientUuid(data);
-    final fields = _buildFields(data, dictamenSelected);
+    final usesRelaxedHechosRules =
+        await AuthService.isHechosCaptureRelaxedUser();
+    final fields = _buildFields(
+      data,
+      dictamenSelected,
+      usesRelaxedHechosRules: usesRelaxedHechosRules,
+    );
     fields['client_uuid'] = clientUuid;
+    final landscapeFotoLugar = fotoLugar == null
+        ? null
+        : await PhotoOrientationService.forceLandscape(fotoLugar);
 
     return OfflineSyncService.submitMultipart(
       label: 'Hecho',
@@ -294,8 +314,8 @@ class HechosFormService {
       uri: Uri.parse('${AuthService.baseUrl}/hechos'),
       fields: fields,
       files: <OfflineUploadFile>[
-        if (fotoLugar != null)
-          OfflineUploadFile(field: 'foto_lugar', path: fotoLugar.path),
+        if (landscapeFotoLugar != null)
+          OfflineUploadFile(field: 'foto_lugar', path: landscapeFotoLugar.path),
         if (fotoSituacion != null)
           OfflineUploadFile(field: 'foto_situacion', path: fotoSituacion.path),
       ],
@@ -312,8 +332,17 @@ class HechosFormService {
     File? fotoLugar,
     File? fotoSituacion,
   }) async {
-    final fields = _buildFields(data, dictamenSelected);
+    final usesRelaxedHechosRules =
+        await AuthService.isHechosCaptureRelaxedUser();
+    final fields = _buildFields(
+      data,
+      dictamenSelected,
+      usesRelaxedHechosRules: usesRelaxedHechosRules,
+    );
     fields['_method'] = 'PUT';
+    final landscapeFotoLugar = fotoLugar == null
+        ? null
+        : await PhotoOrientationService.forceLandscape(fotoLugar);
 
     return OfflineSyncService.submitMultipart(
       label: 'Hecho',
@@ -321,8 +350,8 @@ class HechosFormService {
       uri: Uri.parse('${AuthService.baseUrl}/hechos/$hechoId'),
       fields: fields,
       files: <OfflineUploadFile>[
-        if (fotoLugar != null)
-          OfflineUploadFile(field: 'foto_lugar', path: fotoLugar.path),
+        if (landscapeFotoLugar != null)
+          OfflineUploadFile(field: 'foto_lugar', path: landscapeFotoLugar.path),
         if (fotoSituacion != null)
           OfflineUploadFile(field: 'foto_situacion', path: fotoSituacion.path),
       ],
@@ -340,7 +369,11 @@ class HechosFormService {
     return generated;
   }
 
-  static Map<String, String> _buildFields(HechoFormData d, DictamenItem? dict) {
+  static Map<String, String> _buildFields(
+    HechoFormData d,
+    DictamenItem? dict, {
+    required bool usesRelaxedHechosRules,
+  }) {
     final fields = <String, String>{
       'folio_c5i': d.folioC5i.trim(),
       'perito': d.perito.trim(),
@@ -348,7 +381,9 @@ class HechosFormService {
       'unidad': d.unidad.trim(),
       'hora': horaStr(d.hora!),
       'fecha': ymd(d.fecha!),
-      'sector': HechosCatalogos.normalizeSector(d.sector!),
+      'sector': usesRelaxedHechosRules
+          ? ''
+          : HechosCatalogos.normalizeSector(d.sector!),
       'calle': d.calle.trim(),
       'colonia': d.colonia.trim(),
       'entre_calles': d.entreCalles.trim(),

@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import 'auth_service.dart';
 import 'offline_sync_service.dart';
+import 'photo_orientation_service.dart';
 
 class VialidadesUrbanasFormPayload {
   final int catalogoId;
@@ -160,7 +161,11 @@ class VialidadesUrbanasFormService {
     addText('observaciones', payload.observaciones);
     addText('supervision', payload.supervision);
 
-    if (payload.fotos.isEmpty) {
+    final fotos = payload.fotos.isEmpty
+        ? const <File>[]
+        : await PhotoOrientationService.forceLandscapeAll(payload.fotos);
+
+    if (fotos.isEmpty) {
       return OfflineSyncService.submitJson(
         label: 'Dispositivo Vialidades Urbanas',
         method: 'POST',
@@ -182,7 +187,7 @@ class VialidadesUrbanasFormService {
       uri: Uri.parse('${AuthService.baseUrl}/vialidades-urbanas'),
       fields: fields,
       files: <OfflineUploadFile>[
-        for (final foto in payload.fotos)
+        for (final foto in fotos)
           OfflineUploadFile(field: 'fotos[]', path: foto.path),
       ],
       requestId: clientUuid,

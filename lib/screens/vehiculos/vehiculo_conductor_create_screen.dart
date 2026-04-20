@@ -1,6 +1,8 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:mobile_scanner/mobile_scanner.dart';
 
 import '../services/auth_service.dart';
 import '../../services/vehiculo_form_service.dart';
@@ -110,7 +112,7 @@ class _VehiculoConductorCreateScreenState
 
     final h = await _headers();
     final uri = Uri.parse(
-                    'https://seguridadvial-mich.com/api/hechos/$hechoId/vehiculos/$vehiculoId',
+      'https://seguridadvial-mich.com/api/hechos/$hechoId/vehiculos/$vehiculoId',
     );
     final res = await http.get(uri, headers: h);
 
@@ -191,6 +193,81 @@ class _VehiculoConductorCreateScreenState
     if (picked != null) {
       setState(() => _vigenciaLicencia = picked);
     }
+  }
+
+  Future<void> _scanLicencia() async {
+    final raw = await Navigator.push<String>(
+      context,
+      MaterialPageRoute(builder: (_) => const _LicenciaScannerScreen()),
+    );
+    final text = raw?.trim() ?? '';
+    if (text.isEmpty || !mounted) return;
+
+    final parsed = VehiculoFormService.parseLicenciaConducirQr(text);
+    final applied = _applyLicenciaData(parsed);
+
+    if (!mounted) return;
+    if (applied > 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Se llenaron $applied campos desde la licencia.'),
+        ),
+      );
+      return;
+    }
+
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Licencia leída'),
+        content: const Text(
+          'No pude identificar nombre, tipo o vigencia en el código. Captura manualmente o comparte un ejemplo del texto crudo para ajustar el lector.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cerrar'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  int _applyLicenciaData(ConductorLicenseQrData parsed) {
+    var applied = 0;
+
+    bool setText(TextEditingController controller, String? value) {
+      final cleaned = (value ?? '').trim();
+      if (cleaned.isEmpty || controller.text.trim() == cleaned) return false;
+      controller.text = cleaned;
+      return true;
+    }
+
+    bool sameDate(DateTime? a, DateTime? b) {
+      if (a == null || b == null) return a == b;
+      return a.year == b.year && a.month == b.month && a.day == b.day;
+    }
+
+    setState(() {
+      if (setText(_nombreCtrl, parsed.nombre)) applied += 1;
+      if (setText(_tipoLicenciaCtrl, parsed.tipoLicencia)) applied += 1;
+
+      if (parsed.permanente) {
+        if (!_permanente || _vigenciaLicencia != null) {
+          _permanente = true;
+          _vigenciaLicencia = null;
+          applied += 1;
+        }
+      } else if (parsed.vigencia != null) {
+        if (_permanente || !sameDate(_vigenciaLicencia, parsed.vigencia)) {
+          _permanente = false;
+          _vigenciaLicencia = parsed.vigencia;
+          applied += 1;
+        }
+      }
+    });
+
+    return applied;
   }
 
   Future<void> _guardar() async {
@@ -376,6 +453,12 @@ class _VehiculoConductorCreateScreenState
                 key: _formKey,
                 child: ListView(
                   children: [
+                    OutlinedButton.icon(
+                      onPressed: _guardando ? null : _scanLicencia,
+                      icon: const Icon(Icons.qr_code_scanner),
+                      label: const Text('Escanear licencia de conducir'),
+                    ),
+                    const SizedBox(height: 10),
                     TextFormField(
                       controller: _nombreCtrl,
                       decoration: const InputDecoration(
@@ -580,6 +663,113 @@ class _VehiculoConductorCreateScreenState
                 ),
               ),
             ),
+    );
+  }
+}
+
+class _LicenciaScannerScreen extends StatefulWidget {
+  const _LicenciaScannerScreen();
+
+  @override
+  State<_LicenciaScannerScreen> createState() => _LicenciaScannerScreenState();
+}
+
+class _LicenciaScannerScreenState extends State<_LicenciaScannerScreen> {
+  final MobileScannerController _controller = MobileScannerController(
+    detectionSpeed: DetectionSpeed.noDuplicates,
+    autoZoom: true,
+  );
+
+  bool _handled = false;
+
+  void _handleDetect(BarcodeCapture capture) {
+    if (_handled) return;
+
+    for (final barcode in capture.barcodes) {
+      final raw = barcode.rawValue?.trim() ?? '';
+      if (raw.isEmpty) continue;
+
+      _handled = true;
+      unawaited(_controller.stop());
+      if (!mounted) return;
+      Navigator.pop(context, raw);
+      return;
+    }
+  }
+
+  @override
+  void dispose() {
+    unawaited(_controller.dispose());
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      appBar: AppBar(
+        title: const Text('Escanear licencia'),
+        backgroundColor: Colors.black,
+        foregroundColor: Colors.white,
+        actions: [
+          IconButton(
+            tooltip: 'Linterna',
+            icon: const Icon(Icons.flashlight_on),
+            onPressed: () => _controller.toggleTorch(),
+          ),
+          IconButton(
+            tooltip: 'Cambiar cámara',
+            icon: const Icon(Icons.cameraswitch),
+            onPressed: () => _controller.switchCamera(),
+          ),
+        ],
+      ),
+      body: Stack(
+        children: [
+          MobileScanner(
+            controller: _controller,
+            onDetect: _handleDetect,
+            errorBuilder: (context, error) {
+              return Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Text(
+                    'No se pudo iniciar la cámara.\n\n$error',
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(color: Colors.white),
+                  ),
+                ),
+              );
+            },
+          ),
+          Center(
+            child: Container(
+              width: 280,
+              height: 180,
+              decoration: BoxDecoration(
+                border: Border.all(color: Colors.white, width: 3),
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+          ),
+          Align(
+            alignment: Alignment.bottomCenter,
+            child: Container(
+              width: double.infinity,
+              color: Colors.black.withValues(alpha: 0.72),
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
+              child: const Text(
+                'Apunta al código de la licencia. Se llenarán nombre, tipo y vigencia cuando el formato sea reconocible.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

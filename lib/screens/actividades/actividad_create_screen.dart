@@ -9,6 +9,7 @@ import '../../models/actividad_subcategoria.dart';
 import '../../services/actividades_service.dart';
 import '../../services/auth_service.dart';
 import '../../services/geo_service.dart';
+import '../../widgets/landscape_photo_crop_screen.dart';
 import 'widgets/actividad_vehiculo_modal.dart';
 
 class ActividadCreateScreen extends StatefulWidget {
@@ -48,7 +49,7 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
   final _narrativaCtrl = TextEditingController();
   final _accionesCtrl = TextEditingController();
   final _observacionesCtrl = TextEditingController();
-  final _personasAlcanzadasCtrl = TextEditingController(text: '0');
+  final _personasAlcanzadasCtrl = TextEditingController(text: '1');
   final _personasParticipantesCtrl = TextEditingController(text: '0');
   final _personasDetenidasCtrl = TextEditingController(text: '0');
   final _elementosCtrl = TextEditingController();
@@ -198,7 +199,7 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
     _narrativaCtrl.text = (fields['narrativa'] ?? '').trim();
     _accionesCtrl.text = (fields['acciones_realizadas'] ?? '').trim();
     _observacionesCtrl.text = (fields['observaciones'] ?? '').trim();
-    _personasAlcanzadasCtrl.text = (fields['personas_alcanzadas'] ?? '0')
+    _personasAlcanzadasCtrl.text = (fields['personas_alcanzadas'] ?? '1')
         .trim();
     _personasParticipantesCtrl.text = (fields['personas_participantes'] ?? '0')
         .trim();
@@ -321,12 +322,26 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
   Future<void> _pickFromGallery() async {
     setState(() => _error = null);
 
-    final picked = await _picker.pickMultiImage(imageQuality: 85);
-    if (picked.isEmpty) return;
+    final picked = await _picker.pickMultiImage(
+      imageQuality: 85,
+      maxWidth: 2000,
+      maxHeight: 2000,
+    );
+    if (picked.isEmpty || !mounted) return;
+
+    final files = <File>[];
+    for (final item in picked) {
+      final file = await LandscapePhotoCropScreen.cropIfNeeded(
+        context,
+        File(item.path),
+      );
+      if (!mounted) return;
+      if (file != null) files.add(file);
+    }
+    if (files.isEmpty) return;
 
     setState(() {
-      for (final item in picked) {
-        final file = File(item.path);
+      for (final file in files) {
         if (!_fotos.any((f) => f.path == file.path)) {
           _fotos.add(file);
         }
@@ -340,11 +355,19 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
     final x = await _picker.pickImage(
       source: ImageSource.camera,
       imageQuality: 85,
+      maxWidth: 2000,
+      maxHeight: 2000,
     );
-    if (x == null) return;
+    if (x == null || !mounted) return;
+
+    final file = await LandscapePhotoCropScreen.cropIfNeeded(
+      context,
+      File(x.path),
+    );
+    if (file == null) return;
+    if (!mounted) return;
 
     setState(() {
-      final file = File(x.path);
       if (!_fotos.any((f) => f.path == file.path)) {
         _fotos.add(file);
       }
@@ -406,8 +429,8 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
       notaGeo: _trim(_notaGeoCtrl),
       motivo: _trim(_motivoCtrl),
       narrativa: _trim(_narrativaCtrl),
-      accionesRealizadas: _trim(_accionesCtrl),
-      observaciones: _trim(_observacionesCtrl),
+      accionesRealizadas: null,
+      observaciones: null,
       personasAlcanzadas: _trim(_personasAlcanzadasCtrl),
       personasParticipantes: _trim(_personasParticipantesCtrl),
       personasDetenidas: _trim(_personasDetenidasCtrl),
@@ -456,6 +479,14 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
 
     if (_fotos.isEmpty) {
       setState(() => _error = 'Selecciona al menos una foto.');
+      return;
+    }
+
+    final personasAlcanzadas = int.tryParse(
+      _personasAlcanzadasCtrl.text.trim(),
+    );
+    if (personasAlcanzadas == null || personasAlcanzadas < 1) {
+      setState(() => _error = 'Captura al menos 1 persona alcanzada.');
       return;
     }
 
@@ -787,13 +818,9 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
               title: 'Contenido',
               child: Column(
                 children: [
-                  _textField(_motivoCtrl, 'Que ocasiona o motivo', maxLines: 3),
+                  _textField(_motivoCtrl, 'Asunto', maxLines: 2),
                   const SizedBox(height: 12),
-                  _textField(_narrativaCtrl, 'Narrativa', maxLines: 3),
-                  const SizedBox(height: 12),
-                  _textField(_accionesCtrl, 'Acciones realizadas', maxLines: 3),
-                  const SizedBox(height: 12),
-                  _textField(_observacionesCtrl, 'Observaciones', maxLines: 3),
+                  _textField(_narrativaCtrl, 'Narrativa', maxLines: 6),
                 ],
               ),
             ),
@@ -809,7 +836,7 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
                       Expanded(
                         child: _textField(
                           _personasAlcanzadasCtrl,
-                          'Personas alcanzadas',
+                          'Personas alcanzadas *',
                           keyboardType: TextInputType.number,
                         ),
                       ),

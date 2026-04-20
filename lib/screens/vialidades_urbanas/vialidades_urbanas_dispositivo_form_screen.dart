@@ -8,6 +8,7 @@ import '../../services/auth_service.dart';
 import '../../services/vialidades_urbanas_detalles_form_service.dart';
 import '../../services/vialidades_urbanas_detalles_service.dart';
 import '../../services/vialidades_urbanas_service.dart';
+import '../../widgets/landscape_photo_crop_screen.dart';
 
 class VialidadesUrbanasDispositivoFormScreen extends StatefulWidget {
   final int dispositivoId;
@@ -160,9 +161,20 @@ class _VialidadesUrbanasDispositivoFormScreenState
   }
 
   Future<void> _pickPhoto(ImageSource source) async {
-    final picked = await _picker.pickImage(source: source, imageQuality: 85);
+    final picked = await _picker.pickImage(
+      source: source,
+      imageQuality: 85,
+      maxWidth: 2000,
+      maxHeight: 2000,
+    );
     if (picked == null || !mounted) return;
-    setState(() => _fotosNuevas.add(File(picked.path)));
+    final file = await LandscapePhotoCropScreen.cropIfNeeded(
+      context,
+      File(picked.path),
+    );
+    if (file == null) return;
+    if (!mounted) return;
+    setState(() => _fotosNuevas.add(file));
   }
 
   void _addDetalle() {

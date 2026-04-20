@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/guardianes_camino/guardianes_camino_dispositivos_catalogos.dart';
+import '../../services/auth_service.dart';
 import 'dispositivo_form_screen.dart';
 
 class DispositivoCreateScreen extends StatefulWidget {
@@ -12,6 +13,25 @@ class DispositivoCreateScreen extends StatefulWidget {
 }
 
 class _DispositivoCreateScreenState extends State<DispositivoCreateScreen> {
+  bool _checkingAccess = true;
+  bool _canCreate = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadAccess();
+  }
+
+  Future<void> _loadAccess() async {
+    final hasUnitAccess = await AuthService.isCarreterasUser(refresh: true);
+    final hasPermission = await AuthService.can('crear operativos carreteras');
+    if (!mounted) return;
+    setState(() {
+      _canCreate = hasUnitAccess && hasPermission;
+      _checkingAccess = false;
+    });
+  }
+
   void _handleCatalogoTap(GuardianesCaminoCatalogoLocal catalogo) {
     Navigator.push(
       context,
@@ -23,6 +43,38 @@ class _DispositivoCreateScreenState extends State<DispositivoCreateScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (_checkingAccess) {
+      return Scaffold(
+        appBar: AppBar(
+          elevation: 0,
+          backgroundColor: Colors.blue,
+          title: const Text('Agregar dispositivo'),
+        ),
+        body: const Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    if (!_canCreate) {
+      return Scaffold(
+        appBar: AppBar(
+          elevation: 0,
+          backgroundColor: Colors.blue,
+          title: const Text('Agregar dispositivo'),
+        ),
+        body: const SafeArea(
+          child: Center(
+            child: Padding(
+              padding: EdgeInsets.all(24),
+              child: Text(
+                'No tienes acceso al módulo de carreteras.',
+                textAlign: TextAlign.center,
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
     return Scaffold(
       backgroundColor: const Color(0xFFF6F7FB),
       appBar: AppBar(

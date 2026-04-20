@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import 'auth_service.dart';
 import 'offline_sync_service.dart';
+import 'photo_orientation_service.dart';
 
 class VialidadesUrbanasDetalleInput {
   final String tipo;
@@ -155,6 +156,9 @@ class VialidadesUrbanasDetallesFormService {
     required VialidadesUrbanasDetallesFormPayload payload,
   }) async {
     final requestId = OfflineSyncService.newClientUuid();
+    final fotosNuevas = await PhotoOrientationService.forceLandscapeAll(
+      payload.fotosNuevas,
+    );
 
     return OfflineSyncService.submitMultipart(
       label: 'Detalle Vialidades Urbanas',
@@ -162,7 +166,7 @@ class VialidadesUrbanasDetallesFormService {
       uri: Uri.parse(_base(payload.dispositivoId)),
       fields: _buildFields(payload),
       files: <OfflineUploadFile>[
-        for (final foto in payload.fotosNuevas)
+        for (final foto in fotosNuevas)
           OfflineUploadFile(field: 'fotos[]', path: foto.path),
       ],
       requestId: requestId,
@@ -174,13 +178,17 @@ class VialidadesUrbanasDetallesFormService {
   static Future<OfflineActionResult> update({
     required VialidadesUrbanasDetallesFormPayload payload,
   }) async {
+    final fotosNuevas = await PhotoOrientationService.forceLandscapeAll(
+      payload.fotosNuevas,
+    );
+
     return OfflineSyncService.submitMultipart(
       label: 'Detalle Vialidades Urbanas',
       method: 'POST',
       uri: Uri.parse(_base(payload.dispositivoId)),
       fields: _buildFields(payload, isUpdate: true),
       files: <OfflineUploadFile>[
-        for (final foto in payload.fotosNuevas)
+        for (final foto in fotosNuevas)
           OfflineUploadFile(field: 'fotos[]', path: foto.path),
       ],
       successCodes: const <int>{200},

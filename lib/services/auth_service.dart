@@ -21,6 +21,9 @@ class AuthService {
   static const String _delegacionIdKey = 'auth_delegacion_id';
   static const String _destacamentoIdKey = 'auth_destacamento_id';
   static const String _sessionOwnerKeyKey = 'auth_session_owner_key';
+  static const int unidadDelegacionesId = 2;
+  static const int unidadSeguridadVialId = 3;
+  static const int unidadProteccionCarreterasId = 4;
   static const int unidadVialidadesUrbanasId = 5;
   static const int unidadCulturaVialId = 6;
 
@@ -379,25 +382,37 @@ class AuthService {
       await refreshCurrentUserAccess();
     }
 
-    final unidadId = await getUnidadId();
-    if (unidadId == 5) {
+    if (await isSuperadmin()) {
       return true;
     }
 
-    final perms = await getPermissions();
-    final normalizedPerms = perms
-        .map((perm) => perm.trim().toLowerCase())
-        .where((perm) => perm.isNotEmpty)
-        .toSet();
-    if (normalizedPerms.contains('ver operativos vialidades') ||
-        normalizedPerms.contains('crear operativos vialidades') ||
-        normalizedPerms.contains('editar operativos vialidades') ||
-        normalizedPerms.contains('eliminar operativos vialidades')) {
+    final unidadId = await getUnidadId();
+    if (unidadId == unidadVialidadesUrbanasId ||
+        unidadId == unidadSeguridadVialId) {
       return true;
     }
 
     final payload = await getCurrentUserPayload(refresh: false);
     return _payloadMatchesVialidadesUrbanas(payload);
+  }
+
+  static Future<bool> isCarreterasUser({bool refresh = false}) async {
+    if (refresh) {
+      await refreshCurrentUserAccess();
+    }
+
+    if (await isSuperadmin()) {
+      return true;
+    }
+
+    final unidadId = await getUnidadId();
+    if (unidadId == unidadProteccionCarreterasId ||
+        unidadId == unidadSeguridadVialId) {
+      return true;
+    }
+
+    final payload = await getCurrentUserPayload(refresh: false);
+    return _payloadMatchesCarreteras(payload);
   }
 
   static Future<bool> canCreateHechos({bool refresh = false}) async {
@@ -438,6 +453,20 @@ class AuthService {
 
     final payload = await getCurrentUserPayload(refresh: false);
     return _payloadMatchesHechosCreateExcludedUnit(payload);
+  }
+
+  static Future<bool> isHechosCaptureRelaxedUser({bool refresh = false}) async {
+    if (refresh) {
+      await refreshCurrentUserAccess();
+    }
+
+    final unidadId = await getUnidadId();
+    if (_isHechosCaptureRelaxedUnitId(unidadId)) {
+      return true;
+    }
+
+    final payload = await getCurrentUserPayload(refresh: false);
+    return _payloadMatchesHechosCaptureRelaxedUnit(payload);
   }
 
   static Future<List<String>> refreshPermissions() async {
@@ -720,6 +749,14 @@ class AuthService {
       return false;
     }
 
+    final directId =
+        _readNullableInt(payload['unidad_id']) ??
+        _readNullableInt(payload['unidad_org_id']);
+    if (directId == unidadVialidadesUrbanasId ||
+        directId == unidadSeguridadVialId) {
+      return true;
+    }
+
     final candidates = <dynamic>[
       payload['unidad'],
       payload['unidad_principal'],
@@ -778,6 +815,42 @@ class AuthService {
     return false;
   }
 
+  static bool _payloadMatchesHechosCaptureRelaxedUnit(
+    Map<String, dynamic>? payload,
+  ) {
+    if (payload == null || payload.isEmpty) {
+      return false;
+    }
+
+    final directId =
+        _readNullableInt(payload['unidad_id']) ??
+        _readNullableInt(payload['unidad_org_id']);
+    if (_isHechosCaptureRelaxedUnitId(directId)) {
+      return true;
+    }
+
+    final candidates = <dynamic>[
+      payload['unidad'],
+      payload['unidad_principal'],
+      payload['unidadPrincipal'],
+      payload['unidad_nombre'],
+      payload['unidadName'],
+      payload['unidad_label'],
+      payload['area'],
+      payload['areas'],
+      payload['unidades'],
+      payload['roles'],
+    ];
+
+    for (final candidate in candidates) {
+      if (_dynamicContainsHechosCaptureRelaxedUnit(candidate)) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
   static Future<List<String>> _filterHechosPermissionsForCurrentUser(
     List<String> permissions, {
     Map<String, dynamic>? userPayload,
@@ -793,15 +866,11 @@ class AuthService {
     }
 
     final unidadId = await getUnidadId();
-    final exclude =
+    final excludeHechos =
         _isHechosCreateExcludedUnitId(unidadId) ||
         _payloadMatchesHechosCreateExcludedUnit(payload);
 
-    if (!exclude) {
-      return normalized.toList();
-    }
-
-    const hidden = <String>{
+    const hiddenHechos = <String>{
       'ver busqueda',
       'ver hechos',
       'crear hechos',
@@ -817,7 +886,41 @@ class AuthService {
       'eliminar lesionados',
     };
 
-    normalized.removeWhere(hidden.contains);
+    const hiddenCarreteras = <String>{
+      'ver operativos carreteras',
+      'crear operativos carreteras',
+      'editar operativos carreteras',
+      'eliminar operativos carreteras',
+      'ver estadisticas carreteras',
+    };
+
+    const hiddenVialidades = <String>{
+      'ver operativos vialidades',
+      'crear operativos vialidades',
+      'editar operativos vialidades',
+      'eliminar operativos vialidades',
+    };
+
+    if (excludeHechos) {
+      normalized.removeWhere(hiddenHechos.contains);
+    }
+
+    final canUseCarreteras =
+        unidadId == unidadProteccionCarreterasId ||
+        unidadId == unidadSeguridadVialId ||
+        _payloadMatchesCarreteras(payload);
+    if (!canUseCarreteras) {
+      normalized.removeWhere(hiddenCarreteras.contains);
+    }
+
+    final canUseVialidades =
+        unidadId == unidadVialidadesUrbanasId ||
+        unidadId == unidadSeguridadVialId ||
+        _payloadMatchesVialidadesUrbanas(payload);
+    if (!canUseVialidades) {
+      normalized.removeWhere(hiddenVialidades.contains);
+    }
+
     return normalized.toList();
   }
 
@@ -884,7 +987,8 @@ class AuthService {
       return false;
     }
 
-    if (_readNullableInt(raw) == 5) {
+    final id = _readNullableInt(raw);
+    if (id == unidadVialidadesUrbanasId) {
       return true;
     }
 
@@ -899,7 +1003,7 @@ class AuthService {
       final id = _readNullableInt(
         raw['id'] ?? raw['value'] ?? raw['unidad_id'],
       );
-      if (id == 5) {
+      if (id == unidadVialidadesUrbanasId) {
         return true;
       }
 
@@ -923,6 +1027,95 @@ class AuthService {
     if (raw is Iterable) {
       for (final item in raw) {
         if (_dynamicContainsVialidadesUrbanas(item)) {
+          return true;
+        }
+      }
+    }
+
+    return false;
+  }
+
+  static bool _payloadMatchesCarreteras(Map<String, dynamic>? payload) {
+    if (payload == null || payload.isEmpty) {
+      return false;
+    }
+
+    final directId =
+        _readNullableInt(payload['unidad_id']) ??
+        _readNullableInt(payload['unidad_org_id']);
+    if (directId == unidadProteccionCarreterasId ||
+        directId == unidadSeguridadVialId) {
+      return true;
+    }
+
+    final candidates = <dynamic>[
+      payload['unidad'],
+      payload['unidad_principal'],
+      payload['unidadPrincipal'],
+      payload['unidad_nombre'],
+      payload['unidadName'],
+      payload['unidad_label'],
+      payload['area'],
+      payload['areas'],
+      payload['unidades'],
+      payload['roles'],
+    ];
+
+    for (final candidate in candidates) {
+      if (_dynamicContainsCarreteras(candidate)) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  static bool _dynamicContainsCarreteras(dynamic raw) {
+    if (raw == null) {
+      return false;
+    }
+
+    final id = _readNullableInt(raw);
+    if (id == unidadProteccionCarreterasId) {
+      return true;
+    }
+
+    if (raw is String) {
+      final normalized = _normalizeUnitText(raw);
+      return normalized.contains('PROTECCION A CARRETERAS') ||
+          normalized.contains('PROTECCION EN CARRETERAS') ||
+          normalized == 'CARRETERAS';
+    }
+
+    if (raw is Map) {
+      final nestedId = _readNullableInt(
+        raw['id'] ?? raw['value'] ?? raw['unidad_id'] ?? raw['unidad_org_id'],
+      );
+      if (nestedId == unidadProteccionCarreterasId) {
+        return true;
+      }
+
+      final names = <dynamic>[
+        raw['name'],
+        raw['nombre'],
+        raw['label'],
+        raw['descripcion'],
+        raw['title'],
+        raw['slug'],
+      ];
+
+      for (final value in names) {
+        if (_dynamicContainsCarreteras(value)) {
+          return true;
+        }
+      }
+
+      return false;
+    }
+
+    if (raw is Iterable) {
+      for (final item in raw) {
+        if (_dynamicContainsCarreteras(item)) {
           return true;
         }
       }
@@ -984,6 +1177,65 @@ class AuthService {
     }
 
     return false;
+  }
+
+  static bool _dynamicContainsHechosCaptureRelaxedUnit(dynamic raw) {
+    if (raw == null) {
+      return false;
+    }
+
+    if (_isHechosCaptureRelaxedUnitId(_readNullableInt(raw))) {
+      return true;
+    }
+
+    if (raw is String) {
+      final normalized = _normalizeUnitText(raw);
+      return normalized.contains('DELEGACIONES') ||
+          normalized.contains('PROTECCION A CARRETERAS') ||
+          normalized.contains('PROTECCION EN CARRETERAS') ||
+          normalized == 'CARRETERAS';
+    }
+
+    if (raw is Map) {
+      final id = _readNullableInt(
+        raw['id'] ?? raw['value'] ?? raw['unidad_id'] ?? raw['unidad_org_id'],
+      );
+      if (_isHechosCaptureRelaxedUnitId(id)) {
+        return true;
+      }
+
+      final names = <dynamic>[
+        raw['name'],
+        raw['nombre'],
+        raw['label'],
+        raw['descripcion'],
+        raw['title'],
+        raw['slug'],
+      ];
+
+      for (final value in names) {
+        if (_dynamicContainsHechosCaptureRelaxedUnit(value)) {
+          return true;
+        }
+      }
+
+      return false;
+    }
+
+    if (raw is Iterable) {
+      for (final item in raw) {
+        if (_dynamicContainsHechosCaptureRelaxedUnit(item)) {
+          return true;
+        }
+      }
+    }
+
+    return false;
+  }
+
+  static bool _isHechosCaptureRelaxedUnitId(int? unidadId) {
+    return unidadId == unidadDelegacionesId ||
+        unidadId == unidadProteccionCarreterasId;
   }
 
   static bool _isHechosCreateExcludedUnitId(int? unidadId) {
