@@ -22,24 +22,36 @@ class TrackingTaskHandler extends TaskHandler {
   bool? _enabledByCommander;
   DateTime? _enabledByCommanderCheckedAt;
 
-  static const Duration kMinInterval = Duration(seconds: 12);
-  static const Duration kStillInterval = Duration(seconds: 50);
-  static const Duration kSlowInterval = Duration(seconds: 30);
-  static const Duration kMoveInterval = Duration(seconds: 20);
+  static const Duration kMinInterval = Duration(seconds: 32);
+  static const Duration kStillInterval = Duration(seconds: 70);
+  static const Duration kSlowInterval = Duration(seconds: 50);
+  static const Duration kMoveInterval = Duration(seconds: 40);
 
-  Duration _intervalForSpeed(double speedMps) {
+  static const Duration kExtendedMinInterval = Duration(minutes: 7);
+  static const Duration kExtendedStillInterval = Duration(minutes: 10);
+  static const Duration kExtendedSlowInterval = Duration(minutes: 9);
+
+  Duration _intervalForSpeed(double speedMps, {required bool extended}) {
+    if (extended) {
+      if (!speedMps.isFinite || speedMps < 0) return kExtendedSlowInterval;
+      if (speedMps <= 0.5) return kExtendedStillInterval;
+      if (speedMps <= 2.0) return kExtendedSlowInterval;
+      return kExtendedMinInterval;
+    }
+
     if (!speedMps.isFinite || speedMps < 0) return kSlowInterval;
     if (speedMps <= 0.5) return kStillInterval;
     if (speedMps <= 2.0) return kSlowInterval;
     return kMoveInterval;
   }
 
-  bool _shouldSendNow(Duration wanted) {
+  bool _shouldSendNow(Duration wanted, {required bool extended}) {
     final last = _lastSentAt;
     if (last == null) return true;
 
     final elapsed = DateTime.now().difference(last);
-    if (elapsed < kMinInterval) return false;
+    final minInterval = extended ? kExtendedMinInterval : kMinInterval;
+    if (elapsed < minInterval) return false;
     if (elapsed < wanted) return false;
 
     return true;
@@ -89,8 +101,13 @@ class TrackingTaskHandler extends TaskHandler {
       final age = DateTime.now().difference(pos.timestamp);
       if (age.inMinutes >= 2) return;
 
-      final wantedInterval = _intervalForSpeed(pos.speed);
-      if (!_shouldSendNow(wantedInterval)) return;
+      final intervalProfile =
+          await AuthService.getLocationTrackingIntervalProfile();
+      final extended =
+          intervalProfile == AuthService.locationTrackingIntervalExtended;
+
+      final wantedInterval = _intervalForSpeed(pos.speed, extended: extended);
+      if (!_shouldSendNow(wantedInterval, extended: extended)) return;
 
       final sent = await LocationService(
         apiBase: apiBase,

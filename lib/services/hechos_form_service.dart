@@ -206,6 +206,11 @@ class HechosFormService {
       return 'El responsable no puede exceder 255 caracteres.';
     }
 
+    if (await AuthService.isDelegacionesUser()) {
+      final totalsError = _validateExpectedCaptureTotals(data);
+      if (totalsError != null) return totalsError;
+    }
+
     final situacion = (data.situacion ?? '').trim().toUpperCase();
 
     if (situacion == 'TURNADO' &&
@@ -407,6 +412,9 @@ class HechosFormService {
       'situacion': d.situacion ?? '',
       'vehiculos_mp': d.vehiculosMp.trim(),
       'personas_mp': d.personasMp.trim(),
+      'vehiculos_esperados': _intField(d.vehiculosEsperados),
+      'conductores_esperados': _intField(d.conductoresEsperados),
+      'lesionados_esperados': _intField(d.lesionadosEsperados),
       'danos_patrimoniales': d.danosPatrimoniales ? '1' : '0',
       'oficio_mp': '',
     };
@@ -475,6 +483,44 @@ class HechosFormService {
     }
 
     return fields;
+  }
+
+  static String? _validateExpectedCaptureTotals(HechoFormData data) {
+    final vehiculos = _parseNonNegativeInt(data.vehiculosEsperados);
+    if (vehiculos == null) {
+      return 'Indica cuántos vehículos participaron.';
+    }
+
+    final conductores = _parseNonNegativeInt(data.conductoresEsperados);
+    if (conductores == null) {
+      return 'Indica cuántos conductores participaron.';
+    }
+
+    final lesionados = _parseNonNegativeInt(data.lesionadosEsperados);
+    if (lesionados == null) {
+      return 'Indica cuántos lesionados hubo.';
+    }
+
+    if (conductores > vehiculos) {
+      return 'Los conductores no pueden ser mayores que los vehículos.';
+    }
+
+    if (vehiculos == 0 && conductores > 0) {
+      return 'No puede haber conductores si no hay vehículos.';
+    }
+
+    return null;
+  }
+
+  static int? _parseNonNegativeInt(String value) {
+    final parsed = int.tryParse(value.trim());
+    if (parsed == null || parsed < 0) return null;
+    return parsed;
+  }
+
+  static String _intField(String value) {
+    final parsed = _parseNonNegativeInt(value);
+    return (parsed ?? 0).toString();
   }
 
   static int _trimmedLength(String value) => value.trim().length;

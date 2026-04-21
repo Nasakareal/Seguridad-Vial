@@ -41,9 +41,6 @@ class _MapaPatrullasScreenState extends State<MapaPatrullasScreen>
   static const double _zoomDefault = 13.5;
   static const double _zoomFocus = 16.5;
 
-  bool _isSuperadmin = false;
-  bool _roleLoaded = false;
-
   @override
   void initState() {
     super.initState();
@@ -106,11 +103,6 @@ class _MapaPatrullasScreenState extends State<MapaPatrullasScreen>
     });
 
     try {
-      if (!_roleLoaded) {
-        _isSuperadmin = await _tryIsSuperadmin();
-        _roleLoaded = true;
-      }
-
       final mapData = await _MapaService.getPatrullas();
       final personalData = await _MapaService.getMiPersonal();
 
@@ -178,15 +170,6 @@ class _MapaPatrullasScreenState extends State<MapaPatrullasScreen>
         patrullaNumero: loc?.patrullaNumero,
       );
     }).toList();
-  }
-
-  Future<bool> _tryIsSuperadmin() async {
-    try {
-      final role = await AuthService.getRole();
-      return role != null && role.trim().toLowerCase() == 'superadmin';
-    } catch (_) {
-      return false;
-    }
   }
 
   Future<void> _setUbicacionUsuario({
@@ -447,64 +430,30 @@ class _MapaPatrullasScreenState extends State<MapaPatrullasScreen>
 
     final markers = <Marker>[];
 
-    if (_isSuperadmin) {
-      for (final loc in _patrullas) {
-        if (loc.lat == 0.0 && loc.lng == 0.0) continue;
+    final mapVisible = _personal.where((p) {
+      if (!p.compartirUbicacion) return false;
+      if (p.lastLat == null || p.lastLng == null) return false;
+      return p.isStale == false;
+    }).toList();
 
-        final isStale = loc.isStale;
-        final color = isStale ? Colors.grey : Colors.blue;
+    for (final p in mapVisible) {
+      const color = Colors.blue;
 
-        markers.add(
-          Marker(
-            width: 62,
-            height: 62,
-            point: LatLng(loc.lat, loc.lng),
-            child: GestureDetector(
-              onTap: () async {
-                final match = _personal
-                    .where((x) => x.userId == loc.userId)
-                    .toList();
-                if (match.isNotEmpty) {
-                  _showPatrullaSheet(match.first);
-                } else {
-                  _showQuickLocSheet(loc);
-                }
-              },
-              child: _markerWidget(
-                label: (loc.patrullaNumero ?? '').toString(),
-                isStale: isStale,
-                accent: color,
-              ),
+      markers.add(
+        Marker(
+          width: 62,
+          height: 62,
+          point: LatLng(p.lastLat!, p.lastLng!),
+          child: GestureDetector(
+            onTap: () => _showPatrullaSheet(p),
+            child: _markerWidget(
+              label: (p.patrullaNumero ?? '').toString(),
+              isStale: p.isStale,
+              accent: color,
             ),
           ),
-        );
-      }
-    } else {
-      final mapVisible = _personal.where((p) {
-        if (!p.compartirUbicacion) return false;
-        if (p.lastLat == null || p.lastLng == null) return false;
-        return p.isStale == false;
-      }).toList();
-
-      for (final p in mapVisible) {
-        const color = Colors.blue;
-
-        markers.add(
-          Marker(
-            width: 62,
-            height: 62,
-            point: LatLng(p.lastLat!, p.lastLng!),
-            child: GestureDetector(
-              onTap: () => _showPatrullaSheet(p),
-              child: _markerWidget(
-                label: (p.patrullaNumero ?? '').toString(),
-                isStale: p.isStale,
-                accent: color,
-              ),
-            ),
-          ),
-        );
-      }
+        ),
+      );
     }
 
     final activos = _personal.where((e) => e.compartirUbicacion).length;
@@ -613,13 +562,6 @@ class _MapaPatrullasScreenState extends State<MapaPatrullasScreen>
                   ),
                 ],
               ),
-              if (_isSuperadmin) ...[
-                const SizedBox(height: 10),
-                Text(
-                  'Modo Superadmin: viendo ubicaciones del endpoint /mapa/patrullas',
-                  style: TextStyle(color: Colors.grey.shade700, fontSize: 12),
-                ),
-              ],
             ],
           ),
         ),
@@ -706,113 +648,6 @@ class _MapaPatrullasScreenState extends State<MapaPatrullasScreen>
         ),
         const SizedBox(height: 18),
       ],
-    );
-  }
-
-  void _showQuickLocSheet(_PatrullaLoc loc) {
-    showModalBottomSheet(
-      context: context,
-      showDragHandle: true,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
-      ),
-      builder: (_) {
-        final isStale = loc.isStale;
-        final badgeColor = isStale ? Colors.grey : Colors.green;
-        final statusText = isStale ? 'Sin señal reciente' : 'En línea';
-
-        return Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Row(
-                children: [
-                  Container(
-                    width: 44,
-                    height: 44,
-                    decoration: BoxDecoration(
-                      color: Colors.blue.withOpacity(.12),
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    child: const Icon(Icons.local_police, color: Colors.blue),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          loc.name,
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w900,
-                            color: Color(0xFF0F172A),
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Row(
-                          children: [
-                            Container(
-                              width: 8,
-                              height: 8,
-                              decoration: BoxDecoration(
-                                color: badgeColor,
-                                shape: BoxShape.circle,
-                              ),
-                            ),
-                            const SizedBox(width: 6),
-                            Text(
-                              statusText,
-                              style: TextStyle(
-                                color: Colors.grey.shade700,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 14),
-              _InfoRow(label: 'Patrulla', value: loc.patrullaNumero ?? 'N/A'),
-              _InfoRow(label: 'User ID', value: loc.userId.toString()),
-              _InfoRow(label: 'Última', value: loc.capturedAtStr ?? 'N/A'),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: () async {
-                        Navigator.pop(context);
-                        await _centerAndGoTopByCoords(loc.lat, loc.lng);
-                      },
-                      icon: const Icon(Icons.my_location),
-                      label: const Text('Centrar'),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: FilledButton.icon(
-                      onPressed: _saving
-                          ? null
-                          : () async {
-                              Navigator.pop(context);
-                              await _refreshAll();
-                            },
-                      icon: const Icon(Icons.refresh),
-                      label: const Text('Refrescar'),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        );
-      },
     );
   }
 

@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 
+import '../../app/routes.dart';
 import '../../core/hechos/hechos_catalogos.dart';
 import '../../models/hecho_form_data.dart';
-import '../../services/auth_service.dart';
+import '../../services/hecho_access_service.dart';
 import '../../services/hechos_form_service.dart';
 import '../../services/hechos_service.dart';
+import '../../services/reportes_service.dart';
 import 'widgets/hecho_form.dart';
 
 class EditHechoScreen extends StatefulWidget {
@@ -20,9 +22,8 @@ class _EditHechoScreenState extends State<EditHechoScreen> {
   HechoFormData? _data;
   bool _loading = true;
   String? _error;
-  bool _canEditAnyHecho = false;
-  bool _hechosModuleExcluded = false;
-  int? _currentUserId;
+  HechoEditAccess _editAccess = HechoEditAccess.none;
+  bool _downloadingReporte = false;
 
   @override
   void initState() {
@@ -57,36 +58,11 @@ class _EditHechoScreenState extends State<EditHechoScreen> {
   }
 
   Future<void> _loadEditAccess() async {
-    final canEdit = await AuthService.can('editar hechos');
-    final excluded = await AuthService.isHechosModuleExcludedUser();
-    final userId = await AuthService.getUserId();
-    final role = (await AuthService.getRole())?.trim().toLowerCase() ?? '';
-    final canEditAny =
-        canEdit &&
-        !excluded &&
-        const {
-          'superadmin',
-          'administrador',
-          'administrativo',
-          'subdirector',
-        }.contains(role);
-
-    _canEditAnyHecho = canEditAny;
-    _hechosModuleExcluded = excluded;
-    _currentUserId = userId;
+    _editAccess = await HechoAccessService.loadEditAccess(refresh: true);
   }
 
   bool _puedeEditarHecho(Map<String, dynamic> raw) {
-    if (_hechosModuleExcluded) return false;
-
-    if (raw.containsKey('puede_editar')) {
-      return _asBool(raw['puede_editar']);
-    }
-
-    if (_canEditAnyHecho) return true;
-
-    final createdBy = _asInt(raw['created_by'] ?? raw['createdBy']);
-    return _currentUserId != null && createdBy == _currentUserId;
+    return _editAccess.canEditHecho(raw);
   }
 
   TimeOfDay? _parseHora(dynamic v) {
@@ -214,6 +190,9 @@ class _EditHechoScreenState extends State<EditHechoScreen> {
 
     d.vehiculosMp = _asString(raw['vehiculos_mp']) ?? '0';
     d.personasMp = _asString(raw['personas_mp']) ?? '0';
+    d.vehiculosEsperados = _asString(raw['vehiculos_esperados']) ?? '0';
+    d.conductoresEsperados = _asString(raw['conductores_esperados']) ?? '0';
+    d.lesionadosEsperados = _asString(raw['lesionados_esperados']) ?? '0';
 
     d.danosPatrimoniales = _asBool(raw['danos_patrimoniales']);
     d.propiedadesAfectadas = _asString(raw['propiedades_afectadas']) ?? '';
@@ -283,6 +262,64 @@ class _EditHechoScreenState extends State<EditHechoScreen> {
     await _loadHecho();
   }
 
+  Future<void> _irLesionados() async {
+    await Navigator.pushNamed(
+      context,
+      AppRoutes.lesionados,
+      arguments: {'hechoId': widget.hechoId},
+    );
+
+    if (!mounted) return;
+    await _loadHecho();
+  }
+
+  Future<void> _irCroquis() async {
+    await Navigator.pushNamed(
+      context,
+      AppRoutes.accidentesCroquis,
+      arguments: {'hechoId': widget.hechoId},
+    );
+
+    if (!mounted) return;
+    await _loadHecho();
+  }
+
+  Future<void> _irDescargo() async {
+    if (_downloadingReporte) return;
+
+    setState(() => _downloadingReporte = true);
+
+    try {
+      await ReporteHechoService.descargarYCompartirHecho(
+        hechoId: widget.hechoId,
+      );
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Informe guardado y listo para compartir'),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      showDialog(
+        context: context,
+        builder: (_) => AlertDialog(
+          title: const Text('Error'),
+          content: Text('No se pudo descargar el reporte.\n\n$e'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Cerrar'),
+            ),
+          ],
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _downloadingReporte = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final bottomSafe = MediaQuery.of(context).padding.bottom;
@@ -326,12 +363,62 @@ class _EditHechoScreenState extends State<EditHechoScreen> {
               padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + bottomSafe + 18),
               child: Column(
                 children: [
-                  SizedBox(
-                    width: double.infinity,
-                    child: OutlinedButton.icon(
-                      onPressed: _irVehiculos,
-                      icon: const Icon(Icons.directions_car),
-                      label: const Text('Ir al listado de vehículos'),
+                  Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: Column(
+                        children: [
+                          Row(
+                            children: [
+                              Expanded(
+                                child: OutlinedButton.icon(
+                                  onPressed: _irVehiculos,
+                                  icon: const Icon(Icons.directions_car),
+                                  label: const Text('Vehículos'),
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: OutlinedButton.icon(
+                                  onPressed: _irLesionados,
+                                  icon: const Icon(Icons.personal_injury),
+                                  label: const Text('Lesionados'),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 10),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: OutlinedButton.icon(
+                                  onPressed: _irCroquis,
+                                  icon: const Icon(Icons.draw),
+                                  label: const Text('Croquis'),
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: OutlinedButton.icon(
+                                  onPressed: _downloadingReporte
+                                      ? null
+                                      : _irDescargo,
+                                  icon: _downloadingReporte
+                                      ? const SizedBox(
+                                          width: 18,
+                                          height: 18,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                          ),
+                                        )
+                                      : const Icon(Icons.upload_file),
+                                  label: const Text('Descargo'),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                   const SizedBox(height: 16),

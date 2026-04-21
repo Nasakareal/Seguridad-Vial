@@ -6,7 +6,9 @@ import 'package:http/http.dart' as http;
 import '../../services/auth_service.dart';
 import '../../services/tracking_service.dart';
 import '../../services/app_version_service.dart';
+import '../../services/hecho_access_service.dart';
 import '../../services/hecho_share_service.dart';
+import '../../services/reportes_service.dart';
 
 import '../../widgets/app_drawer.dart';
 import '../../widgets/header_card.dart';
@@ -36,9 +38,8 @@ class _HechoShowScreenState extends State<HechoShowScreen>
   bool _initialized = false;
   int _hechoId = 0;
   bool _sharingWhatsapp = false;
-  bool _canEditAnyHecho = false;
-  bool _hechosModuleExcluded = false;
-  int? _currentUserId;
+  bool _downloadingReporte = false;
+  HechoEditAccess _editAccess = HechoEditAccess.none;
 
   Future<void> _bootstrapTrackingStatusOnly() async {
     if (_bootstrapped) return;
@@ -171,59 +172,16 @@ class _HechoShowScreenState extends State<HechoShowScreen>
   }
 
   Future<void> _loadEditAccess({bool refresh = false}) async {
-    if (refresh) {
-      try {
-        await AuthService.refreshCurrentUserAccess();
-      } catch (_) {}
-    }
-
-    final canEdit = await AuthService.can('editar hechos');
-    final excluded = await AuthService.isHechosModuleExcludedUser();
-    final userId = await AuthService.getUserId();
-    final role = (await AuthService.getRole())?.trim().toLowerCase() ?? '';
-    final canEditAny =
-        canEdit &&
-        !excluded &&
-        const {
-          'superadmin',
-          'administrador',
-          'administrativo',
-          'subdirector',
-        }.contains(role);
+    final editAccess = await HechoAccessService.loadEditAccess(
+      refresh: refresh,
+    );
 
     if (!mounted) return;
-    setState(() {
-      _canEditAnyHecho = canEditAny;
-      _hechosModuleExcluded = excluded;
-      _currentUserId = userId;
-    });
+    setState(() => _editAccess = editAccess);
   }
 
-  int? _intFrom(dynamic value) {
-    if (value == null) return null;
-    if (value is int) return value;
-    if (value is num) return value.toInt();
-    return int.tryParse(value.toString());
-  }
-
-  bool _boolFrom(dynamic value) {
-    if (value is bool) return value;
-    final s = (value ?? '').toString().trim().toLowerCase();
-    return s == '1' || s == 'true' || s == 'si' || s == 'sí';
-  }
-
-  bool _puedeEditarHecho(Map<String, dynamic> hecho) {
-    if (_hechosModuleExcluded) return false;
-
-    if (hecho.containsKey('puede_editar')) {
-      return _boolFrom(hecho['puede_editar']);
-    }
-
-    if (_canEditAnyHecho) return true;
-
-    final createdBy = _intFrom(hecho['created_by'] ?? hecho['createdBy']);
-    return _currentUserId != null && createdBy == _currentUserId;
-  }
+  bool _puedeEditarHecho(Map<String, dynamic> hecho) =>
+      _editAccess.canEditHecho(hecho);
 
   Future<void> _goEdit(int hechoId) async {
     if (hechoId <= 0) return;
@@ -271,6 +229,40 @@ class _HechoShowScreenState extends State<HechoShowScreen>
       );
     } finally {
       if (mounted) setState(() => _sharingWhatsapp = false);
+    }
+  }
+
+  Future<void> _descargarReporte(int hechoId) async {
+    if (_downloadingReporte || hechoId <= 0) return;
+
+    setState(() => _downloadingReporte = true);
+
+    try {
+      await ReporteHechoService.descargarYCompartirHecho(hechoId: hechoId);
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Informe guardado y listo para compartir'),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      showDialog(
+        context: context,
+        builder: (_) => AlertDialog(
+          title: const Text('Error'),
+          content: Text('No se pudo descargar el reporte.\n\n$e'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Cerrar'),
+            ),
+          ],
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _downloadingReporte = false);
     }
   }
 
@@ -358,14 +350,16 @@ class _HechoShowScreenState extends State<HechoShowScreen>
                 const SizedBox(width: 10),
                 Expanded(
                   child: OutlinedButton.icon(
-                    onPressed: () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Pendiente: conectar descargo'),
-                        ),
-                      );
-                    },
-                    icon: const Icon(Icons.upload_file),
+                    onPressed: _downloadingReporte
+                        ? null
+                        : () => _descargarReporte(hechoId),
+                    icon: _downloadingReporte
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.upload_file),
                     label: const Text('Descargo'),
                   ),
                 ),

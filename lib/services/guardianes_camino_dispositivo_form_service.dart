@@ -202,12 +202,17 @@ class GuardianesCaminoDispositivoFormService {
       fields['acompanantes_cantidad'] = acompanantes;
     }
 
-    var unidadId = await AuthService.getUnidadId();
+    final hasFullOperationalAccess =
+        await AuthService.hasFullOperationalAccess();
+    var unidadId = hasFullOperationalAccess
+        ? AuthService.unidadProteccionCarreterasId
+        : await AuthService.getUnidadId();
     var delegacionId = await AuthService.getDelegacionId();
     var destacamentoId = await AuthService.getDestacamentoId();
 
-    if ((unidadId ?? 0) <= 0 ||
-        ((delegacionId ?? 0) <= 0 && (destacamentoId ?? 0) <= 0)) {
+    if (!hasFullOperationalAccess &&
+        ((unidadId ?? 0) <= 0 ||
+            ((delegacionId ?? 0) <= 0 && (destacamentoId ?? 0) <= 0))) {
       final me = await AuthService.getCurrentUserPayload(refresh: true);
       unidadId ??= await AuthService.getUnidadId();
       delegacionId ??= await AuthService.getDelegacionId();
@@ -225,7 +230,9 @@ class GuardianesCaminoDispositivoFormService {
       );
     }
 
-    if ((delegacionId ?? 0) <= 0 && (destacamentoId ?? 0) <= 0) {
+    if (!hasFullOperationalAccess &&
+        (delegacionId ?? 0) <= 0 &&
+        (destacamentoId ?? 0) <= 0) {
       throw Exception(
         'Tu sesión no tiene delegación ni destacamento guardados. Conéctate una vez para actualizar tus datos.',
       );

@@ -25,6 +25,10 @@ class _CreateHechoScreenState extends State<CreateHechoScreen> {
   bool _draftHydrated = false;
   bool _checkingAccess = true;
   bool _canCreateHechos = false;
+  bool _needsDelegacionesCaptureTotals = false;
+  bool _captureTotalsReady = false;
+  bool _captureTotalsPromptScheduled = false;
+  bool _captureTotalsDialogOpen = false;
 
   @override
   void initState() {
@@ -34,11 +38,18 @@ class _CreateHechoScreenState extends State<CreateHechoScreen> {
 
   Future<void> _loadAccess() async {
     final canCreate = await AuthService.canCreateHechos(refresh: true);
+    final needsCaptureTotals =
+        canCreate && await AuthService.isDelegacionesUser();
     if (!mounted) return;
     setState(() {
       _canCreateHechos = canCreate;
+      _needsDelegacionesCaptureTotals = needsCaptureTotals;
       _checkingAccess = false;
     });
+
+    if (needsCaptureTotals) {
+      _scheduleCaptureTotalsPrompt();
+    }
   }
 
   @override
@@ -83,6 +94,21 @@ class _CreateHechoScreenState extends State<CreateHechoScreen> {
     _data.situacion = _blankToNull(fields['situacion']);
     _data.vehiculosMp = (fields['vehiculos_mp'] ?? '').trim();
     _data.personasMp = (fields['personas_mp'] ?? '').trim();
+
+    final hasCaptureTotals =
+        fields.containsKey('vehiculos_esperados') ||
+        fields.containsKey('conductores_esperados') ||
+        fields.containsKey('lesionados_esperados');
+    _data.vehiculosEsperados =
+        (fields['vehiculos_esperados'] ?? _data.vehiculosEsperados).trim();
+    _data.conductoresEsperados =
+        (fields['conductores_esperados'] ?? _data.conductoresEsperados).trim();
+    _data.lesionadosEsperados =
+        (fields['lesionados_esperados'] ?? _data.lesionadosEsperados).trim();
+    if (hasCaptureTotals) {
+      _captureTotalsReady = true;
+    }
+
     _data.danosPatrimoniales = _isTrue(fields['danos_patrimoniales']);
     _data.propiedadesAfectadas = (fields['propiedades_afectadas'] ?? '').trim();
     _data.montoDanos = (fields['monto_danos_patrimoniales'] ?? '').trim();
@@ -154,6 +180,57 @@ class _CreateHechoScreenState extends State<CreateHechoScreen> {
   bool _isTrue(String? value) {
     final raw = (value ?? '').trim().toLowerCase();
     return raw == '1' || raw == 'true' || raw == 'si' || raw == 'sí';
+  }
+
+  void _scheduleCaptureTotalsPrompt() {
+    if (_captureTotalsReady ||
+        _captureTotalsPromptScheduled ||
+        _captureTotalsDialogOpen) {
+      return;
+    }
+
+    _captureTotalsPromptScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      _captureTotalsPromptScheduled = false;
+      if (!mounted ||
+          !_needsDelegacionesCaptureTotals ||
+          _captureTotalsReady ||
+          _captureTotalsDialogOpen) {
+        return;
+      }
+
+      _captureTotalsDialogOpen = true;
+      try {
+        final completed = await _showCaptureTotalsDialog();
+        if (!mounted) return;
+
+        if (completed != true) {
+          Navigator.pop(context);
+        }
+      } finally {
+        _captureTotalsDialogOpen = false;
+      }
+    });
+  }
+
+  Future<bool> _showCaptureTotalsDialog() async {
+    final result = await showDialog<_CaptureTotalsInput>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => _CaptureTotalsDialog(
+        vehiculos: _data.vehiculosEsperados,
+        conductores: _data.conductoresEsperados,
+        lesionados: _data.lesionadosEsperados,
+      ),
+    );
+
+    if (result == null) return false;
+
+    _data.vehiculosEsperados = result.vehiculos;
+    _data.conductoresEsperados = result.conductores;
+    _data.lesionadosEsperados = result.lesionados;
+    _captureTotalsReady = true;
+    return true;
   }
 
   Future<void> _handleSubmitted(
@@ -269,13 +346,17 @@ class _CreateHechoScreenState extends State<CreateHechoScreen> {
             child: Padding(
               padding: EdgeInsets.all(24),
               child: Text(
-                'Tu unidad no tiene habilitada la captura de hechos.',
+                'No tienes permiso para crear hechos.',
                 textAlign: TextAlign.center,
               ),
             ),
           ),
         ),
       );
+    }
+
+    if (_needsDelegacionesCaptureTotals && !_captureTotalsReady) {
+      _scheduleCaptureTotalsPrompt();
     }
 
     return Scaffold(
@@ -303,6 +384,150 @@ class _CreateHechoScreenState extends State<CreateHechoScreen> {
               },
           onSubmitted: _handleSubmitted,
         ),
+      ),
+    );
+  }
+}
+
+class _CaptureTotalsInput {
+  const _CaptureTotalsInput({
+    required this.vehiculos,
+    required this.conductores,
+    required this.lesionados,
+  });
+
+  final String vehiculos;
+  final String conductores;
+  final String lesionados;
+}
+
+class _CaptureTotalsDialog extends StatefulWidget {
+  const _CaptureTotalsDialog({
+    required this.vehiculos,
+    required this.conductores,
+    required this.lesionados,
+  });
+
+  final String vehiculos;
+  final String conductores;
+  final String lesionados;
+
+  @override
+  State<_CaptureTotalsDialog> createState() => _CaptureTotalsDialogState();
+}
+
+class _CaptureTotalsDialogState extends State<_CaptureTotalsDialog> {
+  final _formKey = GlobalKey<FormState>();
+  late final TextEditingController _vehiculosCtrl;
+  late final TextEditingController _conductoresCtrl;
+  late final TextEditingController _lesionadosCtrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _vehiculosCtrl = TextEditingController(text: widget.vehiculos);
+    _conductoresCtrl = TextEditingController(text: widget.conductores);
+    _lesionadosCtrl = TextEditingController(text: widget.lesionados);
+  }
+
+  @override
+  void dispose() {
+    _vehiculosCtrl.dispose();
+    _conductoresCtrl.dispose();
+    _lesionadosCtrl.dispose();
+    super.dispose();
+  }
+
+  String? _requiredInt(String? value) {
+    final text = (value ?? '').trim();
+    final parsed = int.tryParse(text);
+    if (text.isEmpty || parsed == null) return 'Requerido';
+    if (parsed < 0) return 'No puede ser negativo';
+    return null;
+  }
+
+  void _submit() {
+    if (!(_formKey.currentState?.validate() ?? false)) return;
+
+    Navigator.pop(
+      context,
+      _CaptureTotalsInput(
+        vehiculos: _vehiculosCtrl.text.trim(),
+        conductores: _conductoresCtrl.text.trim(),
+        lesionados: _lesionadosCtrl.text.trim(),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return PopScope(
+      canPop: false,
+      child: AlertDialog(
+        title: const Text('Participantes del hecho'),
+        content: SingleChildScrollView(
+          child: Form(
+            key: _formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'Captura estos totales antes de iniciar. Esto ayuda a saber si el hecho ya quedó completo.',
+                ),
+                const SizedBox(height: 14),
+                TextFormField(
+                  controller: _vehiculosCtrl,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(
+                    labelText: 'Vehículos participantes',
+                    prefixIcon: Icon(Icons.directions_car),
+                  ),
+                  validator: _requiredInt,
+                ),
+                const SizedBox(height: 10),
+                TextFormField(
+                  controller: _conductoresCtrl,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(
+                    labelText: 'Conductores participantes',
+                    prefixIcon: Icon(Icons.person),
+                  ),
+                  validator: (value) {
+                    final base = _requiredInt(value);
+                    if (base != null) return base;
+
+                    final vehiculos =
+                        int.tryParse(_vehiculosCtrl.text.trim()) ?? 0;
+                    final conductores =
+                        int.tryParse(_conductoresCtrl.text.trim()) ?? 0;
+                    if (conductores > vehiculos) {
+                      return 'No puede ser mayor que vehículos';
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 10),
+                TextFormField(
+                  controller: _lesionadosCtrl,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(
+                    labelText: 'Lesionados',
+                    prefixIcon: Icon(Icons.personal_injury),
+                  ),
+                  validator: _requiredInt,
+                  onFieldSubmitted: (_) => _submit(),
+                ),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancelar captura'),
+          ),
+          ElevatedButton(onPressed: _submit, child: const Text('Continuar')),
+        ],
       ),
     );
   }

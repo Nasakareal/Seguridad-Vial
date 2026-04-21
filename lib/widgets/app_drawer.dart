@@ -40,10 +40,14 @@ class AppDrawer extends StatelessWidget {
     Navigator.pop(context);
 
     if (requiredPerm != null && requiredPerm.trim().isNotEmpty) {
-      var ok = await AuthService.can(requiredPerm);
+      var ok =
+          await AuthService.hasFullOperationalAccess() ||
+          await AuthService.can(requiredPerm);
       if (!ok) {
         await AuthService.refreshCurrentUserAccess();
-        ok = await AuthService.can(requiredPerm);
+        ok =
+            await AuthService.hasFullOperationalAccess() ||
+            await AuthService.can(requiredPerm);
       }
 
       if (!ok) {
@@ -97,7 +101,8 @@ class AppDrawer extends StatelessWidget {
     return (await AuthService.getUnidadId()) == requiredUnitId;
   }
 
-  bool _allowed(Set<String> perms, String? requiredPerm) {
+  bool _allowed(Set<String> perms, String? requiredPerm, {bool all = false}) {
+    if (all) return true;
     if (requiredPerm == null || requiredPerm.trim().isEmpty) return true;
     return perms.contains(requiredPerm.trim().toLowerCase());
   }
@@ -108,6 +113,7 @@ class AppDrawer extends StatelessWidget {
     var canSeeCarreteras = await AuthService.isCarreterasUser();
     var canSeeVialidadesUrbanas = await AuthService.isVialidadesUrbanasUser();
     var isSuperadmin = await AuthService.isSuperadmin();
+    var hasFullOperationalAccess = await AuthService.hasFullOperationalAccess();
 
     if (permissions.isEmpty) {
       await AuthService.refreshCurrentUserAccess();
@@ -116,6 +122,7 @@ class AppDrawer extends StatelessWidget {
       canSeeCarreteras = await AuthService.isCarreterasUser();
       canSeeVialidadesUrbanas = await AuthService.isVialidadesUrbanasUser();
       isSuperadmin = await AuthService.isSuperadmin();
+      hasFullOperationalAccess = await AuthService.hasFullOperationalAccess();
     }
 
     return _DrawerAccess(
@@ -124,6 +131,7 @@ class AppDrawer extends StatelessWidget {
       canSeeCarreteras: canSeeCarreteras,
       canSeeVialidadesUrbanas: canSeeVialidadesUrbanas,
       isSuperadmin: isSuperadmin,
+      hasFullOperationalAccess: hasFullOperationalAccess,
     );
   }
 
@@ -196,22 +204,32 @@ class AppDrawer extends StatelessWidget {
                 }
 
                 final perms = snap.data?.perms ?? <String>{};
+                final hasFullOperationalAccess =
+                    snap.data?.hasFullOperationalAccess ?? false;
                 final canSeeDispositivos =
-                    (snap.data?.canSeeCarreteras ?? false) &&
+                    ((snap.data?.canSeeCarreteras ?? false) ||
+                        hasFullOperationalAccess) &&
                     (_allowed(perms, permOperativosCarreteras) ||
                         perms.contains('crear operativos carreteras') ||
                         perms.contains('editar operativos carreteras') ||
-                        perms.contains('eliminar operativos carreteras'));
+                        perms.contains('eliminar operativos carreteras') ||
+                        hasFullOperationalAccess);
                 final canSeeVialidadesUrbanas =
-                    snap.data?.canSeeVialidadesUrbanas ?? false;
+                    (snap.data?.canSeeVialidadesUrbanas ?? false) ||
+                    hasFullOperationalAccess;
                 final unidadId = snap.data?.unidadId;
                 final isSuperadmin = snap.data?.isSuperadmin ?? false;
+                final canSeeAllButtons = hasFullOperationalAccess;
                 final canSeePuestas =
-                    _allowed(perms, permPuestasDisposicion) ||
+                    _allowed(
+                      perms,
+                      permPuestasDisposicion,
+                      all: canSeeAllButtons,
+                    ) ||
                     isSuperadmin ||
                     unidadId != null;
                 final canSeeDictamenes =
-                    isSuperadmin ||
+                    canSeeAllButtons ||
                     (_allowed(perms, permDictamenes) && unidadId == 1);
 
                 return ListView(
@@ -224,7 +242,7 @@ class AppDrawer extends StatelessWidget {
                     ),
                     const Divider(height: 24),
 
-                    if (_allowed(perms, permBusqueda))
+                    if (_allowed(perms, permBusqueda, all: canSeeAllButtons))
                       _DrawerItem(
                         icon: Icons.search,
                         label: 'Búsqueda',
@@ -235,7 +253,11 @@ class AppDrawer extends StatelessWidget {
                         ),
                       ),
 
-                    if (_allowed(perms, permEstadisticas))
+                    if (_allowed(
+                      perms,
+                      permEstadisticas,
+                      all: canSeeAllButtons,
+                    ))
                       _DrawerItem(
                         icon: Icons.insights,
                         label: 'Estadísticas',
@@ -282,7 +304,7 @@ class AppDrawer extends StatelessWidget {
 
                     const Divider(height: 24),
 
-                    if (_allowed(perms, permHechos))
+                    if (_allowed(perms, permHechos, all: canSeeAllButtons))
                       _DrawerGroup(
                         icon: Icons.directions_car,
                         label: 'Hechos',
@@ -308,7 +330,7 @@ class AppDrawer extends StatelessWidget {
                         ],
                       ),
 
-                    if (_allowed(perms, permActividades))
+                    if (_allowed(perms, permActividades, all: canSeeAllButtons))
                       _DrawerItem(
                         icon: Icons.photo_library,
                         label: 'Actividades',
@@ -354,7 +376,7 @@ class AppDrawer extends StatelessWidget {
                         ],
                       ),
 
-                    if (_allowed(perms, permGruas))
+                    if (_allowed(perms, permGruas, all: canSeeAllButtons))
                       _DrawerItem(
                         icon: Icons.local_shipping,
                         label: 'Grúas',
@@ -367,7 +389,7 @@ class AppDrawer extends StatelessWidget {
 
                     const Divider(height: 24),
 
-                    if (_allowed(perms, permMapa))
+                    if (_allowed(perms, permMapa, all: canSeeAllButtons))
                       _DrawerGroup(
                         icon: Icons.map,
                         label: 'Mapa',
@@ -393,7 +415,7 @@ class AppDrawer extends StatelessWidget {
                         ],
                       ),
 
-                    if (_allowed(perms, permSustento))
+                    if (_allowed(perms, permSustento, all: canSeeAllButtons))
                       _DrawerItem(
                         icon: Icons.gavel,
                         label: 'Sustento Legal',
@@ -431,6 +453,7 @@ class _DrawerAccess {
   final bool canSeeCarreteras;
   final bool canSeeVialidadesUrbanas;
   final bool isSuperadmin;
+  final bool hasFullOperationalAccess;
 
   const _DrawerAccess({
     required this.perms,
@@ -438,6 +461,7 @@ class _DrawerAccess {
     required this.canSeeCarreteras,
     required this.canSeeVialidadesUrbanas,
     required this.isSuperadmin,
+    required this.hasFullOperationalAccess,
   });
 }
 

@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import '../../services/auth_service.dart';
 import '../../core/vehiculos/vehiculo_taxonomia.dart';
 import '../../core/vehiculos/aseguradoras_vehiculo.dart';
+import '../../core/vehiculos/colores_vehiculo.dart';
 import '../../core/vehiculos/estados_republica.dart';
 import '../../services/offline_sync_service.dart';
 import '../../services/vehiculo_form_service.dart';
@@ -114,8 +115,16 @@ class _VehiculoEditScreenState extends State<VehiculoEditScreen> {
     return AseguradorasVehiculo.valueFromAny(_t(_aseguradoraCtrl)) ?? '';
   }
 
+  String _colorDropdownValue() {
+    return ColoresVehiculo.normalizeUnknown(_t(_colorCtrl));
+  }
+
   void _setAseguradora(String? value) {
     _aseguradoraCtrl.text = value ?? '';
+  }
+
+  void _setColor(String? value) {
+    _colorCtrl.text = value ?? '';
   }
 
   int? _toIntOrNull(String s) {
@@ -233,6 +242,38 @@ class _VehiculoEditScreenState extends State<VehiculoEditScreen> {
     }
     if (cleaned.length > 600) return '$title (HTTP $status)';
     return '$title (HTTP $status)\n\n$cleaned';
+  }
+
+  Future<void> _scrollToContext(BuildContext targetContext) {
+    return Scrollable.ensureVisible(
+      targetContext,
+      duration: const Duration(milliseconds: 450),
+      curve: Curves.easeOutCubic,
+      alignment: 0.12,
+    );
+  }
+
+  Future<void> _scrollToFirstInvalidField(
+    Iterable<FormFieldState<Object?>> invalidFields,
+  ) async {
+    await Future<void>.delayed(const Duration(milliseconds: 60));
+    if (!mounted) return;
+    final firstInvalid = invalidFields.isEmpty ? null : invalidFields.first;
+    final targetContext = firstInvalid?.context;
+    if (targetContext == null) return;
+    if (!targetContext.mounted) return;
+
+    await _scrollToContext(targetContext);
+  }
+
+  Future<bool> _validateFormAndScroll() async {
+    final invalidFields =
+        _formKey.currentState?.validateGranularly() ??
+        const <FormFieldState<Object?>>{};
+    if (invalidFields.isEmpty) return true;
+
+    await _scrollToFirstInvalidField(invalidFields);
+    return false;
   }
 
   List<String> _carroceriasDeTipoGeneral(String? tipoGeneral) {
@@ -655,7 +696,7 @@ class _VehiculoEditScreenState extends State<VehiculoEditScreen> {
       return;
     }
 
-    if (!_formKey.currentState!.validate()) return;
+    if (!await _validateFormAndScroll()) return;
 
     final validationError = VehiculoFormService.validateVehiculoBeforeSubmit(
       marca: _t(_marcaCtrl),
@@ -791,6 +832,10 @@ class _VehiculoEditScreenState extends State<VehiculoEditScreen> {
     );
     final tienePlacas = _limpiaPlacas(_t(_placasCtrl)).isNotEmpty;
     final aseguradoraSeleccionada = _aseguradoraDropdownValue();
+    final colorSeleccionado = _colorDropdownValue();
+    final coloresDisponibles = ColoresVehiculo.opcionesConActual(
+      colorSeleccionado,
+    );
 
     if (!tienePlacas && _estadoPlacasSeleccionado != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -925,12 +970,27 @@ class _VehiculoEditScreenState extends State<VehiculoEditScreen> {
                           ),
                     ),
                     const SizedBox(height: 10),
-                    TextFormField(
-                      controller: _colorCtrl,
+                    DropdownButtonFormField<String>(
+                      value: colorSeleccionado.isEmpty
+                          ? null
+                          : colorSeleccionado,
                       decoration: const InputDecoration(
                         labelText: 'Color *',
                         prefixIcon: Icon(Icons.color_lens),
                       ),
+                      items: [
+                        const DropdownMenuItem<String>(
+                          value: null,
+                          child: Text('-- Seleccione --'),
+                        ),
+                        ...coloresDisponibles.map((color) {
+                          return DropdownMenuItem<String>(
+                            value: color,
+                            child: Text(color),
+                          );
+                        }),
+                      ],
+                      onChanged: (v) => setState(() => _setColor(v)),
                       validator: (v) =>
                           VehiculoFormService.validateRequiredText(
                             v,

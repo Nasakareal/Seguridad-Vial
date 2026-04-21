@@ -26,6 +26,8 @@ class AuthService {
   static const int unidadProteccionCarreterasId = 4;
   static const int unidadVialidadesUrbanasId = 5;
   static const int unidadCulturaVialId = 6;
+  static const String locationTrackingIntervalDefault = 'default';
+  static const String locationTrackingIntervalExtended = 'extended';
 
   static String get baseUrl => _baseUrl;
 
@@ -318,9 +320,27 @@ class AuthService {
   }
 
   static Future<bool> isSuperadmin() async {
+    final roleId = await getRoleId();
+    if (roleId == 1) return true;
+
     final role = await getRole();
     if (role == null) return false;
     return role.trim().toLowerCase() == 'superadmin';
+  }
+
+  static Future<bool> hasFullOperationalAccess() async {
+    if (await isSuperadmin()) return true;
+
+    final unidadId = await getUnidadId();
+    if (unidadId == unidadSeguridadVialId) {
+      return true;
+    }
+
+    final payload = await getStoredUserPayload();
+    final directId =
+        _readNullableInt(payload?['unidad_id']) ??
+        _readNullableInt(payload?['unidad_org_id']);
+    return directId == unidadSeguridadVialId;
   }
 
   static Future<bool> isPerito() async {
@@ -346,9 +366,166 @@ class AuthService {
     return perms.any((perm) => perm.contains('upec'));
   }
 
+  static Future<bool> isPolicia() async {
+    final roleId = await getRoleId();
+    if (roleId == 10) return true;
+
+    final role = await getRole();
+    if (_roleTextMatches(role, 'policia')) {
+      return true;
+    }
+
+    final payload = await getStoredUserPayload();
+    return _payloadHasRole(payload, 'policia');
+  }
+
+  static Future<bool> isDelegado() async {
+    final role = await getRole();
+    if (_roleTextMatches(role, 'delegado')) {
+      return true;
+    }
+
+    final payload = await getStoredUserPayload();
+    return _payloadHasRole(payload, 'delegado');
+  }
+
+  static Future<bool> isAgenteVial() async {
+    final roleId = await getRoleId();
+    if (roleId == 12) return true;
+
+    final role = await getRole();
+    if (_roleTextMatches(role, 'agente vial')) {
+      return true;
+    }
+
+    final payload = await getStoredUserPayload();
+    return _payloadHasRole(payload, 'agente vial');
+  }
+
+  static Future<bool> hasRoleName(String roleName) async {
+    final role = await getRole();
+    if (_roleTextMatches(role, roleName)) {
+      return true;
+    }
+
+    final payload = await getStoredUserPayload();
+    return _payloadHasRole(payload, roleName);
+  }
+
+  static Future<bool> isAdministrativoRole() async {
+    final roleId = await getRoleId();
+    if (roleId == 5) return true;
+    return hasRoleName('administrativo');
+  }
+
+  static Future<bool> isDelegacionesHechosPrivilegedRole() async {
+    if (await isSuperadmin()) return true;
+
+    final roleId = await getRoleId();
+    if (roleId == 2 || roleId == 3) return true;
+
+    return await hasRoleName('administrador') ||
+        await hasRoleName('subdirector');
+  }
+
+  static Future<bool> hideDelegacionesHechoAdminFields({
+    bool refresh = false,
+  }) async {
+    if (refresh) {
+      await refreshCurrentUserAccess();
+    }
+
+    if (!await isDelegacionesUser()) {
+      return false;
+    }
+
+    return !await isDelegacionesHechosPrivilegedRole();
+  }
+
+  static Future<bool> isSiniestrosUser({bool refresh = false}) async {
+    if (refresh) {
+      await refreshCurrentUserAccess();
+    }
+
+    if (await isSuperadmin()) {
+      return true;
+    }
+
+    final unidadId = await getUnidadId();
+    if (unidadId == 1) {
+      return true;
+    }
+
+    final payload = await getCurrentUserPayload(refresh: false);
+    return _payloadMatchesSiniestros(payload);
+  }
+
+  static Future<bool> isDelegacionesUser({bool refresh = false}) async {
+    if (refresh) {
+      await refreshCurrentUserAccess();
+    }
+
+    final unidadId = await getUnidadId();
+    if (unidadId == unidadDelegacionesId) {
+      return true;
+    }
+
+    final payload = await getCurrentUserPayload(refresh: false);
+    return _payloadMatchesDelegaciones(payload);
+  }
+
   static Future<bool> canShareLocationTracking() async {
-    if (await isPerito()) return true;
-    return await isAgenteUpec();
+    final unidadId = await getUnidadId();
+    final payload = await getStoredUserPayload();
+
+    final isSiniestros = unidadId == 1 || _payloadMatchesSiniestros(payload);
+    if (isSiniestros && await isPerito()) {
+      return true;
+    }
+
+    final isCarreteras =
+        unidadId == unidadProteccionCarreterasId ||
+        _payloadMatchesCarreterasStrict(payload);
+    if (isCarreteras && await isAgenteUpec()) {
+      return true;
+    }
+
+    final isDelegaciones =
+        unidadId == unidadDelegacionesId ||
+        _payloadMatchesDelegaciones(payload);
+    if (isDelegaciones && (await isPolicia() || await isDelegado())) {
+      return true;
+    }
+
+    final isVialidadesUrbanas =
+        unidadId == unidadVialidadesUrbanasId ||
+        _payloadMatchesVialidadesUrbanasStrict(payload);
+    if (isVialidadesUrbanas && await isAgenteVial()) {
+      return true;
+    }
+
+    return false;
+  }
+
+  static Future<String> getLocationTrackingIntervalProfile() async {
+    if (!await canShareLocationTracking()) {
+      return locationTrackingIntervalDefault;
+    }
+
+    final unidadId = await getUnidadId();
+    final payload = await getStoredUserPayload();
+
+    final isExtendedUnit =
+        unidadId == unidadDelegacionesId ||
+        unidadId == unidadProteccionCarreterasId ||
+        unidadId == unidadVialidadesUrbanasId ||
+        _payloadMatchesDelegaciones(payload) ||
+        _payloadMatchesCarreterasStrict(payload) ||
+        _payloadMatchesVialidadesUrbanasStrict(payload);
+
+    return isExtendedUnit
+        ? locationTrackingIntervalExtended
+        : locationTrackingIntervalDefault;
   }
 
   static Future<bool> shouldAskLocation() async {
@@ -432,6 +609,21 @@ class AuthService {
     final payload = await getCurrentUserPayload(refresh: false);
     if (_payloadMatchesHechosCreateExcludedUnit(payload)) {
       return false;
+    }
+
+    final isDelegaciones =
+        unidadId == unidadDelegacionesId ||
+        _payloadMatchesDelegaciones(payload);
+    if (isDelegaciones) {
+      final isAdministrativo =
+          _payloadHasRole(payload, 'administrativo') ||
+          await isAdministrativoRole();
+      if (isAdministrativo) {
+        return false;
+      }
+
+      final permissions = await getPermissions();
+      return permissions.contains('crear hechos');
     }
 
     return true;
@@ -779,6 +971,110 @@ class AuthService {
     return false;
   }
 
+  static bool _payloadMatchesSiniestros(Map<String, dynamic>? payload) {
+    if (payload == null || payload.isEmpty) {
+      return false;
+    }
+
+    final directId =
+        _readNullableInt(payload['unidad_id']) ??
+        _readNullableInt(payload['unidad_org_id']);
+    if (directId == 1) {
+      return true;
+    }
+
+    final candidates = <dynamic>[
+      payload['unidad'],
+      payload['unidad_principal'],
+      payload['unidadPrincipal'],
+      payload['unidad_nombre'],
+      payload['unidadName'],
+      payload['unidad_label'],
+      payload['area'],
+      payload['areas'],
+      payload['unidades'],
+      payload['roles'],
+    ];
+
+    for (final candidate in candidates) {
+      if (_dynamicContainsSiniestros(candidate)) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  static bool _payloadMatchesVialidadesUrbanasStrict(
+    Map<String, dynamic>? payload,
+  ) {
+    if (payload == null || payload.isEmpty) {
+      return false;
+    }
+
+    final directId =
+        _readNullableInt(payload['unidad_id']) ??
+        _readNullableInt(payload['unidad_org_id']);
+    if (directId == unidadVialidadesUrbanasId) {
+      return true;
+    }
+
+    final candidates = <dynamic>[
+      payload['unidad'],
+      payload['unidad_principal'],
+      payload['unidadPrincipal'],
+      payload['unidad_nombre'],
+      payload['unidadName'],
+      payload['unidad_label'],
+      payload['area'],
+      payload['areas'],
+      payload['unidades'],
+      payload['roles'],
+    ];
+
+    for (final candidate in candidates) {
+      if (_dynamicContainsVialidadesUrbanas(candidate)) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  static bool _payloadMatchesDelegaciones(Map<String, dynamic>? payload) {
+    if (payload == null || payload.isEmpty) {
+      return false;
+    }
+
+    final directId =
+        _readNullableInt(payload['unidad_id']) ??
+        _readNullableInt(payload['unidad_org_id']);
+    if (directId == unidadDelegacionesId) {
+      return true;
+    }
+
+    final candidates = <dynamic>[
+      payload['unidad'],
+      payload['unidad_principal'],
+      payload['unidadPrincipal'],
+      payload['unidad_nombre'],
+      payload['unidadName'],
+      payload['unidad_label'],
+      payload['area'],
+      payload['areas'],
+      payload['unidades'],
+      payload['roles'],
+    ];
+
+    for (final candidate in candidates) {
+      if (_dynamicContainsDelegaciones(candidate)) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
   static bool _payloadMatchesHechosCreateExcludedUnit(
     Map<String, dynamic>? payload,
   ) {
@@ -905,6 +1201,16 @@ class AuthService {
       normalized.removeWhere(hiddenHechos.contains);
     }
 
+    final isDelegaciones =
+        unidadId == unidadDelegacionesId ||
+        _payloadMatchesDelegaciones(payload);
+    final isAdministrativo =
+        _payloadHasRole(payload, 'administrativo') ||
+        await isAdministrativoRole();
+    if (isDelegaciones && isAdministrativo) {
+      normalized.remove('crear hechos');
+    }
+
     final canUseCarreteras =
         unidadId == unidadProteccionCarreterasId ||
         unidadId == unidadSeguridadVialId ||
@@ -945,13 +1251,13 @@ class AuthService {
   }
 
   static bool _dynamicContainsRole(dynamic raw, String roleName) {
-    final target = roleName.trim().toLowerCase();
+    final target = _normalizeUnitText(roleName).trim();
     if (raw == null || target.isEmpty) {
       return false;
     }
 
     if (raw is String) {
-      return raw.trim().toLowerCase() == target;
+      return _roleTextMatches(raw, target);
     }
 
     if (raw is Map) {
@@ -974,6 +1280,127 @@ class AuthService {
     if (raw is Iterable) {
       for (final item in raw) {
         if (_dynamicContainsRole(item, roleName)) {
+          return true;
+        }
+      }
+    }
+
+    return false;
+  }
+
+  static bool _roleTextMatches(String? raw, String roleName) {
+    final text = _normalizeUnitText(raw ?? '').trim();
+    final target = _normalizeUnitText(roleName).trim();
+    if (text.isEmpty || target.isEmpty) {
+      return false;
+    }
+
+    return text == target || text.contains(target);
+  }
+
+  static bool _dynamicContainsSiniestros(dynamic raw) {
+    if (raw == null) {
+      return false;
+    }
+
+    final id = _readNullableInt(raw);
+    if (id == 1) {
+      return true;
+    }
+
+    if (raw is String) {
+      final normalized = _normalizeUnitText(raw);
+      return normalized.contains('SINIESTROS');
+    }
+
+    if (raw is Map) {
+      final nestedId = _readNullableInt(
+        raw['id'] ?? raw['value'] ?? raw['unidad_id'] ?? raw['unidad_org_id'],
+      );
+      if (nestedId == 1) {
+        return true;
+      }
+
+      final names = <dynamic>[
+        raw['name'],
+        raw['nombre'],
+        raw['label'],
+        raw['descripcion'],
+        raw['title'],
+        raw['slug'],
+      ];
+
+      for (final value in names) {
+        if (_dynamicContainsSiniestros(value)) {
+          return true;
+        }
+      }
+
+      return false;
+    }
+
+    if (raw is Iterable) {
+      for (final item in raw) {
+        if (_dynamicContainsSiniestros(item)) {
+          return true;
+        }
+      }
+    }
+
+    return false;
+  }
+
+  static bool _dynamicContainsDelegaciones(dynamic raw) {
+    if (raw == null) {
+      return false;
+    }
+
+    final id = _readNullableInt(raw);
+    if (id == unidadDelegacionesId) {
+      return true;
+    }
+
+    if (raw is String) {
+      final normalized = _normalizeUnitText(raw);
+      return normalized.contains('DELEGACIONES');
+    }
+
+    if (raw is Map) {
+      final unitId = _readNullableInt(
+        raw['unidad_id'] ?? raw['unidad_org_id'] ?? raw['unit_id'],
+      );
+      if (unitId == unidadDelegacionesId) {
+        return true;
+      }
+
+      final nestedId = _readNullableInt(
+        raw['id'] ?? raw['value'] ?? raw['unidad_id'] ?? raw['unidad_org_id'],
+      );
+      if (nestedId == unidadDelegacionesId) {
+        return true;
+      }
+
+      final names = <dynamic>[
+        raw['name'],
+        raw['nombre'],
+        raw['label'],
+        raw['descripcion'],
+        raw['title'],
+        raw['slug'],
+      ];
+
+      for (final value in names) {
+        if (_dynamicContainsDelegaciones(value)) {
+          return true;
+        }
+      }
+
+      return false;
+    }
+
+    if (raw is Iterable) {
+      for (final item in raw) {
+        if (_dynamicContainsDelegaciones(item)) {
           return true;
         }
       }
@@ -1045,6 +1472,40 @@ class AuthService {
         _readNullableInt(payload['unidad_org_id']);
     if (directId == unidadProteccionCarreterasId ||
         directId == unidadSeguridadVialId) {
+      return true;
+    }
+
+    final candidates = <dynamic>[
+      payload['unidad'],
+      payload['unidad_principal'],
+      payload['unidadPrincipal'],
+      payload['unidad_nombre'],
+      payload['unidadName'],
+      payload['unidad_label'],
+      payload['area'],
+      payload['areas'],
+      payload['unidades'],
+      payload['roles'],
+    ];
+
+    for (final candidate in candidates) {
+      if (_dynamicContainsCarreteras(candidate)) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  static bool _payloadMatchesCarreterasStrict(Map<String, dynamic>? payload) {
+    if (payload == null || payload.isEmpty) {
+      return false;
+    }
+
+    final directId =
+        _readNullableInt(payload['unidad_id']) ??
+        _readNullableInt(payload['unidad_org_id']);
+    if (directId == unidadProteccionCarreterasId) {
       return true;
     }
 
@@ -1197,6 +1658,13 @@ class AuthService {
     }
 
     if (raw is Map) {
+      final unitId = _readNullableInt(
+        raw['unidad_id'] ?? raw['unidad_org_id'] ?? raw['unit_id'],
+      );
+      if (_isHechosCaptureRelaxedUnitId(unitId)) {
+        return true;
+      }
+
       final id = _readNullableInt(
         raw['id'] ?? raw['value'] ?? raw['unidad_id'] ?? raw['unidad_org_id'],
       );

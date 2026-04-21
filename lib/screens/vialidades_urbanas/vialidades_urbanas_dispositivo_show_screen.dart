@@ -86,9 +86,17 @@ class _VialidadesUrbanasDispositivoShowScreenState
             dispositivoId: widget.dispositivoId,
           );
 
-      final canCreate = await AuthService.can('crear operativos vialidades');
-      final canEdit = await AuthService.can('editar operativos vialidades');
-      final canDelete = await AuthService.can('eliminar operativos vialidades');
+      final hasFullOperationalAccess =
+          await AuthService.hasFullOperationalAccess();
+      final canCreate =
+          hasFullOperationalAccess ||
+          await AuthService.can('crear operativos vialidades');
+      final canEdit =
+          hasFullOperationalAccess ||
+          await AuthService.can('editar operativos vialidades');
+      final canDelete =
+          hasFullOperationalAccess ||
+          await AuthService.can('eliminar operativos vialidades');
 
       if (!mounted) return;
       setState(() {

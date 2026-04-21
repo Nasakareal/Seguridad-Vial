@@ -14,11 +14,14 @@ class HomePermissionsController {
     <String>{},
   );
   final ValueNotifier<bool> loading = ValueNotifier<bool>(true);
+  final ValueNotifier<bool> fullOperationalAccess = ValueNotifier<bool>(false);
 
   bool _fetching = false;
   Timer? _timer;
 
   bool allowed(String requiredPerm) {
+    if (fullOperationalAccess.value) return true;
+
     final p = requiredPerm.trim().toLowerCase();
     return perms.value.contains(p);
   }
@@ -30,6 +33,8 @@ class HomePermissionsController {
     try {
       final list = await AuthService.refreshPermissions();
       perms.value = list.map((e) => e.trim().toLowerCase()).toSet();
+      fullOperationalAccess.value =
+          await AuthService.hasFullOperationalAccess();
       loading.value = false;
     } catch (_) {
       loading.value = false;
@@ -54,5 +59,6 @@ class HomePermissionsController {
     stopSoftRefresh();
     perms.dispose();
     loading.dispose();
+    fullOperationalAccess.dispose();
   }
 }

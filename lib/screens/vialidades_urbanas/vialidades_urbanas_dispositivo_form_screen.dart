@@ -71,7 +71,10 @@ class _VialidadesUrbanasDispositivoFormScreenState
       final permission = widget.isEditing
           ? 'editar operativos vialidades'
           : 'crear operativos vialidades';
-      final canAccess = await AuthService.can(permission);
+      final hasFullOperationalAccess =
+          await AuthService.hasFullOperationalAccess();
+      final canAccess =
+          hasFullOperationalAccess || await AuthService.can(permission);
 
       if (!isVialidadesUser || !canAccess) {
         throw Exception('No tienes acceso a esta captura operativa.');

@@ -36,6 +36,10 @@ class HechoFormData {
   String vehiculosMp = '0';
   String personasMp = '0';
 
+  String vehiculosEsperados = '0';
+  String conductoresEsperados = '0';
+  String lesionadosEsperados = '0';
+
   bool danosPatrimoniales = false;
   String propiedadesAfectadas = '';
   String montoDanos = '';

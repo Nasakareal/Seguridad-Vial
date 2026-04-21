@@ -58,6 +58,7 @@ class _HechoFormState extends State<HechoForm> {
   bool _isPerito = false;
   bool _loadingRoleFlags = true;
   bool _usesRelaxedHechosRules = false;
+  bool _hideDelegacionesAdminFields = false;
 
   TimeOfDay? _hora;
   DateTime? _fecha;
@@ -129,18 +130,27 @@ class _HechoFormState extends State<HechoForm> {
     final isPerito = await AuthService.isPerito();
     final usesRelaxedHechosRules =
         await AuthService.isHechosCaptureRelaxedUser();
+    final hideDelegacionesAdminFields =
+        await AuthService.hideDelegacionesHechoAdminFields();
     if (!mounted) return;
 
     setState(() {
       _isPerito = isPerito;
       _loadingRoleFlags = false;
       _usesRelaxedHechosRules = usesRelaxedHechosRules;
+      _hideDelegacionesAdminFields = hideDelegacionesAdminFields;
       if (_usesRelaxedHechosRules) {
         widget.data.sector = null;
       }
       if (_isPerito) {
         _hora = HechosFormService.currentTime();
         widget.data.hora = _hora;
+      }
+      if (_hideDelegacionesAdminFields) {
+        _hora ??= widget.data.hora ?? HechosFormService.currentTime();
+        _fecha ??= widget.data.fecha ?? DateTime.now();
+        widget.data.hora = _hora;
+        widget.data.fecha = _fecha;
       }
     });
   }
@@ -380,6 +390,13 @@ class _HechoFormState extends State<HechoForm> {
       d.hora = _hora;
     }
 
+    if (_hideDelegacionesAdminFields) {
+      _hora ??= d.hora ?? HechosFormService.currentTime();
+      _fecha ??= d.fecha ?? DateTime.now();
+      d.hora = _hora;
+      d.fecha = _fecha;
+    }
+
     if (_hora == null) {
       await _scrollToKey(_horaFieldKey);
       if (!mounted) return false;
@@ -514,6 +531,7 @@ class _HechoFormState extends State<HechoForm> {
   @override
   Widget build(BuildContext context) {
     final d = widget.data;
+    final showDelegacionesAdminFields = !_hideDelegacionesAdminFields;
 
     if (_loadingRoleFlags) {
       return const Padding(
@@ -624,66 +642,77 @@ class _HechoFormState extends State<HechoForm> {
           ),
 
           const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: TextFormField(
-                  controller: _authPracCtrl,
-                  decoration: _dec('Autorización Práctico'),
-                  validator: (v) =>
-                      _maxLengthValidator(v, 255, 'Autorización Práctico'),
+          if (showDelegacionesAdminFields)
+            Row(
+              children: [
+                Expanded(
+                  child: TextFormField(
+                    controller: _authPracCtrl,
+                    decoration: _dec('Autorización Práctico'),
+                    validator: (v) =>
+                        _maxLengthValidator(v, 255, 'Autorización Práctico'),
+                  ),
                 ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: TextFormField(
-                  controller: _unidadCtrl,
-                  decoration: _dec('Unidad *'),
-                  validator: (v) => _requiredMaxValidator(v, 50, 'Unidad'),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: TextFormField(
+                    controller: _unidadCtrl,
+                    decoration: _dec('Unidad *'),
+                    validator: (v) => _requiredMaxValidator(v, 50, 'Unidad'),
+                  ),
                 ),
-              ),
-            ],
-          ),
+              ],
+            )
+          else
+            TextFormField(
+              controller: _unidadCtrl,
+              decoration: _dec('Unidad *'),
+              validator: (v) => _requiredMaxValidator(v, 50, 'Unidad'),
+            ),
 
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                key: _horaFieldKey,
-                child: InkWell(
-                  onTap: (_submitting || _isPerito) ? null : _pickHora,
-                  child: InputDecorator(
-                    decoration: _dec(_isPerito ? 'Hora (automática)' : 'Hora *')
-                        .copyWith(
-                          helperText: _isPerito
-                              ? 'Para perito se usa la hora actual del servidor.'
-                              : null,
-                        ),
-                    child: Text(
-                      _hora != null
-                          ? HechosFormService.horaStr(_hora!)
-                          : 'Seleccionar',
+          if (showDelegacionesAdminFields) ...[
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  key: _horaFieldKey,
+                  child: InkWell(
+                    onTap: (_submitting || _isPerito) ? null : _pickHora,
+                    child: InputDecorator(
+                      decoration:
+                          _dec(
+                            _isPerito ? 'Hora (automática)' : 'Hora *',
+                          ).copyWith(
+                            helperText: _isPerito
+                                ? 'Para perito se usa la hora actual del servidor.'
+                                : null,
+                          ),
+                      child: Text(
+                        _hora != null
+                            ? HechosFormService.horaStr(_hora!)
+                            : 'Seleccionar',
+                      ),
                     ),
                   ),
                 ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                key: _fechaFieldKey,
-                child: InkWell(
-                  onTap: _submitting ? null : _pickFecha,
-                  child: InputDecorator(
-                    decoration: _dec('Fecha *'),
-                    child: Text(
-                      _fecha != null
-                          ? HechosFormService.ymd(_fecha!)
-                          : 'Seleccionar',
+                const SizedBox(width: 8),
+                Expanded(
+                  key: _fechaFieldKey,
+                  child: InkWell(
+                    onTap: _submitting ? null : _pickFecha,
+                    child: InputDecorator(
+                      decoration: _dec('Fecha *'),
+                      child: Text(
+                        _fecha != null
+                            ? HechosFormService.ymd(_fecha!)
+                            : 'Seleccionar',
+                      ),
                     ),
                   ),
                 ),
-              ),
-            ],
-          ),
+              ],
+            ),
+          ],
           if (!_usesRelaxedHechosRules) ...[
             const SizedBox(height: 8),
             DropdownButtonFormField<String>(

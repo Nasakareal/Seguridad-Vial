@@ -4,9 +4,11 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:mobile_scanner/mobile_scanner.dart';
 
+import '../../app/routes.dart';
 import '../../services/auth_service.dart';
 import '../../core/vehiculos/vehiculo_taxonomia.dart';
 import '../../core/vehiculos/aseguradoras_vehiculo.dart';
+import '../../core/vehiculos/colores_vehiculo.dart';
 import '../../core/vehiculos/estados_republica.dart';
 import '../../services/offline_sync_service.dart';
 import '../../services/vehiculo_form_service.dart';
@@ -114,8 +116,16 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
     return AseguradorasVehiculo.valueFromAny(_t(_aseguradoraCtrl)) ?? '';
   }
 
+  String _colorDropdownValue() {
+    return ColoresVehiculo.normalizeUnknown(_t(_colorCtrl));
+  }
+
   void _setAseguradora(String? value) {
     _aseguradoraCtrl.text = value ?? '';
+  }
+
+  void _setColor(String? value) {
+    _colorCtrl.text = value ?? '';
   }
 
   int? _toIntOrNull(String s) {
@@ -168,6 +178,59 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
     } catch (_) {
       return null;
     }
+  }
+
+  Map<String, dynamic>? _tryJsonMapFromNullable(String? body) {
+    final text = (body ?? '').trim();
+    if (text.isEmpty) return null;
+    return _tryJsonMap(text);
+  }
+
+  int _toInt(dynamic value) {
+    if (value is int) return value;
+    return int.tryParse((value ?? '').toString()) ?? 0;
+  }
+
+  Map<String, dynamic>? _createdVehiculoFromResult(OfflineActionResult result) {
+    final response = _tryJsonMapFromNullable(result.responseBody);
+    final data = response?['data'];
+    if (data is Map) return Map<String, dynamic>.from(data);
+    return null;
+  }
+
+  int _createdVehiculoIdFromResult(OfflineActionResult result) {
+    final response = _tryJsonMapFromNullable(result.responseBody);
+    if (response == null) return 0;
+
+    final meta = response['meta'];
+    if (meta is Map) {
+      final id = _toInt(meta['id']);
+      if (id > 0) return id;
+    }
+
+    final data = response['data'];
+    if (data is Map) {
+      final id = _toInt(data['id']);
+      if (id > 0) return id;
+    }
+
+    return _toInt(response['id']);
+  }
+
+  List<Map<String, dynamic>> _vehiculosSnapshotWithCreated(
+    List<Map<String, dynamic>> current,
+    Map<String, dynamic>? created,
+  ) {
+    if (created == null) return current;
+
+    final createdId = _toInt(created['id']);
+    if (createdId <= 0) return current;
+
+    final next = current
+        .where((vehiculo) => _toInt(vehiculo['id']) != createdId)
+        .toList();
+    next.add(created);
+    return next;
   }
 
   String _errorsToText(dynamic errors) {
@@ -457,12 +520,45 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
     return _carroceriasDeTipoGeneral(tipoGeneral).contains(current);
   }
 
+  Future<void> _scrollToContext(BuildContext targetContext) {
+    return Scrollable.ensureVisible(
+      targetContext,
+      duration: const Duration(milliseconds: 450),
+      curve: Curves.easeOutCubic,
+      alignment: 0.12,
+    );
+  }
+
+  Future<void> _scrollToFirstInvalidField(
+    Iterable<FormFieldState<Object?>> invalidFields,
+  ) async {
+    await Future<void>.delayed(const Duration(milliseconds: 60));
+    if (!mounted) return;
+    final firstInvalid = invalidFields.isEmpty ? null : invalidFields.first;
+    final targetContext = firstInvalid?.context;
+    if (targetContext == null) return;
+    if (!targetContext.mounted) return;
+
+    await _scrollToContext(targetContext);
+  }
+
+  Future<bool> _validateFormAndScroll() async {
+    final invalidFields =
+        _formKey.currentState?.validateGranularly() ??
+        const <FormFieldState<Object?>>{};
+    if (invalidFields.isEmpty) return true;
+
+    await _scrollToFirstInvalidField(invalidFields);
+    return false;
+  }
+
   Future<void> _guardar({
     required int hechoId,
     required String? hechoClientUuid,
   }) async {
     final normalizedHechoClientUuid = (hechoClientUuid ?? '').trim();
     final vehiculosSnapshot = _vehiculosSnapshotFromArgs(context);
+    final routeArgs = ModalRoute.of(context)?.settings.arguments;
     if (hechoId <= 0 && normalizedHechoClientUuid.isEmpty) {
       showDialog(
         context: context,
@@ -476,7 +572,7 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
       return;
     }
 
-    if (!_formKey.currentState!.validate()) return;
+    if (!await _validateFormAndScroll()) return;
 
     final validationError = VehiculoFormService.validateVehiculoBeforeSubmit(
       marca: _t(_marcaCtrl),
@@ -502,8 +598,6 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
       ).showSnackBar(SnackBar(content: Text(validationError)));
       return;
     }
-
-    final routeArgs = ModalRoute.of(context)?.settings.arguments;
 
     final duplicateError =
         await VehiculoFormService.validateVehiculoDuplicatesWithinHecho(
@@ -585,6 +679,25 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text(result.message)));
+
+      final createdVehiculoId = _createdVehiculoIdFromResult(result);
+      if (result.synced && hechoId > 0 && createdVehiculoId > 0) {
+        final createdVehiculo = _createdVehiculoFromResult(result);
+        await Navigator.pushReplacementNamed(
+          context,
+          AppRoutes.vehiculoConductorCreate,
+          arguments: {
+            'hechoId': hechoId,
+            'vehiculoId': createdVehiculoId,
+            'vehiculosSnapshot': _vehiculosSnapshotWithCreated(
+              vehiculosSnapshot,
+              createdVehiculo,
+            ),
+          },
+        );
+        return;
+      }
+
       Navigator.pop(context, true);
     } catch (e) {
       if (!mounted) return;
@@ -617,6 +730,10 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
     );
     final tienePlacas = _t(_placasCtrl).isNotEmpty;
     final aseguradoraSeleccionada = _aseguradoraDropdownValue();
+    final colorSeleccionado = _colorDropdownValue();
+    final coloresDisponibles = ColoresVehiculo.opcionesConActual(
+      colorSeleccionado,
+    );
 
     if (!tienePlacas && _estadoPlacasSeleccionado != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -762,12 +879,25 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
                 ),
               ),
               const SizedBox(height: 10),
-              TextFormField(
-                controller: _colorCtrl,
+              DropdownButtonFormField<String>(
+                value: colorSeleccionado.isEmpty ? null : colorSeleccionado,
                 decoration: const InputDecoration(
                   labelText: 'Color *',
                   prefixIcon: Icon(Icons.color_lens),
                 ),
+                items: [
+                  const DropdownMenuItem<String>(
+                    value: null,
+                    child: Text('-- Seleccione --'),
+                  ),
+                  ...coloresDisponibles.map((color) {
+                    return DropdownMenuItem<String>(
+                      value: color,
+                      child: Text(color),
+                    );
+                  }),
+                ],
+                onChanged: (v) => setState(() => _setColor(v)),
                 validator: (v) => VehiculoFormService.validateRequiredText(
                   v,
                   max: 30,

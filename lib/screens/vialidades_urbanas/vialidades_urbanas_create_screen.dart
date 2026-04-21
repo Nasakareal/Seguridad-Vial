@@ -98,7 +98,11 @@ class _VialidadesUrbanasCreateScreenState
       final isVialidadesUser = await AuthService.isVialidadesUrbanasUser(
         refresh: true,
       );
-      final canCreate = await AuthService.can('crear operativos vialidades');
+      final hasFullOperationalAccess =
+          await AuthService.hasFullOperationalAccess();
+      final canCreate =
+          hasFullOperationalAccess ||
+          await AuthService.can('crear operativos vialidades');
 
       if (!isVialidadesUser || !canCreate) {
         throw Exception(

@@ -24,7 +24,11 @@ class _DispositivoCreateScreenState extends State<DispositivoCreateScreen> {
 
   Future<void> _loadAccess() async {
     final hasUnitAccess = await AuthService.isCarreterasUser(refresh: true);
-    final hasPermission = await AuthService.can('crear operativos carreteras');
+    final hasFullOperationalAccess =
+        await AuthService.hasFullOperationalAccess();
+    final hasPermission =
+        hasFullOperationalAccess ||
+        await AuthService.can('crear operativos carreteras');
     if (!mounted) return;
     setState(() {
       _canCreate = hasUnitAccess && hasPermission;

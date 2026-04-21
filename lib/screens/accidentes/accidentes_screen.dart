@@ -1,11 +1,6 @@
 import 'dart:convert';
-import 'dart:io';
-import 'dart:typed_data';
 
-import 'package:file_saver/file_saver.dart';
 import 'package:flutter/material.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:share_plus/share_plus.dart';
 
 import 'package:seguridad_vial_app/app/routes.dart';
 
@@ -13,7 +8,9 @@ import '../../services/auth_service.dart';
 import '../../services/tracking_service.dart';
 import '../../services/app_version_service.dart';
 import '../../services/accidentes_service.dart';
+import '../../services/hecho_access_service.dart';
 import '../../services/hecho_share_service.dart';
+import '../../services/reportes_service.dart';
 
 import '../../widgets/app_drawer.dart';
 import '../../widgets/header_card.dart';
@@ -44,9 +41,7 @@ class _AccidentesScreenState extends State<AccidentesScreen>
   bool _bootstrapped = false;
   bool _busy = false;
   bool _canCreateHechos = false;
-  bool _canEditAnyHecho = false;
-  bool _hechosModuleExcluded = false;
-  int? _currentUserId;
+  HechoEditAccess _editAccess = HechoEditAccess.none;
 
   @override
   void initState() {
@@ -91,26 +86,12 @@ class _AccidentesScreenState extends State<AccidentesScreen>
 
   Future<void> _loadCreateAccess({bool refresh = false}) async {
     final canCreate = await AuthService.canCreateHechos(refresh: refresh);
-    final canEdit = await AuthService.can('editar hechos');
-    final excluded = await AuthService.isHechosModuleExcludedUser();
-    final userId = await AuthService.getUserId();
-    final role = (await AuthService.getRole())?.trim().toLowerCase() ?? '';
-    final canEditAny =
-        canEdit &&
-        !excluded &&
-        const {
-          'superadmin',
-          'administrador',
-          'administrativo',
-          'subdirector',
-        }.contains(role);
+    final editAccess = await HechoAccessService.loadEditAccess();
 
     if (!mounted) return;
     setState(() {
       _canCreateHechos = canCreate;
-      _canEditAnyHecho = canEditAny;
-      _hechosModuleExcluded = excluded;
-      _currentUserId = userId;
+      _editAccess = editAccess;
     });
   }
 
@@ -329,31 +310,8 @@ class _AccidentesScreenState extends State<AccidentesScreen>
     return int.tryParse('$id');
   }
 
-  int? _intFrom(dynamic value) {
-    if (value == null) return null;
-    if (value is int) return value;
-    if (value is num) return value.toInt();
-    return int.tryParse(value.toString());
-  }
-
-  bool _boolFrom(dynamic value) {
-    if (value is bool) return value;
-    final s = (value ?? '').toString().trim().toLowerCase();
-    return s == '1' || s == 'true' || s == 'si' || s == 'sí';
-  }
-
-  bool _puedeEditarHecho(Map<String, dynamic> hecho) {
-    if (_hechosModuleExcluded) return false;
-
-    if (hecho.containsKey('puede_editar')) {
-      return _boolFrom(hecho['puede_editar']);
-    }
-
-    if (_canEditAnyHecho) return true;
-
-    final createdBy = _intFrom(hecho['created_by'] ?? hecho['createdBy']);
-    return _currentUserId != null && createdBy == _currentUserId;
-  }
+  bool _puedeEditarHecho(Map<String, dynamic> hecho) =>
+      _editAccess.canEditHecho(hecho);
 
   Future<void> _obtenerHechos() async {
     if (!mounted) return;
@@ -444,28 +402,7 @@ class _AccidentesScreenState extends State<AccidentesScreen>
     setState(() => _descargando.add(hechoId));
 
     try {
-      final Uint8List bytes = await AccidentesService.downloadReporteDoc(
-        hechoId: hechoId,
-      );
-
-      const ext = 'doc';
-      final baseName = 'hecho_$hechoId';
-
-      await FileSaver.instance.saveFile(
-        name: baseName,
-        bytes: bytes,
-        ext: ext,
-        mimeType: MimeType.microsoftWord,
-      );
-
-      final tmpDir = await getTemporaryDirectory();
-      final tmpPath = '${tmpDir.path}/$baseName.$ext';
-      final tmpFile = File(tmpPath);
-      await tmpFile.writeAsBytes(bytes, flush: true);
-
-      await Share.shareXFiles([
-        XFile(tmpFile.path),
-      ], text: 'Informe del hecho $hechoId');
+      await ReporteHechoService.descargarYCompartirHecho(hechoId: hechoId);
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(

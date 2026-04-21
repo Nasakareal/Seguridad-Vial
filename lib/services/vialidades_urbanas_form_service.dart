@@ -130,6 +130,7 @@ class VialidadesUrbanasFormService {
 
     final body = <String, dynamic>{
       'client_uuid': clientUuid,
+      'unidad_org_id': AuthService.unidadVialidadesUrbanasId,
       'vialidad_dispositivo_catalogo_id': payload.catalogoId,
       'fecha': _fmtYmd(payload.fecha),
       'hora': _fmtHm(payload.hora),

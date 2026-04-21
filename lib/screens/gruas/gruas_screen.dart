@@ -25,11 +25,15 @@ class _GruasScreenState extends State<GruasScreen> {
   String? _errorChart;
 
   List<Map<String, dynamic>> _gruas = <Map<String, dynamic>>[];
+  List<Map<String, dynamic>> _delegaciones = <Map<String, dynamic>>[];
   Map<String, dynamic>? _semana;
   List<Map<String, dynamic>> _gruasView = <Map<String, dynamic>>[];
 
   final Set<int> _hiddenGruas = <int>{};
   bool _hideZero = false;
+  int _unidadFiltroId = 1;
+  int? _delegacionFiltroId;
+  int? _gruaFiltroId;
 
   // --- NUEVO: modo día/semana ---
   bool _modoDia = false;
@@ -86,6 +90,24 @@ class _GruasScreenState extends State<GruasScreen> {
     };
   }
 
+  Uri _apiUri(String path, Map<String, String> params) {
+    return Uri.parse('$_baseUrl$path').replace(queryParameters: params);
+  }
+
+  Map<String, String> _baseFiltroParams({bool includeGrua = false}) {
+    final params = <String, String>{'unidad_id': '$_unidadFiltroId'};
+
+    if (_unidadFiltroId == 2 && _delegacionFiltroId != null) {
+      params['delegacion_id'] = '$_delegacionFiltroId';
+    }
+
+    if (includeGrua && _gruaFiltroId != null) {
+      params['gruas'] = '$_gruaFiltroId';
+    }
+
+    return params;
+  }
+
   // --- Guard para cuando el server devuelve HTML ---
   Map<String, dynamic> _safeJsonMapFromResponse(http.Response res) {
     final body = res.body;
@@ -108,7 +130,11 @@ class _GruasScreenState extends State<GruasScreen> {
   }
 
   Future<void> _cargarTodo() async {
-    await Future.wait([_cargarCatalogoGruas(), _cargarResumenDetallado()]);
+    await Future.wait([
+      _cargarCatalogoGruas(),
+      _cargarResumenDetallado(),
+      if (_unidadFiltroId == 2) _cargarDelegaciones(),
+    ]);
     _rebuildViewDetallado();
   }
 
@@ -119,7 +145,7 @@ class _GruasScreenState extends State<GruasScreen> {
     });
 
     try {
-      final uri = Uri.parse('$_baseUrl/gruas');
+      final uri = _apiUri('/gruas', _baseFiltroParams());
       final res = await http.get(uri, headers: await _headers());
 
       if (res.statusCode != 200) {
@@ -146,6 +172,10 @@ class _GruasScreenState extends State<GruasScreen> {
       if (!mounted) return;
       setState(() {
         _gruas = items;
+        if (_gruaFiltroId != null &&
+            !items.any((g) => _toInt(g['id']) == _gruaFiltroId)) {
+          _gruaFiltroId = null;
+        }
         _cargandoLista = false;
       });
     } catch (e) {
@@ -153,6 +183,42 @@ class _GruasScreenState extends State<GruasScreen> {
       setState(() {
         _errorLista = '$e';
         _cargandoLista = false;
+      });
+    }
+  }
+
+  Future<void> _cargarDelegaciones() async {
+    try {
+      final uri = _apiUri('/gruas/delegaciones', {'unidad_id': '2'});
+      final res = await http.get(uri, headers: await _headers());
+
+      if (res.statusCode != 200) {
+        throw Exception('Error ${res.statusCode}: ${res.body}');
+      }
+
+      final decoded = _safeJsonMapFromResponse(res);
+      final list = (decoded['data'] is List)
+          ? (decoded['data'] as List)
+          : <dynamic>[];
+
+      final items = <Map<String, dynamic>>[];
+      for (final e in list) {
+        if (e is Map) items.add(Map<String, dynamic>.from(e));
+      }
+
+      if (!mounted) return;
+      setState(() {
+        _delegaciones = items;
+        if (_delegacionFiltroId != null &&
+            !items.any((d) => _toInt(d['id']) == _delegacionFiltroId)) {
+          _delegacionFiltroId = null;
+          _gruaFiltroId = null;
+        }
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _delegaciones = <Map<String, dynamic>>[];
       });
     }
   }
@@ -165,19 +231,19 @@ class _GruasScreenState extends State<GruasScreen> {
     });
 
     try {
-      Uri uri;
+      final params = _baseFiltroParams(includeGrua: true);
 
       if (_modoDia) {
         final day = _fmtYmd(_selectedDay);
-        uri = Uri.parse('$_baseUrl/gruas/resumen-semanal-detallado?day=$day');
+        params['day'] = day;
       } else {
         final from = _fmtYmd(_start);
         final to = _fmtYmd(_end);
-        uri = Uri.parse(
-          '$_baseUrl/gruas/resumen-semanal-detallado?from=$from&to=$to',
-        );
+        params['from'] = from;
+        params['to'] = to;
       }
 
+      final uri = _apiUri('/gruas/resumen-semanal-detallado', params);
       final res = await http.get(uri, headers: await _headers());
 
       if (res.statusCode != 200) {
@@ -227,6 +293,11 @@ class _GruasScreenState extends State<GruasScreen> {
       final nombre = (g['nombre'] ?? '').toString();
 
       final sem = byIdSemana[id];
+      final unidadIds = {
+        _unidadFiltroId,
+        ..._extractUnidadIds(g),
+        if (sem != null) ..._extractUnidadIds(sem),
+      }.toList()..sort();
 
       final count = sem != null ? _toInt(sem['servicios_count']) : 0;
       final ultimo = sem?['fecha_ultimo_servicio'];
@@ -244,6 +315,7 @@ class _GruasScreenState extends State<GruasScreen> {
         'servicios_semana': count,
         'fecha_ultimo_servicio': ultimo,
         'vehiculos': vehiculos,
+        'unidad_ids': unidadIds,
       });
     }
 
@@ -313,8 +385,52 @@ class _GruasScreenState extends State<GruasScreen> {
     });
   }
 
+  void _setUnidadFiltro(int unidadId) {
+    if (_unidadFiltroId == unidadId) return;
+
+    setState(() {
+      _unidadFiltroId = unidadId;
+      _delegacionFiltroId = null;
+      _gruaFiltroId = null;
+      _hiddenGruas.clear();
+    });
+    _cargarTodo();
+  }
+
+  void _setDelegacionFiltro(int? delegacionId) {
+    if (_delegacionFiltroId == delegacionId) return;
+
+    setState(() {
+      _delegacionFiltroId = delegacionId;
+      _gruaFiltroId = null;
+      _hiddenGruas.clear();
+    });
+    _cargarTodo();
+  }
+
+  void _setGruaFiltro(int? gruaId) {
+    if (_gruaFiltroId == gruaId) return;
+
+    setState(() {
+      _gruaFiltroId = gruaId;
+      _hiddenGruas.clear();
+    });
+    _cargarTodo();
+  }
+
+  List<Map<String, dynamic>> _unitFilteredGruasView() {
+    return _gruasView.where((g) {
+      final ids = _extractUnidadIds(g);
+      return ids.contains(_unidadFiltroId);
+    }).toList();
+  }
+
   List<Map<String, dynamic>> _filteredGruasView() {
-    var list = [..._gruasView];
+    var list = _unitFilteredGruasView();
+
+    if (_gruaFiltroId != null) {
+      list = list.where((g) => _toInt(g['id']) == _gruaFiltroId).toList();
+    }
 
     list = list.where((g) => !_hiddenGruas.contains(_toInt(g['id']))).toList();
 
@@ -547,12 +663,22 @@ class _GruasScreenState extends State<GruasScreen> {
   Widget _buildFiltersCard() {
     if (_cargandoLista || _cargandoChart) return const SizedBox.shrink();
 
-    final list = [..._gruasView];
+    final list = _unitFilteredGruasView();
     list.sort(
       (a, b) => (a['nombre'] ?? '').toString().compareTo(
         (b['nombre'] ?? '').toString(),
       ),
     );
+    final delegacionValue =
+        _delegacionFiltroId != null &&
+            _delegaciones.any((d) => _toInt(d['id']) == _delegacionFiltroId)
+        ? _delegacionFiltroId
+        : null;
+    final gruaValue =
+        _gruaFiltroId != null &&
+            list.any((g) => _toInt(g['id']) == _gruaFiltroId)
+        ? _gruaFiltroId
+        : null;
 
     return Container(
       decoration: BoxDecoration(
@@ -563,7 +689,7 @@ class _GruasScreenState extends State<GruasScreen> {
           BoxShadow(
             blurRadius: 14,
             offset: const Offset(0, 8),
-            color: Colors.black.withOpacity(.06),
+            color: Colors.black.withValues(alpha: .06),
           ),
         ],
       ),
@@ -579,6 +705,82 @@ class _GruasScreenState extends State<GruasScreen> {
               color: Color(0xFF0F172A),
             ),
           ),
+          const SizedBox(height: 10),
+          SegmentedButton<int>(
+            segments: const [
+              ButtonSegment<int>(
+                value: 1,
+                label: Text('Siniestros'),
+                icon: Icon(Icons.car_crash),
+              ),
+              ButtonSegment<int>(
+                value: 2,
+                label: Text('Delegaciones'),
+                icon: Icon(Icons.local_police),
+              ),
+            ],
+            selected: {_unidadFiltroId},
+            onSelectionChanged: (selection) {
+              if (selection.isEmpty) return;
+              _setUnidadFiltro(selection.first);
+            },
+          ),
+          if (_unidadFiltroId == 2) ...[
+            const SizedBox(height: 12),
+            DropdownButtonFormField<int?>(
+              value: delegacionValue,
+              isExpanded: true,
+              decoration: InputDecoration(
+                labelText: 'Delegación',
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 10,
+                ),
+              ),
+              items: [
+                const DropdownMenuItem<int?>(
+                  value: null,
+                  child: Text('Todas las delegaciones'),
+                ),
+                ..._delegaciones.map((d) {
+                  final id = _toInt(d['id']);
+                  final nombre = _delegacionNombre(d);
+                  return DropdownMenuItem<int?>(value: id, child: Text(nombre));
+                }),
+              ],
+              onChanged: _setDelegacionFiltro,
+            ),
+            const SizedBox(height: 10),
+            DropdownButtonFormField<int?>(
+              value: gruaValue,
+              isExpanded: true,
+              decoration: InputDecoration(
+                labelText: 'Grúa',
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 10,
+                ),
+              ),
+              items: [
+                const DropdownMenuItem<int?>(
+                  value: null,
+                  child: Text('Todas las grúas'),
+                ),
+                ...list.map((g) {
+                  final id = _toInt(g['id']);
+                  final nombre = (g['nombre'] ?? 'Sin nombre').toString();
+                  return DropdownMenuItem<int?>(value: id, child: Text(nombre));
+                }),
+              ],
+              onChanged: _setGruaFiltro,
+            ),
+          ],
           const SizedBox(height: 10),
           Row(
             children: [
@@ -599,7 +801,7 @@ class _GruasScreenState extends State<GruasScreen> {
           ),
           const SizedBox(height: 8),
           Text(
-            'Toca para ocultar/mostrar grúas:',
+            'Toca para ocultar/mostrar grúas de ${_unidadFiltroLabel()}:',
             style: TextStyle(color: Colors.grey.shade700),
           ),
           const SizedBox(height: 8),
@@ -615,7 +817,7 @@ class _GruasScreenState extends State<GruasScreen> {
                 selected: !hidden,
                 label: Text(nombre),
                 onSelected: (_) => _toggleHidden(id),
-                selectedColor: Colors.blue.withOpacity(.15),
+                selectedColor: Colors.blue.withValues(alpha: .15),
                 checkmarkColor: Colors.blue,
               );
             }).toList(),
@@ -627,8 +829,8 @@ class _GruasScreenState extends State<GruasScreen> {
 
   Widget _buildChartCard(String rango) {
     final titulo = _modoDia
-        ? 'Servicios por grúa (día)'
-        : 'Servicios por grúa (semana)';
+        ? 'Servicios por grúa (${_unidadFiltroLabel()}, día)'
+        : 'Servicios por grúa (${_unidadFiltroLabel()}, semana)';
 
     if (_cargandoChart) {
       return _ChartCardShell(
@@ -936,6 +1138,71 @@ class _GruasScreenState extends State<GruasScreen> {
     return int.tryParse(v.toString()) ?? 0;
   }
 
+  String _unidadFiltroLabel() {
+    if (_unidadFiltroId == 2) return 'Delegaciones';
+    return 'Siniestros';
+  }
+
+  String _delegacionNombre(Map<String, dynamic> delegacion) {
+    final nombreConClave = (delegacion['nombre_con_clave'] ?? '')
+        .toString()
+        .trim();
+    if (nombreConClave.isNotEmpty) return nombreConClave;
+
+    final nombre = (delegacion['nombre'] ?? '').toString().trim();
+    final clave = (delegacion['clave'] ?? '').toString().trim();
+    if (nombre.isEmpty) return 'Delegación';
+    if (clave.isEmpty) return nombre;
+    return '$nombre ($clave)';
+  }
+
+  List<int> _extractUnidadIds(Map<String, dynamic> raw) {
+    final ids = <int>{};
+
+    void add(dynamic value) {
+      final id = _toInt(value);
+      if (id > 0) ids.add(id);
+    }
+
+    void scan(dynamic value) {
+      if (value == null) return;
+
+      if (value is int || value is double || value is String) {
+        add(value);
+        return;
+      }
+
+      if (value is Map) {
+        add(value['unidad_id']);
+        add(value['unidad_org_id']);
+        add(value['id']);
+        scan(value['pivot']);
+        scan(value['unidad']);
+        scan(value['unidades']);
+        return;
+      }
+
+      if (value is Iterable) {
+        for (final item in value) {
+          scan(item);
+        }
+      }
+    }
+
+    scan(raw['unidad_ids']);
+    scan(raw['unidades_ids']);
+    scan(raw['unidad_id']);
+    scan(raw['unidad_org_id']);
+    scan(raw['unidad_grua']);
+    scan(raw['unidades_gruas']);
+    scan(raw['unidadGrua']);
+    scan(raw['unidadesGruas']);
+    scan(raw['unidades']);
+    scan(raw['unidad']);
+
+    return ids.toList()..sort();
+  }
+
   static int _safeMax(Iterable<int> values) {
     var m = 0;
     for (final v in values) {
@@ -1033,7 +1300,7 @@ class _ChartCardShell extends StatelessWidget {
           BoxShadow(
             blurRadius: 14,
             offset: const Offset(0, 8),
-            color: Colors.black.withOpacity(.06),
+            color: Colors.black.withValues(alpha: .06),
           ),
         ],
       ),
@@ -1122,8 +1389,8 @@ class _ChartError extends StatelessWidget {
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(14),
-        color: Colors.red.withOpacity(.06),
-        border: Border.all(color: Colors.red.withOpacity(.2)),
+        color: Colors.red.withValues(alpha: .06),
+        border: Border.all(color: Colors.red.withValues(alpha: .2)),
       ),
       child: Text(
         'No se pudo cargar.\n$message',

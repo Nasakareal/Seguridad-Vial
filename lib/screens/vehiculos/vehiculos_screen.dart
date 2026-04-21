@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 
+import '../../app/routes.dart';
 import '../../services/auth_service.dart';
 import '../../widgets/landscape_photo_crop_screen.dart';
 import '../../widgets/safe_network_image.dart';
@@ -173,6 +174,16 @@ class _VehiculosScreenState extends State<VehiculosScreen> {
       },
     );
     await _cargarVehiculos();
+  }
+
+  void _irLesionados() {
+    if (_hechoId <= 0) return;
+
+    Navigator.pushNamed(
+      context,
+      AppRoutes.lesionados,
+      arguments: {'hechoId': _hechoId},
+    );
   }
 
   Future<void> _mostrarAccionesFoto(Map<String, dynamic> vehiculo) async {
@@ -475,6 +486,23 @@ class _VehiculosScreenState extends State<VehiculosScreen> {
       floatingActionButton: FloatingActionButton(
         onPressed: _hechoId > 0 ? _irCrearVehiculo : null,
         child: const Icon(Icons.add),
+      ),
+      bottomNavigationBar: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+          child: ElevatedButton.icon(
+            onPressed: _hechoId > 0 ? _irLesionados : null,
+            icon: const Icon(Icons.personal_injury),
+            label: const Text('Agregar / ver lesionados'),
+            style: ElevatedButton.styleFrom(
+              minimumSize: const Size.fromHeight(54),
+              textStyle: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }

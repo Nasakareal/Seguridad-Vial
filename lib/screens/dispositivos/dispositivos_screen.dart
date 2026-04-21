@@ -134,7 +134,11 @@ class _DispositivosScreenState extends State<DispositivosScreen>
 
     try {
       final hasUnitAccess = await AuthService.isCarreterasUser(refresh: true);
-      final hasPermission = await AuthService.can('ver operativos carreteras');
+      final hasFullOperationalAccess =
+          await AuthService.hasFullOperationalAccess();
+      final hasPermission =
+          hasFullOperationalAccess ||
+          await AuthService.can('ver operativos carreteras');
       if (!hasUnitAccess || !hasPermission) {
         if (!mounted) return;
         setState(() {
