@@ -397,6 +397,8 @@ class VehiculoFormService {
     required String modelo,
     required String tarjetaCirculacionNombre,
     required String aseguradora,
+    bool requireMontoDanos = true,
+    bool requirePartesDanadas = true,
   }) {
     if ((tipoGeneral ?? '').trim().isEmpty) {
       return 'Selecciona el tipo de vehículo.';
@@ -458,10 +460,10 @@ class VehiculoFormService {
     );
     if (aseguradoraError != null) return aseguradoraError;
 
-    final montoError = validateMonto(montoDanos, required: true);
+    final montoError = validateMonto(montoDanos, required: requireMontoDanos);
     if (montoError != null) return montoError;
 
-    if (partesDanadas.trim().isEmpty) {
+    if (requirePartesDanadas && partesDanadas.trim().isEmpty) {
       return 'Captura las partes dañadas.';
     }
 

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../models/feed_item.dart';
+import '../../services/guardianes_camino_dispositivos_service.dart';
 import '../safe_network_image.dart';
 
 class FeedItemCard extends StatelessWidget {
@@ -39,9 +40,11 @@ class FeedItemCard extends StatelessWidget {
     final resumen = item.resumen.trim().isNotEmpty
         ? item.resumen.trim()
         : 'Publicación';
-    final fotoUrl = (item.fotoUrl != null && item.fotoUrl!.trim().isNotEmpty)
-        ? item.fotoUrl!.trim()
-        : null;
+    final rawFoto = (item.fotoUrl ?? '').trim();
+    final normalizedFoto = rawFoto.isEmpty
+        ? ''
+        : GuardianesCaminoDispositivosService.toPublicUrl(rawFoto);
+    final fotoUrl = normalizedFoto.isNotEmpty ? normalizedFoto : null;
 
     return Material(
       color: Colors.white,

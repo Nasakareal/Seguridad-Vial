@@ -26,23 +26,32 @@ class _DispositivoCreateScreenState extends State<DispositivoCreateScreen> {
     final hasUnitAccess = await AuthService.isCarreterasUser(refresh: true);
     final hasFullOperationalAccess =
         await AuthService.hasFullOperationalAccess();
-    final hasPermission =
+    final hasCreatePermission =
         hasFullOperationalAccess ||
         await AuthService.can('crear operativos carreteras');
+    final hasListPermission =
+        hasFullOperationalAccess ||
+        await AuthService.can('ver operativos carreteras');
     if (!mounted) return;
     setState(() {
-      _canCreate = hasUnitAccess && hasPermission;
+      _canCreate = hasUnitAccess && (hasCreatePermission || hasListPermission);
       _checkingAccess = false;
     });
   }
 
-  void _handleCatalogoTap(GuardianesCaminoCatalogoLocal catalogo) {
-    Navigator.push(
+  Future<void> _handleCatalogoTap(
+    GuardianesCaminoCatalogoLocal catalogo,
+  ) async {
+    final created = await Navigator.push<bool>(
       context,
       MaterialPageRoute(
         builder: (_) => DispositivoFormScreen(catalogo: catalogo),
       ),
     );
+
+    if (created == true && mounted) {
+      Navigator.pop(context, true);
+    }
   }
 
   @override

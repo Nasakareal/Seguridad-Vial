@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 
 import '../core/guardianes_camino/guardianes_camino_dispositivos_catalogos.dart';
+import '../models/dispositivo_relacionados.dart';
 import 'auth_service.dart';
 import 'offline_sync_service.dart';
 import 'photo_orientation_service.dart';
@@ -39,6 +40,8 @@ class GuardianesCaminoDispositivoFormPayload {
   final double? lat;
   final double? lng;
   final Map<String, String> dynamicFields;
+  final List<DispositivoVehiculoRelacionado> vehiculosRelacionados;
+  final List<DispositivoPersonaRelacionada> personasRelacionadas;
   final List<File> fotos;
 
   const GuardianesCaminoDispositivoFormPayload({
@@ -72,12 +75,18 @@ class GuardianesCaminoDispositivoFormPayload {
     required this.lat,
     required this.lng,
     required this.dynamicFields,
+    required this.vehiculosRelacionados,
+    required this.personasRelacionadas,
     required this.fotos,
   });
 }
 
 class GuardianesCaminoDispositivoFormService {
   static const int _maxImageBytes = 5 * 1024 * 1024;
+
+  static void _trace(String message) {
+    debugPrint('[CARRETERAS_FORM] $message');
+  }
 
   static String _fmtYmd(DateTime d) {
     final y = d.year.toString().padLeft(4, '0');
@@ -90,6 +99,206 @@ class GuardianesCaminoDispositivoFormService {
     final h = t.hour.toString().padLeft(2, '0');
     final m = t.minute.toString().padLeft(2, '0');
     return '$h:$m';
+  }
+
+  static String? _fmtYmdNullable(DateTime? d) {
+    if (d == null) return null;
+    return _fmtYmd(d);
+  }
+
+  static List<Map<String, dynamic>> _vehiculosRelacionadosJson(
+    GuardianesCaminoDispositivoFormPayload payload, {
+    bool includeClientUuid = false,
+  }) {
+    final out = <Map<String, dynamic>>[];
+
+    for (var i = 0; i < payload.vehiculosRelacionados.length; i++) {
+      final item = payload.vehiculosRelacionados[i];
+      final vehiculo = item.vehiculo;
+
+      final row = <String, dynamic>{
+        'rol': item.rol,
+        'observaciones': item.observaciones,
+        'marca': vehiculo.marca,
+        'modelo': vehiculo.modelo,
+        'tipo_general': vehiculo.tipoGeneral,
+        'tipo': vehiculo.tipo,
+        'linea': vehiculo.linea,
+        'color': vehiculo.color,
+        'placas': vehiculo.placas,
+        'estado_placas': vehiculo.estadoPlacas,
+        'serie': vehiculo.serie,
+        'capacidad_personas': vehiculo.capacidadPersonas,
+        'tipo_servicio': vehiculo.tipoServicio,
+        'tarjeta_circulacion_nombre': vehiculo.tarjetaCirculacionNombre,
+        'grua': vehiculo.grua,
+        'corralon': vehiculo.corralon,
+        'aseguradora': vehiculo.aseguradora,
+        'antecedente_vehiculo': vehiculo.antecedenteVehiculo ? 1 : 0,
+        if (includeClientUuid)
+          'client_uuid': OfflineSyncService.newClientUuid(),
+      };
+
+      row.removeWhere((_, value) {
+        if (value == null) return true;
+        if (value is String && value.trim().isEmpty) return true;
+        return false;
+      });
+
+      out.add(row);
+    }
+
+    return out;
+  }
+
+  static List<Map<String, dynamic>> _personasRelacionadasJson(
+    GuardianesCaminoDispositivoFormPayload payload,
+  ) {
+    final out = <Map<String, dynamic>>[];
+
+    for (var i = 0; i < payload.personasRelacionadas.length; i++) {
+      final persona = payload.personasRelacionadas[i];
+
+      final row = <String, dynamic>{
+        'nombre': persona.nombre,
+        'tipo_participacion': persona.tipoParticipacion,
+        'curp': persona.curp,
+        'telefono': persona.telefono,
+        'domicilio': persona.domicilio,
+        'sexo': persona.sexo,
+        'ocupacion': persona.ocupacion,
+        'edad': persona.edad,
+        'tipo_licencia': persona.tipoLicencia,
+        'estado_licencia': persona.estadoLicencia,
+        'vigencia_licencia': _fmtYmdNullable(persona.vigenciaLicencia),
+        'numero_licencia': persona.numeroLicencia,
+        'permanente': persona.permanente ? 1 : 0,
+        'cinturon': persona.cinturon ? 1 : 0,
+        'antecedentes': persona.antecedentes ? 1 : 0,
+        'certificado_lesiones': persona.certificadoLesiones ? 1 : 0,
+        'certificado_alcoholemia': persona.certificadoAlcoholemia ? 1 : 0,
+        'aliento_etilico': persona.alientoEtilico ? 1 : 0,
+        'observaciones': persona.observaciones,
+      };
+
+      row.removeWhere((_, value) {
+        if (value == null) return true;
+        if (value is String && value.trim().isEmpty) return true;
+        return false;
+      });
+
+      out.add(row);
+    }
+
+    return out;
+  }
+
+  static Map<String, dynamic> _relacionadosBody(
+    GuardianesCaminoDispositivoFormPayload payload,
+    String clientUuid,
+  ) {
+    final body = <String, dynamic>{'client_uuid': clientUuid};
+    final vehiculos = _vehiculosRelacionadosJson(
+      payload,
+      includeClientUuid: true,
+    );
+    if (vehiculos.isNotEmpty) {
+      body['vehiculos_json'] = jsonEncode(vehiculos);
+    }
+
+    final personas = _personasRelacionadasJson(payload);
+    if (personas.isNotEmpty) {
+      body['personas_json'] = jsonEncode(personas);
+    }
+
+    return body;
+  }
+
+  static bool _hasRelacionados(Map<String, dynamic> body) {
+    return (body['vehiculos_json'] ?? '').toString().trim().isNotEmpty ||
+        (body['personas_json'] ?? '').toString().trim().isNotEmpty;
+  }
+
+  static Future<OfflineActionResult> _submitRelacionados({
+    required GuardianesCaminoDispositivoFormPayload payload,
+    required String clientUuid,
+    required OfflineActionResult createResult,
+  }) async {
+    final body = _relacionadosBody(payload, clientUuid);
+    if (!_hasRelacionados(body)) {
+      return createResult;
+    }
+
+    final dispositivoId = _extractDispositivoId(createResult.responseBody);
+    final uri = dispositivoId == null
+        ? Uri.parse(
+            '${AuthService.baseUrl}/guardianes-camino/dispositivos/relacionados',
+          )
+        : Uri.parse(
+            '${AuthService.baseUrl}/guardianes-camino/dispositivos/$dispositivoId/relacionados',
+          );
+
+    if (createResult.queued) {
+      try {
+        _trace('relacionados queued dependency=$clientUuid');
+        await OfflineSyncService.submitJson(
+          label: 'Relacionados dispositivo Guardianes del Camino',
+          method: 'POST',
+          uri: Uri.parse(
+            '${AuthService.baseUrl}/guardianes-camino/dispositivos/relacionados',
+          ),
+          body: body,
+          requestId: '${clientUuid}_relacionados',
+          dependsOnOperationId: clientUuid,
+          successCodes: const <int>{200, 201},
+          errorParser: parseBackendError,
+          announceOnQueue: false,
+        );
+        return const OfflineActionResult.queued(
+          message:
+              'Guardado sin conexión. Los vehículos se sincronizarán después del dispositivo.',
+        );
+      } catch (e) {
+        return OfflineActionResult.queued(
+          message:
+              'Guardado sin conexión. No se pudieron dejar listos los vehículos: ${_cleanException(e)}',
+        );
+      }
+    }
+
+    try {
+      _trace(
+        'relacionados send uri=$uri vehiculos=${payload.vehiculosRelacionados.length} personas=${payload.personasRelacionadas.length}',
+      );
+      final relacionadosResult = await OfflineSyncService.submitJson(
+        label: 'Relacionados dispositivo Guardianes del Camino',
+        method: 'POST',
+        uri: uri,
+        body: body,
+        requestId: '${clientUuid}_relacionados',
+        successCodes: const <int>{200, 201},
+        errorParser: parseBackendError,
+      );
+
+      if (relacionadosResult.queued) {
+        _trace('relacionados queued after create');
+        return OfflineActionResult.synced(
+          message:
+              'Dispositivo capturado. Vehículos pendientes de sincronizar.',
+          responseBody: createResult.responseBody,
+        );
+      }
+
+      _trace('relacionados ok');
+      return createResult;
+    } catch (e) {
+      _trace('relacionados error=${_cleanException(e)}');
+      return OfflineActionResult.synced(
+        message:
+            'Dispositivo capturado. No se pudieron anexar los vehículos: ${_cleanException(e)}',
+        responseBody: createResult.responseBody,
+      );
+    }
   }
 
   static String parseBackendError(String body, int statusCode) {
@@ -116,11 +325,51 @@ class GuardianesCaminoDispositivoFormService {
     return 'Error HTTP $statusCode';
   }
 
+  static int? _extractDispositivoId(String? responseBody) {
+    if (responseBody == null || responseBody.trim().isEmpty) return null;
+
+    try {
+      final raw = jsonDecode(responseBody);
+      if (raw is! Map<String, dynamic>) return null;
+
+      int? asInt(dynamic value) => int.tryParse('${value ?? ''}');
+      final meta = raw['meta'];
+      final data = raw['data'];
+
+      if (meta is Map && asInt(meta['id']) != null) return asInt(meta['id']);
+      if (data is Map && asInt(data['id']) != null) return asInt(data['id']);
+    } catch (_) {}
+
+    return null;
+  }
+
+  static String _cleanException(Object error) {
+    final text = '$error'.trim();
+    if (text.startsWith('Exception: ')) {
+      return text.substring('Exception: '.length).trim();
+    }
+    return text;
+  }
+
   static Future<String?> validateBeforeSubmit({
     required GuardianesCaminoDispositivoFormPayload payload,
   }) async {
     if (payload.catalogo.id <= 0) {
       return 'Selecciona un dispositivo válido.';
+    }
+
+    final placas = <String>{};
+    final series = <String>{};
+    for (final item in payload.vehiculosRelacionados) {
+      final placa = (item.vehiculo.placas ?? '').trim().toUpperCase();
+      if (placa.isNotEmpty && !placas.add(placa)) {
+        return 'No repitas placas en los vehículos relacionados.';
+      }
+
+      final serie = (item.vehiculo.serie ?? '').trim().toUpperCase();
+      if (serie.isNotEmpty && !series.add(serie)) {
+        return 'No repitas números de serie en los vehículos relacionados.';
+      }
     }
 
     for (final foto in payload.fotos) {
@@ -142,6 +391,9 @@ class GuardianesCaminoDispositivoFormService {
     required GuardianesCaminoDispositivoFormPayload payload,
   }) async {
     final clientUuid = OfflineSyncService.newClientUuid();
+    _trace(
+      'create start client=$clientUuid catalogo=${payload.catalogo.id} vehiculos=${payload.vehiculosRelacionados.length} personas=${payload.personasRelacionadas.length} fotos=${payload.fotos.length}',
+    );
 
     int? asInt(dynamic value) => int.tryParse('${value ?? ''}');
 
@@ -249,34 +501,114 @@ class GuardianesCaminoDispositivoFormService {
       if (value.isNotEmpty) fields[entry.key] = value;
     }
 
-    final fotos = payload.fotos.isEmpty
-        ? const <File>[]
-        : await PhotoOrientationService.forceLandscapeAll(payload.fotos);
-
-    if (fotos.isEmpty) {
-      return OfflineSyncService.submitJson(
-        label: 'Dispositivo Guardianes del Camino',
-        method: 'POST',
-        uri: Uri.parse('${AuthService.baseUrl}/guardianes-camino/dispositivos'),
-        body: Map<String, dynamic>.from(fields),
-        requestId: clientUuid,
-        successCodes: const <int>{200, 201},
-        errorParser: parseBackendError,
-      );
-    }
-
-    return OfflineSyncService.submitMultipart(
+    _trace('create dispositivo send fields=${fields.keys.join(',')}');
+    final createResult = await OfflineSyncService.submitJson(
       label: 'Dispositivo Guardianes del Camino',
       method: 'POST',
       uri: Uri.parse('${AuthService.baseUrl}/guardianes-camino/dispositivos'),
-      fields: fields,
-      files: <OfflineUploadFile>[
-        for (final foto in fotos)
-          OfflineUploadFile(field: 'fotos[]', path: foto.path),
-      ],
+      body: Map<String, dynamic>.from(fields),
       requestId: clientUuid,
       successCodes: const <int>{200, 201},
       errorParser: parseBackendError,
     );
+    _trace(
+      'create dispositivo result synced=${createResult.synced} queued=${createResult.queued} message=${createResult.message}',
+    );
+
+    final relatedResult = await _submitRelacionados(
+      payload: payload,
+      clientUuid: clientUuid,
+      createResult: createResult,
+    );
+
+    if (payload.fotos.isEmpty) {
+      _trace(
+        'create done no fotos synced=${relatedResult.synced} queued=${relatedResult.queued}',
+      );
+      return relatedResult;
+    }
+
+    final fotos = await PhotoOrientationService.forceLandscapeAll(
+      payload.fotos,
+    );
+    final photoFiles = <OfflineUploadFile>[
+      for (final foto in fotos)
+        OfflineUploadFile(field: 'fotos[]', path: foto.path),
+    ];
+    final photoFields = <String, String>{'client_uuid': clientUuid};
+    final dispositivoId = _extractDispositivoId(relatedResult.responseBody);
+    final photoUri = dispositivoId == null
+        ? Uri.parse(
+            '${AuthService.baseUrl}/guardianes-camino/dispositivos/fotos',
+          )
+        : Uri.parse(
+            '${AuthService.baseUrl}/guardianes-camino/dispositivos/$dispositivoId/fotos',
+          );
+
+    if (relatedResult.queued) {
+      try {
+        _trace(
+          'fotos queued dependency=$clientUuid count=${photoFiles.length}',
+        );
+        await OfflineSyncService.submitMultipart(
+          label: 'Fotos dispositivo Guardianes del Camino',
+          method: 'POST',
+          uri: Uri.parse(
+            '${AuthService.baseUrl}/guardianes-camino/dispositivos/fotos',
+          ),
+          fields: photoFields,
+          files: photoFiles,
+          requestId: '${clientUuid}_fotos',
+          dependsOnOperationId: clientUuid,
+          successCodes: const <int>{200, 201},
+          errorParser: parseBackendError,
+          announceOnQueue: false,
+        );
+        return const OfflineActionResult.queued(
+          message:
+              'Guardado sin conexión. Las fotos se sincronizarán después del dispositivo.',
+        );
+      } catch (e) {
+        return OfflineActionResult.queued(
+          message:
+              'Guardado sin conexión. No se pudieron dejar listas las fotos: ${_cleanException(e)}',
+        );
+      }
+    }
+
+    try {
+      _trace('fotos send uri=$photoUri count=${photoFiles.length}');
+      final photosResult = await OfflineSyncService.submitMultipart(
+        label: 'Fotos dispositivo Guardianes del Camino',
+        method: 'POST',
+        uri: photoUri,
+        fields: photoFields,
+        files: photoFiles,
+        requestId: '${clientUuid}_fotos',
+        successCodes: const <int>{200, 201},
+        errorParser: parseBackendError,
+      );
+
+      if (photosResult.queued) {
+        _trace('fotos queued after create');
+        return OfflineActionResult.synced(
+          message: 'Dispositivo capturado. Fotos pendientes de sincronizar.',
+          responseBody: relatedResult.responseBody,
+        );
+      }
+
+      _trace('fotos ok');
+      return OfflineActionResult.synced(
+        message: relatedResult.message,
+        responseBody: relatedResult.responseBody,
+      );
+    } catch (e) {
+      _trace('fotos error=${_cleanException(e)}');
+      return OfflineActionResult.synced(
+        message:
+            'Dispositivo capturado. No se pudieron subir las fotos: ${_cleanException(e)}',
+        responseBody: relatedResult.responseBody,
+      );
+    }
   }
 }

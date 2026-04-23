@@ -114,6 +114,7 @@ class AppDrawer extends StatelessWidget {
     var canSeeVialidadesUrbanas = await AuthService.isVialidadesUrbanasUser();
     var isSuperadmin = await AuthService.isSuperadmin();
     var hasFullOperationalAccess = await AuthService.hasFullOperationalAccess();
+    var canReviewCarreteras = await _canReviewCarreteras();
 
     if (permissions.isEmpty) {
       await AuthService.refreshCurrentUserAccess();
@@ -123,6 +124,7 @@ class AppDrawer extends StatelessWidget {
       canSeeVialidadesUrbanas = await AuthService.isVialidadesUrbanasUser();
       isSuperadmin = await AuthService.isSuperadmin();
       hasFullOperationalAccess = await AuthService.hasFullOperationalAccess();
+      canReviewCarreteras = await _canReviewCarreteras();
     }
 
     return _DrawerAccess(
@@ -132,7 +134,14 @@ class AppDrawer extends StatelessWidget {
       canSeeVialidadesUrbanas: canSeeVialidadesUrbanas,
       isSuperadmin: isSuperadmin,
       hasFullOperationalAccess: hasFullOperationalAccess,
+      canReviewCarreteras: canReviewCarreteras,
     );
+  }
+
+  Future<bool> _canReviewCarreteras() async {
+    if (await AuthService.isSuperadmin()) return true;
+    return await AuthService.hasRoleName('RT') ||
+        await AuthService.hasRoleName('Encargado de Destacamento');
   }
 
   @override
@@ -213,6 +222,11 @@ class AppDrawer extends StatelessWidget {
                         perms.contains('crear operativos carreteras') ||
                         perms.contains('editar operativos carreteras') ||
                         perms.contains('eliminar operativos carreteras') ||
+                        hasFullOperationalAccess);
+                final canReviewDispositivos =
+                    canSeeDispositivos &&
+                    (snap.data?.canReviewCarreteras ?? false) &&
+                    (perms.contains('editar operativos carreteras') ||
                         hasFullOperationalAccess);
                 final canSeeVialidadesUrbanas =
                     (snap.data?.canSeeVialidadesUrbanas ?? false) ||
@@ -356,6 +370,17 @@ class AppDrawer extends StatelessWidget {
                                   AuthService.unidadProteccionCarreterasId,
                             ),
                           ),
+                          if (canReviewDispositivos)
+                            _DrawerSubItem(
+                              icon: Icons.fact_check_outlined,
+                              label: 'Pendientes de revisión',
+                              onTap: () => _nav(
+                                context,
+                                AppRoutes.dispositivosRevision,
+                                requiredUnitId:
+                                    AuthService.unidadProteccionCarreterasId,
+                              ),
+                            ),
                         ],
                       ),
 
@@ -454,6 +479,7 @@ class _DrawerAccess {
   final bool canSeeVialidadesUrbanas;
   final bool isSuperadmin;
   final bool hasFullOperationalAccess;
+  final bool canReviewCarreteras;
 
   const _DrawerAccess({
     required this.perms,
@@ -462,6 +488,7 @@ class _DrawerAccess {
     required this.canSeeVialidadesUrbanas,
     required this.isSuperadmin,
     required this.hasFullOperationalAccess,
+    required this.canReviewCarreteras,
   });
 }
 

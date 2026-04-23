@@ -52,6 +52,11 @@ void handlePushTap(Map<String, dynamic> data) {
       return;
     }
 
+    if (type == 'GUARDIANES_REVISION') {
+      navigatorKey.currentState?.pushNamed(AppRoutes.dispositivosRevision);
+      return;
+    }
+
     final hechoId = (data['hecho_id'] ?? '').toString();
     if (hechoId.isEmpty) return;
 

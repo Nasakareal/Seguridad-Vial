@@ -856,10 +856,14 @@ class AuthService {
 
     if (role != null && role!.trim().isNotEmpty) {
       await prefs.setString(_roleKey, role!.trim());
+    } else {
+      await prefs.remove(_roleKey);
     }
 
     if (roleId != null && roleId! > 0) {
       await prefs.setInt(_roleIdKey, roleId!);
+    } else {
+      await prefs.remove(_roleIdKey);
     }
   }
 
@@ -1599,6 +1603,9 @@ class AuthService {
       return normalized.contains('VIALIDADES URBANAS') ||
           normalized.contains('PROTECCION A VIALIDADES URBANAS') ||
           normalized.contains('PROTECCION EN VIALIDADES URBANAS') ||
+          normalized.contains('PROTECCION A CARRETERAS') ||
+          normalized.contains('PROTECCION EN CARRETERAS') ||
+          normalized == 'CARRETERAS' ||
           normalized.contains('FOMENTO A LA CULTURA VIAL') ||
           normalized.contains('CULTURA VIAL');
     }
@@ -1651,10 +1658,7 @@ class AuthService {
 
     if (raw is String) {
       final normalized = _normalizeUnitText(raw);
-      return normalized.contains('DELEGACIONES') ||
-          normalized.contains('PROTECCION A CARRETERAS') ||
-          normalized.contains('PROTECCION EN CARRETERAS') ||
-          normalized == 'CARRETERAS';
+      return normalized.contains('DELEGACIONES');
     }
 
     if (raw is Map) {
@@ -1702,12 +1706,12 @@ class AuthService {
   }
 
   static bool _isHechosCaptureRelaxedUnitId(int? unidadId) {
-    return unidadId == unidadDelegacionesId ||
-        unidadId == unidadProteccionCarreterasId;
+    return unidadId == unidadDelegacionesId;
   }
 
   static bool _isHechosCreateExcludedUnitId(int? unidadId) {
-    return unidadId == unidadVialidadesUrbanasId ||
+    return unidadId == unidadProteccionCarreterasId ||
+        unidadId == unidadVialidadesUrbanasId ||
         unidadId == unidadCulturaVialId;
   }
 

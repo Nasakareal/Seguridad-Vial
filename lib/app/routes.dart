@@ -55,6 +55,8 @@ class AppRoutes {
 
   static const String dispositivos = '/dispositivos';
   static const String dispositivosCreate = '/dispositivos/create';
+  static const String dispositivosShow = '/dispositivos/show';
+  static const String dispositivosRevision = '/dispositivos/revision';
   static const String vialidadesUrbanas = '/vialidades-urbanas';
   static const String vialidadesUrbanasCreate = '/vialidades-urbanas/create';
   static const String vialidadesUrbanasDispositivoShow =

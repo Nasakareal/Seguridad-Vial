@@ -59,6 +59,40 @@ class OfflineSyncService {
   static Timer? _timer;
   static final Random _random = Random();
 
+  static void _trace(String message) {
+    debugPrint('[CARRETERAS_HTTP] $message');
+  }
+
+  static String _clip(String value, [int max = 600]) {
+    final compact = value.replaceAll(RegExp(r'\s+'), ' ').trim();
+    if (compact.length <= max) return compact;
+    return '${compact.substring(0, max)}...';
+  }
+
+  static String _jsonBodySummary(Map<String, dynamic> body) {
+    final entries = body.entries.map((entry) {
+      final value = entry.value;
+      if (value is String) {
+        return '${entry.key}:string(${value.length})';
+      }
+      if (value is List) {
+        return '${entry.key}:list(${value.length})';
+      }
+      if (value is Map) {
+        return '${entry.key}:map(${value.length})';
+      }
+      return '${entry.key}:${value.runtimeType}';
+    });
+    return entries.join(', ');
+  }
+
+  static String _formFieldsSummary(Map<String, String> fields) {
+    final entries = fields.entries.map((entry) {
+      return '${entry.key}:string(${entry.value.length})';
+    });
+    return entries.join(', ');
+  }
+
   static Future<void> initialize() async {
     if (!_initialized) {
       _initialized = true;
@@ -672,38 +706,36 @@ class OfflineSyncService {
       'Content-Type': 'application/json',
       'Authorization': 'Bearer $token',
       'X-Client-Request-Id': requestId,
+      'X-Requested-With': 'XMLHttpRequest',
     };
 
     try {
       final upperMethod = method.toUpperCase();
-      late final http.Response response;
-
-      switch (upperMethod) {
-        case 'POST':
-          response = await http
-              .post(uri, headers: headers, body: jsonEncode(body))
-              .timeout(_requestTimeout);
-          break;
-        case 'PUT':
-          response = await http
-              .put(uri, headers: headers, body: jsonEncode(body))
-              .timeout(_requestTimeout);
-          break;
-        case 'PATCH':
-          response = await http
-              .patch(uri, headers: headers, body: jsonEncode(body))
-              .timeout(_requestTimeout);
-          break;
-        case 'DELETE':
-          response = await http
-              .delete(uri, headers: headers, body: jsonEncode(body))
-              .timeout(_requestTimeout);
-          break;
-        default:
-          throw _PermanentSyncException(
-            'Método HTTP no soportado: $upperMethod',
-          );
+      if (!const <String>{
+        'POST',
+        'PUT',
+        'PATCH',
+        'DELETE',
+      }.contains(upperMethod)) {
+        throw _PermanentSyncException('Método HTTP no soportado: $upperMethod');
       }
+
+      final request = http.Request(upperMethod, uri);
+      request.followRedirects = false;
+      request.headers.addAll(headers);
+      request.body = jsonEncode(body);
+
+      _trace(
+        'JSON -> $upperMethod $uri id=$requestId body={${_jsonBodySummary(body)}}',
+      );
+      final streamed = await request.send().timeout(_requestTimeout);
+      final response = await http.Response.fromStream(streamed);
+      _trace(
+        'JSON <- ${response.statusCode} $uri '
+        'location=${response.headers['location'] ?? '-'} '
+        'type=${response.headers['content-type'] ?? '-'} '
+        'body="${_clip(response.body)}"',
+      );
 
       _handleResponse(
         response: response,
@@ -712,12 +744,15 @@ class OfflineSyncService {
       );
       return response;
     } on TimeoutException {
+      _trace('JSON !! timeout $method $uri id=$requestId');
       throw const _RetryableSyncException(
         'Tiempo de espera agotado al sincronizar.',
       );
     } on SocketException {
+      _trace('JSON !! socket $method $uri id=$requestId');
       throw const _RetryableSyncException('Sin conexión disponible.');
-    } on http.ClientException {
+    } on http.ClientException catch (e) {
+      _trace('JSON !! client $method $uri id=$requestId error=${_clip('$e')}');
       throw const _RetryableSyncException(
         'No fue posible conectar con el servidor.',
       );
@@ -741,10 +776,12 @@ class OfflineSyncService {
     }
 
     final request = http.MultipartRequest(method.toUpperCase(), uri);
+    request.followRedirects = false;
     request.headers.addAll(<String, String>{
       'Accept': 'application/json',
       'Authorization': 'Bearer $token',
       'X-Client-Request-Id': requestId,
+      'X-Requested-With': 'XMLHttpRequest',
     });
     request.fields.addAll(fields);
 
@@ -766,8 +803,18 @@ class OfflineSyncService {
     }
 
     try {
+      _trace(
+        'MULTIPART -> ${method.toUpperCase()} $uri id=$requestId '
+        'fields={${_formFieldsSummary(fields)}} files=${files.length}',
+      );
       final streamed = await request.send().timeout(_requestTimeout);
       final response = await http.Response.fromStream(streamed);
+      _trace(
+        'MULTIPART <- ${response.statusCode} $uri '
+        'location=${response.headers['location'] ?? '-'} '
+        'type=${response.headers['content-type'] ?? '-'} '
+        'body="${_clip(response.body)}"',
+      );
       _handleResponse(
         response: response,
         successCodes: successCodes,
@@ -775,12 +822,17 @@ class OfflineSyncService {
       );
       return response;
     } on TimeoutException {
+      _trace('MULTIPART !! timeout $method $uri id=$requestId');
       throw const _RetryableSyncException(
         'Tiempo de espera agotado al sincronizar.',
       );
     } on SocketException {
+      _trace('MULTIPART !! socket $method $uri id=$requestId');
       throw const _RetryableSyncException('Sin conexión disponible.');
-    } on http.ClientException {
+    } on http.ClientException catch (e) {
+      _trace(
+        'MULTIPART !! client $method $uri id=$requestId error=${_clip('$e')}',
+      );
       throw const _RetryableSyncException(
         'No fue posible conectar con el servidor.',
       );

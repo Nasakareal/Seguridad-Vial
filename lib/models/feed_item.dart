@@ -23,6 +23,20 @@ class FeedItem {
     required this.unidadId,
   });
 
+  FeedItem copyWith({String? fotoUrl}) {
+    return FeedItem(
+      type: type,
+      id: id,
+      userId: userId,
+      userName: userName,
+      resumen: resumen,
+      fotoUrl: fotoUrl ?? this.fotoUrl,
+      createdAt: createdAt,
+      showUrl: showUrl,
+      unidadId: unidadId,
+    );
+  }
+
   static FeedItemType _parseType(dynamic v) {
     final s = (v ?? '').toString().trim().toUpperCase();
     if (s == 'HECHO') return FeedItemType.hecho;
@@ -49,6 +63,12 @@ class FeedItem {
     }
   }
 
+  static String? _asNullableString(dynamic v) {
+    if (v == null) return null;
+    final s = v.toString().trim();
+    return s.isEmpty ? null : s;
+  }
+
   factory FeedItem.fromJson(Map<String, dynamic> json) {
     return FeedItem(
       type: _parseType(json['type']),
@@ -56,7 +76,14 @@ class FeedItem {
       userId: _asInt(json['user_id']),
       userName: (json['user_name'] ?? '').toString(),
       resumen: (json['resumen'] ?? '').toString(),
-      fotoUrl: (json['foto_url'] == null) ? null : json['foto_url'].toString(),
+      fotoUrl: _asNullableString(
+        json['foto_url'] ??
+            json['fotoUrl'] ??
+            json['photo_url'] ??
+            json['image_url'] ??
+            json['foto'] ??
+            json['foto_path'],
+      ),
       createdAt: _parseDate(json['created_at']),
       showUrl: (json['show_url'] == null) ? null : json['show_url'].toString(),
       unidadId: json['unidad_id'] == null ? null : _asInt(json['unidad_id']),

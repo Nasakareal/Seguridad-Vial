@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../models/feed_item.dart';
+import '../../../services/guardianes_camino_dispositivos_service.dart';
 import '../../../widgets/safe_network_image.dart';
 
 class FeedPostCard extends StatelessWidget {
@@ -33,7 +34,10 @@ class FeedPostCard extends StatelessWidget {
     final user = userName.isNotEmpty ? userName : 'Usuario';
 
     final rawFoto = (item.fotoUrl ?? '').trim();
-    final fotoUrl = rawFoto.isNotEmpty ? rawFoto : null;
+    final normalizedFoto = rawFoto.isEmpty
+        ? ''
+        : GuardianesCaminoDispositivosService.toPublicUrl(rawFoto);
+    final fotoUrl = normalizedFoto.isNotEmpty ? normalizedFoto : null;
 
     return Material(
       color: Colors.white,

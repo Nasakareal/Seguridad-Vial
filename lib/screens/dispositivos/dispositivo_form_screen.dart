@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -5,10 +6,17 @@ import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../core/guardianes_camino/guardianes_camino_dispositivos_catalogos.dart';
+import '../../models/dispositivo_relacionados.dart';
 import '../../services/guardianes_camino_dispositivo_form_service.dart';
+import '../../services/guardianes_camino_dispositivos_service.dart';
+import '../../services/guardianes_camino_share_service.dart';
 import '../../widgets/landscape_photo_crop_screen.dart';
+import 'widgets/dispositivo_relacionados_modal.dart';
 
 enum _DynamicFieldKind { integer, decimal, text, select }
+
+const String _fraseInstitucionalDefault =
+    'AHORA LA GUARDIA CIVIL NO TE MULTA ….TE CUIDA EN EL CAMINO!!';
 
 class _DynamicFieldOption {
   final String value;
@@ -159,8 +167,7 @@ class _DispositivoFormScreenState extends State<DispositivoFormScreen> {
   final _tramoCtrl = TextEditingController();
   final _kilometroCtrl = TextEditingController();
   final _narrativaCtrl = TextEditingController();
-  final _accionesCtrl = TextEditingController();
-  final _fraseCtrl = TextEditingController();
+  final _fraseCtrl = TextEditingController(text: _fraseInstitucionalDefault);
   final _nombreConductorCtrl = TextEditingController();
   final _ocupacionCtrl = TextEditingController();
   final _acompanantesCtrl = TextEditingController(text: '0');
@@ -190,6 +197,10 @@ class _DispositivoFormScreenState extends State<DispositivoFormScreen> {
   String? _geoStatus;
   bool _resolvingLocation = false;
   List<File> _fotos = <File>[];
+  List<DispositivoVehiculoRelacionado> _vehiculosRelacionados =
+      <DispositivoVehiculoRelacionado>[];
+  List<DispositivoPersonaRelacionada> _personasRelacionadas =
+      <DispositivoPersonaRelacionada>[];
 
   bool get _showApoyoUsuario {
     final nombre = widget.catalogo.nombre.toUpperCase();
@@ -197,6 +208,15 @@ class _DispositivoFormScreenState extends State<DispositivoFormScreen> {
         nombre.contains('ABANDERAMIENTOS') ||
         nombre.contains('AUXILIOS VIALES') ||
         nombre.contains('CABALLEROS DEL CAMINO');
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _asuntoCtrl.text = widget.catalogo.titulo;
+    _asuntoCtrl.selection = TextSelection.collapsed(
+      offset: _asuntoCtrl.text.length,
+    );
   }
 
   @override
@@ -209,7 +229,6 @@ class _DispositivoFormScreenState extends State<DispositivoFormScreen> {
     _tramoCtrl.dispose();
     _kilometroCtrl.dispose();
     _narrativaCtrl.dispose();
-    _accionesCtrl.dispose();
     _fraseCtrl.dispose();
     _nombreConductorCtrl.dispose();
     _ocupacionCtrl.dispose();
@@ -435,6 +454,152 @@ class _DispositivoFormScreenState extends State<DispositivoFormScreen> {
     setState(() => _fotos = <File>[..._fotos, file]);
   }
 
+  Future<void> _addRelacionado() async {
+    final result = await showDispositivoRelacionadoModal(context);
+    if (result == null || !mounted) return;
+
+    setState(() {
+      final vehiculo = result.vehiculo;
+      if (vehiculo != null) {
+        _vehiculosRelacionados = <DispositivoVehiculoRelacionado>[
+          ..._vehiculosRelacionados,
+          vehiculo,
+        ];
+      }
+
+      final persona = result.persona;
+      if (persona != null) {
+        _personasRelacionadas = <DispositivoPersonaRelacionada>[
+          ..._personasRelacionadas,
+          persona,
+        ];
+      }
+
+      _syncRelacionadosCounters();
+    });
+  }
+
+  void _syncRelacionadosCounters() {
+    void setDynamic(String field, int value) {
+      final controller = _dynamicControllers[field];
+      if (controller != null) controller.text = value.toString();
+    }
+
+    final vehiculosImpactados = _vehiculosRelacionados
+        .where((item) => item.rol == 'IMPACTADO')
+        .length;
+    final vehiculosInspeccionados = _vehiculosRelacionados
+        .where((item) => item.rol == 'INSPECCIONADO')
+        .length;
+    final vehiculosRecuperados = _vehiculosRelacionados
+        .where((item) => item.rol == 'RECUPERADO')
+        .length;
+    final antecedentesVehiculos = _vehiculosRelacionados
+        .where((item) => item.vehiculo.antecedenteVehiculo)
+        .length;
+
+    final personasImpactadas = _personasRelacionadas
+        .where(
+          (item) => const {
+            'IMPACTADA',
+            'CONDUCTOR',
+            'ACOMPANANTE',
+            'PEATON',
+          }.contains(item.tipoParticipacion),
+        )
+        .length;
+    final personasInspeccionadas = _personasRelacionadas
+        .where((item) => item.tipoParticipacion == 'INSPECCIONADA')
+        .length;
+    final antecedentesPersonas = _personasRelacionadas
+        .where((item) => item.antecedentes)
+        .length;
+
+    setDynamic('vehiculos_impactados', vehiculosImpactados);
+    setDynamic('vehiculos_inspeccionados', vehiculosInspeccionados);
+    setDynamic('vehiculos_recuperados', vehiculosRecuperados);
+    setDynamic('antecedentes_vehiculos', antecedentesVehiculos);
+    setDynamic('personas_impactadas', personasImpactadas);
+    setDynamic('personas_inspeccionadas', personasInspeccionadas);
+    setDynamic('antecedentes_personas', antecedentesPersonas);
+  }
+
+  String _vehiculoTitulo(DispositivoVehiculoRelacionado item) {
+    final vehiculo = item.vehiculo;
+    final marcaLinea = [
+      vehiculo.marca,
+      vehiculo.linea,
+    ].where((value) => value.trim().isNotEmpty).join(' ');
+    return marcaLinea.isEmpty ? 'Vehículo' : marcaLinea;
+  }
+
+  Widget _buildRelacionadosCard() {
+    return _card(
+      title: 'Vehículos y personas',
+      child: Column(
+        children: [
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: _addRelacionado,
+              icon: const Icon(Icons.add),
+              label: const Text('Agregar vehículo o persona'),
+            ),
+          ),
+          const SizedBox(height: 12),
+          if (_vehiculosRelacionados.isEmpty && _personasRelacionadas.isEmpty)
+            const Align(
+              alignment: Alignment.centerLeft,
+              child: Text('Sin relacionados agregados.'),
+            ),
+          for (var index = 0; index < _vehiculosRelacionados.length; index++)
+            Card(
+              margin: const EdgeInsets.only(bottom: 8),
+              child: ListTile(
+                leading: const Icon(Icons.directions_car),
+                title: Text(_vehiculoTitulo(_vehiculosRelacionados[index])),
+                subtitle: Text(
+                  '${_vehiculosRelacionados[index].rol} · '
+                  '${_vehiculosRelacionados[index].vehiculo.placas ?? 'SIN PLACAS'}',
+                ),
+                trailing: IconButton(
+                  icon: const Icon(Icons.delete_outline),
+                  onPressed: () {
+                    setState(() {
+                      _vehiculosRelacionados = <DispositivoVehiculoRelacionado>[
+                        ..._vehiculosRelacionados,
+                      ]..removeAt(index);
+                      _syncRelacionadosCounters();
+                    });
+                  },
+                ),
+              ),
+            ),
+          for (var index = 0; index < _personasRelacionadas.length; index++)
+            Card(
+              margin: const EdgeInsets.only(bottom: 8),
+              child: ListTile(
+                leading: const Icon(Icons.person),
+                title: Text(_personasRelacionadas[index].nombre),
+                subtitle: Text(_personasRelacionadas[index].tipoParticipacion),
+                trailing: IconButton(
+                  icon: const Icon(Icons.delete_outline),
+                  onPressed: () {
+                    setState(() {
+                      _personasRelacionadas = <DispositivoPersonaRelacionada>[
+                        ..._personasRelacionadas,
+                      ]..removeAt(index);
+                      _syncRelacionadosCounters();
+                    });
+                  },
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _onRegistrarTap() async {
     if (!_formKey.currentState!.validate()) return;
 
@@ -454,7 +619,7 @@ class _DispositivoFormScreenState extends State<DispositivoFormScreen> {
       tramo: _tramoCtrl.text,
       kilometro: _kilometroCtrl.text,
       narrativa: _narrativaCtrl.text,
-      accionesRealizadas: _accionesCtrl.text,
+      accionesRealizadas: '',
       fraseInstitucional: _fraseCtrl.text,
       nombreConductor: _nombreConductorCtrl.text,
       ocupacionConductor: _ocupacionCtrl.text,
@@ -474,14 +639,20 @@ class _DispositivoFormScreenState extends State<DispositivoFormScreen> {
         for (final entry in _dynamicControllers.entries)
           entry.key: entry.value.text,
       },
+      vehiculosRelacionados: _vehiculosRelacionados,
+      personasRelacionadas: _personasRelacionadas,
       fotos: _fotos,
     );
 
+    debugPrint(
+      '[CARRETERAS] registrar tap catalogo=${widget.catalogo.id} vehiculos=${_vehiculosRelacionados.length} personas=${_personasRelacionadas.length} fotos=${_fotos.length}',
+    );
     final validation =
         await GuardianesCaminoDispositivoFormService.validateBeforeSubmit(
           payload: payload,
         );
     if (validation != null) {
+      debugPrint('[CARRETERAS] validation blocked: $validation');
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
@@ -491,19 +662,94 @@ class _DispositivoFormScreenState extends State<DispositivoFormScreen> {
 
     setState(() => _saving = true);
     try {
+      debugPrint('[CARRETERAS] create service call');
       final result = await GuardianesCaminoDispositivoFormService.create(
         payload: payload,
+      );
+      debugPrint(
+        '[CARRETERAS] create service result synced=${result.synced} queued=${result.queued} message=${result.message}',
       );
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text(result.message)));
+      final dispositivoId = _extractDispositivoId(result.responseBody);
+      if (result.synced && dispositivoId != null) {
+        final shareNow = await _promptShareCreated();
+        if (!mounted) return;
+
+        if (shareNow) {
+          await _shareCreatedTarjeta(dispositivoId);
+          if (!mounted) return;
+        }
+      }
       Navigator.pop(context, true);
-    } catch (e) {
+    } catch (e, stackTrace) {
+      debugPrint('[CARRETERAS] create service error: $e');
+      debugPrint('[CARRETERAS] stack: $stackTrace');
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
     } finally {
       if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  int? _extractDispositivoId(String? responseBody) {
+    if (responseBody == null || responseBody.trim().isEmpty) return null;
+
+    try {
+      final raw = jsonDecode(responseBody);
+      if (raw is! Map<String, dynamic>) return null;
+
+      int? asInt(dynamic value) => int.tryParse('${value ?? ''}');
+      final meta = raw['meta'];
+      final data = raw['data'];
+
+      if (meta is Map && asInt(meta['id']) != null) return asInt(meta['id']);
+      if (data is Map && asInt(data['id']) != null) return asInt(data['id']);
+    } catch (_) {}
+
+    return null;
+  }
+
+  Future<bool> _promptShareCreated() async {
+    return await showDialog<bool>(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) {
+            return AlertDialog(
+              title: const Text('Dispositivo capturado'),
+              content: const Text(
+                'La tarjeta quedó lista para compartir. Permanecerá pendiente de revisión hasta que RT o Encargado la apruebe.',
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context, false),
+                  child: const Text('Terminar'),
+                ),
+                ElevatedButton.icon(
+                  onPressed: () => Navigator.pop(context, true),
+                  icon: const Icon(Icons.share),
+                  label: const Text('Compartir'),
+                ),
+              ],
+            );
+          },
+        ) ??
+        false;
+  }
+
+  Future<void> _shareCreatedTarjeta(int dispositivoId) async {
+    try {
+      final texto = await GuardianesCaminoDispositivosService.fetchWhatsappText(
+        dispositivoId: dispositivoId,
+      );
+      await GuardianesCaminoShareService.compartirTextoEnWhatsapp(texto: texto);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('No se pudo compartir la tarjeta.\n$e')),
+      );
     }
   }
 
@@ -735,23 +981,21 @@ class _DispositivoFormScreenState extends State<DispositivoFormScreen> {
                   children: [
                     TextFormField(
                       controller: _narrativaCtrl,
-                      minLines: 4,
-                      maxLines: 6,
+                      minLines: 8,
+                      maxLines: 12,
                       decoration: _dec('Narrativa'),
                     ),
                     const SizedBox(height: 12),
                     TextFormField(
-                      controller: _accionesCtrl,
-                      minLines: 3,
-                      maxLines: 5,
-                      decoration: _dec('Acciones realizadas'),
-                    ),
-                    const SizedBox(height: 12),
-                    TextFormField(
                       controller: _fraseCtrl,
+                      readOnly: true,
+                      enableInteractiveSelection: false,
                       minLines: 2,
                       maxLines: 3,
-                      decoration: _dec('Frase institucional'),
+                      decoration: _dec('Frase institucional').copyWith(
+                        fillColor: Colors.grey.shade100,
+                        suffixIcon: const Icon(Icons.lock_outline),
+                      ),
                     ),
                   ],
                 ),
@@ -840,6 +1084,8 @@ class _DispositivoFormScreenState extends State<DispositivoFormScreen> {
                   ],
                 ),
               ),
+              const SizedBox(height: 12),
+              _buildRelacionadosCard(),
               const SizedBox(height: 12),
               _card(
                 title: 'Fotos',

@@ -54,6 +54,8 @@ import '../screens/actividades/actividad_create_screen.dart';
 import '../screens/actividades/actividad_edit_screen.dart';
 import '../screens/actividades/actividad_show_screen.dart';
 import '../screens/dispositivos/dispositivo_create_screen.dart';
+import '../screens/dispositivos/dispositivo_show_screen.dart';
+import '../screens/dispositivos/dispositivos_revision_screen.dart';
 import '../screens/dispositivos/dispositivos_screen.dart';
 import '../screens/vialidades_urbanas/vialidades_urbanas_create_screen.dart';
 import '../screens/vialidades_urbanas/vialidades_urbanas_dispositivo_form_screen.dart';
@@ -124,6 +126,8 @@ final Map<String, WidgetBuilder> appRoutesMap = {
   AppRoutes.actividadesEdit: (context) => const ActividadEditScreen(),
   AppRoutes.dispositivos: (context) => const DispositivosScreen(),
   AppRoutes.dispositivosCreate: (context) => const DispositivoCreateScreen(),
+  AppRoutes.dispositivosRevision: (context) =>
+      const DispositivosRevisionScreen(),
   AppRoutes.vialidadesUrbanas: (context) => const VialidadesUrbanasScreen(),
   AppRoutes.vialidadesUrbanasCreate: (context) =>
       const VialidadesUrbanasCreateScreen(),
@@ -191,6 +195,24 @@ Route<dynamic>? onGenerateRoute(RouteSettings settings) {
 
     return MaterialPageRoute(
       builder: (_) => VialidadesUrbanasDispositivoShowScreen(dispositivoId: id),
+      settings: settings,
+    );
+  }
+
+  if (name == AppRoutes.dispositivosShow) {
+    final id = _readDispositivoIdFromArgs(settings.arguments);
+    if (id == null) {
+      return MaterialPageRoute(
+        builder: (_) => const _UnknownArgsScreen(
+          routeName: '/dispositivos/show',
+          message: 'sin dispositivoId',
+        ),
+        settings: settings,
+      );
+    }
+
+    return MaterialPageRoute(
+      builder: (_) => DispositivoShowScreen(dispositivoId: id),
       settings: settings,
     );
   }

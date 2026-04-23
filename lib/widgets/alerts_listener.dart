@@ -1,6 +1,7 @@
 // lib/widgets/alerts_listener.dart
 import 'dart:async';
 import 'package:flutter/material.dart';
+import '../app/routes.dart';
 import '../services/alert_service.dart';
 import '../services/auth_service.dart';
 import '../core/globals.dart' show navigatorKey;
@@ -59,11 +60,15 @@ class _AlertsListenerState extends State<AlertsListener> {
 
       final title = (alert['title'] ?? 'Alerta').toString();
       final message = (alert['message'] ?? '').toString();
+      final data = alert['data'];
+      final canOpenRevision =
+          data is Map &&
+          (data['type'] ?? '').toString() == 'GUARDIANES_REVISION';
 
       final ctx = navigatorKey.currentContext;
       if (ctx == null) return;
 
-      if (!mounted) return;
+      if (!mounted || !ctx.mounted) return;
 
       showDialog(
         context: ctx,
@@ -81,6 +86,19 @@ class _AlertsListenerState extends State<AlertsListener> {
               },
               child: const Text('Aceptar'),
             ),
+            if (canOpenRevision)
+              FilledButton(
+                onPressed: () async {
+                  await AlertService.markRead(alertId);
+                  if (navigatorKey.currentState?.canPop() == true) {
+                    navigatorKey.currentState!.pop();
+                  }
+                  navigatorKey.currentState?.pushNamed(
+                    AppRoutes.dispositivosRevision,
+                  );
+                },
+                child: const Text('Ver pendientes'),
+              ),
           ],
         ),
       );

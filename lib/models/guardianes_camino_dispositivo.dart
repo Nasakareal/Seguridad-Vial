@@ -35,10 +35,15 @@ class GuardianesCaminoDispositivo {
   final String descripcion;
   final String narrativa;
   final String destacamentoNombre;
+  final String usuarioNombre;
   final String nombreResponsable;
   final String cargoResponsable;
+  final String estadoRevision;
+  final String observacionRevision;
+  final String revisadoPorNombre;
   final int estadoFuerzaParticipante;
   final int fotosCount;
+  final List<String> fotoUrls;
   final bool requiereEvidencia;
   final double? lat;
   final double? lng;
@@ -56,10 +61,15 @@ class GuardianesCaminoDispositivo {
     required this.descripcion,
     required this.narrativa,
     required this.destacamentoNombre,
+    required this.usuarioNombre,
     required this.nombreResponsable,
     required this.cargoResponsable,
+    required this.estadoRevision,
+    required this.observacionRevision,
+    required this.revisadoPorNombre,
     required this.estadoFuerzaParticipante,
     required this.fotosCount,
+    required this.fotoUrls,
     required this.requiereEvidencia,
     required this.lat,
     required this.lng,
@@ -76,7 +86,37 @@ class GuardianesCaminoDispositivo {
         : (catalogo is Map ? Map<String, dynamic>.from(catalogo) : null);
 
     final fotos = json['fotos'];
-    final fotosCount = fotos is List ? fotos.length : 0;
+    final fotoUrls = <String>[];
+    if (fotos is List) {
+      for (final foto in fotos) {
+        if (foto is String && foto.trim().isNotEmpty) {
+          fotoUrls.add(foto.trim());
+        } else if (foto is Map) {
+          final fotoMap = Map<String, dynamic>.from(foto);
+          final url = asText(
+            fotoMap['url'] ??
+                fotoMap['foto_url'] ??
+                fotoMap['ruta'] ??
+                fotoMap['path'],
+          );
+          if (url.isNotEmpty) fotoUrls.add(url);
+        }
+      }
+    }
+    final topLevelFoto = asText(json['foto_url'] ?? json['foto_path']);
+    if (topLevelFoto.isNotEmpty) fotoUrls.add(topLevelFoto);
+    final uniqueFotoUrls = fotoUrls.toSet().toList();
+    final fotosCount = uniqueFotoUrls.isNotEmpty
+        ? uniqueFotoUrls.length
+        : (fotos is List ? fotos.length : asInt(json['fotos_count']));
+    final usuario = json['usuario'];
+    final usuarioMap = usuario is Map<String, dynamic>
+        ? usuario
+        : (usuario is Map ? Map<String, dynamic>.from(usuario) : null);
+    final revisadoPor = json['revisado_por'];
+    final revisadoPorMap = revisadoPor is Map<String, dynamic>
+        ? revisadoPor
+        : (revisadoPor is Map ? Map<String, dynamic>.from(revisadoPor) : null);
 
     return GuardianesCaminoDispositivo(
       id: asInt(json['id']),
@@ -95,10 +135,15 @@ class GuardianesCaminoDispositivo {
       descripcion: asText(json['descripcion']),
       narrativa: asText(json['narrativa']),
       destacamentoNombre: asText(json['destacamento_nombre_snapshot']),
+      usuarioNombre: asText(usuarioMap?['name']),
       nombreResponsable: asText(json['nombre_responsable']),
       cargoResponsable: asText(json['cargo_responsable']),
+      estadoRevision: asText(json['estado_revision']),
+      observacionRevision: asText(json['observacion_revision']),
+      revisadoPorNombre: asText(revisadoPorMap?['name']),
       estadoFuerzaParticipante: asInt(json['estado_fuerza_participante']),
       fotosCount: fotosCount,
+      fotoUrls: List<String>.unmodifiable(uniqueFotoUrls),
       requiereEvidencia:
           json['requiere_evidencia'] == true ||
           '${json['requiere_evidencia']}'.trim() == '1',
@@ -122,6 +167,13 @@ class GuardianesCaminoDispositivo {
     if (narrativa.isNotEmpty) return narrativa;
     return 'Sin descripción capturada.';
   }
+
+  bool get pendienteRevision =>
+      estadoRevision.isEmpty || estadoRevision.toLowerCase() == 'pendiente';
+
+  bool get aprobado => estadoRevision.toLowerCase() == 'aprobado';
+
+  bool get rechazado => estadoRevision.toLowerCase() == 'rechazado';
 }
 
 class GuardianesCaminoDispositivosIndexResult {

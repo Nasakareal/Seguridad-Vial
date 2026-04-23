@@ -3,6 +3,7 @@ import 'package:http/http.dart' as http;
 
 import '../models/feed_item.dart';
 import 'auth_service.dart';
+import 'guardianes_camino_dispositivos_service.dart';
 
 class FeedUnidad {
   final int id;
@@ -108,12 +109,79 @@ class FeedService {
       fallbackIds: unidadIds,
     );
 
+    final items = await _hydrateCarreterasFotos(out, date: date);
+
     return FeedResponse(
-      items: out,
+      items: items,
       puedeFiltrarUnidades: decoded['puede_filtrar_unidades'] == true,
       unidadIdsAplicadas: unidadIds.toSet().toList()..sort(),
       unidadesFiltrables: unidadesFiltrables,
     );
+  }
+
+  static Future<List<FeedItem>> _hydrateCarreterasFotos(
+    List<FeedItem> items, {
+    DateTime? date,
+  }) async {
+    final missingIds = items
+        .where(
+          (item) =>
+              item.type == FeedItemType.carreteras &&
+              item.id > 0 &&
+              (item.fotoUrl == null || item.fotoUrl!.trim().isEmpty),
+        )
+        .map((item) => item.id)
+        .toSet();
+
+    if (missingIds.isEmpty) return items;
+
+    final fotoById = <int, String>{};
+
+    if (date != null) {
+      try {
+        final index = await GuardianesCaminoDispositivosService.fetchIndex(
+          fecha: date,
+          perPage: 100,
+        );
+        for (final dispositivo in index.items) {
+          if (!missingIds.contains(dispositivo.id)) continue;
+          if (dispositivo.fotoUrls.isEmpty) continue;
+
+          final foto = dispositivo.fotoUrls.first.trim();
+          if (foto.isNotEmpty) fotoById[dispositivo.id] = foto;
+        }
+      } catch (_) {}
+    }
+
+    final remainingIds = missingIds
+        .where((id) => !fotoById.containsKey(id))
+        .take(12)
+        .toList();
+
+    if (remainingIds.isNotEmpty) {
+      await Future.wait(
+        remainingIds.map((id) async {
+          try {
+            final dispositivo =
+                await GuardianesCaminoDispositivosService.fetchDispositivo(
+                  dispositivoId: id,
+                );
+            if (dispositivo.fotoUrls.isEmpty) return;
+
+            final foto = dispositivo.fotoUrls.first.trim();
+            if (foto.isNotEmpty) fotoById[id] = foto;
+          } catch (_) {}
+        }),
+      );
+    }
+
+    if (fotoById.isEmpty) return items;
+
+    return items.map((item) {
+      final foto = fotoById[item.id];
+      if (foto == null || foto.trim().isEmpty) return item;
+      return item.copyWith(fotoUrl: foto.trim());
+    }).toList();
   }
 
   static List<FeedUnidad> _parseUnidadesFiltrables(

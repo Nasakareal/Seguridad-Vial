@@ -4,11 +4,13 @@ import '../../models/guardianes_camino_dispositivo.dart';
 import '../../services/app_version_service.dart';
 import '../../services/auth_service.dart';
 import '../../services/guardianes_camino_dispositivos_service.dart';
+import '../../services/guardianes_camino_share_service.dart';
 import '../../services/tracking_service.dart';
 import '../../widgets/app_drawer.dart';
 import '../../widgets/header_card.dart';
 import '../../app/routes.dart';
 import '../login_screen.dart';
+import 'widgets/dispositivo_photos.dart';
 
 class DispositivosScreen extends StatefulWidget {
   const DispositivosScreen({super.key});
@@ -24,6 +26,7 @@ class _DispositivosScreenState extends State<DispositivosScreen>
   bool _busy = false;
   bool _loading = true;
   bool _canUseDispositivos = false;
+  int? _sharingId;
 
   String? _error;
 
@@ -235,11 +238,41 @@ class _DispositivosScreenState extends State<DispositivosScreen>
               ),
               const SizedBox(height: 8),
               Text(item.resumen),
+              DispositivoPhotosStrip(urls: item.fotoUrls),
+              const SizedBox(height: 16),
+              ElevatedButton.icon(
+                onPressed: () {
+                  Navigator.pop(context);
+                  _shareTarjeta(item);
+                },
+                icon: const Icon(Icons.share),
+                label: const Text('Compartir tarjeta'),
+              ),
             ],
           ),
         );
       },
     );
+  }
+
+  Future<void> _shareTarjeta(GuardianesCaminoDispositivo item) async {
+    if (_sharingId == item.id) return;
+
+    setState(() => _sharingId = item.id);
+
+    try {
+      final texto = await GuardianesCaminoDispositivosService.fetchWhatsappText(
+        dispositivoId: item.id,
+      );
+      await GuardianesCaminoShareService.compartirTextoEnWhatsapp(texto: texto);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('No se pudo compartir la tarjeta.\n$e')),
+      );
+    } finally {
+      if (mounted) setState(() => _sharingId = null);
+    }
   }
 
   Widget _filtersBar() {
@@ -400,6 +433,8 @@ class _DispositivosScreenState extends State<DispositivosScreen>
                     child: _DispositivoCard(
                       item: item,
                       onTap: () => _showResumen(item),
+                      onShare: () => _shareTarjeta(item),
+                      sharing: _sharingId == item.id,
                     ),
                   );
                 }),
@@ -409,8 +444,16 @@ class _DispositivosScreenState extends State<DispositivosScreen>
       ),
       floatingActionButton: _canUseDispositivos
           ? FloatingActionButton.extended(
-              onPressed: () =>
-                  Navigator.pushNamed(context, AppRoutes.dispositivosCreate),
+              onPressed: () async {
+                final created = await Navigator.pushNamed(
+                  context,
+                  AppRoutes.dispositivosCreate,
+                );
+
+                if (created == true && mounted) {
+                  await _load();
+                }
+              },
               tooltip: 'Agregar dispositivo',
               icon: const Icon(Icons.add),
               label: const Text('Agregar'),
@@ -484,8 +527,15 @@ class _SummaryItem extends StatelessWidget {
 class _DispositivoCard extends StatelessWidget {
   final GuardianesCaminoDispositivo item;
   final VoidCallback onTap;
+  final VoidCallback onShare;
+  final bool sharing;
 
-  const _DispositivoCard({required this.item, required this.onTap});
+  const _DispositivoCard({
+    required this.item,
+    required this.onTap,
+    required this.onShare,
+    required this.sharing,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -522,6 +572,22 @@ class _DispositivoCard extends StatelessWidget {
                       fontWeight: FontWeight.w700,
                     ),
                   ),
+                  const SizedBox(width: 6),
+                  SizedBox(
+                    width: 40,
+                    height: 40,
+                    child: IconButton(
+                      tooltip: 'Compartir tarjeta',
+                      onPressed: sharing ? null : onShare,
+                      icon: sharing
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.share),
+                    ),
+                  ),
                 ],
               ),
               const SizedBox(height: 8),
@@ -539,6 +605,7 @@ class _DispositivoCard extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(color: Colors.grey.shade700, height: 1.35),
               ),
+              DispositivoPhotoPreview(urls: item.fotoUrls),
               const SizedBox(height: 10),
               Wrap(
                 spacing: 8,
@@ -548,6 +615,9 @@ class _DispositivoCard extends StatelessWidget {
                   if (item.hora.isNotEmpty) _MiniTag(text: item.hora),
                   if (item.destacamentoNombre.isNotEmpty)
                     _MiniTag(text: item.destacamentoNombre),
+                  if (item.pendienteRevision)
+                    _MiniTag(text: 'Pendiente de revisión'),
+                  if (item.rechazado) _MiniTag(text: 'Rechazado'),
                   _MiniTag(text: '${item.fotosCount} fotos'),
                 ],
               ),

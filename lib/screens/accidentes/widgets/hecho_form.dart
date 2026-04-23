@@ -634,8 +634,9 @@ class _HechoFormState extends State<HechoForm> {
               Expanded(
                 child: TextFormField(
                   controller: _peritoCtrl,
-                  decoration: _dec('Perito *'),
-                  validator: (v) => _requiredMaxValidator(v, 255, 'Perito'),
+                  decoration: _dec('Agente vial o nombre *'),
+                  validator: (v) =>
+                      _requiredMaxValidator(v, 255, 'Agente vial o nombre'),
                 ),
               ),
             ],
