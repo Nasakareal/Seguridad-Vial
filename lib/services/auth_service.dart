@@ -615,11 +615,16 @@ class AuthService {
     }
 
     final unidadId = await getUnidadId();
+    final payload = await getCurrentUserPayload(refresh: false);
+    final isPeritoUser = await isPerito() || _payloadHasRole(payload, 'perito');
+    if (isPeritoUser) {
+      return true;
+    }
+
     if (_isHechosCreateExcludedUnitId(unidadId)) {
       return false;
     }
 
-    final payload = await getCurrentUserPayload(refresh: false);
     if (_payloadMatchesHechosCreateExcludedUnit(payload)) {
       return false;
     }
@@ -1111,7 +1116,6 @@ class AuthService {
       payload['area'],
       payload['areas'],
       payload['unidades'],
-      payload['roles'],
     ];
 
     for (final candidate in candidates) {
@@ -1145,7 +1149,6 @@ class AuthService {
       payload['area'],
       payload['areas'],
       payload['unidades'],
-      payload['roles'],
     ];
 
     for (final candidate in candidates) {
@@ -1181,7 +1184,6 @@ class AuthService {
       payload['area'],
       payload['areas'],
       payload['unidades'],
-      payload['roles'],
     ];
 
     for (final candidate in candidates) {
@@ -1215,7 +1217,6 @@ class AuthService {
       payload['area'],
       payload['areas'],
       payload['unidades'],
-      payload['roles'],
     ];
 
     for (final candidate in candidates) {
@@ -1251,7 +1252,6 @@ class AuthService {
       payload['area'],
       payload['areas'],
       payload['unidades'],
-      payload['roles'],
     ];
 
     for (final candidate in candidates) {
@@ -1287,7 +1287,6 @@ class AuthService {
       payload['area'],
       payload['areas'],
       payload['unidades'],
-      payload['roles'],
     ];
 
     for (final candidate in candidates) {
@@ -1314,9 +1313,11 @@ class AuthService {
     }
 
     final unidadId = await getUnidadId();
+    final isPeritoUser = await isPerito() || _payloadHasRole(payload, 'perito');
     final excludeHechos =
-        _isHechosCreateExcludedUnitId(unidadId) ||
-        _payloadMatchesHechosCreateExcludedUnit(payload);
+        !isPeritoUser &&
+        (_isHechosCreateExcludedUnitId(unidadId) ||
+            _payloadMatchesHechosCreateExcludedUnit(payload));
 
     const hiddenHechos = <String>{
       'ver busqueda',
@@ -1356,11 +1357,15 @@ class AuthService {
     final hasImplicitHechosAccess =
         unidadId == 1 ||
         _payloadMatchesSiniestros(payload) ||
-        _payloadHasRole(payload, 'perito') ||
+        isPeritoUser ||
         _payloadHasRole(payload, 'jefe de grupo') ||
         _payloadFlagIsTrue(payload, 'is_jefe_grupo');
     if (hasImplicitHechosAccess) {
       normalized.add('ver hechos');
+    }
+
+    if (isPeritoUser) {
+      normalized.add('crear hechos');
     }
 
     final isDelegaciones =
@@ -1674,7 +1679,6 @@ class AuthService {
       payload['area'],
       payload['areas'],
       payload['unidades'],
-      payload['roles'],
     ];
 
     for (final candidate in candidates) {
@@ -1708,7 +1712,6 @@ class AuthService {
       payload['area'],
       payload['areas'],
       payload['unidades'],
-      payload['roles'],
     ];
 
     for (final candidate in candidates) {
