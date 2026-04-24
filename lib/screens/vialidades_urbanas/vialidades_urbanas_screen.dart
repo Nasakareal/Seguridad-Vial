@@ -8,6 +8,7 @@ import '../../services/tracking_service.dart';
 import '../../services/vialidades_urbanas_service.dart';
 import '../../services/vialidades_urbanas_share_service.dart';
 import '../../widgets/app_drawer.dart';
+import '../../widgets/account_drawer.dart';
 import '../../widgets/header_card.dart';
 import '../login_screen.dart';
 
@@ -504,11 +505,10 @@ class _VialidadesUrbanasScreenState extends State<VialidadesUrbanasScreen>
         elevation: 0,
         backgroundColor: Colors.blue,
         title: const Text('Vialidades Urbanas'),
+        actions: const [AccountMenuAction()],
       ),
-      drawer: AppDrawer(
-        trackingOn: _trackingOn,
-        onLogout: () => _logout(context),
-      ),
+      drawer: AppDrawer(trackingOn: _trackingOn),
+      endDrawer: AppAccountDrawer(onLogout: () => _logout(context)),
       body: SafeArea(
         child: RefreshIndicator(
           onRefresh: () async {

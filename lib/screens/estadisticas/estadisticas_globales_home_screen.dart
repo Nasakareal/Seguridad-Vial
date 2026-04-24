@@ -6,7 +6,10 @@ import 'package:file_saver/file_saver.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
+import '../../services/auth_service.dart';
 import '../../services/estadisticas_globales_service.dart';
+import '../../services/tracking_service.dart';
+import '../../widgets/account_drawer.dart';
 import '../../widgets/app_drawer.dart';
 import '../../app/routes.dart';
 
@@ -38,6 +41,7 @@ class _EstadisticasGlobalesHomeScreenState
   // ===== data =====
   bool _loading = true;
   bool _busy = false;
+  bool _loggingOut = false;
   String? _error;
 
   Map<String, dynamic>? _kpis;
@@ -255,6 +259,26 @@ class _EstadisticasGlobalesHomeScreenState
     });
   }
 
+  Future<void> _logout(BuildContext context) async {
+    if (_loggingOut) return;
+
+    setState(() => _loggingOut = true);
+
+    try {
+      try {
+        await TrackingService.stop();
+      } catch (_) {}
+      await AuthService.logout();
+    } finally {
+      if (mounted) {
+        setState(() => _loggingOut = false);
+      }
+    }
+
+    if (!context.mounted) return;
+    Navigator.pushNamedAndRemoveUntil(context, AppRoutes.login, (_) => false);
+  }
+
   // ===== Helpers UI =====
   Future<void> _pickDate({required bool isDesde}) async {
     final initial = isDesde
@@ -452,18 +476,11 @@ class _EstadisticasGlobalesHomeScreenState
             icon: const Icon(Icons.download),
             tooltip: 'Export CSV',
           ),
+          const AccountMenuAction(),
         ],
       ),
-      drawer: AppDrawer(
-        trackingOn: false,
-        onLogout: () {
-          Navigator.pushNamedAndRemoveUntil(
-            context,
-            AppRoutes.login,
-            (_) => false,
-          );
-        },
-      ),
+      drawer: const AppDrawer(trackingOn: false),
+      endDrawer: AppAccountDrawer(onLogout: () => _logout(context)),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _error != null
@@ -769,7 +786,7 @@ class _EstadisticasGlobalesHomeScreenState
           BoxShadow(
             blurRadius: 12,
             offset: const Offset(0, 6),
-            color: Colors.black.withOpacity(.04),
+            color: Colors.black.withValues(alpha: .04),
           ),
         ],
       ),
@@ -801,7 +818,7 @@ class _EstadisticasGlobalesHomeScreenState
       child: Container(
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: color.withOpacity(.08),
+          color: color.withValues(alpha: .08),
           borderRadius: BorderRadius.circular(14),
         ),
         child: Column(

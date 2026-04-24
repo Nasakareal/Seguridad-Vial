@@ -6,6 +6,8 @@ import '../screens/login_screen.dart';
 import '../screens/home_agente_upec_screen.dart';
 import '../screens/home_screen.dart';
 import '../screens/home_perito_screen.dart';
+import '../screens/account/change_password_screen.dart';
+import '../screens/account/profile_screen.dart';
 
 import '../screens/accidentes/accidentes_screen.dart';
 import '../screens/accidentes/create_screen.dart';
@@ -70,6 +72,8 @@ final Map<String, WidgetBuilder> appRoutesMap = {
   AppRoutes.home: (context) => const HomeScreen(),
   AppRoutes.homePerito: (context) => const HomePeritoScreen(),
   AppRoutes.homeAgenteUpec: (context) => const HomeAgenteUpecScreen(),
+  AppRoutes.profile: (context) => const ProfileScreen(),
+  AppRoutes.changePassword: (context) => const ChangePasswordScreen(),
 
   AppRoutes.accidentes: (context) => const AccidentesScreen(),
   AppRoutes.accidentesCreate: (context) => const CreateHechoScreen(),

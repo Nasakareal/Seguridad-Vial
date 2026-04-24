@@ -14,6 +14,7 @@ import '../services/perito_home_service.dart';
 import '../services/push_service.dart';
 import '../services/tracking_service.dart';
 import '../widgets/app_drawer.dart';
+import '../widgets/account_drawer.dart';
 import '../widgets/header_card.dart';
 import '../widgets/offline_sync_status_card.dart';
 import '../widgets/safe_osm_tile_layer.dart';
@@ -345,16 +346,20 @@ class _HomePeritoScreenState extends State<HomePeritoScreen>
         title: const Text('Home Perito'),
         actions: [
           IconButton(
+            tooltip: 'Siniestros',
+            icon: const Icon(Icons.directions_car),
+            onPressed: () => Navigator.pushNamed(context, AppRoutes.accidentes),
+          ),
+          IconButton(
             tooltip: 'Recargar',
             icon: const Icon(Icons.refresh),
             onPressed: _refreshAll,
           ),
+          const AccountMenuAction(),
         ],
       ),
-      drawer: AppDrawer(
-        trackingOn: _trackingOn,
-        onLogout: () => _logout(context),
-      ),
+      drawer: AppDrawer(trackingOn: _trackingOn),
+      endDrawer: AppAccountDrawer(onLogout: () => _logout(context)),
       body: SafeArea(
         child: RefreshIndicator(
           onRefresh: _refreshAll,

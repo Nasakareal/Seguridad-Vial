@@ -412,6 +412,15 @@ class AuthService {
     return _payloadHasRole(payload, roleName);
   }
 
+  static Future<bool> isJefeGrupo() async {
+    final payload = await getStoredUserPayload();
+    if (_payloadFlagIsTrue(payload, 'is_jefe_grupo')) {
+      return true;
+    }
+
+    return hasRoleName('jefe de grupo');
+  }
+
   static Future<bool> isAdministrativoRole() async {
     final roleId = await getRoleId();
     if (roleId == 5) return true;
@@ -448,6 +457,10 @@ class AuthService {
     }
 
     if (await isSuperadmin()) {
+      return true;
+    }
+
+    if (await isPerito() || await isJefeGrupo()) {
       return true;
     }
 
@@ -733,6 +746,59 @@ class AuthService {
     await _clearLocalSession();
   }
 
+  static Future<Map<String, dynamic>> fetchProfile({
+    bool refresh = true,
+  }) async {
+    if (!refresh) {
+      final stored = await getStoredUserPayload();
+      if (stored != null && stored.isNotEmpty) {
+        return stored;
+      }
+    }
+
+    return _fetchAndStoreCurrentUserProfile(
+      endpoint: '$_baseUrl/profile',
+      fallbackError: 'No se pudo obtener el perfil.',
+    );
+  }
+
+  static Future<void> changePassword({
+    required String currentPassword,
+    required String newPassword,
+    required String confirmPassword,
+  }) async {
+    final token = await getToken();
+    if (token == null || token.trim().isEmpty) {
+      throw Exception('Sesión inválida. Vuelve a iniciar sesión.');
+    }
+
+    final response = await http
+        .put(
+          Uri.parse('$_baseUrl/profile/password'),
+          headers: {
+            'Authorization': 'Bearer $token',
+            'Accept': 'application/json',
+            'Content-Type': 'application/json',
+          },
+          body: jsonEncode({
+            'current_password': currentPassword,
+            'password': newPassword,
+            'password_confirmation': confirmPassword,
+          }),
+        )
+        .timeout(const Duration(seconds: 12));
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception(
+        _parseAuthError(
+          response.body,
+          response.statusCode,
+          fallback: 'No se pudo actualizar la contraseña.',
+        ),
+      );
+    }
+  }
+
   static Future<void> _clearLocalSession() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_tokenKey);
@@ -750,6 +816,16 @@ class AuthService {
   }
 
   static Future<Map<String, dynamic>> _refreshCurrentUserProfile() async {
+    return _fetchAndStoreCurrentUserProfile(
+      endpoint: '$_baseUrl/me',
+      fallbackError: 'No se pudo obtener el usuario actual.',
+    );
+  }
+
+  static Future<Map<String, dynamic>> _fetchAndStoreCurrentUserProfile({
+    required String endpoint,
+    required String fallbackError,
+  }) async {
     final token = await getToken();
     if (token == null || token.trim().isEmpty) {
       throw Exception('Sesión inválida.');
@@ -757,7 +833,7 @@ class AuthService {
 
     final response = await http
         .get(
-          Uri.parse('$_baseUrl/me'),
+          Uri.parse(endpoint),
           headers: {
             'Authorization': 'Bearer $token',
             'Accept': 'application/json',
@@ -766,7 +842,13 @@ class AuthService {
         .timeout(const Duration(seconds: 10));
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw Exception('No se pudo obtener el usuario actual.');
+      throw Exception(
+        _parseAuthError(
+          response.body,
+          response.statusCode,
+          fallback: fallbackError,
+        ),
+      );
     }
 
     final raw = jsonDecode(response.body);
@@ -797,10 +879,76 @@ class AuthService {
     return payload;
   }
 
+  static String _parseAuthError(
+    String body,
+    int statusCode, {
+    required String fallback,
+  }) {
+    try {
+      final raw = jsonDecode(body);
+      if (raw is Map) {
+        final errors = raw['errors'];
+        if (errors is Map) {
+          final messages = <String>[];
+          for (final value in errors.values) {
+            if (value is Iterable) {
+              for (final item in value) {
+                final text = item?.toString().trim() ?? '';
+                if (text.isNotEmpty) {
+                  messages.add(text);
+                }
+              }
+              continue;
+            }
+
+            final text = value?.toString().trim() ?? '';
+            if (text.isNotEmpty) {
+              messages.add(text);
+            }
+          }
+
+          if (messages.isNotEmpty) {
+            return messages.join('\n');
+          }
+        }
+
+        final message = raw['message']?.toString().trim() ?? '';
+        if (message.isNotEmpty &&
+            message.toLowerCase() != 'the given data was invalid.') {
+          return message;
+        }
+      }
+    } catch (_) {}
+
+    if (statusCode == 401) {
+      return 'Sesión inválida. Vuelve a iniciar sesión.';
+    }
+
+    return fallback;
+  }
+
   static Map<String, dynamic>? _extractUserPayload(dynamic raw) {
     if (raw is Map<String, dynamic>) {
       if (raw['user'] is Map) {
-        return Map<String, dynamic>.from(raw['user'] as Map);
+        final payload = Map<String, dynamic>.from(raw['user'] as Map);
+        final flags = raw['flags'];
+        if (flags is Map) {
+          payload['flags'] = Map<String, dynamic>.from(flags);
+        }
+
+        if (payload['role'] == null && raw['role'] != null) {
+          payload['role'] = raw['role'];
+        }
+        if (payload['role_id'] == null && raw['role_id'] != null) {
+          payload['role_id'] = raw['role_id'];
+        }
+        if (payload['permissions'] == null && raw['permissions'] is List) {
+          payload['permissions'] = List<dynamic>.from(
+            raw['permissions'] as List,
+          );
+        }
+
+        return payload;
       }
       if (raw['data'] is Map) {
         return Map<String, dynamic>.from(raw['data'] as Map);
@@ -1205,6 +1353,16 @@ class AuthService {
       normalized.removeWhere(hiddenHechos.contains);
     }
 
+    final hasImplicitHechosAccess =
+        unidadId == 1 ||
+        _payloadMatchesSiniestros(payload) ||
+        _payloadHasRole(payload, 'perito') ||
+        _payloadHasRole(payload, 'jefe de grupo') ||
+        _payloadFlagIsTrue(payload, 'is_jefe_grupo');
+    if (hasImplicitHechosAccess) {
+      normalized.add('ver hechos');
+    }
+
     final isDelegaciones =
         unidadId == unidadDelegacionesId ||
         _payloadMatchesDelegaciones(payload);
@@ -1290,6 +1448,33 @@ class AuthService {
     }
 
     return false;
+  }
+
+  static bool _payloadFlagIsTrue(Map<String, dynamic>? payload, String key) {
+    if (payload == null || payload.isEmpty || key.trim().isEmpty) {
+      return false;
+    }
+
+    final flags = payload['flags'];
+    if (flags is Map && _rawFlagIsTrue(flags[key])) {
+      return true;
+    }
+
+    return _rawFlagIsTrue(payload[key]);
+  }
+
+  static bool _rawFlagIsTrue(dynamic value) {
+    if (value is bool) {
+      return value;
+    }
+
+    final number = int.tryParse(value?.toString().trim() ?? '');
+    if (number != null) {
+      return number > 0;
+    }
+
+    final text = value?.toString().trim().toLowerCase() ?? '';
+    return text == 'true' || text == 'yes' || text == 'si' || text == 'sí';
   }
 
   static bool _roleTextMatches(String? raw, String roleName) {

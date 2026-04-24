@@ -1,18 +1,14 @@
 import 'package:flutter/material.dart';
 
-import '../../app/routes.dart';
+import '../app/routes.dart';
 import '../services/auth_service.dart';
 import '../services/home_resolver_service.dart';
+import 'drawer_ui.dart';
 
 class AppDrawer extends StatelessWidget {
   final bool trackingOn;
-  final VoidCallback onLogout;
 
-  const AppDrawer({
-    super.key,
-    required this.trackingOn,
-    required this.onLogout,
-  });
+  const AppDrawer({super.key, required this.trackingOn});
 
   static const String permBusqueda = 'ver busqueda';
   static const String permEstadisticas = 'ver estadisticas';
@@ -108,6 +104,10 @@ class AppDrawer extends StatelessWidget {
   }
 
   Future<_DrawerAccess> _loadAccess() async {
+    try {
+      await AuthService.refreshCurrentUserAccess();
+    } catch (_) {}
+
     var permissions = await AuthService.getPermissions();
     var unidadId = await AuthService.getUnidadId();
     var canSeeCarreteras = await AuthService.isCarreterasUser();
@@ -146,62 +146,22 @@ class AppDrawer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final statusColor = trackingOn ? Colors.green : Colors.transparent;
-
     return Drawer(
+      backgroundColor: const Color(0xFFF6F7FB),
       child: Column(
         children: [
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.fromLTRB(16, 46, 16, 16),
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                colors: [Colors.blue, Color(0xFF2563EB)],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Icon(Icons.shield, color: Colors.white, size: 44),
-                const SizedBox(height: 10),
-                const Text(
-                  'Seguridad Vial',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 20,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                if (trackingOn)
-                  Row(
-                    children: [
-                      Container(
-                        width: 9,
-                        height: 9,
-                        decoration: BoxDecoration(
-                          color: statusColor,
-                          shape: BoxShape.circle,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        'Ubicación ACTIVA',
-                        style: TextStyle(
-                          color: Colors.white.withValues(alpha: .9),
-                        ),
-                      ),
-                    ],
-                  ),
-                const SizedBox(height: 10),
-                Text(
-                  'El control de ubicación lo realiza el mapa.',
-                  style: TextStyle(color: Colors.white.withValues(alpha: .85)),
-                ),
-              ],
-            ),
+          DrawerHeaderPanel(
+            icon: Icons.shield_outlined,
+            title: 'Seguridad Vial',
+            subtitle: trackingOn
+                ? 'Navegación principal con ubicación activa.'
+                : 'Navegación principal del sistema.',
+            helper:
+                'Tu perfil, contraseña y cierre de sesión están en el menú derecho.',
+            chips: <String>[
+              trackingOn ? 'Ubicación activa' : 'Ubicación inactiva',
+              'Menú principal',
+            ],
           ),
           Expanded(
             child: FutureBuilder<_DrawerAccess>(
@@ -247,19 +207,21 @@ class AppDrawer extends StatelessWidget {
                     (_allowed(perms, permDictamenes) && unidadId == 1);
 
                 return ListView(
-                  padding: EdgeInsets.zero,
+                  padding: const EdgeInsets.fromLTRB(14, 0, 14, 24),
                   children: [
+                    const DrawerSectionLabel(label: 'General'),
                     _DrawerItem(
                       icon: Icons.home,
                       label: 'Inicio',
+                      subtitle: 'Volver al panel principal',
                       onTap: () => _nav(context, AppRoutes.home),
                     ),
-                    const Divider(height: 24),
 
                     if (_allowed(perms, permBusqueda, all: canSeeAllButtons))
                       _DrawerItem(
                         icon: Icons.search,
                         label: 'Búsqueda',
+                        subtitle: 'Localizar hechos y registros',
                         onTap: () => _nav(
                           context,
                           AppRoutes.hechosBuscar,
@@ -275,6 +237,7 @@ class AppDrawer extends StatelessWidget {
                       _DrawerItem(
                         icon: Icons.insights,
                         label: 'Estadísticas',
+                        subtitle: 'Consultar reportes globales',
                         onTap: () => _nav(
                           context,
                           AppRoutes.estadisticasGlobales,
@@ -282,15 +245,19 @@ class AppDrawer extends StatelessWidget {
                         ),
                       ),
 
-                    if (canSeePuestas || canSeeDictamenes)
+                    const SizedBox(height: 12),
+                    if (canSeePuestas || canSeeDictamenes) ...[
+                      const DrawerSectionLabel(label: 'Operación'),
                       _DrawerGroup(
                         icon: Icons.gavel,
                         label: 'Puestas a disposición',
+                        subtitle: 'Puestas, creación y dictámenes disponibles',
                         children: [
                           if (canSeePuestas)
                             _DrawerSubItem(
                               icon: Icons.folder_open,
                               label: 'Listado de puestas',
+                              subtitle: 'Consultar registros capturados',
                               onTap: () =>
                                   _nav(context, AppRoutes.puestasDisposicion),
                             ),
@@ -298,6 +265,7 @@ class AppDrawer extends StatelessWidget {
                             _DrawerSubItem(
                               icon: Icons.add_circle_outline,
                               label: 'Crear puesta',
+                              subtitle: 'Registrar una nueva puesta',
                               onTap: () => _nav(
                                 context,
                                 AppRoutes.puestasDisposicionCreate,
@@ -307,6 +275,7 @@ class AppDrawer extends StatelessWidget {
                             _DrawerSubItem(
                               icon: Icons.description,
                               label: 'Listado de dictámenes',
+                              subtitle: 'Explorar dictámenes existentes',
                               onTap: () => _nav(
                                 context,
                                 AppRoutes.dictamenes,
@@ -315,17 +284,18 @@ class AppDrawer extends StatelessWidget {
                             ),
                         ],
                       ),
-
-                    const Divider(height: 24),
+                    ],
 
                     if (_allowed(perms, permHechos, all: canSeeAllButtons))
                       _DrawerGroup(
                         icon: Icons.directions_car,
                         label: 'Hechos',
+                        subtitle: 'Consulta, seguimiento y pendientes',
                         children: [
                           _DrawerSubItem(
                             icon: Icons.list_alt,
                             label: 'Listado de hechos',
+                            subtitle: 'Ver hechos capturados',
                             onTap: () => _nav(
                               context,
                               AppRoutes.accidentes,
@@ -335,6 +305,7 @@ class AppDrawer extends StatelessWidget {
                           _DrawerSubItem(
                             icon: Icons.assignment_late,
                             label: 'Cortes pendientes',
+                            subtitle: 'Revisar pendientes por corte',
                             onTap: () => _nav(
                               context,
                               AppRoutes.pendientesCortes,
@@ -348,6 +319,7 @@ class AppDrawer extends StatelessWidget {
                       _DrawerItem(
                         icon: Icons.photo_library,
                         label: 'Actividades',
+                        subtitle: 'Operativos y actividades del día',
                         onTap: () => _nav(
                           context,
                           AppRoutes.actividades,
@@ -359,10 +331,12 @@ class AppDrawer extends StatelessWidget {
                       _DrawerGroup(
                         icon: Icons.add_road,
                         label: 'Dispositivos',
+                        subtitle: 'Carreteras y revisión operativa',
                         children: [
                           _DrawerSubItem(
                             icon: Icons.list_alt,
                             label: 'Listado',
+                            subtitle: 'Ver dispositivos registrados',
                             onTap: () => _nav(
                               context,
                               AppRoutes.dispositivos,
@@ -374,6 +348,7 @@ class AppDrawer extends StatelessWidget {
                             _DrawerSubItem(
                               icon: Icons.fact_check_outlined,
                               label: 'Pendientes de revisión',
+                              subtitle: 'Aprobar o rechazar capturas',
                               onTap: () => _nav(
                                 context,
                                 AppRoutes.dispositivosRevision,
@@ -388,10 +363,12 @@ class AppDrawer extends StatelessWidget {
                       _DrawerGroup(
                         icon: Icons.add_road,
                         label: 'Vialidades Urbanas',
+                        subtitle: 'Operación y detalles urbanos',
                         children: [
                           _DrawerSubItem(
                             icon: Icons.list_alt,
                             label: 'Dispositivos',
+                            subtitle: 'Ver capturas y detalles',
                             onTap: () => _nav(
                               context,
                               AppRoutes.vialidadesUrbanas,
@@ -405,6 +382,7 @@ class AppDrawer extends StatelessWidget {
                       _DrawerItem(
                         icon: Icons.local_shipping,
                         label: 'Grúas',
+                        subtitle: 'Seguimiento de grúas y movimientos',
                         onTap: () => _nav(
                           context,
                           AppRoutes.gruas,
@@ -412,16 +390,19 @@ class AppDrawer extends StatelessWidget {
                         ),
                       ),
 
-                    const Divider(height: 24),
+                    const SizedBox(height: 12),
+                    const DrawerSectionLabel(label: 'Consulta'),
 
                     if (_allowed(perms, permMapa, all: canSeeAllButtons))
                       _DrawerGroup(
                         icon: Icons.map,
                         label: 'Mapa',
+                        subtitle: 'Ubicación de patrullas e incidencias',
                         children: [
                           _DrawerSubItem(
                             icon: Icons.local_police,
                             label: 'Mapa patrullas',
+                            subtitle: 'Ubicar personal y patrullas',
                             onTap: () => _nav(
                               context,
                               AppRoutes.mapa,
@@ -431,6 +412,7 @@ class AppDrawer extends StatelessWidget {
                           _DrawerSubItem(
                             icon: Icons.warning_amber,
                             label: 'Mapa incidencias',
+                            subtitle: 'Visualizar incidencias activas',
                             onTap: () => _nav(
                               context,
                               AppRoutes.mapaIncidencias,
@@ -444,23 +426,13 @@ class AppDrawer extends StatelessWidget {
                       _DrawerItem(
                         icon: Icons.gavel,
                         label: 'Sustento Legal',
+                        subtitle: 'Consultar base normativa',
                         onTap: () => _nav(
                           context,
                           AppRoutes.sustentoLegal,
                           requiredPerm: permSustento,
                         ),
                       ),
-
-                    const Divider(height: 24),
-
-                    ListTile(
-                      leading: const Icon(Icons.logout, color: Colors.red),
-                      title: const Text(
-                        'Cerrar sesión',
-                        style: TextStyle(color: Colors.red),
-                      ),
-                      onTap: onLogout,
-                    ),
                   ],
                 );
               },
@@ -495,38 +467,52 @@ class _DrawerAccess {
 class _DrawerItem extends StatelessWidget {
   final IconData icon;
   final String label;
+  final String? subtitle;
   final VoidCallback onTap;
 
   const _DrawerItem({
     required this.icon,
     required this.label,
+    this.subtitle,
     required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    return ListTile(leading: Icon(icon), title: Text(label), onTap: onTap);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: DrawerSurface(
+        child: DrawerActionTile(
+          icon: icon,
+          title: label,
+          subtitle: subtitle,
+          onTap: onTap,
+        ),
+      ),
+    );
   }
 }
 
 class _DrawerSubItem extends StatelessWidget {
   final IconData icon;
   final String label;
+  final String? subtitle;
   final VoidCallback onTap;
 
   const _DrawerSubItem({
     required this.icon,
     required this.label,
+    this.subtitle,
     required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    return ListTile(
-      dense: true,
-      contentPadding: const EdgeInsets.only(left: 56, right: 16),
-      leading: Icon(icon, size: 20),
-      title: Text(label),
+    return DrawerActionTile(
+      icon: icon,
+      title: label,
+      subtitle: subtitle,
+      compact: true,
       onTap: onTap,
     );
   }
@@ -535,23 +521,98 @@ class _DrawerSubItem extends StatelessWidget {
 class _DrawerGroup extends StatelessWidget {
   final IconData icon;
   final String label;
+  final String? subtitle;
   final List<Widget> children;
 
   const _DrawerGroup({
     required this.icon,
     required this.label,
+    this.subtitle,
     required this.children,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Theme(
-      data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-      child: ExpansionTile(
-        leading: Icon(icon),
-        title: Text(label),
-        children: children,
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Theme(
+        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+        child: DrawerSurface(
+          child: ExpansionTile(
+            tilePadding: const EdgeInsets.symmetric(
+              horizontal: 14,
+              vertical: 2,
+            ),
+            childrenPadding: const EdgeInsets.fromLTRB(10, 0, 10, 10),
+            leading: Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: const Color(0xFF2563EB).withValues(alpha: .12),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Icon(Icons.more_horiz, color: Colors.transparent),
+            ),
+            title: Row(
+              children: [
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF2563EB).withValues(alpha: .12),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(icon, color: const Color(0xFF2563EB)),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        label,
+                        style: const TextStyle(
+                          color: Color(0xFF0F172A),
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      if ((subtitle ?? '').trim().isNotEmpty) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          subtitle!,
+                          style: TextStyle(
+                            color: Colors.grey.shade700,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            height: 1.3,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            children: _withDividers(children),
+          ),
+        ),
       ),
     );
   }
+}
+
+List<Widget> _withDividers(List<Widget> children) {
+  if (children.isEmpty) {
+    return const <Widget>[];
+  }
+
+  final items = <Widget>[];
+  for (var i = 0; i < children.length; i++) {
+    if (i > 0) {
+      items.add(Divider(height: 1, color: Colors.grey.shade200, indent: 56));
+    }
+    items.add(children[i]);
+  }
+
+  return items;
 }

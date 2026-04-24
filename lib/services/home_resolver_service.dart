@@ -23,6 +23,13 @@ class HomeResolverService {
   }
 
   static Future<bool> isPeritoHomeAvailable() async {
+    final isPerito = await AuthService.isPerito();
+    final unidadId = await AuthService.getUnidadId();
+
+    if (!isPerito || unidadId != 1) {
+      return false;
+    }
+
     return _isAvailable('perito-home/filtros');
   }
 

@@ -6,6 +6,7 @@ import '../../services/guardianes_camino_dispositivos_service.dart';
 import '../../services/guardianes_camino_share_service.dart';
 import '../../services/tracking_service.dart';
 import '../../widgets/app_drawer.dart';
+import '../../widgets/account_drawer.dart';
 import '../login_screen.dart';
 import 'widgets/dispositivo_photos.dart';
 
@@ -151,12 +152,11 @@ class _DispositivoShowScreenState extends State<DispositivoShowScreen>
             onPressed: _load,
             icon: const Icon(Icons.refresh),
           ),
+          const AccountMenuAction(),
         ],
       ),
-      drawer: AppDrawer(
-        trackingOn: _trackingOn,
-        onLogout: () => _logout(context),
-      ),
+      drawer: AppDrawer(trackingOn: _trackingOn),
+      endDrawer: AppAccountDrawer(onLogout: () => _logout(context)),
       body: SafeArea(
         child: RefreshIndicator(
           onRefresh: _load,

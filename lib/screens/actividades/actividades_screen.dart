@@ -10,6 +10,7 @@ import '../../services/app_version_service.dart';
 import '../../services/auth_service.dart';
 import '../../services/tracking_service.dart';
 import '../../widgets/app_drawer.dart';
+import '../../widgets/account_drawer.dart';
 import '../../widgets/header_card.dart';
 import '../../widgets/safe_network_image.dart';
 import '../login_screen.dart';
@@ -517,12 +518,11 @@ class _ActividadesScreenState extends State<ActividadesScreen>
             icon: const Icon(Icons.search),
             onPressed: () => _go(context, AppRoutes.hechosBuscar),
           ),
+          const AccountMenuAction(),
         ],
       ),
-      drawer: AppDrawer(
-        trackingOn: _trackingOn,
-        onLogout: () => _logout(context),
-      ),
+      drawer: AppDrawer(trackingOn: _trackingOn),
+      endDrawer: AppAccountDrawer(onLogout: () => _logout(context)),
       body: SafeArea(
         child: RefreshIndicator(
           onRefresh: () async {

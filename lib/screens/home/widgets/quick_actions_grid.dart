@@ -2,75 +2,25 @@ import 'package:flutter/material.dart';
 
 class QuickActionsGrid extends StatelessWidget {
   final bool canAccidentes;
-  final bool canGruas;
   final bool canMapa;
-  final bool canBuscar;
 
   final VoidCallback onAccidentes;
-  final VoidCallback onGruas;
   final VoidCallback onMapa;
-  final VoidCallback onBuscar;
 
   const QuickActionsGrid({
     super.key,
     required this.canAccidentes,
-    required this.canGruas,
     required this.canMapa,
-    required this.canBuscar,
     required this.onAccidentes,
-    required this.onGruas,
     required this.onMapa,
-    required this.onBuscar,
   });
 
   @override
   Widget build(BuildContext context) {
-    final rows = <Widget>[];
+    final actions = <Widget>[];
 
-    final row1 = <Widget>[];
-    if (canBuscar) {
-      row1.add(
-        Expanded(
-          child: _QuickCard(
-            icon: Icons.search,
-            title: 'Búsqueda',
-            subtitle: 'Por placa, serie, conductor…',
-            onTap: onBuscar,
-          ),
-        ),
-      );
-    }
-    if (canAccidentes) {
-      if (row1.isNotEmpty) row1.add(const SizedBox(width: 12));
-      row1.add(
-        Expanded(
-          child: _QuickCard(
-            icon: Icons.directions_car,
-            title: 'Siniestros',
-            subtitle: 'Listado y registros',
-            onTap: onAccidentes,
-          ),
-        ),
-      );
-    }
-    if (row1.isNotEmpty) rows.add(Row(children: row1));
-
-    final row2 = <Widget>[];
-    if (canGruas) {
-      row2.add(
-        Expanded(
-          child: _QuickCard(
-            icon: Icons.local_shipping,
-            title: 'Grúas',
-            subtitle: 'Listado y gráfica',
-            onTap: onGruas,
-          ),
-        ),
-      );
-    }
     if (canMapa) {
-      if (row2.isNotEmpty) row2.add(const SizedBox(width: 12));
-      row2.add(
+      actions.add(
         Expanded(
           child: _QuickCard(
             icon: Icons.map,
@@ -81,13 +31,29 @@ class QuickActionsGrid extends StatelessWidget {
         ),
       );
     }
-    if (row2.isNotEmpty) {
-      if (rows.isNotEmpty) rows.add(const SizedBox(height: 12));
-      rows.add(Row(children: row2));
+
+    if (canMapa && canAccidentes) {
+      actions.add(const SizedBox(width: 12));
     }
 
-    if (rows.isEmpty) return const SizedBox.shrink();
-    return Column(children: rows);
+    if (canAccidentes) {
+      actions.add(
+        Expanded(
+          child: _QuickCard(
+            icon: Icons.directions_car,
+            title: 'Siniestros',
+            subtitle: 'Listado y registros',
+            onTap: onAccidentes,
+          ),
+        ),
+      );
+    }
+
+    if (actions.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return Row(children: actions);
   }
 }
 

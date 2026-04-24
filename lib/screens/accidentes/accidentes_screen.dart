@@ -13,6 +13,7 @@ import '../../services/hecho_share_service.dart';
 import '../../services/reportes_service.dart';
 
 import '../../widgets/app_drawer.dart';
+import '../../widgets/account_drawer.dart';
 import '../../widgets/header_card.dart';
 
 import '../login_screen.dart';
@@ -483,12 +484,11 @@ class _AccidentesScreenState extends State<AccidentesScreen>
             tooltip: 'Actualizar',
             onPressed: _obtenerHechos,
           ),
+          const AccountMenuAction(),
         ],
       ),
-      drawer: AppDrawer(
-        trackingOn: _trackingOn,
-        onLogout: () => _logout(context),
-      ),
+      drawer: AppDrawer(trackingOn: _trackingOn),
+      endDrawer: AppAccountDrawer(onLogout: () => _logout(context)),
       body: SafeArea(
         child: RefreshIndicator(
           onRefresh: () async {

@@ -9,6 +9,7 @@ import '../services/feed_service.dart';
 import '../services/push_service.dart';
 
 import '../widgets/app_drawer.dart';
+import '../widgets/account_drawer.dart';
 import '../widgets/header_card.dart';
 import '../widgets/offline_sync_status_card.dart';
 
@@ -253,9 +254,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         final canHechos =
             !loadingPerms &&
             _permsCtrl.allowed(HomePermissionsController.permHechos);
-        final canGruas =
-            !loadingPerms &&
-            _permsCtrl.allowed(HomePermissionsController.permGruas);
         final canMapa =
             !loadingPerms &&
             _permsCtrl.allowed(HomePermissionsController.permMapa);
@@ -275,12 +273,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                       icon: const Icon(Icons.search),
                       onPressed: () => _go(context, AppRoutes.hechosBuscar),
                     ),
+                  const AccountMenuAction(),
                 ],
               ),
-              drawer: AppDrawer(
-                trackingOn: trackingOn,
-                onLogout: () => _logout(context),
-              ),
+              drawer: AppDrawer(trackingOn: trackingOn),
+              endDrawer: AppAccountDrawer(onLogout: () => _logout(context)),
               body: SafeArea(
                 child: RefreshIndicator(
                   onRefresh: _refreshAll,
@@ -306,16 +303,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                               ),
                               const SizedBox(height: 12),
                               QuickActionsGrid(
-                                canBuscar: canBuscar,
                                 canAccidentes: canHechos,
-                                canGruas: canGruas,
                                 canMapa: canMapa,
                                 onAccidentes: () =>
                                     _go(context, AppRoutes.accidentes),
-                                onGruas: () => _go(context, AppRoutes.gruas),
                                 onMapa: () => _go(context, AppRoutes.mapa),
-                                onBuscar: () =>
-                                    _go(context, AppRoutes.hechosBuscar),
                               ),
                               const SizedBox(height: 14),
                               Container(

@@ -31,7 +31,13 @@ class HomePermissionsController {
     _fetching = true;
 
     try {
-      final list = await AuthService.refreshPermissions();
+      if (force || perms.value.isEmpty) {
+        await AuthService.refreshCurrentUserAccess();
+      }
+
+      final list = force
+          ? await AuthService.getPermissions()
+          : await AuthService.refreshPermissions();
       perms.value = list.map((e) => e.trim().toLowerCase()).toSet();
       fullOperationalAccess.value =
           await AuthService.hasFullOperationalAccess();

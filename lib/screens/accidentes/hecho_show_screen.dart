@@ -11,6 +11,7 @@ import '../../services/hecho_share_service.dart';
 import '../../services/reportes_service.dart';
 
 import '../../widgets/app_drawer.dart';
+import '../../widgets/account_drawer.dart';
 import '../../widgets/header_card.dart';
 
 import '../login_screen.dart';
@@ -535,12 +536,11 @@ class _HechoShowScreenState extends State<HechoShowScreen>
               if (hechoId > 0) await _cargarHecho(hechoId);
             },
           ),
+          const AccountMenuAction(),
         ],
       ),
-      drawer: AppDrawer(
-        trackingOn: _trackingOn,
-        onLogout: () => _logout(context),
-      ),
+      drawer: AppDrawer(trackingOn: _trackingOn),
+      endDrawer: AppAccountDrawer(onLogout: () => _logout(context)),
       body: SafeArea(
         child: RefreshIndicator(
           onRefresh: () async {

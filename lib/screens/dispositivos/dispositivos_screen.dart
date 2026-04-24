@@ -7,6 +7,7 @@ import '../../services/guardianes_camino_dispositivos_service.dart';
 import '../../services/guardianes_camino_share_service.dart';
 import '../../services/tracking_service.dart';
 import '../../widgets/app_drawer.dart';
+import '../../widgets/account_drawer.dart';
 import '../../widgets/header_card.dart';
 import '../../app/routes.dart';
 import '../login_screen.dart';
@@ -378,11 +379,10 @@ class _DispositivosScreenState extends State<DispositivosScreen>
         elevation: 0,
         backgroundColor: Colors.blue,
         title: const Text('Dispositivos'),
+        actions: const [AccountMenuAction()],
       ),
-      drawer: AppDrawer(
-        trackingOn: _trackingOn,
-        onLogout: () => _logout(context),
-      ),
+      drawer: AppDrawer(trackingOn: _trackingOn),
+      endDrawer: AppAccountDrawer(onLogout: () => _logout(context)),
       body: SafeArea(
         child: RefreshIndicator(
           onRefresh: () async {

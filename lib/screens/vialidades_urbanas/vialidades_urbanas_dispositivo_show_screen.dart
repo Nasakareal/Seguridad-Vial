@@ -8,6 +8,7 @@ import '../../services/vialidades_urbanas_detalles_service.dart';
 import '../../services/vialidades_urbanas_service.dart';
 import '../../services/vialidades_urbanas_share_service.dart';
 import '../../widgets/app_drawer.dart';
+import '../../widgets/account_drawer.dart';
 import '../login_screen.dart';
 
 class VialidadesUrbanasDispositivoShowScreen extends StatefulWidget {
@@ -270,12 +271,11 @@ class _VialidadesUrbanasDispositivoShowScreenState
             onPressed: _load,
             icon: const Icon(Icons.refresh),
           ),
+          const AccountMenuAction(),
         ],
       ),
-      drawer: AppDrawer(
-        trackingOn: _trackingOn,
-        onLogout: () => _logout(context),
-      ),
+      drawer: AppDrawer(trackingOn: _trackingOn),
+      endDrawer: AppAccountDrawer(onLogout: () => _logout(context)),
       body: SafeArea(
         child: RefreshIndicator(
           onRefresh: _load,
