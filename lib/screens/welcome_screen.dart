@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../app/routes.dart';
 import 'login_screen.dart';
 
 class WelcomeScreen extends StatelessWidget {
@@ -96,6 +97,16 @@ class WelcomeScreen extends StatelessWidget {
                       );
                     },
                     child: const Text('Iniciar Sesión'),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: () =>
+                        Navigator.pushNamed(context, AppRoutes.culturaVialJoin),
+                    icon: const Icon(Icons.sports_esports),
+                    label: const Text('Entrar a juego vial'),
                   ),
                 ),
               ],

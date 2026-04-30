@@ -33,6 +33,7 @@ class _HomePeritoScreenState extends State<HomePeritoScreen>
   bool _busy = false;
   bool _bootstrapped = false;
   bool _loading = true;
+  bool _canUseConstanciasManejo = false;
   String? _error;
 
   PeritoHomeMapData? _mapData;
@@ -66,6 +67,8 @@ class _HomePeritoScreenState extends State<HomePeritoScreen>
       }
 
       await _loadMap();
+      if (!mounted) return;
+      await _loadConstanciasAccess();
       if (!mounted) return;
       await _syncTrackingFromCommanderFlag();
     });
@@ -159,6 +162,9 @@ class _HomePeritoScreenState extends State<HomePeritoScreen>
 
     if (!mounted) return;
 
+    await _loadConstanciasAccess();
+    if (!mounted) return;
+
     try {
       await _syncTrackingFromCommanderFlag();
     } catch (_) {}
@@ -181,6 +187,17 @@ class _HomePeritoScreenState extends State<HomePeritoScreen>
           PushService.registerDeviceToken(reason: 'home_perito_resumed');
         });
       } catch (_) {}
+    }
+  }
+
+  Future<void> _loadConstanciasAccess() async {
+    try {
+      final allowed = await AuthService.canUseConstanciasManejo();
+      if (!mounted) return;
+      setState(() => _canUseConstanciasManejo = allowed);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _canUseConstanciasManejo = false);
     }
   }
 
@@ -350,6 +367,15 @@ class _HomePeritoScreenState extends State<HomePeritoScreen>
             icon: const Icon(Icons.directions_car),
             onPressed: () => Navigator.pushNamed(context, AppRoutes.accidentes),
           ),
+          if (_canUseConstanciasManejo)
+            IconButton(
+              tooltip: 'Constancias',
+              icon: const Icon(Icons.qr_code_scanner),
+              onPressed: () => Navigator.pushNamed(
+                context,
+                AppRoutes.constanciasManejoScanner,
+              ),
+            ),
           IconButton(
             tooltip: 'Recargar',
             icon: const Icon(Icons.refresh),

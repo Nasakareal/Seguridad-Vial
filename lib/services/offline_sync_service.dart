@@ -47,6 +47,7 @@ typedef OfflineErrorParser = String Function(String body, int statusCode);
 class OfflineSyncService {
   static const String _queueKey = 'offline_sync_queue_v1';
   static const Duration _requestTimeout = Duration(seconds: 15);
+  static const int _maxServerRetryAttempts = 10;
 
   static final ValueNotifier<int> pendingCount = ValueNotifier<int>(0);
   static final ValueNotifier<int> failedCount = ValueNotifier<int>(0);
@@ -120,14 +121,7 @@ class OfflineSyncService {
       return 'Guardado pendiente. Se sincronizara automaticamente.';
     }
 
-    final lower = trimmed.toLowerCase();
-    final looksLikeConnectivityIssue =
-        lower.contains('sin conexión') ||
-        lower.contains('sin conexion') ||
-        lower.contains('no fue posible conectar') ||
-        lower.contains('tiempo de espera');
-
-    if (looksLikeConnectivityIssue) {
+    if (_looksLikeConnectivityIssue(trimmed)) {
       return 'Guardado sin conexión. Se sincronizará automáticamente.';
     }
 
@@ -478,10 +472,26 @@ class OfflineSyncService {
           changed = true;
           retryableCount += 1;
           firstRetryableMessage ??= e.message;
+          final nextAttempts = op.attempts + 1;
+          if (!_looksLikeConnectivityIssue(e.message) &&
+              nextAttempts >= _maxServerRetryAttempts) {
+            failedIds.add(op.id);
+            nextQueue.add(
+              op.copyWith(
+                attempts: nextAttempts,
+                nextAttemptAt: null,
+                state: _QueuedOperationState.failed,
+                lastError:
+                    'No se pudo sincronizar después de $nextAttempts intentos. ${e.message}',
+              ),
+            );
+            continue;
+          }
+
           nextQueue.add(
             op.copyWith(
-              attempts: op.attempts + 1,
-              nextAttemptAt: now.add(_retryDelay(op.attempts + 1)),
+              attempts: nextAttempts,
+              nextAttemptAt: now.add(_retryDelay(nextAttempts)),
               state: _QueuedOperationState.pending,
               lastError: e.message,
             ),
@@ -868,20 +878,14 @@ class OfflineSyncService {
     try {
       final raw = jsonDecode(body);
       if (raw is Map<String, dynamic>) {
-        final message = (raw['message'] ?? '').toString().trim();
-        if (message.isNotEmpty) return message;
-
         final errors = raw['errors'];
         if (errors is Map) {
-          final buffer = StringBuffer();
-          errors.forEach((_, value) {
-            if (value is List && value.isNotEmpty) {
-              buffer.writeln('• ${value.first}');
-            }
-          });
-          final text = buffer.toString().trim();
+          final text = _formatValidationErrors(errors);
           if (text.isNotEmpty) return text;
         }
+
+        final message = (raw['message'] ?? '').toString().trim();
+        if (message.isNotEmpty) return message;
       }
     } catch (_) {}
 
@@ -918,6 +922,73 @@ class OfflineSyncService {
     }
 
     return buffer.toString();
+  }
+
+  static bool _looksLikeConnectivityIssue(String message) {
+    final lower = message.trim().toLowerCase();
+    return lower.contains('sin conexión') ||
+        lower.contains('sin conexion') ||
+        lower.contains('no fue posible conectar') ||
+        lower.contains('tiempo de espera');
+  }
+
+  static String _formatValidationErrors(Map errors) {
+    final buffer = StringBuffer();
+    errors.forEach((key, value) {
+      final label = _validationFieldLabel(key.toString());
+      if (value is List) {
+        for (final item in value) {
+          final message = item.toString().trim();
+          if (message.isNotEmpty) {
+            buffer.writeln('• $label: $message');
+          }
+        }
+      } else {
+        final message = value.toString().trim();
+        if (message.isNotEmpty) {
+          buffer.writeln('• $label: $message');
+        }
+      }
+    });
+    return buffer.toString().trim();
+  }
+
+  static String _validationFieldLabel(String key) {
+    const labels = <String, String>{
+      'actividad_categoria_id': 'Categoría',
+      'actividad_subcategoria_id': 'Subcategoría',
+      'client_uuid': 'Identificador offline',
+      'dictamen_id': 'Dictamen',
+      'fecha': 'Fecha',
+      'folio_c5i': 'Folio C5i',
+      'foto': 'Foto',
+      'foto_lugar': 'Foto del hecho',
+      'foto_situacion': 'Foto de la situación',
+      'fotos': 'Fotos',
+      'hora': 'Hora',
+      'km_recorridos': 'Kilómetros recorridos',
+      'lat': 'Latitud',
+      'lng': 'Longitud',
+      'personas_alcanzadas': 'Personas alcanzadas',
+      'personas_detenidas': 'Personas detenidas',
+      'personas_mp': 'Personas MP',
+      'personas_participantes': 'Personas participantes',
+      'vehiculos_mp': 'Vehículos MP',
+    };
+
+    final exact = labels[key];
+    if (exact != null) return exact;
+
+    final normalized = key.replaceAll(RegExp(r'[\[\]\.]+'), ' ');
+    return normalized
+        .split('_')
+        .expand((part) => part.split(' '))
+        .where((part) => part.trim().isNotEmpty)
+        .map((part) {
+          final lower = part.toLowerCase();
+          return lower[0].toUpperCase() + lower.substring(1);
+        })
+        .join(' ');
   }
 
   static Future<List<_QueuedUploadFile>> _stashFilesForQueue(

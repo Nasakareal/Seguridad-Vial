@@ -425,6 +425,7 @@ class _EditHechoScreenState extends State<EditHechoScreen> {
                   HechoForm(
                     mode: HechoFormMode.edit,
                     data: _data!,
+                    draftId: 'hechos:edit:${widget.hechoId}',
                     onSubmit:
                         ({
                           required data,

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../services/local_draft_service.dart';
 import '../../services/offline_sync_service.dart';
 
 class LesionadoCreateScreen extends StatefulWidget {
@@ -15,6 +16,7 @@ class _LesionadoCreateScreenState extends State<LesionadoCreateScreen> {
   final _formKey = GlobalKey<FormState>();
   bool _guardando = false;
   bool _draftHydrated = false;
+  LocalDraftAutosave? _draft;
 
   // ===== Campos que TU backend espera =====
   final TextEditingController _nombreCtrl = TextEditingController();
@@ -53,11 +55,15 @@ class _LesionadoCreateScreenState extends State<LesionadoCreateScreen> {
     super.didChangeDependencies();
     if (_draftHydrated) return;
     _draftHydrated = true;
-    _hydrateDraftFromArgs();
+    _ensureDraft();
+    if (!_hydrateDraftFromArgs()) {
+      _restoreLocalDraft();
+    }
   }
 
   @override
   void dispose() {
+    _draft?.dispose();
     _nombreCtrl.dispose();
     _edadCtrl.dispose();
     _hospitalCtrl.dispose();
@@ -77,9 +83,27 @@ class _LesionadoCreateScreenState extends State<LesionadoCreateScreen> {
     return Uri.parse('$_baseUrl/lesionados');
   }
 
-  void _hydrateDraftFromArgs() {
+  void _ensureDraft() {
+    _draft ??= LocalDraftAutosave(draftId: _draftId(), collect: _draftValues)
+      ..attachTextControllers({
+        'nombre': _nombreCtrl,
+        'edad': _edadCtrl,
+        'hospital': _hospitalCtrl,
+        'ambulancia': _ambulanciaCtrl,
+        'paramedico': _paramedicoCtrl,
+        'observaciones': _observacionesCtrl,
+      });
+  }
+
+  String _draftId() {
+    final hechoId = _hechoIdFromArgs(context);
+    final hechoClientUuid = _hechoClientUuidFromArgs(context) ?? '';
+    return 'lesionados:create:$hechoId:$hechoClientUuid';
+  }
+
+  bool _hydrateDraftFromArgs() {
     final args = ModalRoute.of(context)?.settings.arguments;
-    if (args is! Map || args['offlineDraft'] is! Map) return;
+    if (args is! Map || args['offlineDraft'] is! Map) return false;
 
     final draft = Map<String, dynamic>.from(args['offlineDraft'] as Map);
     final body = draft['body'] is Map
@@ -104,6 +128,55 @@ class _LesionadoCreateScreenState extends State<LesionadoCreateScreen> {
     _ambulanciaCtrl.text = (body['ambulancia'] ?? '').toString();
     _paramedicoCtrl.text = (body['paramedico'] ?? '').toString();
     _observacionesCtrl.text = (body['observaciones'] ?? '').toString();
+    return true;
+  }
+
+  Future<void> _restoreLocalDraft() async {
+    final restored = await _draft?.restore(_applyLocalDraft) ?? false;
+    if (!mounted || !restored) return;
+    setState(() {});
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Borrador local recuperado.')));
+  }
+
+  void _applyLocalDraft(Map<String, dynamic> draft) {
+    _nombreCtrl.text = _str(draft['nombre']);
+    _edadCtrl.text = _str(draft['edad']);
+    _sexo = _blankToNull(draft['sexo']);
+    _tipoLesion = _blankToNull(draft['tipo_lesion']) ?? 'Leve';
+    _hospitalizado = _toBool(draft['hospitalizado'], fallback: false);
+    _hospitalCtrl.text = _str(draft['hospital']);
+    _atencionEnSitio = _toBool(draft['atencion_en_sitio'], fallback: true);
+    _ambulanciaCtrl.text = _str(draft['ambulancia']);
+    _paramedicoCtrl.text = _str(draft['paramedico']);
+    _observacionesCtrl.text = _str(draft['observaciones']);
+  }
+
+  Map<String, dynamic> _draftValues() {
+    return <String, dynamic>{
+      'nombre': _nombreCtrl.text,
+      'edad': _edadCtrl.text,
+      'sexo': _sexo,
+      'tipo_lesion': _tipoLesion,
+      'hospitalizado': _hospitalizado,
+      'hospital': _hospitalCtrl.text,
+      'atencion_en_sitio': _atencionEnSitio,
+      'ambulancia': _ambulanciaCtrl.text,
+      'paramedico': _paramedicoCtrl.text,
+      'observaciones': _observacionesCtrl.text,
+    };
+  }
+
+  String _str(dynamic value) => (value ?? '').toString();
+
+  String? _blankToNull(dynamic value) {
+    final text = (value ?? '').toString().trim();
+    return text.isEmpty ? null : text;
+  }
+
+  void _markDraftChanged() {
+    _draft?.notifyChanged();
   }
 
   bool _toBool(dynamic v, {bool fallback = false}) {
@@ -187,6 +260,8 @@ class _LesionadoCreateScreenState extends State<LesionadoCreateScreen> {
         context,
       ).showSnackBar(SnackBar(content: Text(result.message)));
 
+      await _draft?.discard();
+      if (!mounted) return;
       Navigator.pop(context, true);
     } catch (e) {
       if (!mounted) return;
@@ -311,7 +386,10 @@ class _LesionadoCreateScreenState extends State<LesionadoCreateScreen> {
                                 child: Text('Otro'),
                               ),
                             ],
-                            onChanged: (v) => setState(() => _sexo = v),
+                            onChanged: (v) {
+                              setState(() => _sexo = v);
+                              _markDraftChanged();
+                            },
                           ),
                         ),
                       ],
@@ -339,8 +417,10 @@ class _LesionadoCreateScreenState extends State<LesionadoCreateScreen> {
                           child: Text('Fallecido'),
                         ),
                       ],
-                      onChanged: (v) =>
-                          setState(() => _tipoLesion = v ?? 'Leve'),
+                      onChanged: (v) {
+                        setState(() => _tipoLesion = v ?? 'Leve');
+                        _markDraftChanged();
+                      },
                     ),
                     const SizedBox(height: 12),
 
@@ -348,7 +428,10 @@ class _LesionadoCreateScreenState extends State<LesionadoCreateScreen> {
                       contentPadding: EdgeInsets.zero,
                       title: const Text('Hospitalizado'),
                       value: _hospitalizado,
-                      onChanged: (v) => setState(() => _hospitalizado = v),
+                      onChanged: (v) {
+                        setState(() => _hospitalizado = v);
+                        _markDraftChanged();
+                      },
                     ),
                     if (_hospitalizado) ...[
                       const SizedBox(height: 6),
@@ -368,7 +451,10 @@ class _LesionadoCreateScreenState extends State<LesionadoCreateScreen> {
                       contentPadding: EdgeInsets.zero,
                       title: const Text('Atención en sitio'),
                       value: _atencionEnSitio,
-                      onChanged: (v) => setState(() => _atencionEnSitio = v),
+                      onChanged: (v) {
+                        setState(() => _atencionEnSitio = v);
+                        _markDraftChanged();
+                      },
                     ),
                     const SizedBox(height: 6),
 

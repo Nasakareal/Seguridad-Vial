@@ -7,6 +7,7 @@ import '../core/hechos/hechos_catalogos.dart';
 import '../models/dictamen_item.dart';
 import '../models/hecho_form_data.dart';
 import 'auth_service.dart';
+import 'delegacion_distance_service.dart';
 import 'offline_sync_service.dart';
 import 'photo_orientation_service.dart';
 
@@ -148,6 +149,7 @@ class HechosFormService {
     required DictamenItem? dictamenSelected,
     File? fotoLugar,
     File? fotoSituacion,
+    bool requireCoords = true,
   }) async {
     final usesRelaxedHechosRules =
         await AuthService.isHechosCaptureRelaxedUser();
@@ -212,8 +214,10 @@ class HechosFormService {
     }
 
     final situacion = (data.situacion ?? '').trim().toUpperCase();
+    final canUseDictamenes = await _canUseDictamenes();
 
-    if (situacion == 'TURNADO' &&
+    if (canUseDictamenes &&
+        situacion == 'TURNADO' &&
         (data.dictamenId == null || dictamenSelected == null)) {
       return 'Selecciona el dictamen.';
     }
@@ -225,27 +229,29 @@ class HechosFormService {
       return 'Para marcar el hecho como RESUELTO o TURNADO debes subir la foto de situación.';
     }
 
-    final vehiculosMp = data.vehiculosMp.trim();
-    if (situacion == 'TURNADO' && vehiculosMp.isEmpty) {
-      return 'Indica cuántos vehículos se turnaron.';
-    }
-    if (vehiculosMp.isNotEmpty) {
-      final parsed = int.tryParse(vehiculosMp);
-      if (parsed == null) return 'En Vehículos MP solo se permiten números.';
-      if (parsed < 0) return 'Vehículos MP no puede ser negativo.';
-      if (situacion == 'TURNADO' && parsed < 1) {
-        return 'Cuando el hecho está TURNADO, Vehículos MP debe ser mayor que cero.';
+    if (canUseDictamenes) {
+      final vehiculosMp = data.vehiculosMp.trim();
+      if (situacion == 'TURNADO' && vehiculosMp.isEmpty) {
+        return 'Indica cuántos vehículos se turnaron.';
       }
-    }
+      if (vehiculosMp.isNotEmpty) {
+        final parsed = int.tryParse(vehiculosMp);
+        if (parsed == null) return 'En Vehículos MP solo se permiten números.';
+        if (parsed < 0) return 'Vehículos MP no puede ser negativo.';
+        if (situacion == 'TURNADO' && parsed < 1) {
+          return 'Cuando el hecho está TURNADO, Vehículos MP debe ser mayor que cero.';
+        }
+      }
 
-    final personasMp = data.personasMp.trim();
-    if (situacion == 'TURNADO' && personasMp.isEmpty) {
-      return 'Indica cuántas personas se turnaron.';
-    }
-    if (personasMp.isNotEmpty) {
-      final parsed = int.tryParse(personasMp);
-      if (parsed == null) return 'En Personas MP solo se permiten números.';
-      if (parsed < 0) return 'Personas MP no puede ser negativo.';
+      final personasMp = data.personasMp.trim();
+      if (situacion == 'TURNADO' && personasMp.isEmpty) {
+        return 'Indica cuántas personas se turnaron.';
+      }
+      if (personasMp.isNotEmpty) {
+        final parsed = int.tryParse(personasMp);
+        if (parsed == null) return 'En Personas MP solo se permiten números.';
+        if (parsed < 0) return 'Personas MP no puede ser negativo.';
+      }
     }
 
     if (data.danosPatrimoniales) {
@@ -269,6 +275,9 @@ class HechosFormService {
 
     final hasLat = data.lat != null;
     final hasLng = data.lng != null;
+    if (requireCoords && (!hasLat || !hasLng)) {
+      return 'Captura la ubicación del hecho antes de guardar.';
+    }
     if (hasLat != hasLng) {
       return 'Si envías ubicación, debes enviar lat y lng.';
     }
@@ -303,17 +312,20 @@ class HechosFormService {
     final clientUuid = _ensureClientUuid(data);
     final usesRelaxedHechosRules =
         await AuthService.isHechosCaptureRelaxedUser();
+    final canUseDictamenes = await _canUseDictamenes();
     final fields = _buildFields(
       data,
       dictamenSelected,
       usesRelaxedHechosRules: usesRelaxedHechosRules,
+      canUseDictamenes: canUseDictamenes,
     );
+    await _addKilometrosRecorridos(fields, lat: data.lat, lng: data.lng);
     fields['client_uuid'] = clientUuid;
     final landscapeFotoLugar = fotoLugar == null
         ? null
         : await PhotoOrientationService.forceLandscape(fotoLugar);
 
-    return OfflineSyncService.submitMultipart(
+    final result = await OfflineSyncService.submitMultipart(
       label: 'Hecho',
       method: 'POST',
       uri: Uri.parse('${AuthService.baseUrl}/hechos'),
@@ -328,6 +340,11 @@ class HechosFormService {
       successCodes: const <int>{200, 201},
       errorParser: parseBackendError,
     );
+    await DelegacionDistanceService.markCaptureSubmitted(
+      lat: data.lat,
+      lng: data.lng,
+    );
+    return result;
   }
 
   static Future<OfflineActionResult> update({
@@ -339,10 +356,12 @@ class HechosFormService {
   }) async {
     final usesRelaxedHechosRules =
         await AuthService.isHechosCaptureRelaxedUser();
+    final canUseDictamenes = await _canUseDictamenes();
     final fields = _buildFields(
       data,
       dictamenSelected,
       usesRelaxedHechosRules: usesRelaxedHechosRules,
+      canUseDictamenes: canUseDictamenes,
     );
     fields['_method'] = 'PUT';
     final landscapeFotoLugar = fotoLugar == null
@@ -378,6 +397,7 @@ class HechosFormService {
     HechoFormData d,
     DictamenItem? dict, {
     required bool usesRelaxedHechosRules,
+    required bool canUseDictamenes,
   }) {
     final fields = <String, String>{
       'folio_c5i': d.folioC5i.trim(),
@@ -410,19 +430,26 @@ class HechosFormService {
         d.colisionCamino!,
       ),
       'situacion': d.situacion ?? '',
-      'vehiculos_mp': d.vehiculosMp.trim(),
-      'personas_mp': d.personasMp.trim(),
       'vehiculos_esperados': _intField(d.vehiculosEsperados),
       'conductores_esperados': _intField(d.conductoresEsperados),
       'lesionados_esperados': _intField(d.lesionadosEsperados),
       'danos_patrimoniales': d.danosPatrimoniales ? '1' : '0',
-      'oficio_mp': '',
     };
 
     final unidadOrg = d.unidadOrgId.trim();
     if (unidadOrg.isNotEmpty) fields['unidad_org_id'] = unidadOrg;
 
-    if (d.situacion == 'TURNADO' && dict != null) {
+    if (canUseDictamenes) {
+      fields['vehiculos_mp'] = d.situacion == 'TURNADO'
+          ? d.vehiculosMp.trim()
+          : '0';
+      fields['personas_mp'] = d.situacion == 'TURNADO'
+          ? d.personasMp.trim()
+          : '0';
+      fields['oficio_mp'] = '';
+    }
+
+    if (canUseDictamenes && d.situacion == 'TURNADO' && dict != null) {
       fields['dictamen_id'] = dict.id.toString();
       fields['oficio_mp'] = buildOficio(dict);
 
@@ -485,6 +512,25 @@ class HechosFormService {
     return fields;
   }
 
+  static Future<void> _addKilometrosRecorridos(
+    Map<String, String> fields, {
+    required double? lat,
+    required double? lng,
+  }) async {
+    final km = await DelegacionDistanceService.distanceForNextCaptureKmField(
+      lat: lat,
+      lng: lng,
+    );
+    if (km == null) return;
+
+    fields[DelegacionDistanceService.kilometrosRecorridosField] = km;
+  }
+
+  static Future<bool> _canUseDictamenes() async {
+    if (await AuthService.isDelegacionesUser()) return false;
+    return AuthService.isSiniestrosUser();
+  }
+
   static String? _validateExpectedCaptureTotals(HechoFormData data) {
     final vehiculos = _parseNonNegativeInt(data.vehiculosEsperados);
     if (vehiculos == null) {
@@ -507,6 +553,11 @@ class HechosFormService {
 
     if (vehiculos == 0 && conductores > 0) {
       return 'No puede haber conductores si no hay vehículos.';
+    }
+
+    final situacion = (data.situacion ?? '').trim().toUpperCase();
+    if (situacion == 'TURNADO' && vehiculos < 1) {
+      return 'Cuando el hecho está TURNADO, debe capturarse al menos 1 vehículo.';
     }
 
     return null;

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
@@ -7,6 +8,7 @@ import '../../../models/dictamen_item.dart';
 import '../../../models/hecho_form_data.dart';
 import '../../../services/auth_service.dart';
 import '../../../services/hechos_form_service.dart';
+import '../../../services/local_draft_service.dart';
 import '../../../services/offline_sync_service.dart';
 import '../../../services/reverse_geocode_service.dart';
 import '../../../widgets/landscape_photo_crop_screen.dart';
@@ -22,6 +24,7 @@ class HechoForm extends StatefulWidget {
   final HechoFormData data;
   final File? initialFotoLugar;
   final File? initialFotoSituacion;
+  final String? draftId;
   final Future<OfflineActionResult> Function({
     required HechoFormData data,
     required DictamenItem? dictamenSelected,
@@ -38,6 +41,7 @@ class HechoForm extends StatefulWidget {
     required this.data,
     this.initialFotoLugar,
     this.initialFotoSituacion,
+    this.draftId,
     required this.onSubmit,
     this.onSubmitted,
   });
@@ -59,6 +63,7 @@ class _HechoFormState extends State<HechoForm> {
   bool _loadingRoleFlags = true;
   bool _usesRelaxedHechosRules = false;
   bool _hideDelegacionesAdminFields = false;
+  bool _canUseDictamenes = false;
 
   TimeOfDay? _hora;
   DateTime? _fecha;
@@ -84,11 +89,13 @@ class _HechoFormState extends State<HechoForm> {
   File? _fotoSituacion;
 
   DictamenItem? _dictamenSelected;
+  LocalDraftAutosave? _draft;
 
   @override
   void initState() {
     super.initState();
     _syncFromData();
+    _initDraft();
     _loadRoleFlags();
   }
 
@@ -132,6 +139,9 @@ class _HechoFormState extends State<HechoForm> {
         await AuthService.isHechosCaptureRelaxedUser();
     final hideDelegacionesAdminFields =
         await AuthService.hideDelegacionesHechoAdminFields();
+    final isDelegaciones = await AuthService.isDelegacionesUser();
+    final canUseDictamenes =
+        !isDelegaciones && await AuthService.isSiniestrosUser();
     if (!mounted) return;
 
     setState(() {
@@ -139,6 +149,7 @@ class _HechoFormState extends State<HechoForm> {
       _loadingRoleFlags = false;
       _usesRelaxedHechosRules = usesRelaxedHechosRules;
       _hideDelegacionesAdminFields = hideDelegacionesAdminFields;
+      _canUseDictamenes = canUseDictamenes;
       if (_usesRelaxedHechosRules) {
         widget.data.sector = null;
       }
@@ -152,11 +163,17 @@ class _HechoFormState extends State<HechoForm> {
         widget.data.hora = _hora;
         widget.data.fecha = _fecha;
       }
+      if (!_canUseDictamenes) {
+        widget.data.dictamenId = null;
+        _dictamenSelected = null;
+        _resetMpFields();
+      }
     });
   }
 
   @override
   void dispose() {
+    _draft?.dispose();
     _folioCtrl.dispose();
     _peritoCtrl.dispose();
     _authPracCtrl.dispose();
@@ -170,6 +187,190 @@ class _HechoFormState extends State<HechoForm> {
     _propsCtrl.dispose();
     _montoCtrl.dispose();
     super.dispose();
+  }
+
+  void _initDraft() {
+    final draftId = widget.draftId;
+    if (draftId == null || draftId.trim().isEmpty) return;
+    _draft = LocalDraftAutosave(draftId: draftId, collect: _draftValues)
+      ..attachTextControllers({
+        'folio_c5i': _folioCtrl,
+        'perito': _peritoCtrl,
+        'autorizacion_practico': _authPracCtrl,
+        'unidad': _unidadCtrl,
+        'calle': _calleCtrl,
+        'colonia': _coloniaCtrl,
+        'entre_calles': _entreCtrl,
+        'municipio': _municipioCtrl,
+        'vehiculos_mp': _vehMpCtrl,
+        'personas_mp': _persMpCtrl,
+        'propiedades_afectadas': _propsCtrl,
+        'monto_danos': _montoCtrl,
+      });
+    unawaited(_restoreLocalDraft());
+  }
+
+  Future<void> _restoreLocalDraft() async {
+    final restored = await _draft?.restore(_applyLocalDraft) ?? false;
+    if (!mounted || !restored) return;
+    setState(() {});
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Borrador local recuperado.')));
+  }
+
+  void _applyLocalDraft(Map<String, dynamic> draft) {
+    final d = widget.data;
+    d.clientUuid = _blankToNull(draft['client_uuid']);
+    d.folioC5i = _str(draft['folio_c5i']);
+    d.perito = _str(draft['perito']);
+    d.autorizacionPractico = _str(draft['autorizacion_practico']);
+    d.unidad = _str(draft['unidad']);
+    d.unidadOrgId = _str(draft['unidad_org_id']);
+    d.hora = _parseTime(draft['hora']);
+    d.fecha = DateTime.tryParse(_str(draft['fecha']));
+    d.sector = _blankToNull(draft['sector']);
+    d.calle = _str(draft['calle']);
+    d.colonia = _str(draft['colonia']);
+    d.entreCalles = _str(draft['entre_calles']);
+    d.municipio = _str(draft['municipio']);
+    d.tipoHecho = _blankToNull(draft['tipo_hecho']);
+    d.superficieVia = _blankToNull(draft['superficie_via']);
+    d.tiempo = _blankToNull(draft['tiempo']);
+    d.clima = _blankToNull(draft['clima']);
+    d.condiciones = _blankToNull(draft['condiciones']);
+    d.controlTransito = _blankToNull(draft['control_transito']);
+    d.checaronAntecedentes = _boolValue(draft['checaron_antecedentes']);
+    d.causa = _blankToNull(draft['causas']);
+    d.responsable = _str(draft['responsable']);
+    d.colisionCamino = _blankToNull(draft['colision_camino']);
+    d.situacion = _blankToNull(draft['situacion']);
+    d.vehiculosMp = _str(draft['vehiculos_mp'], fallback: '0');
+    d.personasMp = _str(draft['personas_mp'], fallback: '0');
+    d.vehiculosEsperados = _str(
+      draft['vehiculos_esperados'],
+      fallback: d.vehiculosEsperados,
+    );
+    d.conductoresEsperados = _str(
+      draft['conductores_esperados'],
+      fallback: d.conductoresEsperados,
+    );
+    d.lesionadosEsperados = _str(
+      draft['lesionados_esperados'],
+      fallback: d.lesionadosEsperados,
+    );
+    d.danosPatrimoniales = _boolValue(draft['danos_patrimoniales']);
+    d.propiedadesAfectadas = _str(draft['propiedades_afectadas']);
+    d.montoDanos = _str(draft['monto_danos']);
+    d.lat = _doubleValue(draft['lat']);
+    d.lng = _doubleValue(draft['lng']);
+    d.calidadGeo = _blankToNull(draft['calidad_geo']);
+    d.notaGeo = _blankToNull(draft['nota_geo']);
+    d.fuenteUbicacion = _blankToNull(draft['fuente_ubicacion']);
+    d.ubicacionFormateada = _blankToNull(draft['ubicacion_formateada']);
+    d.placeId = _blankToNull(draft['place_id']);
+    d.dictamenId = _intValue(draft['dictamen_id']);
+
+    final fotoLugarPath = _blankToNull(draft['foto_lugar_path']);
+    if (fotoLugarPath != null) {
+      final file = File(fotoLugarPath);
+      if (file.existsSync()) _fotoLugar = file;
+    }
+    final fotoSituacionPath = _blankToNull(draft['foto_situacion_path']);
+    if (fotoSituacionPath != null) {
+      final file = File(fotoSituacionPath);
+      if (file.existsSync()) _fotoSituacion = file;
+    }
+
+    _syncFromData();
+  }
+
+  Map<String, dynamic> _draftValues() {
+    final d = widget.data;
+    return <String, dynamic>{
+      'client_uuid': d.clientUuid,
+      'folio_c5i': _folioCtrl.text,
+      'perito': _peritoCtrl.text,
+      'autorizacion_practico': _authPracCtrl.text,
+      'unidad': _unidadCtrl.text,
+      'unidad_org_id': d.unidadOrgId,
+      'hora': _hora == null ? null : HechosFormService.horaStr(_hora!),
+      'fecha': _fecha == null ? null : HechosFormService.ymd(_fecha!),
+      'sector': d.sector,
+      'calle': _calleCtrl.text,
+      'colonia': _coloniaCtrl.text,
+      'entre_calles': _entreCtrl.text,
+      'municipio': _municipioCtrl.text,
+      'tipo_hecho': d.tipoHecho,
+      'superficie_via': d.superficieVia,
+      'tiempo': d.tiempo,
+      'clima': d.clima,
+      'condiciones': d.condiciones,
+      'control_transito': d.controlTransito,
+      'checaron_antecedentes': d.checaronAntecedentes,
+      'causas': d.causa,
+      'responsable': d.responsable,
+      'colision_camino': d.colisionCamino,
+      'situacion': d.situacion,
+      'vehiculos_mp': _vehMpCtrl.text,
+      'personas_mp': _persMpCtrl.text,
+      'vehiculos_esperados': d.vehiculosEsperados,
+      'conductores_esperados': d.conductoresEsperados,
+      'lesionados_esperados': d.lesionadosEsperados,
+      'danos_patrimoniales': d.danosPatrimoniales,
+      'propiedades_afectadas': _propsCtrl.text,
+      'monto_danos': _montoCtrl.text,
+      'lat': d.lat,
+      'lng': d.lng,
+      'calidad_geo': d.calidadGeo,
+      'nota_geo': d.notaGeo,
+      'fuente_ubicacion': d.fuenteUbicacion,
+      'ubicacion_formateada': d.ubicacionFormateada,
+      'place_id': d.placeId,
+      'dictamen_id': d.dictamenId,
+      'foto_lugar_path': _fotoLugar?.path,
+      'foto_situacion_path': _fotoSituacion?.path,
+    };
+  }
+
+  String _str(dynamic value, {String fallback = ''}) {
+    final text = (value ?? '').toString();
+    return text.trim().isEmpty ? fallback : text;
+  }
+
+  String? _blankToNull(dynamic value) {
+    final text = (value ?? '').toString().trim();
+    return text.isEmpty ? null : text;
+  }
+
+  TimeOfDay? _parseTime(dynamic value) {
+    final parts = (value ?? '').toString().split(':');
+    if (parts.length < 2) return null;
+    final hour = int.tryParse(parts[0]);
+    final minute = int.tryParse(parts[1]);
+    if (hour == null || minute == null) return null;
+    return TimeOfDay(hour: hour, minute: minute);
+  }
+
+  bool _boolValue(dynamic value) {
+    if (value is bool) return value;
+    final raw = (value ?? '').toString().trim().toLowerCase();
+    return raw == '1' || raw == 'true' || raw == 'si' || raw == 'sí';
+  }
+
+  double? _doubleValue(dynamic value) {
+    if (value is double) return value;
+    if (value is int) return value.toDouble();
+    return double.tryParse((value ?? '').toString().trim());
+  }
+
+  int? _intValue(dynamic value) {
+    if (value is int) return value;
+    return int.tryParse((value ?? '').toString().trim());
+  }
+
+  void _markDraftChanged() {
+    _draft?.notifyChanged();
   }
 
   InputDecoration _dec(String label) =>
@@ -284,6 +485,7 @@ class _HechoFormState extends State<HechoForm> {
       _hora = picked;
       widget.data.hora = picked;
     });
+    _markDraftChanged();
   }
 
   Future<void> _pickFecha() async {
@@ -300,6 +502,7 @@ class _HechoFormState extends State<HechoForm> {
       _fecha = picked;
       widget.data.fecha = picked;
     });
+    _markDraftChanged();
   }
 
   Future<void> _pickPhoto(bool isLugar) async {
@@ -325,6 +528,7 @@ class _HechoFormState extends State<HechoForm> {
         _fotoSituacion = f;
       }
     });
+    _markDraftChanged();
   }
 
   void _setControllerText(TextEditingController controller, String value) {
@@ -332,6 +536,13 @@ class _HechoFormState extends State<HechoForm> {
       text: value,
       selection: TextSelection.collapsed(offset: value.length),
     );
+  }
+
+  void _resetMpFields() {
+    widget.data.vehiculosMp = '0';
+    widget.data.personasMp = '0';
+    _setControllerText(_vehMpCtrl, '0');
+    _setControllerText(_persMpCtrl, '0');
   }
 
   Future<String?> _autofillAddressFromCoords() async {
@@ -436,6 +647,7 @@ class _HechoFormState extends State<HechoForm> {
       dictamenSelected: _dictamenSelected,
       fotoLugar: _fotoLugar,
       fotoSituacion: _fotoSituacion,
+      requireCoords: widget.mode == HechoFormMode.create,
     );
     if (offlineError != null) {
       final targetKey = _keyForBusinessRuleMessage(offlineError);
@@ -465,8 +677,15 @@ class _HechoFormState extends State<HechoForm> {
     d.entreCalles = _entreCtrl.text;
     d.municipio = HechosFormService.normalizeMunicipio(_municipioCtrl.text);
 
-    d.vehiculosMp = _vehMpCtrl.text;
-    d.personasMp = _persMpCtrl.text;
+    if (_canUseDictamenes && d.situacion == 'TURNADO') {
+      d.vehiculosMp = _vehMpCtrl.text;
+      d.personasMp = _persMpCtrl.text;
+    } else {
+      d.dictamenId = null;
+      _dictamenSelected = null;
+      d.vehiculosMp = '0';
+      d.personasMp = '0';
+    }
 
     d.responsable =
         _safeDropdownValue(d.responsable, HechosCatalogos.responsablesUi) ??
@@ -502,6 +721,8 @@ class _HechoFormState extends State<HechoForm> {
         fotoSituacion: _fotoSituacion,
       );
 
+      if (!mounted) return;
+      await _draft?.discard();
       if (!mounted) return;
       if (widget.onSubmitted != null) {
         await widget.onSubmitted!(result, widget.data);
@@ -583,8 +804,15 @@ class _HechoFormState extends State<HechoForm> {
           UbicacionCard(
             data: d,
             disabled: _submitting,
-            onChanged: () => setState(() {}),
-            onLocationCaptured: _autofillAddressFromCoords,
+            onChanged: () {
+              setState(() {});
+              _markDraftChanged();
+            },
+            onLocationCaptured: () async {
+              final message = await _autofillAddressFromCoords();
+              _markDraftChanged();
+              return message;
+            },
           ),
           const SizedBox(height: 12),
 
@@ -594,7 +822,10 @@ class _HechoFormState extends State<HechoForm> {
             disabled: _submitting,
             propsCtrl: _propsCtrl,
             montoCtrl: _montoCtrl,
-            onChanged: () => setState(() {}),
+            onChanged: () {
+              setState(() {});
+              _markDraftChanged();
+            },
           ),
           const SizedBox(height: 12),
 
@@ -604,7 +835,10 @@ class _HechoFormState extends State<HechoForm> {
             file: _fotoLugar,
             disabled: _submitting,
             onPick: () => _pickPhoto(true),
-            onClear: () => setState(() => _fotoLugar = null),
+            onClear: () {
+              setState(() => _fotoLugar = null);
+              _markDraftChanged();
+            },
           ),
           PhotoCard(
             key: _fotoSituacionKey,
@@ -612,7 +846,10 @@ class _HechoFormState extends State<HechoForm> {
             file: _fotoSituacion,
             disabled: _submitting,
             onPick: () => _pickPhoto(false),
-            onClear: () => setState(() => _fotoSituacion = null),
+            onClear: () {
+              setState(() => _fotoSituacion = null);
+              _markDraftChanged();
+            },
           ),
           const SizedBox(height: 12),
 
@@ -730,7 +967,10 @@ class _HechoFormState extends State<HechoForm> {
                   .toList(),
               onChanged: _submitting
                   ? null
-                  : (v) => setState(() => d.sector = v),
+                  : (v) {
+                      setState(() => d.sector = v);
+                      _markDraftChanged();
+                    },
               validator: (v) => v == null ? 'Requerido' : null,
             ),
           ],
@@ -770,7 +1010,10 @@ class _HechoFormState extends State<HechoForm> {
                 .toList(),
             onChanged: _submitting
                 ? null
-                : (v) => setState(() => d.tipoHecho = v),
+                : (v) {
+                    setState(() => d.tipoHecho = v);
+                    _markDraftChanged();
+                  },
             validator: (v) => v == null ? 'Requerido' : null,
           ),
 
@@ -784,7 +1027,10 @@ class _HechoFormState extends State<HechoForm> {
                 .toList(),
             onChanged: _submitting
                 ? null
-                : (v) => setState(() => d.superficieVia = v),
+                : (v) {
+                    setState(() => d.superficieVia = v);
+                    _markDraftChanged();
+                  },
             validator: (v) => v == null ? 'Requerido' : null,
           ),
 
@@ -806,7 +1052,10 @@ class _HechoFormState extends State<HechoForm> {
                       .toList(),
                   onChanged: _submitting
                       ? null
-                      : (v) => setState(() => d.tiempo = v),
+                      : (v) {
+                          setState(() => d.tiempo = v);
+                          _markDraftChanged();
+                        },
                   validator: (v) => v == null ? 'Requerido' : null,
                 ),
               ),
@@ -826,7 +1075,10 @@ class _HechoFormState extends State<HechoForm> {
                       .toList(),
                   onChanged: _submitting
                       ? null
-                      : (v) => setState(() => d.clima = v),
+                      : (v) {
+                          setState(() => d.clima = v);
+                          _markDraftChanged();
+                        },
                   validator: (v) => v == null ? 'Requerido' : null,
                 ),
               ),
@@ -847,7 +1099,10 @@ class _HechoFormState extends State<HechoForm> {
                 .toList(),
             onChanged: _submitting
                 ? null
-                : (v) => setState(() => d.condiciones = v),
+                : (v) {
+                    setState(() => d.condiciones = v);
+                    _markDraftChanged();
+                  },
             validator: (v) => v == null ? 'Requerido' : null,
           ),
 
@@ -861,7 +1116,10 @@ class _HechoFormState extends State<HechoForm> {
                 .toList(),
             onChanged: _submitting
                 ? null
-                : (v) => setState(() => d.controlTransito = v),
+                : (v) {
+                    setState(() => d.controlTransito = v);
+                    _markDraftChanged();
+                  },
             validator: (v) => v == null ? 'Requerido' : null,
           ),
 
@@ -871,7 +1129,10 @@ class _HechoFormState extends State<HechoForm> {
             value: d.checaronAntecedentes,
             onChanged: _submitting
                 ? null
-                : (v) => setState(() => d.checaronAntecedentes = v ?? false),
+                : (v) {
+                    setState(() => d.checaronAntecedentes = v ?? false);
+                    _markDraftChanged();
+                  },
           ),
 
           const SizedBox(height: 12),
@@ -882,7 +1143,12 @@ class _HechoFormState extends State<HechoForm> {
             items: HechosCatalogos.causasUi
                 .map((v) => DropdownMenuItem(value: v, child: Text(v)))
                 .toList(),
-            onChanged: _submitting ? null : (v) => setState(() => d.causa = v),
+            onChanged: _submitting
+                ? null
+                : (v) {
+                    setState(() => d.causa = v);
+                    _markDraftChanged();
+                  },
             validator: (v) => v == null ? 'Requerido' : null,
           ),
 
@@ -896,7 +1162,10 @@ class _HechoFormState extends State<HechoForm> {
                 .toList(),
             onChanged: _submitting
                 ? null
-                : (v) => setState(() => d.responsable = v ?? ''),
+                : (v) {
+                    setState(() => d.responsable = v ?? '');
+                    _markDraftChanged();
+                  },
             validator: (v) => v == null ? 'Requerido' : null,
           ),
 
@@ -910,7 +1179,10 @@ class _HechoFormState extends State<HechoForm> {
                 .toList(),
             onChanged: _submitting
                 ? null
-                : (v) => setState(() => d.colisionCamino = v),
+                : (v) {
+                    setState(() => d.colisionCamino = v);
+                    _markDraftChanged();
+                  },
             validator: (v) => v == null ? 'Requerido' : null,
           ),
 
@@ -927,58 +1199,60 @@ class _HechoFormState extends State<HechoForm> {
                 : (v) {
                     setState(() {
                       d.situacion = v;
-                      if (d.situacion != 'TURNADO') {
+                      if (d.situacion != 'TURNADO' || !_canUseDictamenes) {
                         d.dictamenId = null;
                         _dictamenSelected = null;
+                        _resetMpFields();
                       }
                     });
+                    _markDraftChanged();
                   },
             validator: (v) => v == null ? 'Requerido' : null,
           ),
 
-          DictamenSelector(
-            data: d,
-            disabled: _submitting,
-            onSelected: (sel) => _dictamenSelected = sel,
-          ),
+          if (_canUseDictamenes)
+            DictamenSelector(
+              data: d,
+              disabled: _submitting,
+              onSelected: (sel) {
+                _dictamenSelected = sel;
+                _markDraftChanged();
+              },
+            ),
 
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: TextFormField(
-                  controller: _vehMpCtrl,
-                  decoration: _dec(
-                    d.situacion == 'TURNADO'
-                        ? 'Vehículos MP *'
-                        : 'Vehículos MP',
-                  ),
-                  keyboardType: TextInputType.number,
-                  validator: (v) => _nonNegativeIntValidator(
-                    v,
-                    label: 'Vehículos MP',
-                    required: d.situacion == 'TURNADO',
-                    min: 1,
+          if (_canUseDictamenes && d.situacion == 'TURNADO') ...[
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: TextFormField(
+                    controller: _vehMpCtrl,
+                    decoration: _dec('Vehículos MP *'),
+                    keyboardType: TextInputType.number,
+                    validator: (v) => _nonNegativeIntValidator(
+                      v,
+                      label: 'Vehículos MP',
+                      required: true,
+                      min: 1,
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: TextFormField(
-                  controller: _persMpCtrl,
-                  decoration: _dec(
-                    d.situacion == 'TURNADO' ? 'Personas MP *' : 'Personas MP',
-                  ),
-                  keyboardType: TextInputType.number,
-                  validator: (v) => _nonNegativeIntValidator(
-                    v,
-                    label: 'Personas MP',
-                    required: d.situacion == 'TURNADO',
+                const SizedBox(width: 8),
+                Expanded(
+                  child: TextFormField(
+                    controller: _persMpCtrl,
+                    decoration: _dec('Personas MP *'),
+                    keyboardType: TextInputType.number,
+                    validator: (v) => _nonNegativeIntValidator(
+                      v,
+                      label: 'Personas MP',
+                      required: true,
+                    ),
                   ),
                 ),
-              ),
-            ],
-          ),
+              ],
+            ),
+          ],
 
           const SizedBox(height: 20),
           SizedBox(

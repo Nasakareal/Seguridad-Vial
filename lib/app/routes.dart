@@ -55,6 +55,14 @@ class AppRoutes {
   static const String actividadesShow = '/actividades/show';
   static const String actividadesEdit = '/actividades/edit';
 
+  static const String culturaVial = '/cultura-vial';
+  static const String culturaVialSala = '/cultura-vial/sala';
+  static const String culturaVialJoin = '/cultura-vial/join';
+
+  static const String constanciasManejo = '/constancias-manejo';
+  static const String constanciasManejoScanner = '/constancias-manejo/scanner';
+  static const String constanciasManejoDetalle = '/constancias-manejo/detalle';
+
   static const String dispositivos = '/dispositivos';
   static const String dispositivosCreate = '/dispositivos/create';
   static const String dispositivosShow = '/dispositivos/show';

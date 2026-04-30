@@ -87,6 +87,10 @@ class AppDrawer extends StatelessWidget {
   }
 
   Future<bool> _hasRequiredUnitAccess(int requiredUnitId) async {
+    if (await AuthService.hasFullOperationalAccess()) {
+      return true;
+    }
+
     if (requiredUnitId == AuthService.unidadVialidadesUrbanasId) {
       return AuthService.isVialidadesUrbanasUser();
     }
@@ -115,6 +119,7 @@ class AppDrawer extends StatelessWidget {
     var isSuperadmin = await AuthService.isSuperadmin();
     var hasFullOperationalAccess = await AuthService.hasFullOperationalAccess();
     var canReviewCarreteras = await _canReviewCarreteras();
+    var canUseConstanciasManejo = await AuthService.canUseConstanciasManejo();
 
     if (permissions.isEmpty) {
       await AuthService.refreshCurrentUserAccess();
@@ -125,6 +130,7 @@ class AppDrawer extends StatelessWidget {
       isSuperadmin = await AuthService.isSuperadmin();
       hasFullOperationalAccess = await AuthService.hasFullOperationalAccess();
       canReviewCarreteras = await _canReviewCarreteras();
+      canUseConstanciasManejo = await AuthService.canUseConstanciasManejo();
     }
 
     return _DrawerAccess(
@@ -135,6 +141,7 @@ class AppDrawer extends StatelessWidget {
       isSuperadmin: isSuperadmin,
       hasFullOperationalAccess: hasFullOperationalAccess,
       canReviewCarreteras: canReviewCarreteras,
+      canUseConstanciasManejo: canUseConstanciasManejo,
     );
   }
 
@@ -192,6 +199,9 @@ class AppDrawer extends StatelessWidget {
                     (snap.data?.canSeeVialidadesUrbanas ?? false) ||
                     hasFullOperationalAccess;
                 final unidadId = snap.data?.unidadId;
+                final canSeeCulturaVial =
+                    hasFullOperationalAccess ||
+                    unidadId == AuthService.unidadCulturaVialId;
                 final isSuperadmin = snap.data?.isSuperadmin ?? false;
                 final canSeeAllButtons = hasFullOperationalAccess;
                 final canSeePuestas =
@@ -205,6 +215,8 @@ class AppDrawer extends StatelessWidget {
                 final canSeeDictamenes =
                     canSeeAllButtons ||
                     (_allowed(perms, permDictamenes) && unidadId == 1);
+                final canSeeConstanciasManejo =
+                    snap.data?.canUseConstanciasManejo ?? false;
 
                 return ListView(
                   padding: const EdgeInsets.fromLTRB(14, 0, 14, 24),
@@ -324,6 +336,26 @@ class AppDrawer extends StatelessWidget {
                           context,
                           AppRoutes.actividades,
                           requiredPerm: permActividades,
+                        ),
+                      ),
+
+                    if (canSeeConstanciasManejo)
+                      _DrawerItem(
+                        icon: Icons.badge,
+                        label: 'Constancias de manejo',
+                        subtitle: 'Generar lotes, imprimir y activar',
+                        onTap: () => _nav(context, AppRoutes.constanciasManejo),
+                      ),
+
+                    if (canSeeCulturaVial)
+                      _DrawerItem(
+                        icon: Icons.sports_esports,
+                        label: 'Cultura Vial',
+                        subtitle: 'Salas, QR y minijuegos',
+                        onTap: () => _nav(
+                          context,
+                          AppRoutes.culturaVial,
+                          requiredUnitId: AuthService.unidadCulturaVialId,
                         ),
                       ),
 
@@ -452,6 +484,7 @@ class _DrawerAccess {
   final bool isSuperadmin;
   final bool hasFullOperationalAccess;
   final bool canReviewCarreteras;
+  final bool canUseConstanciasManejo;
 
   const _DrawerAccess({
     required this.perms,
@@ -461,6 +494,7 @@ class _DrawerAccess {
     required this.isSuperadmin,
     required this.hasFullOperationalAccess,
     required this.canReviewCarreteras,
+    required this.canUseConstanciasManejo,
   });
 }
 

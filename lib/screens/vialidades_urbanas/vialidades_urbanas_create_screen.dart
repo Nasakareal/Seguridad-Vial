@@ -5,6 +5,7 @@ import 'package:image_picker/image_picker.dart';
 
 import '../../models/vialidades_urbanas_dispositivo.dart';
 import '../../services/auth_service.dart';
+import '../../services/local_draft_service.dart';
 import '../../services/vialidades_urbanas_form_service.dart';
 import '../../services/vialidades_urbanas_service.dart';
 import '../../widgets/landscape_photo_crop_screen.dart';
@@ -55,10 +56,35 @@ class _VialidadesUrbanasCreateScreenState
   final _otrosApoyosCtrl = TextEditingController(text: '0');
 
   List<File> _fotos = <File>[];
+  late final LocalDraftAutosave _draft;
 
   @override
   void initState() {
     super.initState();
+    _draft =
+        LocalDraftAutosave(
+          draftId: 'vialidades_urbanas:create',
+          collect: _draftValues,
+        )..attachTextControllers({
+          'asunto': _asuntoCtrl,
+          'municipio': _municipioCtrl,
+          'lugar': _lugarCtrl,
+          'evento': _eventoCtrl,
+          'supervision': _supervisionCtrl,
+          'descripcion': _descripcionCtrl,
+          'objetivo': _objetivoCtrl,
+          'narrativa': _narrativaCtrl,
+          'acciones': _accionesCtrl,
+          'observaciones': _observacionesCtrl,
+          'elementos': _elementosCtrl,
+          'crp': _crpCtrl,
+          'motopatrullas': _motopatrullasCtrl,
+          'fenix': _fenixCtrl,
+          'unidades_motorizadas': _unidadesMotorizadasCtrl,
+          'patrullas': _patrullasCtrl,
+          'gruas': _gruasCtrl,
+          'otros_apoyos': _otrosApoyosCtrl,
+        });
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       await _bootstrap();
@@ -67,6 +93,7 @@ class _VialidadesUrbanasCreateScreenState
 
   @override
   void dispose() {
+    _draft.dispose();
     _asuntoCtrl.dispose();
     _municipioCtrl.dispose();
     _lugarCtrl.dispose();
@@ -121,6 +148,7 @@ class _VialidadesUrbanasCreateScreenState
         _catalogoId = catalogos.isNotEmpty ? catalogos.first.id : null;
         _loading = false;
       });
+      await _restoreLocalDraft();
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -142,6 +170,94 @@ class _VialidadesUrbanasCreateScreenState
     final h = t.hour.toString().padLeft(2, '0');
     final m = t.minute.toString().padLeft(2, '0');
     return '$h:$m';
+  }
+
+  Map<String, dynamic> _draftValues() {
+    return <String, dynamic>{
+      'catalogo_id': _catalogoId,
+      'fecha': _fmtYmd(_fecha),
+      'hora': _fmtHm(_hora),
+      'asunto': _asuntoCtrl.text,
+      'municipio': _municipioCtrl.text,
+      'lugar': _lugarCtrl.text,
+      'evento': _eventoCtrl.text,
+      'supervision': _supervisionCtrl.text,
+      'descripcion': _descripcionCtrl.text,
+      'objetivo': _objetivoCtrl.text,
+      'narrativa': _narrativaCtrl.text,
+      'acciones': _accionesCtrl.text,
+      'observaciones': _observacionesCtrl.text,
+      'elementos': _elementosCtrl.text,
+      'crp': _crpCtrl.text,
+      'motopatrullas': _motopatrullasCtrl.text,
+      'fenix': _fenixCtrl.text,
+      'unidades_motorizadas': _unidadesMotorizadasCtrl.text,
+      'patrullas': _patrullasCtrl.text,
+      'gruas': _gruasCtrl.text,
+      'otros_apoyos': _otrosApoyosCtrl.text,
+      'fotos': _fotos.map((file) => file.path).toList(),
+    };
+  }
+
+  Future<void> _restoreLocalDraft() async {
+    final restored = await _draft.restore(_applyLocalDraft);
+    if (!mounted || !restored) return;
+    setState(() {});
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Borrador local recuperado.')));
+  }
+
+  void _applyLocalDraft(Map<String, dynamic> draft) {
+    _catalogoId = _intValue(draft['catalogo_id']) ?? _catalogoId;
+    _fecha = DateTime.tryParse((draft['fecha'] ?? '').toString()) ?? _fecha;
+    _hora = _parseTime(draft['hora']) ?? _hora;
+    _asuntoCtrl.text = (draft['asunto'] ?? '').toString();
+    _municipioCtrl.text = (draft['municipio'] ?? '').toString();
+    _lugarCtrl.text = (draft['lugar'] ?? '').toString();
+    _eventoCtrl.text = (draft['evento'] ?? '').toString();
+    _supervisionCtrl.text = (draft['supervision'] ?? '').toString();
+    _descripcionCtrl.text = (draft['descripcion'] ?? '').toString();
+    _objetivoCtrl.text = (draft['objetivo'] ?? '').toString();
+    _narrativaCtrl.text = (draft['narrativa'] ?? '').toString();
+    _accionesCtrl.text = (draft['acciones'] ?? '').toString();
+    _observacionesCtrl.text = (draft['observaciones'] ?? '').toString();
+    _elementosCtrl.text = (draft['elementos'] ?? '0').toString();
+    _crpCtrl.text = (draft['crp'] ?? '0').toString();
+    _motopatrullasCtrl.text = (draft['motopatrullas'] ?? '0').toString();
+    _fenixCtrl.text = (draft['fenix'] ?? '0').toString();
+    _unidadesMotorizadasCtrl.text = (draft['unidades_motorizadas'] ?? '0')
+        .toString();
+    _patrullasCtrl.text = (draft['patrullas'] ?? '0').toString();
+    _gruasCtrl.text = (draft['gruas'] ?? '0').toString();
+    _otrosApoyosCtrl.text = (draft['otros_apoyos'] ?? '0').toString();
+    _fotos = _filesFromPaths(draft['fotos']);
+  }
+
+  int? _intValue(dynamic value) {
+    if (value is int) return value;
+    return int.tryParse((value ?? '').toString().trim());
+  }
+
+  TimeOfDay? _parseTime(dynamic value) {
+    final parts = (value ?? '').toString().split(':');
+    if (parts.length < 2) return null;
+    final hour = int.tryParse(parts[0]);
+    final minute = int.tryParse(parts[1]);
+    if (hour == null || minute == null) return null;
+    return TimeOfDay(hour: hour, minute: minute);
+  }
+
+  List<File> _filesFromPaths(dynamic value) {
+    if (value is! List) return const <File>[];
+    return value
+        .map((item) => File(item.toString()))
+        .where((file) => file.existsSync())
+        .toList();
+  }
+
+  void _markDraftChanged() {
+    _draft.notifyChanged();
   }
 
   int _readInt(TextEditingController controller) {
@@ -197,6 +313,7 @@ class _VialidadesUrbanasCreateScreenState
 
     if (picked == null) return;
     setState(() => _fecha = picked);
+    _markDraftChanged();
   }
 
   Future<void> _pickHora() async {
@@ -213,6 +330,7 @@ class _VialidadesUrbanasCreateScreenState
 
     if (picked == null) return;
     setState(() => _hora = picked);
+    _markDraftChanged();
   }
 
   Future<void> _pickPhoto(ImageSource source) async {
@@ -230,6 +348,7 @@ class _VialidadesUrbanasCreateScreenState
     if (file == null) return;
     if (!mounted) return;
     setState(() => _fotos = <File>[..._fotos, file]);
+    _markDraftChanged();
   }
 
   Future<void> _submit() async {
@@ -283,6 +402,8 @@ class _VialidadesUrbanasCreateScreenState
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text(result.message)));
+      await _draft.discard();
+      if (!mounted) return;
       Navigator.pop(context, true);
     } catch (e) {
       if (!mounted) return;
@@ -343,6 +464,7 @@ class _VialidadesUrbanasCreateScreenState
                                 .toList(),
                             onChanged: (value) {
                               setState(() => _catalogoId = value);
+                              _markDraftChanged();
                             },
                             decoration: _dec('Catalogo'),
                             validator: (value) {
@@ -583,6 +705,7 @@ class _VialidadesUrbanasCreateScreenState
                                               _fotos = <File>[..._fotos]
                                                 ..removeAt(index);
                                             });
+                                            _markDraftChanged();
                                           },
                                           child: Container(
                                             padding: const EdgeInsets.all(4),

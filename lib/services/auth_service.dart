@@ -28,6 +28,7 @@ class AuthService {
   static const int unidadCulturaVialId = 6;
   static const String locationTrackingIntervalDefault = 'default';
   static const String locationTrackingIntervalExtended = 'extended';
+  static const String locationTrackingIntervalHourly = 'hourly';
 
   static String get baseUrl => _baseUrl;
 
@@ -389,6 +390,16 @@ class AuthService {
     return _payloadHasRole(payload, 'delegado');
   }
 
+  static Future<bool> isDelegadoLocationTrackingRole() async {
+    final role = await getRole();
+    if (_roleTextEquals(role, 'delegado')) {
+      return true;
+    }
+
+    final payload = await getStoredUserPayload();
+    return _payloadHasExactRole(payload, 'delegado');
+  }
+
   static Future<bool> isAgenteVial() async {
     final roleId = await getRoleId();
     if (roleId == 12) return true;
@@ -487,6 +498,44 @@ class AuthService {
     return _payloadMatchesDelegaciones(payload);
   }
 
+  static Future<bool> canUseConstanciasManejo({bool refresh = false}) async {
+    if (refresh) {
+      await refreshCurrentUserAccess();
+    }
+
+    if (await isSuperadmin()) {
+      return true;
+    }
+
+    if (!await can('ver modulo examenes')) {
+      return false;
+    }
+
+    final unidadId = await getUnidadId();
+    if (unidadId == 1 || unidadId == unidadDelegacionesId) {
+      return true;
+    }
+
+    final payload = await getCurrentUserPayload(refresh: false);
+    return _payloadHasAnyUnitId(payload, const <int>{1, unidadDelegacionesId});
+  }
+
+  static Future<bool> canEditConstanciasManejo({bool refresh = false}) async {
+    if (refresh) {
+      await refreshCurrentUserAccess();
+    }
+
+    if (await isSuperadmin()) {
+      return true;
+    }
+
+    if (!await canUseConstanciasManejo()) {
+      return false;
+    }
+
+    return can('editar modulo examenes');
+  }
+
   static Future<bool> canShareLocationTracking() async {
     final unidadId = await getUnidadId();
     final payload = await getStoredUserPayload();
@@ -506,7 +555,7 @@ class AuthService {
     final isDelegaciones =
         unidadId == unidadDelegacionesId ||
         _payloadMatchesDelegaciones(payload);
-    if (isDelegaciones && (await isPolicia() || await isDelegado())) {
+    if (isDelegaciones && await isDelegadoLocationTrackingRole()) {
       return true;
     }
 
@@ -528,11 +577,16 @@ class AuthService {
     final unidadId = await getUnidadId();
     final payload = await getStoredUserPayload();
 
-    final isExtendedUnit =
+    final isDelegaciones =
         unidadId == unidadDelegacionesId ||
+        _payloadMatchesDelegaciones(payload);
+    if (isDelegaciones) {
+      return locationTrackingIntervalHourly;
+    }
+
+    final isExtendedUnit =
         unidadId == unidadProteccionCarreterasId ||
         unidadId == unidadVialidadesUrbanasId ||
-        _payloadMatchesDelegaciones(payload) ||
         _payloadMatchesCarreterasStrict(payload) ||
         _payloadMatchesVialidadesUrbanasStrict(payload);
 
@@ -1417,6 +1471,129 @@ class AuthService {
         _dynamicContainsRole(payload['roles'], roleName);
   }
 
+  static bool _payloadHasExactRole(
+    Map<String, dynamic>? payload,
+    String roleName,
+  ) {
+    if (payload == null || payload.isEmpty) {
+      return false;
+    }
+
+    return _dynamicContainsExactRole(payload['role'], roleName) ||
+        _dynamicContainsExactRole(payload['roles'], roleName);
+  }
+
+  static bool _payloadHasAnyUnitId(
+    Map<String, dynamic>? payload,
+    Set<int> unitIds,
+  ) {
+    if (payload == null || payload.isEmpty || unitIds.isEmpty) {
+      return false;
+    }
+
+    final directId =
+        _readNullableInt(payload['unidad_id']) ??
+        _readNullableInt(payload['unidad_org_id']);
+    if (directId != null && unitIds.contains(directId)) {
+      return true;
+    }
+
+    final candidates = <dynamic>[
+      payload['unidad'],
+      payload['unidad_principal'],
+      payload['unidadPrincipal'],
+      payload['unidades'],
+      payload['areas'],
+    ];
+
+    for (final candidate in candidates) {
+      if (_dynamicContainsAnyUnitId(candidate, unitIds)) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  static bool _dynamicContainsAnyUnitId(dynamic raw, Set<int> unitIds) {
+    if (raw == null || unitIds.isEmpty) {
+      return false;
+    }
+
+    final id = _readNullableInt(raw);
+    if (id != null && unitIds.contains(id)) {
+      return true;
+    }
+
+    if (raw is Map) {
+      final nestedId = _readNullableInt(
+        raw['id'] ??
+            raw['value'] ??
+            raw['unidad_id'] ??
+            raw['unidad_org_id'] ??
+            raw['unit_id'],
+      );
+      if (nestedId != null && unitIds.contains(nestedId)) {
+        return true;
+      }
+
+      for (final value in raw.values) {
+        if (_dynamicContainsAnyUnitId(value, unitIds)) {
+          return true;
+        }
+      }
+
+      return false;
+    }
+
+    if (raw is Iterable) {
+      for (final item in raw) {
+        if (_dynamicContainsAnyUnitId(item, unitIds)) {
+          return true;
+        }
+      }
+    }
+
+    return false;
+  }
+
+  static bool _dynamicContainsExactRole(dynamic raw, String roleName) {
+    if (raw == null) {
+      return false;
+    }
+
+    if (raw is String) {
+      return _roleTextEquals(raw, roleName);
+    }
+
+    if (raw is Map) {
+      final values = <dynamic>[
+        raw['name'],
+        raw['nombre'],
+        raw['slug'],
+        raw['label'],
+      ];
+
+      for (final value in values) {
+        if (_dynamicContainsExactRole(value, roleName)) {
+          return true;
+        }
+      }
+
+      return false;
+    }
+
+    if (raw is Iterable) {
+      for (final item in raw) {
+        if (_dynamicContainsExactRole(item, roleName)) {
+          return true;
+        }
+      }
+    }
+
+    return false;
+  }
+
   static bool _dynamicContainsRole(dynamic raw, String roleName) {
     final target = _normalizeUnitText(roleName).trim();
     if (raw == null || target.isEmpty) {
@@ -1489,7 +1666,30 @@ class AuthService {
       return false;
     }
 
-    return text == target || text.contains(target);
+    final looseText = _looseRoleText(text);
+    final looseTarget = _looseRoleText(target);
+
+    return text == target ||
+        text.contains(target) ||
+        looseText == looseTarget ||
+        looseText.contains(looseTarget);
+  }
+
+  static bool _roleTextEquals(String? raw, String roleName) {
+    final text = _normalizedRoleText(raw ?? '');
+    final target = _normalizedRoleText(roleName);
+    return text.isNotEmpty && target.isNotEmpty && text == target;
+  }
+
+  static String _normalizedRoleText(String raw) {
+    return _normalizeUnitText(raw).replaceAll(RegExp(r'\s+'), ' ').trim();
+  }
+
+  static String _looseRoleText(String raw) {
+    return raw
+        .replaceAll(RegExp(r'\bDE\b'), ' ')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
   }
 
   static bool _dynamicContainsSiniestros(dynamic raw) {

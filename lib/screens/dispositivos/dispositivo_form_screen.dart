@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -6,10 +7,12 @@ import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../core/guardianes_camino/guardianes_camino_dispositivos_catalogos.dart';
+import '../../models/actividad.dart';
 import '../../models/dispositivo_relacionados.dart';
 import '../../services/guardianes_camino_dispositivo_form_service.dart';
 import '../../services/guardianes_camino_dispositivos_service.dart';
 import '../../services/guardianes_camino_share_service.dart';
+import '../../services/local_draft_service.dart';
 import '../../widgets/landscape_photo_crop_screen.dart';
 import 'widgets/dispositivo_relacionados_modal.dart';
 
@@ -158,6 +161,7 @@ class _DispositivoFormScreenState extends State<DispositivoFormScreen> {
   final _formKey = GlobalKey<FormState>();
   final _picker = ImagePicker();
   bool _saving = false;
+  late final LocalDraftAutosave _draft;
 
   final _tipoReporteCtrl = TextEditingController();
   final _asuntoCtrl = TextEditingController();
@@ -217,10 +221,16 @@ class _DispositivoFormScreenState extends State<DispositivoFormScreen> {
     _asuntoCtrl.selection = TextSelection.collapsed(
       offset: _asuntoCtrl.text.length,
     );
+    _draft = LocalDraftAutosave(
+      draftId: 'dispositivos:create:${widget.catalogo.id}',
+      collect: _draftValues,
+    )..attachTextControllers(_allDraftTextControllers());
+    unawaited(_restoreLocalDraft());
   }
 
   @override
   void dispose() {
+    _draft.dispose();
     _tipoReporteCtrl.dispose();
     _asuntoCtrl.dispose();
     _lugarCtrl.dispose();
@@ -245,6 +255,266 @@ class _DispositivoFormScreenState extends State<DispositivoFormScreen> {
       controller.dispose();
     }
     super.dispose();
+  }
+
+  Map<String, TextEditingController> _allDraftTextControllers() {
+    return <String, TextEditingController>{
+      'tipo_reporte': _tipoReporteCtrl,
+      'asunto': _asuntoCtrl,
+      'lugar': _lugarCtrl,
+      'descripcion': _descripcionCtrl,
+      'carretera': _carreteraCtrl,
+      'tramo': _tramoCtrl,
+      'kilometro': _kilometroCtrl,
+      'narrativa': _narrativaCtrl,
+      'frase': _fraseCtrl,
+      'nombre_conductor': _nombreConductorCtrl,
+      'ocupacion': _ocupacionCtrl,
+      'acompanantes': _acompanantesCtrl,
+      'vehiculo_descripcion': _vehiculoDescripcionCtrl,
+      'placas': _placasCtrl,
+      'procedencia': _procedenciaCtrl,
+      'destino': _destinoCtrl,
+      'motivo_apoyo': _motivoApoyoCtrl,
+      'cargo_responsable': _cargoResponsableCtrl,
+      'nombre_responsable': _nombreResponsableCtrl,
+      'observaciones': _observacionesCtrl,
+      for (final entry in _dynamicControllers.entries)
+        'dynamic.${entry.key}': entry.value,
+    };
+  }
+
+  Map<String, dynamic> _draftValues() {
+    return <String, dynamic>{
+      'fecha': _fmtYmd(_fecha),
+      'hora': _fmtHm(_hora),
+      'hora_inicio': _horaInicio == null ? null : _fmtHm(_horaInicio),
+      'hora_fin': _horaFin == null ? null : _fmtHm(_horaFin),
+      'tipo_reporte': _tipoReporteCtrl.text,
+      'asunto': _asuntoCtrl.text,
+      'lugar': _lugarCtrl.text,
+      'descripcion': _descripcionCtrl.text,
+      'carretera': _carreteraCtrl.text,
+      'tramo': _tramoCtrl.text,
+      'kilometro': _kilometroCtrl.text,
+      'narrativa': _narrativaCtrl.text,
+      'frase': _fraseCtrl.text,
+      'nombre_conductor': _nombreConductorCtrl.text,
+      'ocupacion': _ocupacionCtrl.text,
+      'acompanantes': _acompanantesCtrl.text,
+      'vehiculo_descripcion': _vehiculoDescripcionCtrl.text,
+      'placas': _placasCtrl.text,
+      'procedencia': _procedenciaCtrl.text,
+      'destino': _destinoCtrl.text,
+      'motivo_apoyo': _motivoApoyoCtrl.text,
+      'cargo_responsable': _cargoResponsableCtrl.text,
+      'nombre_responsable': _nombreResponsableCtrl.text,
+      'observaciones': _observacionesCtrl.text,
+      'requiere_evidencia': _requiereEvidencia,
+      'lat': _lat,
+      'lng': _lng,
+      'geo_status': _geoStatus,
+      'dynamic': <String, String>{
+        for (final entry in _dynamicControllers.entries)
+          entry.key: entry.value.text,
+      },
+      'fotos': _fotos.map((file) => file.path).toList(),
+      'vehiculos_relacionados': _vehiculosRelacionados
+          .map(_vehiculoRelacionadoToJson)
+          .toList(),
+      'personas_relacionadas': _personasRelacionadas
+          .map(_personaRelacionadaToJson)
+          .toList(),
+    };
+  }
+
+  Future<void> _restoreLocalDraft() async {
+    final restored = await _draft.restore(_applyLocalDraft);
+    if (!mounted || !restored) return;
+    setState(() {});
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Borrador local recuperado.')));
+  }
+
+  void _applyLocalDraft(Map<String, dynamic> draft) {
+    _fecha = DateTime.tryParse((draft['fecha'] ?? '').toString()) ?? _fecha;
+    _hora = _parseTime(draft['hora']) ?? _hora;
+    _horaInicio = _parseTime(draft['hora_inicio']);
+    _horaFin = _parseTime(draft['hora_fin']);
+    _tipoReporteCtrl.text = (draft['tipo_reporte'] ?? '').toString();
+    _asuntoCtrl.text = (draft['asunto'] ?? widget.catalogo.titulo).toString();
+    _lugarCtrl.text = (draft['lugar'] ?? '').toString();
+    _descripcionCtrl.text = (draft['descripcion'] ?? '').toString();
+    _carreteraCtrl.text = (draft['carretera'] ?? '').toString();
+    _tramoCtrl.text = (draft['tramo'] ?? '').toString();
+    _kilometroCtrl.text = (draft['kilometro'] ?? '').toString();
+    _narrativaCtrl.text = (draft['narrativa'] ?? '').toString();
+    _fraseCtrl.text = (draft['frase'] ?? _fraseInstitucionalDefault).toString();
+    _nombreConductorCtrl.text = (draft['nombre_conductor'] ?? '').toString();
+    _ocupacionCtrl.text = (draft['ocupacion'] ?? '').toString();
+    _acompanantesCtrl.text = (draft['acompanantes'] ?? '0').toString();
+    _vehiculoDescripcionCtrl.text = (draft['vehiculo_descripcion'] ?? '')
+        .toString();
+    _placasCtrl.text = (draft['placas'] ?? '').toString();
+    _procedenciaCtrl.text = (draft['procedencia'] ?? '').toString();
+    _destinoCtrl.text = (draft['destino'] ?? '').toString();
+    _motivoApoyoCtrl.text = (draft['motivo_apoyo'] ?? '').toString();
+    _cargoResponsableCtrl.text = (draft['cargo_responsable'] ?? '').toString();
+    _nombreResponsableCtrl.text = (draft['nombre_responsable'] ?? '')
+        .toString();
+    _observacionesCtrl.text = (draft['observaciones'] ?? '').toString();
+    _requiereEvidencia = _boolValue(draft['requiere_evidencia']);
+    _lat = _doubleValue(draft['lat']);
+    _lng = _doubleValue(draft['lng']);
+    _geoStatus = _blankToNull(draft['geo_status']);
+
+    final dynamicFields = draft['dynamic'];
+    if (dynamicFields is Map) {
+      for (final entry in dynamicFields.entries) {
+        final controller = _dynamicControllers[entry.key.toString()];
+        if (controller != null) controller.text = entry.value?.toString() ?? '';
+      }
+    }
+
+    _fotos = _filesFromPaths(draft['fotos']);
+    _vehiculosRelacionados = _vehiculosRelacionadosFromDraft(
+      draft['vehiculos_relacionados'],
+    );
+    _personasRelacionadas = _personasRelacionadasFromDraft(
+      draft['personas_relacionadas'],
+    );
+  }
+
+  TimeOfDay? _parseTime(dynamic value) {
+    final parts = (value ?? '').toString().split(':');
+    if (parts.length < 2) return null;
+    final hour = int.tryParse(parts[0]);
+    final minute = int.tryParse(parts[1]);
+    if (hour == null || minute == null) return null;
+    return TimeOfDay(hour: hour, minute: minute);
+  }
+
+  bool _boolValue(dynamic value) {
+    if (value is bool) return value;
+    final raw = (value ?? '').toString().trim().toLowerCase();
+    return raw == '1' || raw == 'true' || raw == 'si' || raw == 'sí';
+  }
+
+  double? _doubleValue(dynamic value) {
+    if (value is double) return value;
+    if (value is int) return value.toDouble();
+    return double.tryParse((value ?? '').toString().trim());
+  }
+
+  String? _blankToNull(dynamic value) {
+    final text = (value ?? '').toString().trim();
+    return text.isEmpty ? null : text;
+  }
+
+  List<File> _filesFromPaths(dynamic value) {
+    if (value is! List) return const <File>[];
+    return value
+        .map((item) => File(item.toString()))
+        .where((file) => file.existsSync())
+        .toList();
+  }
+
+  Map<String, dynamic> _vehiculoRelacionadoToJson(
+    DispositivoVehiculoRelacionado item,
+  ) {
+    return <String, dynamic>{
+      'vehiculo': item.vehiculo.toJson(),
+      'rol': item.rol,
+      'observaciones': item.observaciones,
+    };
+  }
+
+  List<DispositivoVehiculoRelacionado> _vehiculosRelacionadosFromDraft(
+    dynamic value,
+  ) {
+    if (value is! List) return const <DispositivoVehiculoRelacionado>[];
+    return value.whereType<Map>().map((item) {
+      final data = Map<String, dynamic>.from(item);
+      final vehiculoRaw = data['vehiculo'];
+      return DispositivoVehiculoRelacionado(
+        vehiculo: vehiculoRaw is Map
+            ? ActividadVehiculo.fromJson(Map<String, dynamic>.from(vehiculoRaw))
+            : const ActividadVehiculo(
+                marca: '',
+                tipo: '',
+                linea: '',
+                color: '',
+                capacidadPersonas: 0,
+                tipoServicio: 'PARTICULAR',
+                antecedenteVehiculo: false,
+              ),
+        rol: (data['rol'] ?? '').toString(),
+        observaciones: _blankToNull(data['observaciones']),
+      );
+    }).toList();
+  }
+
+  Map<String, dynamic> _personaRelacionadaToJson(
+    DispositivoPersonaRelacionada item,
+  ) {
+    return <String, dynamic>{
+      'nombre': item.nombre,
+      'tipo_participacion': item.tipoParticipacion,
+      'curp': item.curp,
+      'telefono': item.telefono,
+      'domicilio': item.domicilio,
+      'sexo': item.sexo,
+      'ocupacion': item.ocupacion,
+      'edad': item.edad,
+      'tipo_licencia': item.tipoLicencia,
+      'estado_licencia': item.estadoLicencia,
+      'vigencia_licencia': item.vigenciaLicencia?.toIso8601String(),
+      'numero_licencia': item.numeroLicencia,
+      'permanente': item.permanente,
+      'cinturon': item.cinturon,
+      'antecedentes': item.antecedentes,
+      'certificado_lesiones': item.certificadoLesiones,
+      'certificado_alcoholemia': item.certificadoAlcoholemia,
+      'aliento_etilico': item.alientoEtilico,
+      'observaciones': item.observaciones,
+    };
+  }
+
+  List<DispositivoPersonaRelacionada> _personasRelacionadasFromDraft(
+    dynamic value,
+  ) {
+    if (value is! List) return const <DispositivoPersonaRelacionada>[];
+    return value.whereType<Map>().map((item) {
+      final data = Map<String, dynamic>.from(item);
+      return DispositivoPersonaRelacionada(
+        nombre: (data['nombre'] ?? '').toString(),
+        tipoParticipacion: (data['tipo_participacion'] ?? '').toString(),
+        curp: _blankToNull(data['curp']),
+        telefono: _blankToNull(data['telefono']),
+        domicilio: _blankToNull(data['domicilio']),
+        sexo: _blankToNull(data['sexo']),
+        ocupacion: _blankToNull(data['ocupacion']),
+        edad: int.tryParse((data['edad'] ?? '').toString()),
+        tipoLicencia: _blankToNull(data['tipo_licencia']),
+        estadoLicencia: _blankToNull(data['estado_licencia']),
+        vigenciaLicencia: DateTime.tryParse(
+          (data['vigencia_licencia'] ?? '').toString(),
+        ),
+        numeroLicencia: _blankToNull(data['numero_licencia']),
+        permanente: _boolValue(data['permanente']),
+        cinturon: _boolValue(data['cinturon']),
+        antecedentes: _boolValue(data['antecedentes']),
+        certificadoLesiones: _boolValue(data['certificado_lesiones']),
+        certificadoAlcoholemia: _boolValue(data['certificado_alcoholemia']),
+        alientoEtilico: _boolValue(data['aliento_etilico']),
+        observaciones: _blankToNull(data['observaciones']),
+      );
+    }).toList();
+  }
+
+  void _markDraftChanged() {
+    _draft.notifyChanged();
   }
 
   String _fmtYmd(DateTime d) {
@@ -302,6 +572,7 @@ class _DispositivoFormScreenState extends State<DispositivoFormScreen> {
           setState(() {
             controller.text = value?.trim() ?? '';
           });
+          _markDraftChanged();
         },
         decoration: _dec(spec.label),
       );
@@ -377,6 +648,7 @@ class _DispositivoFormScreenState extends State<DispositivoFormScreen> {
     );
     if (picked == null) return;
     setState(() => _fecha = picked);
+    _markDraftChanged();
   }
 
   Future<void> _pickHora({
@@ -395,6 +667,7 @@ class _DispositivoFormScreenState extends State<DispositivoFormScreen> {
     );
     if (picked == null) return;
     setState(() => onSelected(picked));
+    _markDraftChanged();
   }
 
   Future<void> _usarUbicacionActual() async {
@@ -429,6 +702,7 @@ class _DispositivoFormScreenState extends State<DispositivoFormScreen> {
         _geoStatus =
             'OK: ${position.latitude.toStringAsFixed(6)}, ${position.longitude.toStringAsFixed(6)}';
       });
+      _markDraftChanged();
     } catch (e) {
       if (!mounted) return;
       setState(() => _geoStatus = 'No se pudo obtener la ubicación: $e');
@@ -452,6 +726,7 @@ class _DispositivoFormScreenState extends State<DispositivoFormScreen> {
     if (file == null) return;
     if (!mounted) return;
     setState(() => _fotos = <File>[..._fotos, file]);
+    _markDraftChanged();
   }
 
   Future<void> _addRelacionado() async {
@@ -477,6 +752,7 @@ class _DispositivoFormScreenState extends State<DispositivoFormScreen> {
 
       _syncRelacionadosCounters();
     });
+    _markDraftChanged();
   }
 
   void _syncRelacionadosCounters() {
@@ -571,6 +847,7 @@ class _DispositivoFormScreenState extends State<DispositivoFormScreen> {
                       ]..removeAt(index);
                       _syncRelacionadosCounters();
                     });
+                    _markDraftChanged();
                   },
                 ),
               ),
@@ -591,6 +868,7 @@ class _DispositivoFormScreenState extends State<DispositivoFormScreen> {
                       ]..removeAt(index);
                       _syncRelacionadosCounters();
                     });
+                    _markDraftChanged();
                   },
                 ),
               ),
@@ -673,6 +951,8 @@ class _DispositivoFormScreenState extends State<DispositivoFormScreen> {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text(result.message)));
+      await _draft.discard();
+      if (!mounted) return;
       final dispositivoId = _extractDispositivoId(result.responseBody);
       if (result.synced && dispositivoId != null) {
         final shareNow = await _promptShareCreated();
@@ -960,6 +1240,7 @@ class _DispositivoFormScreenState extends State<DispositivoFormScreen> {
                                 _lng = null;
                                 _geoStatus = 'Sin coordenadas';
                               });
+                              _markDraftChanged();
                             },
                             child: const Text('Quitar'),
                           ),
@@ -1071,8 +1352,10 @@ class _DispositivoFormScreenState extends State<DispositivoFormScreen> {
                       contentPadding: EdgeInsets.zero,
                       title: const Text('Requiere evidencia'),
                       value: _requiereEvidencia,
-                      onChanged: (value) =>
-                          setState(() => _requiereEvidencia = value),
+                      onChanged: (value) {
+                        setState(() => _requiereEvidencia = value);
+                        _markDraftChanged();
+                      },
                     ),
                     const SizedBox(height: 12),
                     TextFormField(
@@ -1143,6 +1426,7 @@ class _DispositivoFormScreenState extends State<DispositivoFormScreen> {
                                         _fotos = <File>[..._fotos]
                                           ..removeAt(index);
                                       });
+                                      _markDraftChanged();
                                     },
                                     child: Container(
                                       padding: const EdgeInsets.all(4),

@@ -30,8 +30,14 @@ class TrackingTaskHandler extends TaskHandler {
   static const Duration kExtendedMinInterval = Duration(minutes: 7);
   static const Duration kExtendedStillInterval = Duration(minutes: 10);
   static const Duration kExtendedSlowInterval = Duration(minutes: 9);
+  static const Duration kHourlyInterval = Duration(hours: 1);
 
-  Duration _intervalForSpeed(double speedMps, {required bool extended}) {
+  Duration _intervalForSpeed(double speedMps, {required String profile}) {
+    if (profile == AuthService.locationTrackingIntervalHourly) {
+      return kHourlyInterval;
+    }
+
+    final extended = profile == AuthService.locationTrackingIntervalExtended;
     if (extended) {
       if (!speedMps.isFinite || speedMps < 0) return kExtendedSlowInterval;
       if (speedMps <= 0.5) return kExtendedStillInterval;
@@ -45,12 +51,24 @@ class TrackingTaskHandler extends TaskHandler {
     return kMoveInterval;
   }
 
-  bool _shouldSendNow(Duration wanted, {required bool extended}) {
+  Duration _minIntervalForProfile(String profile) {
+    if (profile == AuthService.locationTrackingIntervalHourly) {
+      return kHourlyInterval;
+    }
+
+    if (profile == AuthService.locationTrackingIntervalExtended) {
+      return kExtendedMinInterval;
+    }
+
+    return kMinInterval;
+  }
+
+  bool _shouldSendNow(Duration wanted, {required String profile}) {
     final last = _lastSentAt;
     if (last == null) return true;
 
     final elapsed = DateTime.now().difference(last);
-    final minInterval = extended ? kExtendedMinInterval : kMinInterval;
+    final minInterval = _minIntervalForProfile(profile);
     if (elapsed < minInterval) return false;
     if (elapsed < wanted) return false;
 
@@ -103,11 +121,12 @@ class TrackingTaskHandler extends TaskHandler {
 
       final intervalProfile =
           await AuthService.getLocationTrackingIntervalProfile();
-      final extended =
-          intervalProfile == AuthService.locationTrackingIntervalExtended;
 
-      final wantedInterval = _intervalForSpeed(pos.speed, extended: extended);
-      if (!_shouldSendNow(wantedInterval, extended: extended)) return;
+      final wantedInterval = _intervalForSpeed(
+        pos.speed,
+        profile: intervalProfile,
+      );
+      if (!_shouldSendNow(wantedInterval, profile: intervalProfile)) return;
 
       final sent = await LocationService(
         apiBase: apiBase,

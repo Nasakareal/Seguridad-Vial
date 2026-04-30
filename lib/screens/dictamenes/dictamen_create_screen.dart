@@ -1,9 +1,11 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../services/dictamenes_service.dart';
+import '../../services/local_draft_service.dart';
 
 class DictamenCreateScreen extends StatefulWidget {
   const DictamenCreateScreen({super.key});
@@ -27,12 +29,58 @@ class _DictamenCreateScreenState extends State<DictamenCreateScreen> {
   String? _pdfName;
 
   final _picker = ImagePicker();
+  late final LocalDraftAutosave _draft;
+
+  @override
+  void initState() {
+    super.initState();
+    _draft =
+        LocalDraftAutosave(draftId: 'dictamenes:create', collect: _draftValues)
+          ..attachTextControllers({
+            'nombre_policia': _nombrePolicia,
+            'nombre_mp': _nombreMp,
+          });
+    unawaited(_restoreLocalDraft());
+  }
 
   @override
   void dispose() {
+    _draft.dispose();
     _nombrePolicia.dispose();
     _nombreMp.dispose();
     super.dispose();
+  }
+
+  Map<String, dynamic> _draftValues() {
+    return <String, dynamic>{
+      'nombre_policia': _nombrePolicia.text,
+      'nombre_mp': _nombreMp.text,
+      'pdf_path': _pdf?.path,
+      'pdf_name': _pdfName,
+    };
+  }
+
+  Future<void> _restoreLocalDraft() async {
+    final restored = await _draft.restore((draft) {
+      _nombrePolicia.text = (draft['nombre_policia'] ?? '').toString();
+      _nombreMp.text = (draft['nombre_mp'] ?? '').toString();
+      final path = (draft['pdf_path'] ?? '').toString().trim();
+      if (path.isNotEmpty) {
+        final file = File(path);
+        if (file.existsSync()) {
+          _pdf = file;
+          _pdfName = (draft['pdf_name'] ?? '').toString().trim();
+          if ((_pdfName ?? '').isEmpty) {
+            _pdfName = path.split(Platform.pathSeparator).last;
+          }
+        }
+      }
+    });
+    if (!mounted || !restored) return;
+    setState(() {});
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Borrador local recuperado.')));
   }
 
   Future<void> _pickPdf() async {
@@ -57,6 +105,7 @@ class _DictamenCreateScreenState extends State<DictamenCreateScreen> {
         _pdf = File(path);
         _pdfName = path.split(Platform.pathSeparator).last;
       });
+      _draft.notifyChanged();
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -70,6 +119,7 @@ class _DictamenCreateScreenState extends State<DictamenCreateScreen> {
       _pdf = null;
       _pdfName = null;
     });
+    _draft.notifyChanged();
   }
 
   Future<void> _save() async {
@@ -104,6 +154,8 @@ class _DictamenCreateScreenState extends State<DictamenCreateScreen> {
         ),
       );
 
+      await _draft.discard();
+      if (!mounted) return;
       Navigator.pop(context, true);
     } catch (e) {
       if (!mounted) return;

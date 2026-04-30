@@ -242,29 +242,15 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
     final a = _actividad;
     if (a == null) return;
 
-    if (_categoriaId == null || _categoriaId! <= 0) {
-      setState(() => _error = 'Selecciona una categoria.');
-      return;
-    }
-
-    if (_subcategorias.isEmpty) {
-      setState(
-        () => _error =
-            'La categoria seleccionada no tiene subcategorias disponibles.',
-      );
-      return;
-    }
-
-    if (_subcategoriaId == null || _subcategoriaId! <= 0) {
-      setState(() => _error = 'Selecciona una subcategoria.');
-      return;
-    }
-
-    final personasAlcanzadas = int.tryParse(
-      _personasAlcanzadasCtrl.text.trim(),
+    final payload = _buildPayload();
+    final validation = await ActividadesService.validateBeforeSubmit(
+      data: payload,
+      fotos: _fotoNueva == null ? const <File>[] : <File>[_fotoNueva!],
+      requirePhotos: false,
+      requireCoords: false,
     );
-    if (personasAlcanzadas == null || personasAlcanzadas < 1) {
-      setState(() => _error = 'Captura al menos 1 persona alcanzada.');
+    if (validation != null) {
+      setState(() => _error = validation);
       return;
     }
 
@@ -274,7 +260,7 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
     try {
       final result = await ActividadesService.update(
         id: a.id,
-        data: _buildPayload(),
+        data: payload,
         foto: _fotoNueva,
       );
 
@@ -285,7 +271,10 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
       Navigator.pop(context, true);
     } catch (e) {
       if (!mounted) return;
-      setState(() => _error = 'No se pudo actualizar.\n$e');
+      setState(
+        () => _error =
+            'No se pudo actualizar.\n${ActividadesService.cleanExceptionMessage(e)}',
+      );
     } finally {
       if (mounted) setState(() => _saving = false);
     }

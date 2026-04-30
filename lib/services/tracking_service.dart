@@ -24,6 +24,7 @@ class TrackingService {
 
   static Position? _lastGood;
   static DateTime? _lastGoodAt;
+  static DateTime? _iosLastSentAt;
 
   static Future<bool> startAfterConsent(BuildContext context) async {
     return await startWithDisclosure(context);
@@ -183,6 +184,7 @@ class TrackingService {
       _iosRunning = false;
       _lastGood = null;
       _lastGoodAt = null;
+      _iosLastSentAt = null;
     } catch (_) {}
   }
 
@@ -247,7 +249,28 @@ class TrackingService {
     _lastGood = pos;
     _lastGoodAt = DateTime.now();
 
-    await ls.sendOnce(positionOverride: pos, requireAlways: requireAlways);
+    final intervalProfile =
+        await AuthService.getLocationTrackingIntervalProfile();
+    if (!_shouldSendIosNow(intervalProfile)) return;
+
+    final sent = await ls.sendOnce(
+      positionOverride: pos,
+      requireAlways: requireAlways,
+    );
+    if (sent && intervalProfile == AuthService.locationTrackingIntervalHourly) {
+      _iosLastSentAt = DateTime.now();
+    }
+  }
+
+  static bool _shouldSendIosNow(String intervalProfile) {
+    if (intervalProfile != AuthService.locationTrackingIntervalHourly) {
+      return true;
+    }
+
+    final lastSentAt = _iosLastSentAt;
+    if (lastSentAt == null) return true;
+
+    return DateTime.now().difference(lastSentAt) >= const Duration(hours: 1);
   }
 
   static Future<bool> _sendOnceIfGood(

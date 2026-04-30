@@ -55,6 +55,10 @@ import '../screens/actividades/actividades_screen.dart';
 import '../screens/actividades/actividad_create_screen.dart';
 import '../screens/actividades/actividad_edit_screen.dart';
 import '../screens/actividades/actividad_show_screen.dart';
+import '../screens/cultura_vial/cultura_vial_home_screen.dart';
+import '../screens/cultura_vial/cultura_vial_join_screen.dart';
+import '../screens/constancias_manejo/constancias_manejo_screen.dart';
+import '../screens/constancias_manejo/constancia_manejo_scan_screen.dart';
 import '../screens/dispositivos/dispositivo_create_screen.dart';
 import '../screens/dispositivos/dispositivo_show_screen.dart';
 import '../screens/dispositivos/dispositivos_revision_screen.dart';
@@ -128,6 +132,14 @@ final Map<String, WidgetBuilder> appRoutesMap = {
   AppRoutes.actividadesCreate: (context) => const ActividadCreateScreen(),
   AppRoutes.actividadesShow: (context) => const ActividadShowScreen(),
   AppRoutes.actividadesEdit: (context) => const ActividadEditScreen(),
+  AppRoutes.culturaVial: (context) => const CulturaVialHomeScreen(),
+  AppRoutes.culturaVialSala: (context) => const CulturaVialSalaScreen(),
+  AppRoutes.culturaVialJoin: (context) => const CulturaVialJoinScreen(),
+  AppRoutes.constanciasManejo: (context) => const ConstanciasManejoScreen(),
+  AppRoutes.constanciasManejoScanner: (context) =>
+      const ConstanciaManejoScanScreen(),
+  AppRoutes.constanciasManejoDetalle: (context) =>
+      const ConstanciaManejoDetailScreen(),
   AppRoutes.dispositivos: (context) => const DispositivosScreen(),
   AppRoutes.dispositivosCreate: (context) => const DispositivoCreateScreen(),
   AppRoutes.dispositivosRevision: (context) =>

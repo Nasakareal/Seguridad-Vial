@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
@@ -5,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../services/puestas_disposicion_service.dart';
+import '../../services/local_draft_service.dart';
 
 class PuestaDisposicionCreateScreen extends StatefulWidget {
   const PuestaDisposicionCreateScreen({super.key});
@@ -44,15 +46,32 @@ class _PuestaDisposicionCreateScreenState
   final _personas = <_PersonaFields>[];
   final _vehiculos = <_VehiculoFields>[];
   final _objetos = <_ObjetoFields>[];
+  late final LocalDraftAutosave _draft;
 
   @override
   void initState() {
     super.initState();
+    _draft =
+        LocalDraftAutosave(
+          draftId: 'puestas_disposicion:create',
+          collect: _draftValues,
+        )..attachTextControllers({
+          'motivo': _motivo,
+          'lugar': _lugar,
+          'policia': _policia,
+          'mp': _mp,
+          'autoridad': _autoridad,
+          'carpeta': _carpeta,
+          'oficio': _oficio,
+          'narrativa': _narrativa,
+          'observaciones': _observaciones,
+        });
     _loadUnidades();
   }
 
   @override
   void dispose() {
+    _draft.dispose();
     for (final item in _personas) {
       item.dispose();
     }
@@ -83,6 +102,7 @@ class _PuestaDisposicionCreateScreenState
         _unidadId = unidades.isNotEmpty ? unidades.first.id : null;
         _loadingUnidades = false;
       });
+      await _restoreLocalDraft();
     } catch (_) {
       if (!mounted) return;
       setState(() => _loadingUnidades = false);
@@ -108,6 +128,286 @@ class _PuestaDisposicionCreateScreenState
     if (text.isNotEmpty) fields[key] = text;
   }
 
+  Map<String, dynamic> _draftValues() {
+    return <String, dynamic>{
+      'tipo_puesta': _tipoPuesta,
+      'unidad_id': _unidadId,
+      'fecha': _ymd(_fecha),
+      'hora': _hora == null
+          ? null
+          : '${_hora!.hour.toString().padLeft(2, '0')}:${_hora!.minute.toString().padLeft(2, '0')}',
+      'motivo': _motivo.text,
+      'lugar': _lugar.text,
+      'policia': _policia.text,
+      'mp': _mp.text,
+      'autoridad': _autoridad.text,
+      'carpeta': _carpeta.text,
+      'oficio': _oficio.text,
+      'narrativa': _narrativa.text,
+      'observaciones': _observaciones.text,
+      'pdf_path': _pdf?.path,
+      'pdf_name': _pdfName,
+      'personas': _personas.map(_personaToJson).toList(),
+      'vehiculos': _vehiculos.map(_vehiculoToJson).toList(),
+      'objetos': _objetos.map(_objetoToJson).toList(),
+    };
+  }
+
+  Future<void> _restoreLocalDraft() async {
+    final restored = await _draft.restore(_applyLocalDraft);
+    if (!mounted || !restored) return;
+    _attachDynamicDraftControllers();
+    setState(() {});
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Borrador local recuperado.')));
+  }
+
+  void _applyLocalDraft(Map<String, dynamic> draft) {
+    _tipoPuesta = (draft['tipo_puesta'] ?? _tipoPuesta).toString();
+    _unidadId = _intValue(draft['unidad_id']) ?? _unidadId;
+    _fecha = DateTime.tryParse((draft['fecha'] ?? '').toString()) ?? _fecha;
+    _hora = _parseTime(draft['hora']) ?? _hora;
+    _motivo.text = (draft['motivo'] ?? '').toString();
+    _lugar.text = (draft['lugar'] ?? '').toString();
+    _policia.text = (draft['policia'] ?? '').toString();
+    _mp.text = (draft['mp'] ?? '').toString();
+    _autoridad.text = (draft['autoridad'] ?? '').toString();
+    _carpeta.text = (draft['carpeta'] ?? '').toString();
+    _oficio.text = (draft['oficio'] ?? '').toString();
+    _narrativa.text = (draft['narrativa'] ?? '').toString();
+    _observaciones.text = (draft['observaciones'] ?? '').toString();
+
+    final pdfPath = (draft['pdf_path'] ?? '').toString().trim();
+    if (pdfPath.isNotEmpty) {
+      final file = File(pdfPath);
+      if (file.existsSync()) {
+        _pdf = file;
+        _pdfName = (draft['pdf_name'] ?? '').toString().trim();
+        if ((_pdfName ?? '').isEmpty) {
+          _pdfName = pdfPath.split(Platform.pathSeparator).last;
+        }
+      }
+    }
+
+    _personas
+      ..forEach((item) => item.dispose())
+      ..clear()
+      ..addAll(_personasFromDraft(draft['personas']));
+    _vehiculos
+      ..forEach((item) => item.dispose())
+      ..clear()
+      ..addAll(_vehiculosFromDraft(draft['vehiculos']));
+    _objetos
+      ..forEach((item) => item.dispose())
+      ..clear()
+      ..addAll(_objetosFromDraft(draft['objetos']));
+  }
+
+  int? _intValue(dynamic value) {
+    if (value is int) return value;
+    return int.tryParse((value ?? '').toString().trim());
+  }
+
+  TimeOfDay? _parseTime(dynamic value) {
+    final parts = (value ?? '').toString().split(':');
+    if (parts.length < 2) return null;
+    final hour = int.tryParse(parts[0]);
+    final minute = int.tryParse(parts[1]);
+    if (hour == null || minute == null) return null;
+    return TimeOfDay(hour: hour, minute: minute);
+  }
+
+  bool _boolValue(dynamic value) {
+    if (value is bool) return value;
+    final raw = (value ?? '').toString().trim().toLowerCase();
+    return raw == '1' || raw == 'true' || raw == 'si' || raw == 'sí';
+  }
+
+  void _attachDynamicDraftControllers() {
+    final controllers = <String, TextEditingController>{};
+    for (var i = 0; i < _personas.length; i++) {
+      final item = _personas[i];
+      controllers.addAll({
+        'personas.$i.nombre': item.nombre,
+        'personas.$i.alias': item.alias,
+        'personas.$i.edad': item.edad,
+        'personas.$i.sexo': item.sexo,
+        'personas.$i.fecha_nacimiento': item.fechaNacimiento,
+        'personas.$i.curp': item.curp,
+        'personas.$i.rfc': item.rfc,
+        'personas.$i.calidad': item.calidad,
+        'personas.$i.domicilio': item.domicilio,
+        'personas.$i.delito': item.delito,
+        'personas.$i.mandamiento': item.mandamiento,
+        'personas.$i.observaciones': item.observaciones,
+      });
+    }
+    for (var i = 0; i < _vehiculos.length; i++) {
+      final item = _vehiculos[i];
+      controllers.addAll({
+        'vehiculos.$i.tipo': item.tipo,
+        'vehiculos.$i.marca': item.marca,
+        'vehiculos.$i.submarca': item.submarca,
+        'vehiculos.$i.modelo': item.modelo,
+        'vehiculos.$i.color': item.color,
+        'vehiculos.$i.placas': item.placas,
+        'vehiculos.$i.serie': item.serie,
+        'vehiculos.$i.calidad': item.calidad,
+        'vehiculos.$i.motivo': item.motivoRelacion,
+        'vehiculos.$i.reporte_robo': item.numeroReporteRobo,
+        'vehiculos.$i.observaciones': item.observaciones,
+      });
+    }
+    for (var i = 0; i < _objetos.length; i++) {
+      final item = _objetos[i];
+      controllers.addAll({
+        'objetos.$i.tipo': item.tipoObjeto,
+        'objetos.$i.descripcion': item.descripcion,
+        'objetos.$i.cantidad': item.cantidad,
+        'objetos.$i.unidad': item.unidadMedida,
+        'objetos.$i.cadena': item.cadenaCustodia,
+        'objetos.$i.observaciones': item.observaciones,
+      });
+    }
+    _draft.attachTextControllers(controllers);
+  }
+
+  void _addPersona() {
+    setState(() => _personas.add(_PersonaFields()));
+    _attachDynamicDraftControllers();
+    _markDraftChanged();
+  }
+
+  void _addVehiculo() {
+    setState(() => _vehiculos.add(_VehiculoFields()));
+    _attachDynamicDraftControllers();
+    _markDraftChanged();
+  }
+
+  void _addObjeto() {
+    setState(() => _objetos.add(_ObjetoFields()));
+    _attachDynamicDraftControllers();
+    _markDraftChanged();
+  }
+
+  void _markDraftChanged() {
+    _draft.notifyChanged();
+  }
+
+  Map<String, dynamic> _personaToJson(_PersonaFields item) {
+    return <String, dynamic>{
+      'nombre': item.nombre.text,
+      'alias': item.alias.text,
+      'edad': item.edad.text,
+      'sexo': item.sexo.text,
+      'fecha_nacimiento': item.fechaNacimiento.text,
+      'curp': item.curp.text,
+      'rfc': item.rfc.text,
+      'calidad': item.calidad.text,
+      'domicilio': item.domicilio.text,
+      'delito': item.delito.text,
+      'orden_aprehension': item.ordenAprehension,
+      'mandamiento': item.mandamiento.text,
+      'observaciones': item.observaciones.text,
+    };
+  }
+
+  _PersonaFields _personaFromJson(Map<String, dynamic> data) {
+    return _PersonaFields()
+      ..nombre.text = (data['nombre'] ?? '').toString()
+      ..alias.text = (data['alias'] ?? '').toString()
+      ..edad.text = (data['edad'] ?? '').toString()
+      ..sexo.text = (data['sexo'] ?? '').toString()
+      ..fechaNacimiento.text = (data['fecha_nacimiento'] ?? '').toString()
+      ..curp.text = (data['curp'] ?? '').toString()
+      ..rfc.text = (data['rfc'] ?? '').toString()
+      ..calidad.text = (data['calidad'] ?? '').toString()
+      ..domicilio.text = (data['domicilio'] ?? '').toString()
+      ..delito.text = (data['delito'] ?? '').toString()
+      ..ordenAprehension = _boolValue(data['orden_aprehension'])
+      ..mandamiento.text = (data['mandamiento'] ?? '').toString()
+      ..observaciones.text = (data['observaciones'] ?? '').toString();
+  }
+
+  List<_PersonaFields> _personasFromDraft(dynamic value) {
+    if (value is! List) return <_PersonaFields>[];
+    return value
+        .whereType<Map>()
+        .map((item) => _personaFromJson(Map<String, dynamic>.from(item)))
+        .toList();
+  }
+
+  Map<String, dynamic> _vehiculoToJson(_VehiculoFields item) {
+    return <String, dynamic>{
+      'tipo': item.tipo.text,
+      'marca': item.marca.text,
+      'submarca': item.submarca.text,
+      'modelo': item.modelo.text,
+      'color': item.color.text,
+      'placas': item.placas.text,
+      'serie': item.serie.text,
+      'calidad': item.calidad.text,
+      'motivo_relacion': item.motivoRelacion.text,
+      'con_reporte_robo': item.conReporteRobo,
+      'numero_reporte_robo': item.numeroReporteRobo.text,
+      'observaciones': item.observaciones.text,
+    };
+  }
+
+  _VehiculoFields _vehiculoFromJson(Map<String, dynamic> data) {
+    return _VehiculoFields()
+      ..tipo.text = (data['tipo'] ?? '').toString()
+      ..marca.text = (data['marca'] ?? '').toString()
+      ..submarca.text = (data['submarca'] ?? '').toString()
+      ..modelo.text = (data['modelo'] ?? '').toString()
+      ..color.text = (data['color'] ?? '').toString()
+      ..placas.text = (data['placas'] ?? '').toString()
+      ..serie.text = (data['serie'] ?? '').toString()
+      ..calidad.text = (data['calidad'] ?? '').toString()
+      ..motivoRelacion.text = (data['motivo_relacion'] ?? '').toString()
+      ..conReporteRobo = _boolValue(data['con_reporte_robo'])
+      ..numeroReporteRobo.text = (data['numero_reporte_robo'] ?? '').toString()
+      ..observaciones.text = (data['observaciones'] ?? '').toString();
+  }
+
+  List<_VehiculoFields> _vehiculosFromDraft(dynamic value) {
+    if (value is! List) return <_VehiculoFields>[];
+    return value
+        .whereType<Map>()
+        .map((item) => _vehiculoFromJson(Map<String, dynamic>.from(item)))
+        .toList();
+  }
+
+  Map<String, dynamic> _objetoToJson(_ObjetoFields item) {
+    return <String, dynamic>{
+      'tipo_objeto': item.tipoObjeto.text,
+      'descripcion': item.descripcion.text,
+      'cantidad': item.cantidad.text,
+      'unidad_medida': item.unidadMedida.text,
+      'cadena_custodia': item.cadenaCustodia.text,
+      'observaciones': item.observaciones.text,
+    };
+  }
+
+  _ObjetoFields _objetoFromJson(Map<String, dynamic> data) {
+    return _ObjetoFields()
+      ..tipoObjeto.text = (data['tipo_objeto'] ?? '').toString()
+      ..descripcion.text = (data['descripcion'] ?? '').toString()
+      ..cantidad.text = (data['cantidad'] ?? '').toString()
+      ..unidadMedida.text = (data['unidad_medida'] ?? '').toString()
+      ..cadenaCustodia.text = (data['cadena_custodia'] ?? '').toString()
+      ..observaciones.text = (data['observaciones'] ?? '').toString();
+  }
+
+  List<_ObjetoFields> _objetosFromDraft(dynamic value) {
+    if (value is! List) return <_ObjetoFields>[];
+    return value
+        .whereType<Map>()
+        .map((item) => _objetoFromJson(Map<String, dynamic>.from(item)))
+        .toList();
+  }
+
   Future<void> _pickDate() async {
     final picked = await showDatePicker(
       context: context,
@@ -116,7 +416,10 @@ class _PuestaDisposicionCreateScreenState
       lastDate: DateTime(DateTime.now().year + 1),
     );
 
-    if (picked != null && mounted) setState(() => _fecha = picked);
+    if (picked != null && mounted) {
+      setState(() => _fecha = picked);
+      _markDraftChanged();
+    }
   }
 
   Future<void> _pickTime() async {
@@ -125,7 +428,10 @@ class _PuestaDisposicionCreateScreenState
       initialTime: _hora ?? TimeOfDay.now(),
     );
 
-    if (picked != null && mounted) setState(() => _hora = picked);
+    if (picked != null && mounted) {
+      setState(() => _hora = picked);
+      _markDraftChanged();
+    }
   }
 
   Future<void> _pickPdf() async {
@@ -145,6 +451,7 @@ class _PuestaDisposicionCreateScreenState
         _pdf = File(selected.path);
         _pdfName = selected.name;
       });
+      _markDraftChanged();
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -223,6 +530,8 @@ class _PuestaDisposicionCreateScreenState
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('Puesta registrada.')));
+      await _draft.discard();
+      if (!mounted) return;
       Navigator.of(context).pop(true);
     } catch (error) {
       if (!mounted) return;
@@ -278,9 +587,12 @@ class _PuestaDisposicionCreateScreenState
                         ],
                         onChanged: _saving
                             ? null
-                            : (value) => setState(
-                                () => _tipoPuesta = value ?? 'PERSONA',
-                              ),
+                            : (value) {
+                                setState(
+                                  () => _tipoPuesta = value ?? 'PERSONA',
+                                );
+                                _markDraftChanged();
+                              },
                       ),
                       const SizedBox(height: 12),
                       _field(_motivo, 'Motivo', validator: _required),
@@ -346,7 +658,10 @@ class _PuestaDisposicionCreateScreenState
                             value == null ? 'Campo requerido' : null,
                         onChanged: _saving
                             ? null
-                            : (value) => setState(() => _unidadId = value),
+                            : (value) {
+                                setState(() => _unidadId = value);
+                                _markDraftChanged();
+                              },
                       ),
                       const SizedBox(height: 12),
                       _field(_carpeta, 'Carpeta de Investigación'),
@@ -377,10 +692,13 @@ class _PuestaDisposicionCreateScreenState
                             IconButton(
                               onPressed: _saving
                                   ? null
-                                  : () => setState(() {
-                                      _pdf = null;
-                                      _pdfName = null;
-                                    }),
+                                  : () {
+                                      setState(() {
+                                        _pdf = null;
+                                        _pdfName = null;
+                                      });
+                                      _markDraftChanged();
+                                    },
                               icon: const Icon(Icons.close),
                             ),
                         ],
@@ -403,8 +721,7 @@ class _PuestaDisposicionCreateScreenState
                   _dynamicSection(
                     title: 'Personas',
                     button: 'Agregar Persona',
-                    onAdd: () =>
-                        setState(() => _personas.add(_PersonaFields())),
+                    onAdd: _addPersona,
                     children: [
                       for (var i = 0; i < _personas.length; i++)
                         _personaCard(_personas[i], i),
@@ -414,8 +731,7 @@ class _PuestaDisposicionCreateScreenState
                   _dynamicSection(
                     title: 'Vehículos',
                     button: 'Agregar Vehículo',
-                    onAdd: () =>
-                        setState(() => _vehiculos.add(_VehiculoFields())),
+                    onAdd: _addVehiculo,
                     children: [
                       for (var i = 0; i < _vehiculos.length; i++)
                         _vehiculoCard(_vehiculos[i], i),
@@ -425,7 +741,7 @@ class _PuestaDisposicionCreateScreenState
                   _dynamicSection(
                     title: 'Objetos',
                     button: 'Agregar Objeto',
-                    onAdd: () => setState(() => _objetos.add(_ObjetoFields())),
+                    onAdd: _addObjeto,
                     children: [
                       for (var i = 0; i < _objetos.length; i++)
                         _objetoCard(_objetos[i], i),
@@ -512,7 +828,10 @@ class _PuestaDisposicionCreateScreenState
   Widget _personaCard(_PersonaFields item, int index) {
     return _DynamicBlock(
       title: 'Persona ${index + 1}',
-      onRemove: () => setState(() => _personas.removeAt(index).dispose()),
+      onRemove: () {
+        setState(() => _personas.removeAt(index).dispose());
+        _markDraftChanged();
+      },
       children: [
         _field(
           item.nombre,
@@ -543,8 +862,10 @@ class _PuestaDisposicionCreateScreenState
           contentPadding: EdgeInsets.zero,
           value: item.ordenAprehension,
           title: const Text('Orden de Aprehensión'),
-          onChanged: (value) =>
-              setState(() => item.ordenAprehension = value ?? false),
+          onChanged: (value) {
+            setState(() => item.ordenAprehension = value ?? false);
+            _markDraftChanged();
+          },
         ),
         _field(item.mandamiento, 'Mandamiento Judicial'),
         const SizedBox(height: 10),
@@ -556,7 +877,10 @@ class _PuestaDisposicionCreateScreenState
   Widget _vehiculoCard(_VehiculoFields item, int index) {
     return _DynamicBlock(
       title: 'Vehículo ${index + 1}',
-      onRemove: () => setState(() => _vehiculos.removeAt(index).dispose()),
+      onRemove: () {
+        setState(() => _vehiculos.removeAt(index).dispose());
+        _markDraftChanged();
+      },
       children: [
         _field(item.tipo, 'Tipo'),
         const SizedBox(height: 10),
@@ -579,8 +903,10 @@ class _PuestaDisposicionCreateScreenState
           contentPadding: EdgeInsets.zero,
           value: item.conReporteRobo,
           title: const Text('Con Reporte de Robo'),
-          onChanged: (value) =>
-              setState(() => item.conReporteRobo = value ?? false),
+          onChanged: (value) {
+            setState(() => item.conReporteRobo = value ?? false);
+            _markDraftChanged();
+          },
         ),
         _field(item.numeroReporteRobo, 'Número Reporte Robo'),
         const SizedBox(height: 10),
@@ -592,7 +918,10 @@ class _PuestaDisposicionCreateScreenState
   Widget _objetoCard(_ObjetoFields item, int index) {
     return _DynamicBlock(
       title: 'Objeto ${index + 1}',
-      onRemove: () => setState(() => _objetos.removeAt(index).dispose()),
+      onRemove: () {
+        setState(() => _objetos.removeAt(index).dispose());
+        _markDraftChanged();
+      },
       children: [
         _field(
           item.tipoObjeto,

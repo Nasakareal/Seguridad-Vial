@@ -10,6 +10,7 @@ import '../../core/vehiculos/vehiculo_taxonomia.dart';
 import '../../core/vehiculos/aseguradoras_vehiculo.dart';
 import '../../core/vehiculos/colores_vehiculo.dart';
 import '../../core/vehiculos/estados_republica.dart';
+import '../../services/local_draft_service.dart';
 import '../../services/offline_sync_service.dart';
 import '../../services/vehiculo_form_service.dart';
 
@@ -24,6 +25,7 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
   final _formKey = GlobalKey<FormState>();
   bool _saving = false;
   bool _draftHydrated = false;
+  LocalDraftAutosave? _draft;
 
   final _marcaCtrl = TextEditingController();
   final _modeloCtrl = TextEditingController();
@@ -86,7 +88,10 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
     super.didChangeDependencies();
     if (!_draftHydrated) {
       _draftHydrated = true;
-      _hydrateDraftFromArgs();
+      _ensureDraft();
+      if (!_hydrateDraftFromArgs()) {
+        unawaited(_restoreLocalDraft());
+      }
     }
     if (_cargandoGruas) {
       _cargarGruas();
@@ -95,6 +100,7 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
 
   @override
   void dispose() {
+    _draft?.dispose();
     _marcaCtrl.dispose();
     _modeloCtrl.dispose();
     _lineaCtrl.dispose();
@@ -339,15 +345,57 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
     }
   }
 
-  void _hydrateDraftFromArgs() {
+  void _ensureDraft() {
+    _draft ??= LocalDraftAutosave(draftId: _draftId(), collect: _draftValues)
+      ..attachTextControllers({
+        'marca': _marcaCtrl,
+        'modelo': _modeloCtrl,
+        'linea': _lineaCtrl,
+        'color': _colorCtrl,
+        'placas': _placasCtrl,
+        'serie': _serieCtrl,
+        'capacidad': _capacidadCtrl,
+        'tipo_servicio': _tipoServicioCtrl,
+        'tarjeta_circulacion_nombre': _tarjetaCirculacionNombreCtrl,
+        'aseguradora': _aseguradoraCtrl,
+        'monto_danos': _montoDanosCtrl,
+        'partes_danadas': _partesDanadasCtrl,
+      });
+  }
+
+  String _draftId() {
+    final hechoId = _hechoIdFromArgs(context);
+    final hechoClientUuid = _hechoClientUuidFromArgs(context) ?? '';
+    return 'vehiculos:create:$hechoId:$hechoClientUuid';
+  }
+
+  bool _hydrateDraftFromArgs() {
     final args = ModalRoute.of(context)?.settings.arguments;
-    if (args is! Map || args['offlineDraft'] is! Map) return;
+    if (args is! Map || args['offlineDraft'] is! Map) return false;
 
     final draft = Map<String, dynamic>.from(args['offlineDraft'] as Map);
     final body = draft['body'] is Map
         ? Map<String, dynamic>.from(draft['body'] as Map)
         : const <String, dynamic>{};
 
+    _applyDraftBody(body);
+    return true;
+  }
+
+  Future<void> _restoreLocalDraft() async {
+    final restored = await _draft?.restore(_applyLocalDraft) ?? false;
+    if (!mounted || !restored) return;
+    setState(() {});
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Borrador local recuperado.')));
+  }
+
+  void _applyLocalDraft(Map<String, dynamic> draft) {
+    _applyDraftBody(draft);
+  }
+
+  void _applyDraftBody(Map<String, dynamic> body) {
     _marcaCtrl.text = (body['marca'] ?? '').toString();
     _modeloCtrl.text = (body['modelo'] ?? '').toString();
     _lineaCtrl.text = (body['linea'] ?? '').toString();
@@ -369,16 +417,50 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
     _estadoPlacasSeleccionado = EstadosRepublica.valueFromAny(
       (body['estado_placas'] ?? '').toString(),
     );
-    _tipoCarroceriaSeleccionada = (body['tipo'] ?? '').toString().trim().isEmpty
-        ? null
-        : (body['tipo'] ?? '').toString().trim();
-    _tipoGeneralSeleccionado = _inferirTipoGeneralPorCarroceria(
+    _tipoGeneralSeleccionado = _blankToNull(body['tipo_general']);
+    _tipoCarroceriaSeleccionada = _blankToNull(body['tipo']);
+    _tipoGeneralSeleccionado ??= _inferirTipoGeneralPorCarroceria(
       _tipoCarroceriaSeleccionada,
     );
-    _gruaIdSeleccionada = int.tryParse((body['grua_id'] ?? '').toString());
-    _corralonGruaIdSeleccionada = int.tryParse(
-      (body['corralon_id'] ?? '').toString(),
-    );
+    _gruaIdSeleccionada = _intValue(body['grua_id']);
+    _corralonGruaIdSeleccionada = _intValue(body['corralon_id']);
+  }
+
+  Map<String, dynamic> _draftValues() {
+    return <String, dynamic>{
+      'marca': _marcaCtrl.text,
+      'modelo': _modeloCtrl.text,
+      'tipo_general': _tipoGeneralSeleccionado,
+      'tipo': _tipoCarroceriaSeleccionada,
+      'linea': _lineaCtrl.text,
+      'color': _colorCtrl.text,
+      'placas': _placasCtrl.text,
+      'estado_placas': _estadoPlacasSeleccionado,
+      'serie': _serieCtrl.text,
+      'capacidad_personas': _capacidadCtrl.text,
+      'tipo_servicio': _tipoServicioCtrl.text,
+      'tarjeta_circulacion_nombre': _tarjetaCirculacionNombreCtrl.text,
+      'grua_id': _gruaIdSeleccionada,
+      'corralon_id': _corralonGruaIdSeleccionada,
+      'aseguradora': _aseguradoraCtrl.text,
+      'monto_danos': _montoDanosCtrl.text,
+      'partes_danadas': _partesDanadasCtrl.text,
+      'antecedente_vehiculo': _antecedenteVehiculo,
+    };
+  }
+
+  int? _intValue(dynamic value) {
+    if (value is int) return value;
+    return int.tryParse((value ?? '').toString().trim());
+  }
+
+  String? _blankToNull(dynamic value) {
+    final text = (value ?? '').toString().trim();
+    return text.isEmpty ? null : text;
+  }
+
+  void _markDraftChanged() {
+    _draft?.notifyChanged();
   }
 
   bool _toBool(dynamic value) {
@@ -503,6 +585,7 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
       }
     });
 
+    if (applied > 0) _markDraftChanged();
     return applied;
   }
 
@@ -683,6 +766,8 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
       final createdVehiculoId = _createdVehiculoIdFromResult(result);
       if (result.synced && hechoId > 0 && createdVehiculoId > 0) {
         final createdVehiculo = _createdVehiculoFromResult(result);
+        await _draft?.discard();
+        if (!mounted) return;
         await Navigator.pushReplacementNamed(
           context,
           AppRoutes.vehiculoConductorCreate,
@@ -698,6 +783,8 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
         return;
       }
 
+      await _draft?.discard();
+      if (!mounted) return;
       Navigator.pop(context, true);
     } catch (e) {
       if (!mounted) return;
@@ -813,6 +900,7 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
                     _tipoGeneralSeleccionado = v;
                     _tipoCarroceriaSeleccionada = null;
                   });
+                  _markDraftChanged();
                 },
                 validator: _tipoGeneralValidator,
               ),
@@ -846,7 +934,10 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
                       ],
                 onChanged: carroceriasDisponibles.isEmpty
                     ? null
-                    : (v) => setState(() => _tipoCarroceriaSeleccionada = v),
+                    : (v) {
+                        setState(() => _tipoCarroceriaSeleccionada = v);
+                        _markDraftChanged();
+                      },
                 validator: (v) {
                   if ((_tipoGeneralSeleccionado ?? '').isEmpty) return null;
                   return _tipoCarroceriaValidator(v);
@@ -897,7 +988,10 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
                     );
                   }),
                 ],
-                onChanged: (v) => setState(() => _setColor(v)),
+                onChanged: (v) {
+                  setState(() => _setColor(v));
+                  _markDraftChanged();
+                },
                 validator: (v) => VehiculoFormService.validateRequiredText(
                   v,
                   max: 30,
@@ -912,7 +1006,10 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
                   prefixIcon: Icon(Icons.credit_card),
                 ),
                 validator: VehiculoFormService.validatePlacas,
-                onChanged: (_) => setState(() {}),
+                onChanged: (_) {
+                  setState(() {});
+                  _markDraftChanged();
+                },
               ),
               if (tienePlacas) ...[
                 const SizedBox(height: 10),
@@ -934,8 +1031,10 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
                       );
                     }),
                   ],
-                  onChanged: (v) =>
-                      setState(() => _estadoPlacasSeleccionado = v),
+                  onChanged: (v) {
+                    setState(() => _estadoPlacasSeleccionado = v);
+                    _markDraftChanged();
+                  },
                   validator: (v) {
                     if (!tienePlacas) return null;
                     if ((v ?? '').trim().isEmpty) {
@@ -1021,7 +1120,10 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
                           );
                         }),
                       ],
-                      onChanged: (v) => setState(() => _gruaIdSeleccionada = v),
+                      onChanged: (v) {
+                        setState(() => _gruaIdSeleccionada = v);
+                        _markDraftChanged();
+                      },
                     ),
               const SizedBox(height: 10),
               _cargandoGruas
@@ -1048,8 +1150,10 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
                           );
                         }),
                       ],
-                      onChanged: (v) =>
-                          setState(() => _corralonGruaIdSeleccionada = v),
+                      onChanged: (v) {
+                        setState(() => _corralonGruaIdSeleccionada = v);
+                        _markDraftChanged();
+                      },
                     ),
               const SizedBox(height: 10),
               DropdownButtonFormField<String>(
@@ -1070,7 +1174,10 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
                     );
                   }),
                 ],
-                onChanged: (value) => setState(() => _setAseguradora(value)),
+                onChanged: (value) {
+                  setState(() => _setAseguradora(value));
+                  _markDraftChanged();
+                },
               ),
               const SizedBox(height: 10),
               TextFormField(
@@ -1103,7 +1210,10 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
               SwitchListTile(
                 title: const Text('Antecedente del vehículo'),
                 value: _antecedenteVehiculo,
-                onChanged: (v) => setState(() => _antecedenteVehiculo = v),
+                onChanged: (v) {
+                  setState(() => _antecedenteVehiculo = v);
+                  _markDraftChanged();
+                },
               ),
               const SizedBox(height: 18),
               ElevatedButton.icon(

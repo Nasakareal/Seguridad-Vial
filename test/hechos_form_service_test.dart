@@ -1,0 +1,92 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:seguridad_vial_app/core/hechos/hechos_catalogos.dart';
+import 'package:seguridad_vial_app/models/hecho_form_data.dart';
+import 'package:seguridad_vial_app/services/auth_service.dart';
+import 'package:seguridad_vial_app/services/hechos_form_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+void main() {
+  setUp(() {
+    SharedPreferences.setMockInitialValues(<String, Object>{});
+  });
+
+  HechoFormData validDelegacionesData({String vehiculosEsperados = '1'}) {
+    return HechoFormData()
+      ..perito = 'Elemento de prueba'
+      ..unidad = 'Unidad 01'
+      ..hora = const TimeOfDay(hour: 9, minute: 30)
+      ..fecha = DateTime(2026, 4, 25)
+      ..calle = 'Lugar de prueba'
+      ..colonia = 'Centro'
+      ..municipio = 'Morelia'
+      ..tipoHecho = HechosCatalogos.tiposHecho.first
+      ..superficieVia = HechosCatalogos.superficiesViaUi.first
+      ..tiempo = HechosCatalogos.tiemposUi.first
+      ..clima = HechosCatalogos.climasUi.first
+      ..condiciones = HechosCatalogos.condicionesUi.first
+      ..controlTransito = HechosCatalogos.controlesTransitoUi.last
+      ..causa = HechosCatalogos.causasUi.first
+      ..responsable = HechosCatalogos.responsablesUi.first
+      ..colisionCamino = HechosCatalogos.colisionCaminoUi.first
+      ..situacion = 'TURNADO'
+      ..vehiculosEsperados = vehiculosEsperados
+      ..conductoresEsperados = vehiculosEsperados == '0' ? '0' : '1'
+      ..lesionadosEsperados = '0'
+      ..lat = 19.7
+      ..lng = -101.2;
+  }
+
+  test(
+    'delegaciones can turnado a hecho without dictamen or MP fields',
+    () async {
+      SharedPreferences.setMockInitialValues(<String, Object>{
+        'auth_unidad_id': AuthService.unidadDelegacionesId,
+        'auth_role': 'Policia',
+      });
+
+      final data = validDelegacionesData();
+
+      final error = await HechosFormService.validateBeforeSubmit(
+        data: data,
+        dictamenSelected: null,
+      );
+
+      expect(error, isNull);
+    },
+  );
+
+  test('delegaciones turnado requires at least one expected vehicle', () async {
+    SharedPreferences.setMockInitialValues(<String, Object>{
+      'auth_unidad_id': AuthService.unidadDelegacionesId,
+      'auth_role': 'Policia',
+    });
+
+    final error = await HechosFormService.validateBeforeSubmit(
+      data: validDelegacionesData(vehiculosEsperados: '0'),
+      dictamenSelected: null,
+    );
+
+    expect(
+      error,
+      'Cuando el hecho está TURNADO, debe capturarse al menos 1 vehículo.',
+    );
+  });
+
+  test(
+    'delegaciones privileged users still do not need dictamen for turnado',
+    () async {
+      SharedPreferences.setMockInitialValues(<String, Object>{
+        'auth_unidad_id': AuthService.unidadDelegacionesId,
+        'auth_role': 'Superadmin',
+      });
+
+      final error = await HechosFormService.validateBeforeSubmit(
+        data: validDelegacionesData(),
+        dictamenSelected: null,
+      );
+
+      expect(error, isNull);
+    },
+  );
+}

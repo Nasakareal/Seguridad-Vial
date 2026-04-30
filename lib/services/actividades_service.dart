@@ -8,6 +8,7 @@ import '../models/actividad.dart';
 import '../models/actividad_categoria.dart';
 import '../models/actividad_subcategoria.dart';
 import 'auth_service.dart';
+import 'delegacion_distance_service.dart';
 import 'offline_sync_service.dart';
 import 'photo_orientation_service.dart';
 
@@ -154,6 +155,7 @@ class ActividadNativeShareData {
 class ActividadesService {
   static String get _base => '${AuthService.baseUrl}/actividades';
   static const String _categoriasCacheKey = 'actividades_categorias_cache_v1';
+  static const int _maxImageBytes = 4 * 1024 * 1024;
 
   static String _subcategoriasCacheKey(int categoriaId) =>
       'actividades_subcategorias_cache_v1_$categoriaId';
@@ -211,6 +213,126 @@ class ActividadesService {
     } catch (_) {}
 
     return 'Error HTTP $statusCode';
+  }
+
+  static String cleanExceptionMessage(Object error) {
+    final raw = error.toString().trim();
+    if (raw.isEmpty) return 'Ocurrió un error inesperado.';
+    return raw.replaceFirst(RegExp(r'^Exception:\s*'), '').trim();
+  }
+
+  static Future<String?> validateBeforeSubmit({
+    required ActividadUpsertData data,
+    required List<File> fotos,
+    bool requirePhotos = true,
+    bool requireCoords = true,
+  }) async {
+    final errors = <String>[];
+
+    void add(String message) {
+      if (!errors.contains(message)) errors.add(message);
+    }
+
+    if (data.actividadCategoriaId <= 0) {
+      add('Selecciona una categoría.');
+    }
+    if (data.actividadSubcategoriaId == null ||
+        data.actividadSubcategoriaId! <= 0) {
+      add('Selecciona una subcategoría.');
+    }
+
+    final fecha = (data.fecha ?? '').trim();
+    if (fecha.isEmpty) {
+      add('Captura la fecha.');
+    } else if (DateTime.tryParse(fecha) == null) {
+      add('La fecha debe tener formato AAAA-MM-DD.');
+    }
+
+    final hora = (data.hora ?? '').trim();
+    if (hora.isNotEmpty &&
+        !RegExp(r'^([01]\d|2[0-3]):[0-5]\d$').hasMatch(hora)) {
+      add('La hora debe tener formato HH:mm.');
+    }
+
+    _validateLength(errors, data.lugar, 255, 'Lugar');
+    _validateLength(errors, data.municipio, 255, 'Municipio');
+    _validateLength(errors, data.carretera, 255, 'Carretera');
+    _validateLength(errors, data.tramo, 255, 'Tramo');
+    _validateLength(errors, data.kilometro, 50, 'Kilómetro');
+    _validateLength(errors, data.fuenteUbicacion, 50, 'Fuente de ubicación');
+    _validateLength(errors, data.notaGeo, 255, 'Nota de ubicación');
+
+    final latText = (data.lat ?? '').trim();
+    final lngText = (data.lng ?? '').trim();
+    if (requireCoords && (latText.isEmpty || lngText.isEmpty)) {
+      add('Captura la ubicación con el botón "Usar mi ubicación".');
+    } else if (latText.isNotEmpty || lngText.isNotEmpty) {
+      final lat = double.tryParse(latText);
+      final lng = double.tryParse(lngText);
+      if (lat == null || lat < -90 || lat > 90) {
+        add('La latitud de la ubicación no es válida.');
+      }
+      if (lng == null || lng < -180 || lng > 180) {
+        add('La longitud de la ubicación no es válida.');
+      }
+    }
+
+    _validateNonNegativeInt(
+      errors,
+      data.personasAlcanzadas,
+      'Personas alcanzadas',
+      min: 1,
+    );
+    _validateNonNegativeInt(
+      errors,
+      data.personasParticipantes,
+      'Personas participantes',
+    );
+    _validateNonNegativeInt(
+      errors,
+      data.personasDetenidas,
+      'Personas detenidas',
+    );
+
+    if (requirePhotos && fotos.isEmpty) {
+      add('Selecciona al menos una foto.');
+    }
+
+    final seenPaths = <String>{};
+    for (var i = 0; i < fotos.length; i += 1) {
+      final file = fotos[i];
+      final label = 'Foto ${i + 1}';
+      final path = file.path.trim();
+      if (path.isEmpty) {
+        add('$label no tiene una ruta válida.');
+        continue;
+      }
+      if (!seenPaths.add(path)) {
+        add('$label está duplicada en la misma captura.');
+      }
+      if (!await file.exists()) {
+        add('$label ya no existe en el dispositivo.');
+        continue;
+      }
+
+      final ext = path.split('.').last.toLowerCase();
+      const allowed = <String>{'jpg', 'jpeg', 'png', 'webp'};
+      if (!allowed.contains(ext)) {
+        add('$label debe ser JPG, JPEG, PNG o WEBP.');
+      }
+
+      final size = await file.length();
+      if (size > _maxImageBytes) {
+        add('$label es muy pesada (máximo 4 MB).');
+      }
+    }
+
+    for (var i = 0; i < data.vehiculos.length; i += 1) {
+      _validateVehiculo(errors, data.vehiculos[i], i + 1);
+    }
+
+    if (errors.isEmpty) return null;
+    return 'Corrige esto antes de guardar:\n• ${errors.join('\n• ')}';
   }
 
   static List<Actividad> _decodeActividadesList(dynamic raw) {
@@ -412,7 +534,9 @@ class ActividadesService {
     required List<File> fotos,
   }) async {
     final clientUuid = _ensureClientUuid(data.clientUuid);
-    final fields = data.toFields()..['client_uuid'] = clientUuid;
+    final fields = data.toFields();
+    await _addKilometrosRecorridos(fields, lat: data.lat, lng: data.lng);
+    fields['client_uuid'] = clientUuid;
     final landscapeFotos = await PhotoOrientationService.forceLandscapeAll(
       fotos,
     );
@@ -421,7 +545,7 @@ class ActividadesService {
         OfflineUploadFile(field: 'fotos[]', path: foto.path),
     ];
 
-    return OfflineSyncService.submitMultipart(
+    final result = await OfflineSyncService.submitMultipart(
       label: 'Actividad',
       method: 'POST',
       uri: Uri.parse(_base),
@@ -431,6 +555,11 @@ class ActividadesService {
       successCodes: const <int>{200, 201},
       errorParser: _parseBackendError,
     );
+    await DelegacionDistanceService.markCaptureSubmitted(
+      lat: double.tryParse(data.lat?.trim() ?? ''),
+      lng: double.tryParse(data.lng?.trim() ?? ''),
+    );
+    return result;
   }
 
   static Future<Actividad> storeVehiculo({
@@ -472,7 +601,8 @@ class ActividadesService {
     required ActividadUpsertData data,
     File? foto,
   }) async {
-    final fields = data.toFields()..['_method'] = 'PUT';
+    final fields = data.toFields();
+    fields['_method'] = 'PUT';
     final landscapeFoto = foto == null
         ? null
         : await PhotoOrientationService.forceLandscape(foto);
@@ -513,6 +643,109 @@ class ActividadesService {
     final current = (clientUuid ?? '').trim();
     if (current.isNotEmpty) return current;
     return OfflineSyncService.newClientUuid();
+  }
+
+  static Future<void> _addKilometrosRecorridos(
+    Map<String, String> fields, {
+    required String? lat,
+    required String? lng,
+  }) async {
+    final km = await DelegacionDistanceService.distanceForNextCaptureKmField(
+      lat: double.tryParse(lat?.trim() ?? ''),
+      lng: double.tryParse(lng?.trim() ?? ''),
+    );
+    if (km == null) return;
+
+    fields[DelegacionDistanceService.kilometrosRecorridosField] = km;
+  }
+
+  static void _validateLength(
+    List<String> errors,
+    String? value,
+    int max,
+    String label,
+  ) {
+    final text = (value ?? '').trim();
+    if (text.length > max) {
+      errors.add('$label no puede exceder $max caracteres.');
+    }
+  }
+
+  static void _validateNonNegativeInt(
+    List<String> errors,
+    String? value,
+    String label, {
+    int min = 0,
+  }) {
+    final text = (value ?? '').trim();
+    if (text.isEmpty) {
+      if (min > 0) {
+        errors.add('$label debe ser al menos $min.');
+      }
+      return;
+    }
+
+    final parsed = int.tryParse(text);
+    if (parsed == null) {
+      errors.add('$label debe ser un número entero.');
+      return;
+    }
+    if (parsed < min) {
+      errors.add(
+        min <= 0
+            ? '$label no puede ser negativo.'
+            : '$label debe ser al menos $min.',
+      );
+    }
+  }
+
+  static void _validateVehiculo(
+    List<String> errors,
+    ActividadVehiculo vehiculo,
+    int index,
+  ) {
+    final prefix = 'Vehículo $index';
+
+    void requiredText(String? value, String label, int max) {
+      final text = (value ?? '').trim();
+      if (text.isEmpty) {
+        errors.add('$prefix: captura $label.');
+      } else if (text.length > max) {
+        errors.add('$prefix: $label no puede exceder $max caracteres.');
+      }
+    }
+
+    void optionalText(String? value, String label, int max) {
+      final text = (value ?? '').trim();
+      if (text.length > max) {
+        errors.add('$prefix: $label no puede exceder $max caracteres.');
+      }
+    }
+
+    requiredText(vehiculo.marca, 'marca', 50);
+    optionalText(vehiculo.modelo, 'modelo', 10);
+    requiredText(vehiculo.tipo, 'tipo', 50);
+    requiredText(vehiculo.linea, 'línea', 50);
+    requiredText(vehiculo.color, 'color', 30);
+    optionalText(vehiculo.placas, 'placas', 15);
+    optionalText(vehiculo.estadoPlacas, 'estado de placas', 15);
+    optionalText(vehiculo.serie, 'serie', 17);
+    requiredText(vehiculo.tipoServicio, 'tipo de servicio', 50);
+    optionalText(
+      vehiculo.tarjetaCirculacionNombre,
+      'nombre de tarjeta de circulación',
+      60,
+    );
+    optionalText(vehiculo.grua, 'grúa', 255);
+    optionalText(vehiculo.corralon, 'corralón', 255);
+    optionalText(vehiculo.aseguradora, 'aseguradora', 100);
+
+    if (vehiculo.capacidadPersonas < 0) {
+      errors.add('$prefix: capacidad de personas no puede ser negativa.');
+    }
+    if (vehiculo.montoDanos != null && vehiculo.montoDanos! < 0) {
+      errors.add('$prefix: monto de daños no puede ser negativo.');
+    }
   }
 
   static Actividad _decodeActividadResponse(String body) {

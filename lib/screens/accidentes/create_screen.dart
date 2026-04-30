@@ -23,6 +23,7 @@ class _CreateHechoScreenState extends State<CreateHechoScreen> {
   File? _initialFotoLugar;
   File? _initialFotoSituacion;
   bool _draftHydrated = false;
+  bool _usingOfflineDraft = false;
   bool _checkingAccess = true;
   bool _canCreateHechos = false;
   bool _needsDelegacionesCaptureTotals = false;
@@ -63,6 +64,7 @@ class _CreateHechoScreenState extends State<CreateHechoScreen> {
   void _hydrateDraftFromArgs() {
     final args = ModalRoute.of(context)?.settings.arguments;
     if (args is! Map || args['offlineDraft'] is! Map) return;
+    _usingOfflineDraft = true;
 
     final draft = Map<String, dynamic>.from(args['offlineDraft'] as Map);
     final fields = _stringMapFrom(draft['fields']);
@@ -248,7 +250,7 @@ class _CreateHechoScreenState extends State<CreateHechoScreen> {
       if (hechoId != null && hechoId > 0) {
         Navigator.pushReplacementNamed(
           context,
-          AppRoutes.accidentesShow,
+          AppRoutes.vehiculos,
           arguments: {'hechoId': hechoId},
         );
       } else {
@@ -368,6 +370,7 @@ class _CreateHechoScreenState extends State<CreateHechoScreen> {
           data: _data,
           initialFotoLugar: _initialFotoLugar,
           initialFotoSituacion: _initialFotoSituacion,
+          draftId: _usingOfflineDraft ? null : 'hechos:create',
           onSubmit:
               ({
                 required data,

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -9,6 +10,7 @@ import '../../models/actividad_subcategoria.dart';
 import '../../services/actividades_service.dart';
 import '../../services/auth_service.dart';
 import '../../services/geo_service.dart';
+import '../../services/local_draft_service.dart';
 import '../../widgets/landscape_photo_crop_screen.dart';
 import 'widgets/actividad_vehiculo_modal.dart';
 
@@ -56,11 +58,34 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
   final _patrullasCtrl = TextEditingController();
 
   final ImagePicker _picker = ImagePicker();
+  late final LocalDraftAutosave _draft;
 
   @override
   void initState() {
     super.initState();
     _setNow();
+    _draft =
+        LocalDraftAutosave(draftId: 'actividades:create', collect: _draftValues)
+          ..attachTextControllers({
+            'fecha': _fechaCtrl,
+            'hora': _horaCtrl,
+            'lugar': _lugarCtrl,
+            'municipio': _municipioCtrl,
+            'lat': _latCtrl,
+            'lng': _lngCtrl,
+            'coordenadas': _coordenadasCtrl,
+            'fuente_ubicacion': _fuenteUbicacionCtrl,
+            'nota_geo': _notaGeoCtrl,
+            'motivo': _motivoCtrl,
+            'narrativa': _narrativaCtrl,
+            'acciones': _accionesCtrl,
+            'observaciones': _observacionesCtrl,
+            'personas_alcanzadas': _personasAlcanzadasCtrl,
+            'personas_participantes': _personasParticipantesCtrl,
+            'personas_detenidas': _personasDetenidasCtrl,
+            'elementos': _elementosCtrl,
+            'patrullas': _patrullasCtrl,
+          });
     _loadCategorias();
     _loadUserLabel();
   }
@@ -70,11 +95,14 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
     super.didChangeDependencies();
     if (_draftHydrated) return;
     _draftHydrated = true;
-    _hydrateDraftFromArgs();
+    if (!_hydrateDraftFromArgs()) {
+      unawaited(_restoreLocalDraft());
+    }
   }
 
   @override
   void dispose() {
+    _draft.dispose();
     _fechaCtrl.dispose();
     _horaCtrl.dispose();
     _lugarCtrl.dispose();
@@ -166,9 +194,9 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
     }
   }
 
-  void _hydrateDraftFromArgs() {
+  bool _hydrateDraftFromArgs() {
     final args = ModalRoute.of(context)?.settings.arguments;
-    if (args is! Map || args['offlineDraft'] is! Map) return;
+    if (args is! Map || args['offlineDraft'] is! Map) return false;
 
     final draft = Map<String, dynamic>.from(args['offlineDraft'] as Map);
     final fields = _stringMapFrom(draft['fields']);
@@ -221,6 +249,117 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
     } else if (_notaGeoCtrl.text.trim().isNotEmpty) {
       _locationStatus = _notaGeoCtrl.text.trim();
     }
+    return true;
+  }
+
+  Future<void> _restoreLocalDraft() async {
+    final restored = await _draft.restore(_applyLocalDraft);
+    if (!mounted || !restored) return;
+    setState(() {});
+    if (_categoriaId != null && _categoriaId! > 0) {
+      await _loadSubcategorias(
+        _categoriaId!,
+        preferredSubcategoriaId: _subcategoriaId,
+      );
+    }
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Borrador local recuperado.')));
+  }
+
+  void _applyLocalDraft(Map<String, dynamic> draft) {
+    _clientUuid = _stringValue(draft['client_uuid']);
+    _categoriaId = _intValue(draft['categoria_id']);
+    _subcategoriaId = _intValue(draft['subcategoria_id']);
+
+    _fechaCtrl.text = _stringValue(draft['fecha']) ?? _fechaCtrl.text;
+    _horaCtrl.text = _stringValue(draft['hora']) ?? _horaCtrl.text;
+    _lugarCtrl.text = _stringValue(draft['lugar']) ?? '';
+    _municipioCtrl.text = _stringValue(draft['municipio']) ?? '';
+    _latCtrl.text = _stringValue(draft['lat']) ?? '';
+    _lngCtrl.text = _stringValue(draft['lng']) ?? '';
+    _coordenadasCtrl.text = _stringValue(draft['coordenadas']) ?? '';
+    _fuenteUbicacionCtrl.text = _stringValue(draft['fuente_ubicacion']) ?? '';
+    _notaGeoCtrl.text = _stringValue(draft['nota_geo']) ?? '';
+    _motivoCtrl.text = _stringValue(draft['motivo']) ?? '';
+    _narrativaCtrl.text = _stringValue(draft['narrativa']) ?? '';
+    _accionesCtrl.text = _stringValue(draft['acciones']) ?? '';
+    _observacionesCtrl.text = _stringValue(draft['observaciones']) ?? '';
+    _personasAlcanzadasCtrl.text =
+        _stringValue(draft['personas_alcanzadas']) ?? '1';
+    _personasParticipantesCtrl.text =
+        _stringValue(draft['personas_participantes']) ?? '0';
+    _personasDetenidasCtrl.text =
+        _stringValue(draft['personas_detenidas']) ?? '0';
+    _elementosCtrl.text = _stringValue(draft['elementos']) ?? '';
+    _patrullasCtrl.text = _stringValue(draft['patrullas']) ?? '';
+
+    _fotos
+      ..clear()
+      ..addAll(_filesFromPaths(draft['fotos']));
+    _vehiculos
+      ..clear()
+      ..addAll(_actividadVehiculosFromDraft(draft['vehiculos']));
+
+    if (_latCtrl.text.trim().isNotEmpty && _lngCtrl.text.trim().isNotEmpty) {
+      _locationStatus = 'Ubicacion recuperada del borrador local.';
+    } else if (_notaGeoCtrl.text.trim().isNotEmpty) {
+      _locationStatus = _notaGeoCtrl.text.trim();
+    }
+  }
+
+  Map<String, dynamic> _draftValues() {
+    return <String, dynamic>{
+      'client_uuid': _clientUuid,
+      'categoria_id': _categoriaId,
+      'subcategoria_id': _subcategoriaId,
+      'fecha': _fechaCtrl.text,
+      'hora': _horaCtrl.text,
+      'lugar': _lugarCtrl.text,
+      'municipio': _municipioCtrl.text,
+      'lat': _latCtrl.text,
+      'lng': _lngCtrl.text,
+      'coordenadas': _coordenadasCtrl.text,
+      'fuente_ubicacion': _fuenteUbicacionCtrl.text,
+      'nota_geo': _notaGeoCtrl.text,
+      'motivo': _motivoCtrl.text,
+      'narrativa': _narrativaCtrl.text,
+      'acciones': _accionesCtrl.text,
+      'observaciones': _observacionesCtrl.text,
+      'personas_alcanzadas': _personasAlcanzadasCtrl.text,
+      'personas_participantes': _personasParticipantesCtrl.text,
+      'personas_detenidas': _personasDetenidasCtrl.text,
+      'elementos': _elementosCtrl.text,
+      'patrullas': _patrullasCtrl.text,
+      'fotos': _fotos.map((file) => file.path).toList(),
+      'vehiculos': _vehiculos.map((vehiculo) => vehiculo.toJson()).toList(),
+    };
+  }
+
+  String? _stringValue(dynamic value) {
+    final text = (value ?? '').toString().trim();
+    return text.isEmpty ? null : text;
+  }
+
+  int? _intValue(dynamic value) {
+    if (value is int) return value;
+    return int.tryParse((value ?? '').toString().trim());
+  }
+
+  List<File> _filesFromPaths(dynamic value) {
+    if (value is! List) return const <File>[];
+    return value
+        .map((item) => File(item.toString()))
+        .where((file) => file.existsSync())
+        .toList();
+  }
+
+  List<ActividadVehiculo> _actividadVehiculosFromDraft(dynamic value) {
+    if (value is! List) return const <ActividadVehiculo>[];
+    return value.whereType<Map>().map((item) {
+      return ActividadVehiculo.fromJson(Map<String, dynamic>.from(item));
+    }).toList();
   }
 
   Map<String, String> _stringMapFrom(dynamic value) {
@@ -347,6 +486,7 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
         }
       }
     });
+    _draft.notifyChanged();
   }
 
   Future<void> _pickFromCamera() async {
@@ -372,6 +512,7 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
         _fotos.add(file);
       }
     });
+    _draft.notifyChanged();
   }
 
   Future<void> _captureLocation() async {
@@ -406,6 +547,7 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
       _notaGeoCtrl.text = geo.notaGeo ?? '';
       _locationStatus = 'Ubicacion capturada correctamente.';
     });
+    _draft.notifyChanged();
   }
 
   String? _trim(TextEditingController ctrl) {
@@ -445,48 +587,24 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
     if (vehiculo == null || !mounted) return;
 
     setState(() => _vehiculos.add(vehiculo));
+    _draft.notifyChanged();
   }
 
   void _quitarVehiculo(int index) {
     setState(() => _vehiculos.removeAt(index));
+    _draft.notifyChanged();
   }
 
   Future<void> _submit() async {
     setState(() => _error = null);
 
-    if (_categoriaId == null || _categoriaId! <= 0) {
-      setState(() => _error = 'Selecciona una categoria.');
-      return;
-    }
-
-    if (_subcategorias.isEmpty) {
-      setState(
-        () => _error =
-            'La categoria seleccionada no tiene subcategorias disponibles.',
-      );
-      return;
-    }
-
-    if (_subcategoriaId == null || _subcategoriaId! <= 0) {
-      setState(() => _error = 'Selecciona una subcategoria.');
-      return;
-    }
-
-    if (_fechaCtrl.text.trim().isEmpty) {
-      setState(() => _error = 'Captura la fecha.');
-      return;
-    }
-
-    if (_fotos.isEmpty) {
-      setState(() => _error = 'Selecciona al menos una foto.');
-      return;
-    }
-
-    final personasAlcanzadas = int.tryParse(
-      _personasAlcanzadasCtrl.text.trim(),
+    final payload = _buildPayload();
+    final validation = await ActividadesService.validateBeforeSubmit(
+      data: payload,
+      fotos: List<File>.from(_fotos),
     );
-    if (personasAlcanzadas == null || personasAlcanzadas < 1) {
-      setState(() => _error = 'Captura al menos 1 persona alcanzada.');
+    if (validation != null) {
+      setState(() => _error = validation);
       return;
     }
 
@@ -495,7 +613,7 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
 
     try {
       final result = await ActividadesService.create(
-        data: _buildPayload(),
+        data: payload,
         fotos: List<File>.from(_fotos),
       );
 
@@ -503,10 +621,15 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text(result.message)));
+      await _draft.discard();
+      if (!mounted) return;
       Navigator.pop(context, true);
     } catch (e) {
       if (!mounted) return;
-      setState(() => _error = 'No se pudo crear.\n$e');
+      setState(
+        () => _error =
+            'No se pudo crear.\n${ActividadesService.cleanExceptionMessage(e)}',
+      );
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -586,7 +709,10 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
               child: InkWell(
                 onTap: _saving
                     ? null
-                    : () => setState(() => _fotos.removeAt(index)),
+                    : () {
+                        setState(() => _fotos.removeAt(index));
+                        _draft.notifyChanged();
+                      },
                 child: Container(
                   padding: const EdgeInsets.all(6),
                   decoration: BoxDecoration(
@@ -672,6 +798,7 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
                         _subcategoriaId = null;
                         _subcategorias = [];
                       });
+                      _draft.notifyChanged();
                       if (v != null) {
                         await _loadSubcategorias(v);
                       }
@@ -699,7 +826,10 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
                     ],
                     onChanged: _subcategorias.isEmpty
                         ? null
-                        : (v) => setState(() => _subcategoriaId = v),
+                        : (v) {
+                            setState(() => _subcategoriaId = v);
+                            _draft.notifyChanged();
+                          },
                     decoration: _dec('Subcategoria'),
                   ),
                   if (_categoriaId != null && _subcategorias.isEmpty) ...[
@@ -746,7 +876,10 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
                     child: OutlinedButton.icon(
                       onPressed: _saving
                           ? null
-                          : () => setState(() => _setNow()),
+                          : () {
+                              setState(() => _setNow());
+                              _draft.notifyChanged();
+                            },
                       icon: const Icon(Icons.access_time),
                       label: const Text('Usar fecha y hora actual'),
                     ),

@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import 'package:mobile_scanner/mobile_scanner.dart';
 
 import '../services/auth_service.dart';
+import '../../services/local_draft_service.dart';
 import '../../services/vehiculo_form_service.dart';
 
 class VehiculoConductorCreateScreen extends StatefulWidget {
@@ -46,6 +47,7 @@ class _VehiculoConductorCreateScreenState
   bool _certificadoLesiones = false;
   bool _certificadoAlcoholemia = false;
   bool _alientoEtilico = false;
+  LocalDraftAutosave? _draft;
 
   // ✅ para evitar recargas/rellenados al seleccionar dropdown
   bool _loadedOnce = false;
@@ -192,6 +194,7 @@ class _VehiculoConductorCreateScreenState
 
     if (picked != null) {
       setState(() => _vigenciaLicencia = picked);
+      _markDraftChanged();
     }
   }
 
@@ -267,6 +270,7 @@ class _VehiculoConductorCreateScreenState
       }
     });
 
+    if (applied > 0) _markDraftChanged();
     return applied;
   }
 
@@ -387,6 +391,8 @@ class _VehiculoConductorCreateScreenState
         const SnackBar(content: Text('Conductor guardado correctamente.')),
       );
 
+      await _draft?.discard();
+      if (!mounted) return;
       Navigator.pop(context, true);
     } catch (e) {
       if (!mounted) return;
@@ -411,6 +417,7 @@ class _VehiculoConductorCreateScreenState
     final a = _args(context);
     hechoId = int.tryParse((a['hechoId'] ?? 0).toString()) ?? 0;
     vehiculoId = int.tryParse((a['vehiculoId'] ?? 0).toString()) ?? 0;
+    _ensureDraft();
     if (a['vehiculosSnapshot'] is List) {
       _vehiculosSnapshot = (a['vehiculosSnapshot'] as List)
           .whereType<Map>()
@@ -420,7 +427,7 @@ class _VehiculoConductorCreateScreenState
 
     // evitar llamar setState aquí si no hace falta
     if (hechoId > 0 && vehiculoId > 0) {
-      _cargarVehiculo();
+      unawaited(_restoreLocalDraft().whenComplete(_cargarVehiculo));
     } else {
       setState(() => _cargando = false);
     }
@@ -428,6 +435,7 @@ class _VehiculoConductorCreateScreenState
 
   @override
   void dispose() {
+    _draft?.dispose();
     _nombreCtrl.dispose();
     _telefonoCtrl.dispose();
     _domicilioCtrl.dispose();
@@ -440,6 +448,80 @@ class _VehiculoConductorCreateScreenState
   }
 
   String _fmtDate(DateTime d) => d.toIso8601String().substring(0, 10);
+
+  void _ensureDraft() {
+    _draft ??=
+        LocalDraftAutosave(
+          draftId: 'vehiculos:conductor:create:$hechoId:$vehiculoId',
+          collect: _draftValues,
+        )..attachTextControllers({
+          'nombre': _nombreCtrl,
+          'telefono': _telefonoCtrl,
+          'domicilio': _domicilioCtrl,
+          'ocupacion': _ocupacionCtrl,
+          'edad': _edadCtrl,
+          'tipo_licencia': _tipoLicenciaCtrl,
+          'estado_licencia': _estadoLicenciaCtrl,
+          'numero_licencia': _numeroLicenciaCtrl,
+        });
+  }
+
+  Map<String, dynamic> _draftValues() {
+    return <String, dynamic>{
+      'nombre': _nombreCtrl.text,
+      'telefono': _telefonoCtrl.text,
+      'domicilio': _domicilioCtrl.text,
+      'ocupacion': _ocupacionCtrl.text,
+      'edad': _edadCtrl.text,
+      'tipo_licencia': _tipoLicenciaCtrl.text,
+      'estado_licencia': _estadoLicenciaCtrl.text,
+      'numero_licencia': _numeroLicenciaCtrl.text,
+      'vigencia_licencia': _vigenciaLicencia?.toIso8601String(),
+      'sexo': _sexo,
+      'permanente': _permanente,
+      'cinturon': _cinturon,
+      'antecedente_conductor': _antecedenteConductor,
+      'certificado_lesiones': _certificadoLesiones,
+      'certificado_alcoholemia': _certificadoAlcoholemia,
+      'aliento_etilico': _alientoEtilico,
+    };
+  }
+
+  Future<void> _restoreLocalDraft() async {
+    final restored = await _draft?.restore(_applyLocalDraft) ?? false;
+    if (!mounted || !restored) return;
+    _prefilledOnce = true;
+    setState(() {});
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Borrador local recuperado.')));
+  }
+
+  void _applyLocalDraft(Map<String, dynamic> draft) {
+    _nombreCtrl.text = (draft['nombre'] ?? '').toString();
+    _telefonoCtrl.text = (draft['telefono'] ?? '').toString();
+    _domicilioCtrl.text = (draft['domicilio'] ?? '').toString();
+    _ocupacionCtrl.text = (draft['ocupacion'] ?? '').toString();
+    _edadCtrl.text = (draft['edad'] ?? '').toString();
+    _tipoLicenciaCtrl.text = (draft['tipo_licencia'] ?? '').toString();
+    _estadoLicenciaCtrl.text = (draft['estado_licencia'] ?? '').toString();
+    _numeroLicenciaCtrl.text = (draft['numero_licencia'] ?? '').toString();
+    _vigenciaLicencia = DateTime.tryParse(
+      (draft['vigencia_licencia'] ?? '').toString(),
+    );
+    final sexo = (draft['sexo'] ?? '').toString().trim();
+    _sexo = sexo.isEmpty ? null : sexo;
+    _permanente = _toBool(draft['permanente']);
+    _cinturon = _toBool(draft['cinturon']);
+    _antecedenteConductor = _toBool(draft['antecedente_conductor']);
+    _certificadoLesiones = _toBool(draft['certificado_lesiones']);
+    _certificadoAlcoholemia = _toBool(draft['certificado_alcoholemia']);
+    _alientoEtilico = _toBool(draft['aliento_etilico']);
+  }
+
+  void _markDraftChanged() {
+    _draft?.notifyChanged();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -521,6 +603,7 @@ class _VehiculoConductorCreateScreenState
                       onChanged: (v) {
                         // ✅ solo esto, sin recargar nada
                         setState(() => _sexo = v);
+                        _markDraftChanged();
                       },
                     ),
                     const SizedBox(height: 10),
@@ -555,7 +638,10 @@ class _VehiculoConductorCreateScreenState
                     SwitchListTile(
                       title: const Text('Licencia permanente'),
                       value: _permanente,
-                      onChanged: (v) => setState(() => _permanente = v),
+                      onChanged: (v) {
+                        setState(() => _permanente = v);
+                        _markDraftChanged();
+                      },
                     ),
                     const SizedBox(height: 6),
 
@@ -618,30 +704,42 @@ class _VehiculoConductorCreateScreenState
                     SwitchListTile(
                       title: const Text('Cinturón'),
                       value: _cinturon,
-                      onChanged: (v) => setState(() => _cinturon = v),
+                      onChanged: (v) {
+                        setState(() => _cinturon = v);
+                        _markDraftChanged();
+                      },
                     ),
                     SwitchListTile(
                       title: const Text('Antecedente conductor'),
                       value: _antecedenteConductor,
-                      onChanged: (v) =>
-                          setState(() => _antecedenteConductor = v),
+                      onChanged: (v) {
+                        setState(() => _antecedenteConductor = v);
+                        _markDraftChanged();
+                      },
                     ),
                     SwitchListTile(
                       title: const Text('Certificado lesiones'),
                       value: _certificadoLesiones,
-                      onChanged: (v) =>
-                          setState(() => _certificadoLesiones = v),
+                      onChanged: (v) {
+                        setState(() => _certificadoLesiones = v);
+                        _markDraftChanged();
+                      },
                     ),
                     SwitchListTile(
                       title: const Text('Certificado alcoholemia'),
                       value: _certificadoAlcoholemia,
-                      onChanged: (v) =>
-                          setState(() => _certificadoAlcoholemia = v),
+                      onChanged: (v) {
+                        setState(() => _certificadoAlcoholemia = v);
+                        _markDraftChanged();
+                      },
                     ),
                     SwitchListTile(
                       title: const Text('Aliento etílico'),
                       value: _alientoEtilico,
-                      onChanged: (v) => setState(() => _alientoEtilico = v),
+                      onChanged: (v) {
+                        setState(() => _alientoEtilico = v);
+                        _markDraftChanged();
+                      },
                     ),
 
                     const SizedBox(height: 18),
