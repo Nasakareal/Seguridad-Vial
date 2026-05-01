@@ -59,6 +59,7 @@ import '../screens/cultura_vial/cultura_vial_home_screen.dart';
 import '../screens/cultura_vial/cultura_vial_join_screen.dart';
 import '../screens/constancias_manejo/constancias_manejo_screen.dart';
 import '../screens/constancias_manejo/constancia_manejo_scan_screen.dart';
+import '../screens/modulo_examenes_diarios/modulo_examenes_diarios_screen.dart';
 import '../screens/dispositivos/dispositivo_create_screen.dart';
 import '../screens/dispositivos/dispositivo_show_screen.dart';
 import '../screens/dispositivos/dispositivos_revision_screen.dart';
@@ -140,6 +141,8 @@ final Map<String, WidgetBuilder> appRoutesMap = {
       const ConstanciaManejoScanScreen(),
   AppRoutes.constanciasManejoDetalle: (context) =>
       const ConstanciaManejoDetailScreen(),
+  AppRoutes.moduloExamenesDiarios: (context) =>
+      const ModuloExamenesDiariosScreen(),
   AppRoutes.dispositivos: (context) => const DispositivosScreen(),
   AppRoutes.dispositivosCreate: (context) => const DispositivoCreateScreen(),
   AppRoutes.dispositivosRevision: (context) =>

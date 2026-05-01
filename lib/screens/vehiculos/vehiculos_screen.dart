@@ -53,6 +53,22 @@ class _VehiculosScreenState extends State<VehiculosScreen> {
 
   bool _tieneFoto(Map<String, dynamic> vehiculo) => _fotoPath(vehiculo) != null;
 
+  String? _inventarioPath(Map<String, dynamic> vehiculo) {
+    final f = vehiculo['foto_inventario_grua'];
+    final s = (f ?? '').toString().trim();
+    return s.isEmpty ? null : s;
+  }
+
+  String? _numeroInventario(Map<String, dynamic> vehiculo) {
+    final s = (vehiculo['numero_inventario_grua'] ?? '').toString().trim();
+    return s.isEmpty ? null : s;
+  }
+
+  bool _tieneInventario(Map<String, dynamic> vehiculo) {
+    return _numeroInventario(vehiculo) != null ||
+        _inventarioPath(vehiculo) != null;
+  }
+
   String _fotoUrlFromPath(String path) {
     final p = path.startsWith('/') ? path.substring(1) : path;
     return 'https://seguridadvial-mich.com/storage/$p';
@@ -60,6 +76,13 @@ class _VehiculosScreenState extends State<VehiculosScreen> {
 
   String _fotoUrl(Map<String, dynamic> vehiculo) {
     final path = _fotoPath(vehiculo);
+    if (path == null) return '';
+    if (path.startsWith('http://') || path.startsWith('https://')) return path;
+    return _fotoUrlFromPath(path);
+  }
+
+  String _inventarioUrl(Map<String, dynamic> vehiculo) {
+    final path = _inventarioPath(vehiculo);
     if (path == null) return '';
     if (path.startsWith('http://') || path.startsWith('https://')) return path;
     return _fotoUrlFromPath(path);
@@ -80,6 +103,10 @@ class _VehiculosScreenState extends State<VehiculosScreen> {
 
   Uri _fotoApiUri(int vehiculoId) => Uri.parse(
     'https://seguridadvial-mich.com/api/hechos/$_hechoId/vehiculos/$vehiculoId/foto',
+  );
+
+  Uri _inventarioApiUri(int vehiculoId) => Uri.parse(
+    'https://seguridadvial-mich.com/api/hechos/$_hechoId/vehiculos/$vehiculoId/inventario-grua',
   );
 
   Future<void> _cargarVehiculos() async {
@@ -380,6 +407,311 @@ class _VehiculosScreenState extends State<VehiculosScreen> {
     await _cargarVehiculos();
   }
 
+  Future<Map<String, dynamic>> _consultarInventario({
+    required int vehiculoId,
+  }) async {
+    final headers = await _headersJson();
+    final res = await http.get(_inventarioApiUri(vehiculoId), headers: headers);
+
+    if (res.statusCode != 200) {
+      throw Exception('HTTP ${res.statusCode}: ${res.body}');
+    }
+
+    final raw = jsonDecode(res.body);
+    if (raw is Map<String, dynamic> && raw['data'] is Map) {
+      return Map<String, dynamic>.from(raw['data'] as Map);
+    }
+    if (raw is Map<String, dynamic>) return raw;
+    return <String, dynamic>{};
+  }
+
+  Future<void> _mostrarAccionesInventario(Map<String, dynamic> vehiculo) async {
+    final vehiculoId = _safeInt(vehiculo['id']);
+    if (vehiculoId <= 0) return;
+
+    Map<String, dynamic> inventario = <String, dynamic>{};
+
+    if (!mounted) return;
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(child: CircularProgressIndicator()),
+    );
+
+    try {
+      inventario = await _consultarInventario(vehiculoId: vehiculoId);
+    } catch (e) {
+      inventario = Map<String, dynamic>.from(vehiculo);
+    } finally {
+      if (mounted) Navigator.pop(context);
+    }
+
+    if (!mounted) return;
+
+    final numeroCtrl = TextEditingController(
+      text:
+          (inventario['numero_inventario_grua'] ??
+                  _numeroInventario(vehiculo) ??
+                  '')
+              .toString(),
+    );
+    File? selectedFile;
+    var saving = false;
+
+    final currentUrl = (inventario['url'] ?? '').toString().trim().isNotEmpty
+        ? inventario['url'].toString().trim()
+        : _inventarioUrl(vehiculo);
+    final hasCurrentInventory =
+        numeroCtrl.text.trim().isNotEmpty || currentUrl.trim().isNotEmpty;
+
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (sheetContext) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            Future<void> pickInventoryPhoto() async {
+              final picked = await _picker.pickImage(
+                source: ImageSource.gallery,
+                imageQuality: 85,
+                maxWidth: 2400,
+                maxHeight: 2400,
+              );
+              if (picked == null || !mounted || !context.mounted) return;
+
+              final file = await LandscapePhotoCropScreen.cropIfNeeded(
+                context,
+                File(picked.path),
+              );
+              if (file == null) return;
+
+              final len = await file.length();
+              const maxBytes = 4 * 1024 * 1024;
+              if (len > maxBytes) {
+                if (!mounted || !context.mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text(
+                      'La imagen supera 4MB. Elige otra o comprímela.',
+                    ),
+                  ),
+                );
+                return;
+              }
+
+              setModalState(() => selectedFile = file);
+            }
+
+            Future<void> saveInventory() async {
+              final numero = numeroCtrl.text.trim();
+              if (numero.isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Captura el numero de inventario.'),
+                  ),
+                );
+                return;
+              }
+
+              setModalState(() => saving = true);
+              try {
+                await _guardarInventario(
+                  vehiculoId: vehiculoId,
+                  numeroInventario: numero,
+                  foto: selectedFile,
+                );
+                if (!mounted || !context.mounted || !sheetContext.mounted) {
+                  return;
+                }
+                Navigator.pop(sheetContext);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Inventario guardado.')),
+                );
+              } catch (e) {
+                if (!mounted || !context.mounted) return;
+                setModalState(() => saving = false);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Error guardando inventario: $e')),
+                );
+              }
+            }
+
+            Future<void> deleteInventory() async {
+              setModalState(() => saving = true);
+              try {
+                await _eliminarInventario(vehiculoId: vehiculoId);
+                if (!mounted || !context.mounted || !sheetContext.mounted) {
+                  return;
+                }
+                Navigator.pop(sheetContext);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Inventario eliminado.')),
+                );
+              } catch (e) {
+                if (!mounted || !context.mounted) return;
+                setModalState(() => saving = false);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Error eliminando inventario: $e')),
+                );
+              }
+            }
+
+            final bottom = MediaQuery.of(context).viewInsets.bottom;
+
+            return SafeArea(
+              child: Padding(
+                padding: EdgeInsets.fromLTRB(16, 8, 16, 16 + bottom),
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Text(
+                        'Inventario del vehículo #$vehiculoId',
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      if (selectedFile != null)
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(12),
+                          child: AspectRatio(
+                            aspectRatio: 16 / 9,
+                            child: Image.file(selectedFile!, fit: BoxFit.cover),
+                          ),
+                        )
+                      else if (currentUrl.isNotEmpty)
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(12),
+                          child: AspectRatio(
+                            aspectRatio: 16 / 9,
+                            child: SafeNetworkImage(
+                              currentUrl,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) => const Center(
+                                child: Text('No se pudo cargar la imagen'),
+                              ),
+                            ),
+                          ),
+                        )
+                      else
+                        const Text(
+                          'Este vehículo no tiene inventario todavía.',
+                        ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: numeroCtrl,
+                        enabled: !saving,
+                        textCapitalization: TextCapitalization.characters,
+                        decoration: const InputDecoration(
+                          labelText: 'Numero de inventario',
+                          prefixIcon: Icon(Icons.confirmation_number),
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              onPressed: saving ? null : pickInventoryPhoto,
+                              icon: const Icon(Icons.upload_file),
+                              label: Text(
+                                selectedFile != null || currentUrl.isNotEmpty
+                                    ? 'Reemplazar foto'
+                                    : 'Subir foto',
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: ElevatedButton.icon(
+                              onPressed: saving ? null : saveInventory,
+                              icon: const Icon(Icons.save),
+                              label: Text(saving ? 'Guardando...' : 'Guardar'),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              onPressed: saving
+                                  ? null
+                                  : () => Navigator.pop(sheetContext),
+                              icon: const Icon(Icons.close),
+                              label: const Text('Cerrar'),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              onPressed: saving || !hasCurrentInventory
+                                  ? null
+                                  : deleteInventory,
+                              icon: const Icon(Icons.delete_outline),
+                              label: const Text('Eliminar'),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+
+    numeroCtrl.dispose();
+    await _cargarVehiculos();
+  }
+
+  Future<void> _guardarInventario({
+    required int vehiculoId,
+    required String numeroInventario,
+    File? foto,
+  }) async {
+    final token = await AuthService.getToken();
+    final req = http.MultipartRequest('POST', _inventarioApiUri(vehiculoId));
+    req.headers['Accept'] = 'application/json';
+    if (token != null && token.isNotEmpty) {
+      req.headers['Authorization'] = 'Bearer $token';
+    }
+    req.fields['numero_inventario_grua'] = numeroInventario;
+    if (foto != null) {
+      req.files.add(
+        await http.MultipartFile.fromPath('foto_inventario_grua', foto.path),
+      );
+    }
+
+    final streamed = await req.send();
+    final res = await http.Response.fromStream(streamed);
+
+    if (res.statusCode != 200 && res.statusCode != 201) {
+      throw Exception('HTTP ${res.statusCode}: ${res.body}');
+    }
+  }
+
+  Future<void> _eliminarInventario({required int vehiculoId}) async {
+    final headers = await _headersJson();
+    final res = await http.delete(
+      _inventarioApiUri(vehiculoId),
+      headers: headers,
+    );
+
+    if (res.statusCode != 200) {
+      throw Exception('HTTP ${res.statusCode}: ${res.body}');
+    }
+  }
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -425,60 +757,92 @@ class _VehiculosScreenState extends State<VehiculosScreen> {
                 final modelo = _safeText(v['modelo']);
                 final conductor = _conductorNombre(v);
                 final tieneFoto = _tieneFoto(v);
+                final tieneInventario = _tieneInventario(v);
+                final inventario = _numeroInventario(v);
 
                 return Card(
                   margin: const EdgeInsets.symmetric(
                     horizontal: 16,
                     vertical: 8,
                   ),
-                  child: ListTile(
-                    leading: Stack(
-                      alignment: Alignment.bottomRight,
-                      children: [
-                        const Icon(Icons.directions_car),
-                        if (tieneFoto)
-                          const Padding(
-                            padding: EdgeInsets.only(left: 6),
-                            child: Icon(Icons.photo, size: 16),
-                          ),
-                      ],
-                    ),
-                    title: Text('$marca $linea'),
-                    subtitle: Text(
-                      'Placas: $placas  •  Modelo: $modelo\nConductor: $conductor',
-                    ),
-                    isThreeLine: true,
-                    onTap: vehiculoId > 0
-                        ? () => _irEditarVehiculo(vehiculoId: vehiculoId)
-                        : null,
-                    trailing: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        IconButton(
-                          tooltip: 'Foto',
-                          icon: const Icon(Icons.photo_camera),
-                          onPressed: vehiculoId > 0
-                              ? () => _mostrarAccionesFoto(v)
-                              : null,
+                  child: Column(
+                    children: [
+                      ListTile(
+                        leading: Stack(
+                          alignment: Alignment.bottomRight,
+                          children: [
+                            const Icon(Icons.directions_car),
+                            if (tieneFoto || tieneInventario)
+                              Padding(
+                                padding: const EdgeInsets.only(left: 6),
+                                child: Icon(
+                                  tieneInventario
+                                      ? Icons.inventory_2
+                                      : Icons.photo,
+                                  size: 16,
+                                ),
+                              ),
+                          ],
                         ),
-                        IconButton(
-                          tooltip: 'Editar vehículo',
-                          icon: const Icon(Icons.edit),
-                          onPressed: vehiculoId > 0
-                              ? () => _irEditarVehiculo(vehiculoId: vehiculoId)
-                              : null,
+                        title: Text('$marca $linea'),
+                        subtitle: Text(
+                          [
+                            'Placas: $placas  •  Modelo: $modelo',
+                            'Conductor: $conductor',
+                            if ((inventario ?? '').isNotEmpty)
+                              'Inventario: $inventario',
+                          ].join('\n'),
                         ),
-                        IconButton(
-                          tooltip: 'Agregar/Editar conductor',
-                          icon: const Icon(Icons.person_add_alt_1),
-                          onPressed: vehiculoId > 0
-                              ? () => _irCrearEditarConductor(
-                                  vehiculoId: vehiculoId,
-                                )
-                              : null,
+                        isThreeLine: true,
+                        onTap: vehiculoId > 0
+                            ? () => _irEditarVehiculo(vehiculoId: vehiculoId)
+                            : null,
+                      ),
+                      const Divider(height: 1),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
                         ),
-                      ],
-                    ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                          children: [
+                            IconButton(
+                              tooltip: 'Editar vehículo',
+                              icon: const Icon(Icons.edit),
+                              onPressed: vehiculoId > 0
+                                  ? () => _irEditarVehiculo(
+                                      vehiculoId: vehiculoId,
+                                    )
+                                  : null,
+                            ),
+                            IconButton(
+                              tooltip: 'Agregar/Editar conductor',
+                              icon: const Icon(Icons.person_add_alt_1),
+                              onPressed: vehiculoId > 0
+                                  ? () => _irCrearEditarConductor(
+                                      vehiculoId: vehiculoId,
+                                    )
+                                  : null,
+                            ),
+                            IconButton(
+                              tooltip: 'Foto del vehículo',
+                              icon: const Icon(Icons.photo_camera),
+                              onPressed: vehiculoId > 0
+                                  ? () => _mostrarAccionesFoto(v)
+                                  : null,
+                            ),
+                            IconButton(
+                              tooltip: 'Inventario',
+                              icon: const Icon(Icons.inventory_2),
+                              onPressed: vehiculoId > 0
+                                  ? () => _mostrarAccionesInventario(v)
+                                  : null,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
                 );
               },

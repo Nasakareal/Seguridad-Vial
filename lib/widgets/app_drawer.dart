@@ -340,11 +340,26 @@ class AppDrawer extends StatelessWidget {
                       ),
 
                     if (canSeeConstanciasManejo)
-                      _DrawerItem(
-                        icon: Icons.badge,
-                        label: 'Constancias de manejo',
-                        subtitle: 'Generar lotes, imprimir y activar',
-                        onTap: () => _nav(context, AppRoutes.constanciasManejo),
+                      _DrawerGroup(
+                        icon: Icons.fact_check,
+                        label: 'Modulo de examenes',
+                        subtitle: 'Captura diaria y constancias',
+                        children: [
+                          _DrawerSubItem(
+                            icon: Icons.today,
+                            label: 'Examenes diarios',
+                            subtitle: 'Capturar totales por modulo',
+                            onTap: () =>
+                                _nav(context, AppRoutes.moduloExamenesDiarios),
+                          ),
+                          _DrawerSubItem(
+                            icon: Icons.badge,
+                            label: 'Constancias de manejo',
+                            subtitle: 'Generar lotes, imprimir y activar',
+                            onTap: () =>
+                                _nav(context, AppRoutes.constanciasManejo),
+                          ),
+                        ],
                       ),
 
                     if (canSeeCulturaVial)
