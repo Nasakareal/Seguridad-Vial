@@ -93,92 +93,128 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xfff0f3f6),
-      body: Center(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 24),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Image.asset('assets/images/guardiacivil.png', height: 160),
-              const SizedBox(height: 20),
-              Container(
-                padding: const EdgeInsets.all(24),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(6),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.grey.withValues(alpha: 0.2),
-                      blurRadius: 10,
-                      offset: const Offset(0, 5),
-                    ),
-                  ],
-                ),
-                child: Column(
-                  children: [
-                    const Text(
-                      'Autenticarse para iniciar sesión',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    if (_error != null)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 12),
-                        child: Text(
-                          _error!,
-                          style: const TextStyle(color: Colors.red),
+      body: SafeArea(
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final isVeryShort = constraints.maxHeight < 560;
+            final horizontalPadding = constraints.maxWidth < 360 ? 16.0 : 24.0;
+            final topPadding = isVeryShort ? 12.0 : 24.0;
+            final bottomPadding =
+                (isVeryShort ? 16.0 : 24.0) +
+                MediaQuery.viewInsetsOf(context).bottom;
+            final minHeight = constraints.maxHeight > topPadding + bottomPadding
+                ? constraints.maxHeight - topPadding - bottomPadding
+                : 0.0;
+
+            return SingleChildScrollView(
+              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+              padding: EdgeInsets.fromLTRB(
+                horizontalPadding,
+                topPadding,
+                horizontalPadding,
+                bottomPadding,
+              ),
+              child: ConstrainedBox(
+                constraints: BoxConstraints(minHeight: minHeight),
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 420),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Image.asset(
+                          'assets/images/guardiacivil.png',
+                          height: isVeryShort ? 96 : 160,
                         ),
-                      ),
-                    TextField(
-                      controller: _emailController,
-                      keyboardType: TextInputType.emailAddress,
-                      textInputAction: TextInputAction.next,
-                      decoration: const InputDecoration(
-                        prefixIcon: Icon(Icons.email),
-                        labelText: 'Email',
-                        border: OutlineInputBorder(),
-                      ),
-                      onSubmitted: (_) =>
-                          FocusScope.of(context).requestFocus(_passwordFocus),
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: _passwordController,
-                      focusNode: _passwordFocus,
-                      obscureText: true,
-                      textInputAction: TextInputAction.done,
-                      decoration: const InputDecoration(
-                        prefixIcon: Icon(Icons.lock),
-                        labelText: 'Contraseña',
-                        border: OutlineInputBorder(),
-                      ),
-                      onSubmitted: (_) => _login(),
-                    ),
-                    const SizedBox(height: 16),
-                    _loading
-                        ? const CircularProgressIndicator()
-                        : SizedBox(
-                            width: double.infinity,
-                            child: ElevatedButton.icon(
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xff007bff),
-                                padding: const EdgeInsets.symmetric(
-                                  vertical: 12,
+                        SizedBox(height: isVeryShort ? 14 : 20),
+                        Container(
+                          padding: EdgeInsets.all(isVeryShort ? 18 : 24),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(6),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.grey.withValues(alpha: 0.2),
+                                blurRadius: 10,
+                                offset: const Offset(0, 5),
+                              ),
+                            ],
+                          ),
+                          child: Column(
+                            children: [
+                              const Text(
+                                'Autenticarse para iniciar sesión',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
                                 ),
                               ),
-                              icon: const Icon(Icons.login),
-                              label: const Text('Acceder'),
-                              onPressed: _login,
-                            ),
+                              const SizedBox(height: 16),
+                              if (_error != null)
+                                Padding(
+                                  padding: const EdgeInsets.only(bottom: 12),
+                                  child: Text(
+                                    _error!,
+                                    textAlign: TextAlign.center,
+                                    style: const TextStyle(color: Colors.red),
+                                  ),
+                                ),
+                              TextField(
+                                controller: _emailController,
+                                keyboardType: TextInputType.emailAddress,
+                                textInputAction: TextInputAction.next,
+                                decoration: const InputDecoration(
+                                  prefixIcon: Icon(Icons.email),
+                                  labelText: 'Email',
+                                  border: OutlineInputBorder(),
+                                ),
+                                onSubmitted: (_) => FocusScope.of(
+                                  context,
+                                ).requestFocus(_passwordFocus),
+                              ),
+                              const SizedBox(height: 12),
+                              TextField(
+                                controller: _passwordController,
+                                focusNode: _passwordFocus,
+                                obscureText: true,
+                                textInputAction: TextInputAction.done,
+                                decoration: const InputDecoration(
+                                  prefixIcon: Icon(Icons.lock),
+                                  labelText: 'Contraseña',
+                                  border: OutlineInputBorder(),
+                                ),
+                                onSubmitted: (_) => _login(),
+                              ),
+                              const SizedBox(height: 16),
+                              _loading
+                                  ? const CircularProgressIndicator()
+                                  : SizedBox(
+                                      width: double.infinity,
+                                      child: ElevatedButton.icon(
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: const Color(
+                                            0xff007bff,
+                                          ),
+                                          padding: const EdgeInsets.symmetric(
+                                            vertical: 12,
+                                          ),
+                                        ),
+                                        icon: const Icon(Icons.login),
+                                        label: const Text('Acceder'),
+                                        onPressed: _login,
+                                      ),
+                                    ),
+                            ],
                           ),
-                  ],
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
               ),
-            ],
-          ),
+            );
+          },
         ),
       ),
     );
