@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../models/actividad.dart';
@@ -11,7 +12,9 @@ import '../../services/actividades_service.dart';
 import '../../services/auth_service.dart';
 import '../../services/geo_service.dart';
 import '../../services/local_draft_service.dart';
+import '../../widgets/actividad_people_count_guard.dart';
 import '../../widgets/landscape_photo_crop_screen.dart';
+import '../../widgets/normalized_integer_input_formatter.dart';
 import 'widgets/actividad_vehiculo_modal.dart';
 
 class ActividadCreateScreen extends StatefulWidget {
@@ -227,11 +230,15 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
     _narrativaCtrl.text = (fields['narrativa'] ?? '').trim();
     _accionesCtrl.text = (fields['acciones_realizadas'] ?? '').trim();
     _observacionesCtrl.text = (fields['observaciones'] ?? '').trim();
-    _personasAlcanzadasCtrl.text = (fields['personas_alcanzadas'] ?? '1')
-        .trim();
-    _personasParticipantesCtrl.text = (fields['personas_participantes'] ?? '0')
-        .trim();
-    _personasDetenidasCtrl.text = (fields['personas_detenidas'] ?? '0').trim();
+    _personasAlcanzadasCtrl.text = NormalizedIntegerInputFormatter.normalize(
+      (fields['personas_alcanzadas'] ?? '1').trim(),
+    );
+    _personasParticipantesCtrl.text = NormalizedIntegerInputFormatter.normalize(
+      (fields['personas_participantes'] ?? '0').trim(),
+    );
+    _personasDetenidasCtrl.text = NormalizedIntegerInputFormatter.normalize(
+      (fields['personas_detenidas'] ?? '0').trim(),
+    );
     _elementosCtrl.text = (fields['elementos_participantes_texto'] ?? '')
         .trim();
     _patrullasCtrl.text = (fields['patrullas_participantes_texto'] ?? '')
@@ -286,12 +293,15 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
     _narrativaCtrl.text = _stringValue(draft['narrativa']) ?? '';
     _accionesCtrl.text = _stringValue(draft['acciones']) ?? '';
     _observacionesCtrl.text = _stringValue(draft['observaciones']) ?? '';
-    _personasAlcanzadasCtrl.text =
-        _stringValue(draft['personas_alcanzadas']) ?? '1';
-    _personasParticipantesCtrl.text =
-        _stringValue(draft['personas_participantes']) ?? '0';
-    _personasDetenidasCtrl.text =
-        _stringValue(draft['personas_detenidas']) ?? '0';
+    _personasAlcanzadasCtrl.text = NormalizedIntegerInputFormatter.normalize(
+      _stringValue(draft['personas_alcanzadas']) ?? '1',
+    );
+    _personasParticipantesCtrl.text = NormalizedIntegerInputFormatter.normalize(
+      _stringValue(draft['personas_participantes']) ?? '0',
+    );
+    _personasDetenidasCtrl.text = NormalizedIntegerInputFormatter.normalize(
+      _stringValue(draft['personas_detenidas']) ?? '0',
+    );
     _elementosCtrl.text = _stringValue(draft['elementos']) ?? '';
     _patrullasCtrl.text = _stringValue(draft['patrullas']) ?? '';
 
@@ -327,9 +337,9 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
       'narrativa': _narrativaCtrl.text,
       'acciones': _accionesCtrl.text,
       'observaciones': _observacionesCtrl.text,
-      'personas_alcanzadas': _personasAlcanzadasCtrl.text,
-      'personas_participantes': _personasParticipantesCtrl.text,
-      'personas_detenidas': _personasDetenidasCtrl.text,
+      'personas_alcanzadas': _integerText(_personasAlcanzadasCtrl),
+      'personas_participantes': _integerText(_personasParticipantesCtrl),
+      'personas_detenidas': _integerText(_personasDetenidasCtrl),
       'elementos': _elementosCtrl.text,
       'patrullas': _patrullasCtrl.text,
       'fotos': _fotos.map((file) => file.path).toList(),
@@ -441,7 +451,9 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
       capacidadPersonas: int.tryParse(str('capacidad_personas') ?? '') ?? 0,
       tipoServicio: str('tipo_servicio') ?? 'PARTICULAR',
       tarjetaCirculacionNombre: str('tarjeta_circulacion_nombre'),
+      gruaId: int.tryParse(str('grua_id') ?? ''),
       grua: str('grua'),
+      corralonId: int.tryParse(str('corralon_id') ?? ''),
       corralon: str('corralon'),
       aseguradora: str('aseguradora'),
       antecedenteVehiculo: boolValue('antecedente_vehiculo'),
@@ -555,6 +567,15 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
     return value.isEmpty ? null : value;
   }
 
+  String? _trimInteger(TextEditingController ctrl) {
+    final value = _integerText(ctrl);
+    return value.isEmpty ? null : value;
+  }
+
+  String _integerText(TextEditingController ctrl) {
+    return NormalizedIntegerInputFormatter.normalize(ctrl.text.trim());
+  }
+
   ActividadUpsertData _buildPayload() {
     return ActividadUpsertData(
       clientUuid: _clientUuid,
@@ -573,9 +594,9 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
       narrativa: _trim(_narrativaCtrl),
       accionesRealizadas: null,
       observaciones: null,
-      personasAlcanzadas: _trim(_personasAlcanzadasCtrl),
-      personasParticipantes: _trim(_personasParticipantesCtrl),
-      personasDetenidas: _trim(_personasDetenidasCtrl),
+      personasAlcanzadas: _trimInteger(_personasAlcanzadasCtrl),
+      personasParticipantes: _trimInteger(_personasParticipantesCtrl),
+      personasDetenidas: _trimInteger(_personasDetenidasCtrl),
       elementosParticipantesTexto: _trim(_elementosCtrl),
       patrullasParticipantesTexto: _trim(_patrullasCtrl),
       vehiculos: List<ActividadVehiculo>.from(_vehiculos),
@@ -607,6 +628,13 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
       setState(() => _error = validation);
       return;
     }
+
+    if (!mounted) return;
+    final confirmedCounts = await ActividadPeopleCountGuard.confirmIfNeeded(
+      context,
+      payload,
+    );
+    if (!confirmedCounts || !mounted) return;
 
     if (_saving) return;
     setState(() => _saving = true);
@@ -652,12 +680,14 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
     int maxLines = 1,
     TextInputType? keyboardType,
     bool readOnly = false,
+    List<TextInputFormatter>? inputFormatters,
   }) {
     return TextField(
       controller: controller,
       maxLines: maxLines,
       keyboardType: keyboardType,
       readOnly: readOnly,
+      inputFormatters: inputFormatters,
       decoration: _dec(label, hint: hint),
     );
   }
@@ -971,6 +1001,9 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
                           _personasAlcanzadasCtrl,
                           'Personas alcanzadas *',
                           keyboardType: TextInputType.number,
+                          inputFormatters: const [
+                            NormalizedIntegerInputFormatter(),
+                          ],
                         ),
                       ),
                       const SizedBox(width: 10),
@@ -979,6 +1012,9 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
                           _personasParticipantesCtrl,
                           'Personas participantes',
                           keyboardType: TextInputType.number,
+                          inputFormatters: const [
+                            NormalizedIntegerInputFormatter(),
+                          ],
                         ),
                       ),
                     ],
@@ -988,6 +1024,7 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
                     _personasDetenidasCtrl,
                     'Personas detenidas',
                     keyboardType: TextInputType.number,
+                    inputFormatters: const [NormalizedIntegerInputFormatter()],
                   ),
                   const SizedBox(height: 12),
                   _textField(

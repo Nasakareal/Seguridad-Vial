@@ -687,13 +687,6 @@ class AuthService {
         unidadId == unidadDelegacionesId ||
         _payloadMatchesDelegaciones(payload);
     if (isDelegaciones) {
-      final isAdministrativo =
-          _payloadHasRole(payload, 'administrativo') ||
-          await isAdministrativoRole();
-      if (isAdministrativo) {
-        return false;
-      }
-
       final permissions = await getPermissions();
       return permissions.contains('crear hechos');
     }
@@ -1420,16 +1413,6 @@ class AuthService {
 
     if (isPeritoUser) {
       normalized.add('crear hechos');
-    }
-
-    final isDelegaciones =
-        unidadId == unidadDelegacionesId ||
-        _payloadMatchesDelegaciones(payload);
-    final isAdministrativo =
-        _payloadHasRole(payload, 'administrativo') ||
-        await isAdministrativoRole();
-    if (isDelegaciones && isAdministrativo) {
-      normalized.remove('crear hechos');
     }
 
     final canUseCarreteras =

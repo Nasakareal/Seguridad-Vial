@@ -1,7 +1,9 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:seguridad_vial_app/models/actividad.dart';
 import 'package:seguridad_vial_app/services/actividades_service.dart';
+import 'package:seguridad_vial_app/widgets/normalized_integer_input_formatter.dart';
 
 void main() {
   test('validates activity captures before they enter offline queue', () async {
@@ -50,5 +52,80 @@ void main() {
     );
 
     expect(error, isNull);
+  });
+
+  test('activity vehicle api payload keeps selected grua id and name', () {
+    final vehiculo = ActividadVehiculo(
+      marca: 'NISSAN',
+      tipo: 'Sedán',
+      linea: 'TSURU',
+      color: 'BLANCO',
+      capacidadPersonas: 5,
+      tipoServicio: 'PARTICULAR',
+      gruaId: 12,
+      grua: 'GRÚAS CENTRO',
+      corralonId: 20,
+      corralon: 'CORRALÓN CENTRO',
+      antecedenteVehiculo: false,
+    );
+
+    final payload = vehiculo.toApiJson();
+
+    expect(payload['grua_id'], 12);
+    expect(payload['grua'], 'GRÚAS CENTRO');
+    expect(payload['corralon'], 'CORRALÓN CENTRO');
+    expect(payload.containsKey('corralon_id'), isFalse);
+  });
+
+  test('normalizes activity integer inputs while typing', () {
+    const formatter = NormalizedIntegerInputFormatter();
+
+    TextEditingValue format(String text) {
+      return formatter.formatEditUpdate(
+        TextEditingValue.empty,
+        TextEditingValue(text: text),
+      );
+    }
+
+    expect(format('01').text, '1');
+    expect(format('00100').text, '100');
+    expect(format('000001').text, '1');
+    expect(format('000').text, '0');
+  });
+
+  test('warns before saving suspicious activity people counts', () {
+    final warnings = ActividadesService.peopleCountWarnings(
+      const ActividadUpsertData(
+        actividadCategoriaId: 1,
+        actividadSubcategoriaId: 2,
+        fecha: '2026-04-25',
+        personasAlcanzadas: '1000',
+        personasParticipantes: '5',
+        personasDetenidas: '3',
+      ),
+    );
+
+    expect(warnings, anyElement(contains('Personas alcanzadas tiene 1000')));
+    expect(warnings, anyElement(contains('Personas participantes tiene 5')));
+    expect(warnings, anyElement(contains('Personas detenidas tiene 3')));
+    expect(
+      warnings,
+      everyElement(anyOf(contains('operativo'), contains('alta'))),
+    );
+  });
+
+  test('warns when activity participants are zero', () {
+    final warnings = ActividadesService.peopleCountWarnings(
+      const ActividadUpsertData(
+        actividadCategoriaId: 1,
+        actividadSubcategoriaId: 2,
+        fecha: '2026-04-25',
+        personasAlcanzadas: '1',
+        personasParticipantes: '0',
+        personasDetenidas: '0',
+      ),
+    );
+
+    expect(warnings, anyElement(contains('Personas participantes está en 0')));
   });
 }

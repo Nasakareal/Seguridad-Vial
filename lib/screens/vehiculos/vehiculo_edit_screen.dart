@@ -7,6 +7,7 @@ import '../../core/vehiculos/vehiculo_taxonomia.dart';
 import '../../core/vehiculos/aseguradoras_vehiculo.dart';
 import '../../core/vehiculos/colores_vehiculo.dart';
 import '../../core/vehiculos/estados_republica.dart';
+import '../../services/gruas_catalog_service.dart';
 import '../../services/offline_sync_service.dart';
 import '../../services/vehiculo_form_service.dart';
 
@@ -51,8 +52,6 @@ class _VehiculoEditScreenState extends State<VehiculoEditScreen> {
   String? _corralonNombreCargado;
 
   static const String _baseApi = 'https://seguridadvial-mich.com/api';
-  static const String _urlGruas = '$_baseApi/gruas';
-
   int _hechoId = 0;
   int _vehiculoId = 0;
   bool _argsOk = false;
@@ -466,35 +465,10 @@ class _VehiculoEditScreenState extends State<VehiculoEditScreen> {
 
   Future<void> _cargarGruas() async {
     try {
-      final h = await _headers();
-      final res = await http.get(Uri.parse(_urlGruas), headers: h);
-
-      if (res.statusCode != 200) {
-        final msg = _apiErrorText(
-          res,
-          fallbackTitle: 'No se pudieron cargar grúas',
-        );
-        throw Exception(msg);
-      }
-
-      final raw = jsonDecode(_decodeBody(res));
-
-      List list;
-      if (raw is Map && raw['data'] is List) {
-        list = raw['data'] as List;
-      } else if (raw is List) {
-        list = raw;
-      } else {
-        list = [];
-      }
-
-      _gruas = list
-          .whereType<Map>()
-          .map((e) => Map<String, dynamic>.from(e))
-          .toList();
-
+      final gruas = await GruasCatalogService.fetchVisibleGruas();
       if (!mounted) return;
       setState(() {
+        _gruas = gruas;
         _cargandoGruas = false;
 
         _aplicarPendientesSiSePuede();
@@ -1113,14 +1087,12 @@ class _VehiculoEditScreenState extends State<VehiculoEditScreen> {
                                 child: Text('SIN GRÚA / N/A'),
                               ),
                               ..._gruas.map((g) {
-                                final id = int.tryParse(
-                                  (g['id'] ?? '').toString(),
-                                );
-                                final nombre = (g['nombre'] ?? '').toString();
+                                final id = GruasCatalogService.idOf(g);
                                 return DropdownMenuItem<int?>(
                                   value: id,
                                   child: Text(
-                                    nombre.isEmpty ? 'GRÚA #$id' : nombre,
+                                    GruasCatalogService.displayName(g),
+                                    overflow: TextOverflow.ellipsis,
                                   ),
                                 );
                               }),
@@ -1148,14 +1120,15 @@ class _VehiculoEditScreenState extends State<VehiculoEditScreen> {
                                 child: Text('SIN CORRALÓN / N/A'),
                               ),
                               ..._gruas.map((g) {
-                                final id = int.tryParse(
-                                  (g['id'] ?? '').toString(),
-                                );
-                                final nombre = (g['nombre'] ?? '').toString();
+                                final id = GruasCatalogService.idOf(g);
                                 return DropdownMenuItem<int?>(
                                   value: id,
                                   child: Text(
-                                    nombre.isEmpty ? 'CORRALÓN #$id' : nombre,
+                                    GruasCatalogService.displayName(
+                                      g,
+                                      fallbackPrefix: 'CORRALÓN',
+                                    ),
+                                    overflow: TextOverflow.ellipsis,
                                   ),
                                 );
                               }),

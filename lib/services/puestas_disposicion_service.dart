@@ -52,6 +52,22 @@ class PuestasDisposicionService {
         .toList();
   }
 
+  Future<Map<String, dynamic>> show(int id) async {
+    final response = await http.get(
+      _uri('/puestas-disposicion/$id'),
+      headers: await _headers(),
+    );
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception('Error HTTP ${response.statusCode}: ${response.body}');
+    }
+
+    final decoded = json.decode(response.body);
+    if (decoded is Map<String, dynamic>) return decoded;
+    if (decoded is Map) return Map<String, dynamic>.from(decoded);
+    return <String, dynamic>{};
+  }
+
   Future<Map<String, dynamic>> store({
     required Map<String, String> fields,
     File? archivoPuesta,

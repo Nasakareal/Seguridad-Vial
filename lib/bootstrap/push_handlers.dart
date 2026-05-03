@@ -47,7 +47,7 @@ void handlePushTap(Map<String, dynamic> data) {
   try {
     final type = (data['type'] ?? '').toString();
 
-    if (type == 'WAZE_ACCIDENT') {
+    if (type == 'WAZE_ACCIDENT' || type == 'WAZE_ROAD_CLOSED') {
       unawaited(openMapsFromData(data));
       return;
     }

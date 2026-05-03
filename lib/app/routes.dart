@@ -41,6 +41,7 @@ class AppRoutes {
   static const String estadisticasGlobales = '/estadisticas-globales';
   static const String estadisticasGlobalesHechos =
       '/estadisticas-globales/hechos';
+  static const String estadisticasActividades = '/estadisticas-actividades';
 
   static const String dictamenes = '/dictamenes';
   static const String dictamenesCreate = '/dictamenes/create';
@@ -49,6 +50,7 @@ class AppRoutes {
 
   static const String puestasDisposicion = '/puestas-disposicion';
   static const String puestasDisposicionCreate = '/puestas-disposicion/create';
+  static const String puestasDisposicionShow = '/puestas-disposicion/show';
 
   static const String actividades = '/actividades';
   static const String actividadesCreate = '/actividades/create';

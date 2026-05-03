@@ -76,12 +76,21 @@ class AccidentesService {
   static Future<List<Map<String, dynamic>>> fetchHechos({
     required String fecha,
     int perPage = 100,
+    int? unidadOrgId,
+    int? delegacionId,
   }) async {
     final token = await AuthService.getToken();
 
-    final uri = Uri.parse(
-      '${AuthService.baseUrl}/hechos',
-    ).replace(queryParameters: {'per_page': '$perPage', 'fecha': fecha});
+    final uri = Uri.parse('${AuthService.baseUrl}/hechos').replace(
+      queryParameters: {
+        'per_page': '$perPage',
+        'fecha': fecha,
+        if (unidadOrgId != null && unidadOrgId > 0)
+          'unidad_org_id': '$unidadOrgId',
+        if (delegacionId != null && delegacionId > 0)
+          'delegacion_id': '$delegacionId',
+      },
+    );
 
     final headers = <String, String>{
       'Accept': 'application/json',
@@ -112,6 +121,41 @@ class AccidentesService {
     }
 
     return datos
+        .whereType<Map>()
+        .map((e) => Map<String, dynamic>.from(e))
+        .toList();
+  }
+
+  static Future<List<Map<String, dynamic>>> fetchDelegacionesCatalogo() async {
+    final token = await AuthService.getToken();
+
+    final uri = Uri.parse(
+      '${AuthService.baseUrl}/estadisticas-actividades/catalogos/delegaciones',
+    );
+
+    final headers = <String, String>{
+      'Accept': 'application/json',
+      'Content-Type': 'application/json',
+    };
+
+    if (token != null && token.isNotEmpty) {
+      headers['Authorization'] = 'Bearer $token';
+    }
+
+    final response = await http.get(uri, headers: headers);
+
+    if (response.statusCode != 200) {
+      throw Exception(_parseBackendError(response.body, response.statusCode));
+    }
+
+    final raw = jsonDecode(response.body);
+    final data = raw is List
+        ? raw
+        : raw is Map<String, dynamic> && raw['data'] is List
+        ? raw['data'] as List<dynamic>
+        : const <dynamic>[];
+
+    return data
         .whereType<Map>()
         .map((e) => Map<String, dynamic>.from(e))
         .toList();

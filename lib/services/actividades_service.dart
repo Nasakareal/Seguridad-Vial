@@ -156,9 +156,52 @@ class ActividadesService {
   static String get _base => '${AuthService.baseUrl}/actividades';
   static const String _categoriasCacheKey = 'actividades_categorias_cache_v1';
   static const int _maxImageBytes = 4 * 1024 * 1024;
+  static const int suspiciousReachedCount = 1000;
+  static const int suspiciousParticipantsCount = 5;
+  static const int suspiciousDetainedCount = 3;
 
   static String _subcategoriasCacheKey(int categoriaId) =>
       'actividades_subcategorias_cache_v1_$categoriaId';
+
+  static List<String> peopleCountWarnings(ActividadUpsertData data) {
+    final warnings = <String>[];
+
+    final participantes = int.tryParse(
+      (data.personasParticipantes ?? '').trim(),
+    );
+    if (participantes == 0) {
+      warnings.add(
+        'Personas participantes está en 0. Revisa si realmente no participó nadie.',
+      );
+    }
+
+    void warnHigh(String label, String? raw, int threshold, String reason) {
+      final value = int.tryParse((raw ?? '').trim());
+      if (value == null || value < threshold) return;
+      warnings.add('$label tiene $value. $reason');
+    }
+
+    warnHigh(
+      'Personas alcanzadas',
+      data.personasAlcanzadas,
+      suspiciousReachedCount,
+      'Es una cantidad muy alta; revisa si fue captura accidental.',
+    );
+    warnHigh(
+      'Personas participantes',
+      data.personasParticipantes,
+      suspiciousParticipantsCount,
+      'Ya suena a operativo o dispositivo; confirma que sí corresponde a esta actividad.',
+    );
+    warnHigh(
+      'Personas detenidas',
+      data.personasDetenidas,
+      suspiciousDetainedCount,
+      'Ya suena a operativo o dispositivo; confirma que sí corresponde a esta actividad.',
+    );
+
+    return warnings;
+  }
 
   static String toPublicUrl(String pathOrUrl) {
     final p = pathOrUrl.trim();

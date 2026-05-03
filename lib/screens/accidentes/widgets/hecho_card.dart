@@ -25,6 +25,9 @@ class HechoCard extends StatelessWidget {
   final VoidCallback? onTapEdit;
   final VoidCallback? onDownload;
   final VoidCallback? onEnviarWhatsapp;
+  final bool delegacionesIncompleto;
+  final String? delegacionLabel;
+  final List<String> capturaFaltanteDetalles;
 
   const HechoCard({
     super.key,
@@ -45,15 +48,29 @@ class HechoCard extends StatelessWidget {
     required this.onTapEdit,
     required this.onDownload,
     required this.onEnviarWhatsapp,
+    this.delegacionesIncompleto = false,
+    this.delegacionLabel,
+    this.capturaFaltanteDetalles = const [],
   });
 
   @override
   Widget build(BuildContext context) {
     final responsable = (hecho['responsable'] ?? '').toString().trim();
+    final delegacion = (delegacionLabel ?? '').trim();
+    final faltantes = capturaFaltanteDetalles
+        .map((item) => item.trim())
+        .where((item) => item.isNotEmpty)
+        .toList();
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      color: delegacionesIncompleto ? Colors.red.shade50 : null,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: delegacionesIncompleto
+            ? BorderSide(color: Colors.red.shade300, width: 1.2)
+            : BorderSide.none,
+      ),
       child: InkWell(
         borderRadius: BorderRadius.circular(16),
         onTap: onTapShow,
@@ -71,6 +88,40 @@ class HechoCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    if (delegacionesIncompleto)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 6,
+                              children: [
+                                _StatusBadge(
+                                  text: 'DELEGACIONES',
+                                  color: Colors.red.shade700,
+                                ),
+                                _StatusBadge(
+                                  text: 'CAPTURA INCOMPLETA',
+                                  color: Colors.red.shade700,
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              faltantes.isEmpty
+                                  ? 'Falta completar la captura esperada.'
+                                  : 'Falta capturar: ${faltantes.join(', ')}.',
+                              style: TextStyle(
+                                color: Colors.red.shade700,
+                                fontWeight: FontWeight.w800,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                     Text(
                       'Folio: $folio',
                       style: const TextStyle(fontWeight: FontWeight.w700),
@@ -80,6 +131,7 @@ class HechoCard extends StatelessWidget {
                     Text('Ubicación: $ubicacion'),
                     Text('Situación: $situacion'),
                     Text('Perito: $perito'),
+                    if (delegacion.isNotEmpty) Text('Delegación: $delegacion'),
                     if (responsable.isNotEmpty)
                       Text('Responsable: $responsable'),
                     PhotoBlock(label: 'Foto del hecho', url: fotoHecho),
@@ -188,6 +240,33 @@ class HechoCard extends StatelessWidget {
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _StatusBadge extends StatelessWidget {
+  final String text;
+  final Color color;
+
+  const _StatusBadge({required this.text, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: color.withValues(alpha: 0.28)),
+      ),
+      child: Text(
+        text,
+        style: TextStyle(
+          color: color,
+          fontWeight: FontWeight.w900,
+          fontSize: 11,
         ),
       ),
     );

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../core/vehiculos/estados_republica.dart';
 import '../../../core/vehiculos/vehiculo_taxonomia.dart';
 import '../../../models/actividad.dart';
+import '../../../services/gruas_catalog_service.dart';
 import '../../../services/vehiculo_form_service.dart';
 
 Future<ActividadVehiculo?> showActividadVehiculoModal(BuildContext context) {
@@ -33,8 +34,6 @@ class _ActividadVehiculoModalState extends State<_ActividadVehiculoModal> {
   final _serieCtrl = TextEditingController();
   final _capacidadCtrl = TextEditingController(text: '0');
   final _tarjetaCtrl = TextEditingController();
-  final _gruaCtrl = TextEditingController();
-  final _corralonCtrl = TextEditingController();
   final _aseguradoraCtrl = TextEditingController();
   final _montoDanosCtrl = TextEditingController(text: '0');
   final _partesDanadasCtrl = TextEditingController();
@@ -44,6 +43,17 @@ class _ActividadVehiculoModalState extends State<_ActividadVehiculoModal> {
   String? _estadoPlacas;
   String? _tipoServicio = 'PARTICULAR';
   bool _antecedenteVehiculo = false;
+  bool _cargandoGruas = true;
+  String? _gruasError;
+  List<Map<String, dynamic>> _gruas = const <Map<String, dynamic>>[];
+  int? _gruaIdSeleccionada;
+  int? _corralonGruaIdSeleccionada;
+
+  @override
+  void initState() {
+    super.initState();
+    _cargarGruas();
+  }
 
   @override
   void dispose() {
@@ -55,8 +65,6 @@ class _ActividadVehiculoModalState extends State<_ActividadVehiculoModal> {
     _serieCtrl.dispose();
     _capacidadCtrl.dispose();
     _tarjetaCtrl.dispose();
-    _gruaCtrl.dispose();
-    _corralonCtrl.dispose();
     _aseguradoraCtrl.dispose();
     _montoDanosCtrl.dispose();
     _partesDanadasCtrl.dispose();
@@ -89,6 +97,37 @@ class _ActividadVehiculoModalState extends State<_ActividadVehiculoModal> {
     return null;
   }
 
+  Future<void> _cargarGruas() async {
+    setState(() {
+      _cargandoGruas = true;
+      _gruasError = null;
+    });
+
+    try {
+      final gruas = await GruasCatalogService.fetchVisibleGruas();
+      if (!mounted) return;
+      setState(() {
+        _gruas = gruas;
+        if (!GruasCatalogService.containsId(_gruas, _gruaIdSeleccionada)) {
+          _gruaIdSeleccionada = null;
+        }
+        if (!GruasCatalogService.containsId(
+          _gruas,
+          _corralonGruaIdSeleccionada,
+        )) {
+          _corralonGruaIdSeleccionada = null;
+        }
+        _cargandoGruas = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _gruasError = e.toString();
+        _cargandoGruas = false;
+      });
+    }
+  }
+
   void _submit() {
     if (!_formKey.currentState!.validate()) return;
 
@@ -99,6 +138,14 @@ class _ActividadVehiculoModalState extends State<_ActividadVehiculoModal> {
     final serieClean = VehiculoFormService.normalizeSerie(_t(_serieCtrl));
     final capacidad = int.tryParse(_t(_capacidadCtrl)) ?? 0;
     final montoDanos = double.tryParse(_t(_montoDanosCtrl));
+    final gruaNombre = GruasCatalogService.findNameById(
+      _gruas,
+      _gruaIdSeleccionada,
+    );
+    final corralonNombre = GruasCatalogService.findNameById(
+      _gruas,
+      _corralonGruaIdSeleccionada,
+    );
 
     Navigator.pop(
       context,
@@ -115,13 +162,84 @@ class _ActividadVehiculoModalState extends State<_ActividadVehiculoModal> {
         capacidadPersonas: capacidad,
         tipoServicio: _tipoServicio ?? 'PARTICULAR',
         tarjetaCirculacionNombre: _nullIfEmpty(_t(_tarjetaCtrl)),
-        grua: _nullIfEmpty(_t(_gruaCtrl)),
-        corralon: _nullIfEmpty(_t(_corralonCtrl)),
+        gruaId: _gruaIdSeleccionada,
+        grua: _nullIfEmpty(gruaNombre ?? ''),
+        corralonId: _corralonGruaIdSeleccionada,
+        corralon: _nullIfEmpty(corralonNombre ?? ''),
         aseguradora: _nullIfEmpty(_t(_aseguradoraCtrl)),
         antecedenteVehiculo: _antecedenteVehiculo,
         montoDanos: montoDanos ?? 0,
         partesDanadas: _nullIfEmpty(_t(_partesDanadasCtrl)),
       ),
+    );
+  }
+
+  Widget _gruasSelector({
+    required String label,
+    required String emptyLabel,
+    required IconData icon,
+    required int? value,
+    required ValueChanged<int?> onChanged,
+  }) {
+    if (_cargandoGruas) {
+      return const ListTile(
+        contentPadding: EdgeInsets.zero,
+        leading: SizedBox(
+          width: 18,
+          height: 18,
+          child: CircularProgressIndicator(strokeWidth: 2),
+        ),
+        title: Text('Cargando grúas...'),
+      );
+    }
+
+    if (_gruasError != null) {
+      return Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: Colors.red.withValues(alpha: .06),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.red.withValues(alpha: .18)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'No se pudieron cargar grúas.',
+              style: TextStyle(
+                color: Colors.red.shade700,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+              onPressed: _cargarGruas,
+              icon: const Icon(Icons.refresh),
+              label: const Text('Reintentar'),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return DropdownButtonFormField<int?>(
+      value: value,
+      isExpanded: true,
+      decoration: _dec(label, icon: icon),
+      items: [
+        DropdownMenuItem<int?>(value: null, child: Text(emptyLabel)),
+        ..._gruas.map((grua) {
+          final id = GruasCatalogService.idOf(grua);
+          return DropdownMenuItem<int?>(
+            value: id,
+            child: Text(
+              GruasCatalogService.displayName(grua),
+              overflow: TextOverflow.ellipsis,
+            ),
+          );
+        }),
+      ],
+      onChanged: onChanged,
     );
   }
 
@@ -359,26 +477,31 @@ class _ActividadVehiculoModalState extends State<_ActividadVehiculoModal> {
                 ),
               ),
               const SizedBox(height: 10),
-              TextFormField(
-                controller: _gruaCtrl,
-                decoration: _dec('Grúa', icon: Icons.local_shipping),
-                textCapitalization: TextCapitalization.characters,
-                validator: (v) => VehiculoFormService.validateOptionalText(
-                  v,
-                  max: 255,
-                  label: 'Grúa',
-                ),
+              _gruasSelector(
+                label: 'Grúa (empresa)',
+                emptyLabel: 'SIN GRÚA / N/A',
+                icon: Icons.local_shipping,
+                value:
+                    GruasCatalogService.containsId(_gruas, _gruaIdSeleccionada)
+                    ? _gruaIdSeleccionada
+                    : null,
+                onChanged: (value) =>
+                    setState(() => _gruaIdSeleccionada = value),
               ),
               const SizedBox(height: 10),
-              TextFormField(
-                controller: _corralonCtrl,
-                decoration: _dec('Corralón', icon: Icons.warehouse),
-                textCapitalization: TextCapitalization.characters,
-                validator: (v) => VehiculoFormService.validateOptionalText(
-                  v,
-                  max: 255,
-                  label: 'Corralón',
-                ),
+              _gruasSelector(
+                label: 'Corralón (empresa)',
+                emptyLabel: 'SIN CORRALÓN / N/A',
+                icon: Icons.warehouse,
+                value:
+                    GruasCatalogService.containsId(
+                      _gruas,
+                      _corralonGruaIdSeleccionada,
+                    )
+                    ? _corralonGruaIdSeleccionada
+                    : null,
+                onChanged: (value) =>
+                    setState(() => _corralonGruaIdSeleccionada = value),
               ),
               const SizedBox(height: 10),
               TextFormField(

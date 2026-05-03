@@ -4,7 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:fl_chart/fl_chart.dart';
 
+import '../../app/routes.dart';
 import '../../services/auth_service.dart';
+import '../../services/gruas_catalog_service.dart';
 import '../../services/gruas_share_service.dart';
 
 // CAMBIO: ahora importamos el SHOW
@@ -20,6 +22,8 @@ class GruasScreen extends StatefulWidget {
 class _GruasScreenState extends State<GruasScreen> {
   bool _cargandoLista = true;
   bool _cargandoChart = true;
+  bool _cargandoAcceso = true;
+  bool _canChooseUnidadFiltro = false;
 
   String? _errorLista;
   String? _errorChart;
@@ -34,6 +38,7 @@ class _GruasScreenState extends State<GruasScreen> {
   int _unidadFiltroId = 1;
   int? _delegacionFiltroId;
   int? _gruaFiltroId;
+  static const int _soloDelegacionesConServiciosId = -1;
 
   // --- NUEVO: modo día/semana ---
   bool _modoDia = false;
@@ -50,7 +55,23 @@ class _GruasScreenState extends State<GruasScreen> {
   void initState() {
     super.initState();
     _recalcWeek();
-    _cargarTodo();
+    _bootstrapAccess();
+  }
+
+  Future<void> _bootstrapAccess() async {
+    final canChooseUnidad = await AuthService.hasFullOperationalAccess();
+    final unidadId = await AuthService.getUnidadId();
+
+    if (!mounted) return;
+    setState(() {
+      _canChooseUnidadFiltro = canChooseUnidad;
+      if (!canChooseUnidad) {
+        _unidadFiltroId = unidadId == AuthService.unidadDelegacionesId ? 2 : 1;
+      }
+      _cargandoAcceso = false;
+    });
+
+    await _cargarTodo();
   }
 
   void _recalcWeek() {
@@ -97,7 +118,9 @@ class _GruasScreenState extends State<GruasScreen> {
   Map<String, String> _baseFiltroParams({bool includeGrua = false}) {
     final params = <String, String>{'unidad_id': '$_unidadFiltroId'};
 
-    if (_unidadFiltroId == 2 && _delegacionFiltroId != null) {
+    if (_unidadFiltroId == 2 &&
+        _delegacionFiltroId != null &&
+        _delegacionFiltroId! > 0) {
       params['delegacion_id'] = '$_delegacionFiltroId';
     }
 
@@ -210,6 +233,7 @@ class _GruasScreenState extends State<GruasScreen> {
       setState(() {
         _delegaciones = items;
         if (_delegacionFiltroId != null &&
+            _delegacionFiltroId != _soloDelegacionesConServiciosId &&
             !items.any((d) => _toInt(d['id']) == _delegacionFiltroId)) {
           _delegacionFiltroId = null;
           _gruaFiltroId = null;
@@ -298,16 +322,22 @@ class _GruasScreenState extends State<GruasScreen> {
         ..._extractUnidadIds(g),
         if (sem != null) ..._extractUnidadIds(sem),
       }.toList()..sort();
+      final delegacionIds = {
+        ...GruasCatalogService.extractDelegacionIds(g),
+        if (sem != null) ...GruasCatalogService.extractDelegacionIds(sem),
+      }.toList()..sort();
 
-      final count = sem != null ? _toInt(sem['servicios_count']) : 0;
       final ultimo = sem?['fecha_ultimo_servicio'];
 
-      final vehiculos = (sem?['vehiculos'] is List)
+      final rawVehiculos = (sem?['vehiculos'] is List)
           ? (sem!['vehiculos'] as List)
                 .whereType<Map>()
                 .map((m) => Map<String, dynamic>.from(m))
                 .toList()
           : <Map<String, dynamic>>[];
+      final vehiculos = _dedupeVehiculos(rawVehiculos);
+      final serverCount = sem != null ? _toInt(sem['servicios_count']) : 0;
+      final count = vehiculos.isNotEmpty ? vehiculos.length : serverCount;
 
       merged.add({
         'id': id,
@@ -316,6 +346,7 @@ class _GruasScreenState extends State<GruasScreen> {
         'fecha_ultimo_servicio': ultimo,
         'vehiculos': vehiculos,
         'unidad_ids': unidadIds,
+        'delegacion_ids': delegacionIds,
       });
     }
 
@@ -386,6 +417,7 @@ class _GruasScreenState extends State<GruasScreen> {
   }
 
   void _setUnidadFiltro(int unidadId) {
+    if (!_canChooseUnidadFiltro) return;
     if (_unidadFiltroId == unidadId) return;
 
     setState(() {
@@ -421,7 +453,12 @@ class _GruasScreenState extends State<GruasScreen> {
   List<Map<String, dynamic>> _unitFilteredGruasView() {
     return _gruasView.where((g) {
       final ids = _extractUnidadIds(g);
-      return ids.contains(_unidadFiltroId);
+      if (!ids.contains(_unidadFiltroId)) return false;
+      if (_unidadFiltroId == 2 &&
+          _delegacionFiltroId == _soloDelegacionesConServiciosId) {
+        return _toInt(g['servicios_semana']) > 0;
+      }
+      return true;
     }).toList();
   }
 
@@ -448,30 +485,63 @@ class _GruasScreenState extends State<GruasScreen> {
 
   // CAMBIO: ir a SHOW en lugar de EDIT
   Future<void> _irAVerVehiculo(Map<String, dynamic> v) async {
-    final vehiculoId = _toInt(v['vehiculo_id']);
-    final hechoId = _toInt(v['hecho_id']);
-
-    if (vehiculoId <= 0) {
-      _showInfo('No se encontró vehiculo_id para abrir el vehículo.');
-      return;
-    }
-
-    if (hechoId <= 0) {
-      _showInfo(
-        'No viene hecho_id en el JSON.\n\n'
-        'El backend debe regresar hecho_id dentro de cada item de "vehiculos".',
+    final actividadId = _toInt(v['actividad_id']);
+    if (actividadId > 0) {
+      await Navigator.pushNamed(
+        context,
+        AppRoutes.actividadesShow,
+        arguments: {'actividad_id': actividadId},
       );
       return;
     }
 
-    await Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => const VehiculoShowScreen(),
-        settings: RouteSettings(
-          arguments: {'hechoId': hechoId, 'vehiculoId': vehiculoId},
-        ),
-      ),
+    final puestaId = _toInt(v['puesta_disposicion_id']);
+    if (puestaId > 0) {
+      await Navigator.pushNamed(
+        context,
+        AppRoutes.puestasDisposicionShow,
+        arguments: {'puesta_disposicion_id': puestaId},
+      );
+      return;
+    }
+
+    final operativoId = _toInt(v['operativo_dispositivo_id']);
+    if (operativoId > 0) {
+      await Navigator.pushNamed(
+        context,
+        AppRoutes.dispositivosShow,
+        arguments: {'dispositivoId': operativoId},
+      );
+      return;
+    }
+
+    final vehiculoId = _toInt(v['vehiculo_id']);
+    final hechoId = _toInt(v['hecho_id']);
+    if (hechoId > 0) {
+      if (vehiculoId > 0) {
+        await Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => const VehiculoShowScreen(),
+            settings: RouteSettings(
+              arguments: {'hechoId': hechoId, 'vehiculoId': vehiculoId},
+            ),
+          ),
+        );
+        return;
+      }
+
+      await Navigator.pushNamed(
+        context,
+        AppRoutes.accidentesShow,
+        arguments: {'hechoId': hechoId},
+      );
+      return;
+    }
+
+    _showInfo(
+      'No pude identificar la vista origen de este servicio.\n\n'
+      'Servicio #${_toInt(v['servicio_id'])}',
     );
   }
 
@@ -511,6 +581,10 @@ class _GruasScreenState extends State<GruasScreen> {
     final servicioId = _toInt(v['servicio_id']);
     final vehiculoId = _toInt(v['vehiculo_id']);
     final hechoId = _toInt(v['hecho_id']);
+    final actividadId = _toInt(v['actividad_id']);
+    final puestaId = _toInt(v['puesta_disposicion_id']);
+    final operativoId = _toInt(v['operativo_dispositivo_id']);
+    final delegacion = _delegacionServicioLabel(v);
     final fecha = (v['fecha_servicio'] ?? '').toString().trim();
 
     final descripcion = [
@@ -529,6 +603,10 @@ class _GruasScreenState extends State<GruasScreen> {
       'Seguro: ${tieneSeguro ? 'Sí' : 'No'}',
       if (servicioId > 0) 'Servicio: #$servicioId',
       if (vehiculoId > 0) 'Vehículo ID: #$vehiculoId',
+      if (delegacion.isNotEmpty) 'Delegación: $delegacion',
+      if (actividadId > 0) 'Actividad: #$actividadId',
+      if (puestaId > 0) 'Puesta a disposición: #$puestaId',
+      if (operativoId > 0) 'Operativo/dispositivo: #$operativoId',
       if (hechoId > 0) 'Hecho: #$hechoId',
       if (fecha.isNotEmpty) 'Fecha: $fecha',
     ];
@@ -661,7 +739,9 @@ class _GruasScreenState extends State<GruasScreen> {
   }
 
   Widget _buildFiltersCard() {
-    if (_cargandoLista || _cargandoChart) return const SizedBox.shrink();
+    if (_cargandoAcceso || _cargandoLista || _cargandoChart) {
+      return const SizedBox.shrink();
+    }
 
     final list = _unitFilteredGruasView();
     list.sort(
@@ -670,8 +750,10 @@ class _GruasScreenState extends State<GruasScreen> {
       ),
     );
     final delegacionValue =
-        _delegacionFiltroId != null &&
-            _delegaciones.any((d) => _toInt(d['id']) == _delegacionFiltroId)
+        _delegacionFiltroId == _soloDelegacionesConServiciosId
+        ? _soloDelegacionesConServiciosId
+        : _delegacionFiltroId != null &&
+              _delegaciones.any((d) => _toInt(d['id']) == _delegacionFiltroId)
         ? _delegacionFiltroId
         : null;
     final gruaValue =
@@ -706,25 +788,40 @@ class _GruasScreenState extends State<GruasScreen> {
             ),
           ),
           const SizedBox(height: 10),
-          SegmentedButton<int>(
-            segments: const [
-              ButtonSegment<int>(
-                value: 1,
-                label: Text('Siniestros'),
-                icon: Icon(Icons.car_crash),
+          if (_canChooseUnidadFiltro)
+            SegmentedButton<int>(
+              segments: const [
+                ButtonSegment<int>(
+                  value: 1,
+                  label: Text('Siniestros'),
+                  icon: Icon(Icons.car_crash),
+                ),
+                ButtonSegment<int>(
+                  value: 2,
+                  label: Text('Delegaciones'),
+                  icon: Icon(Icons.local_police),
+                ),
+              ],
+              selected: {_unidadFiltroId},
+              onSelectionChanged: (selection) {
+                if (selection.isEmpty) return;
+                _setUnidadFiltro(selection.first);
+              },
+            )
+          else
+            InputDecorator(
+              decoration: InputDecoration(
+                labelText: 'Unidad',
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 10,
+                ),
               ),
-              ButtonSegment<int>(
-                value: 2,
-                label: Text('Delegaciones'),
-                icon: Icon(Icons.local_police),
-              ),
-            ],
-            selected: {_unidadFiltroId},
-            onSelectionChanged: (selection) {
-              if (selection.isEmpty) return;
-              _setUnidadFiltro(selection.first);
-            },
-          ),
+              child: Text(_unidadFiltroLabel()),
+            ),
           if (_unidadFiltroId == 2) ...[
             const SizedBox(height: 12),
             DropdownButtonFormField<int?>(
@@ -741,6 +838,10 @@ class _GruasScreenState extends State<GruasScreen> {
                 ),
               ),
               items: [
+                const DropdownMenuItem<int?>(
+                  value: _soloDelegacionesConServiciosId,
+                  child: Text('Solo delegaciones con servicios'),
+                ),
                 const DropdownMenuItem<int?>(
                   value: null,
                   child: Text('Todas las delegaciones'),
@@ -1076,7 +1177,8 @@ class _GruasScreenState extends State<GruasScreen> {
 
                       final servicioId = _toInt(v['servicio_id']);
                       final vehiculoId = _toInt(v['vehiculo_id']);
-                      final hechoId = _toInt(v['hecho_id']);
+                      final origen = _origenServicioLabel(v);
+                      final delegacion = _delegacionServicioLabel(v);
                       final fecha = (v['fecha_servicio'] ?? '').toString();
 
                       final title = [
@@ -1098,7 +1200,8 @@ class _GruasScreenState extends State<GruasScreen> {
                         'Seguro: ${tieneSeguro ? 'SÍ' : 'NO'}',
                         if (servicioId > 0) 'Servicio #$servicioId',
                         if (vehiculoId > 0) 'Vehículo #$vehiculoId',
-                        if (hechoId > 0) 'Hecho #$hechoId',
+                        if (delegacion.isNotEmpty) 'Delegación: $delegacion',
+                        if (origen.isNotEmpty) origen,
                         if (fecha.isNotEmpty) fecha,
                       ].where((s) => s.trim().isNotEmpty).join(' · ');
 
@@ -1138,6 +1241,53 @@ class _GruasScreenState extends State<GruasScreen> {
     return int.tryParse(v.toString()) ?? 0;
   }
 
+  List<Map<String, dynamic>> _dedupeVehiculos(
+    List<Map<String, dynamic>> vehiculos,
+  ) {
+    final seen = <String>{};
+    final unique = <Map<String, dynamic>>[];
+
+    for (final v in vehiculos) {
+      final key = _vehiculoServicioKey(v);
+      if (seen.add(key)) unique.add(v);
+    }
+
+    return unique;
+  }
+
+  String _vehiculoServicioKey(Map<String, dynamic> v) {
+    final servicioId = _toInt(v['servicio_id']);
+    if (servicioId > 0) return 'servicio:$servicioId';
+
+    final actividadId = _toInt(v['actividad_id']);
+    final vehiculoId = _toInt(v['vehiculo_id']);
+    if (actividadId > 0 && vehiculoId > 0) {
+      return 'actividad:$actividadId:vehiculo:$vehiculoId';
+    }
+
+    final puestaId = _toInt(v['puesta_disposicion_id']);
+    if (puestaId > 0 && vehiculoId > 0) {
+      return 'puesta:$puestaId:vehiculo:$vehiculoId';
+    }
+
+    final operativoId = _toInt(v['operativo_dispositivo_id']);
+    if (operativoId > 0 && vehiculoId > 0) {
+      return 'operativo:$operativoId:vehiculo:$vehiculoId';
+    }
+
+    final hechoId = _toInt(v['hecho_id']);
+    if (hechoId > 0 && vehiculoId > 0) {
+      return 'hecho:$hechoId:vehiculo:$vehiculoId';
+    }
+    if (vehiculoId > 0) return 'vehiculo:$vehiculoId';
+
+    final placas = (v['placas'] ?? '').toString().trim().toUpperCase();
+    final fecha = (v['fecha_servicio'] ?? '').toString().trim();
+    final marca = (v['marca'] ?? '').toString().trim().toUpperCase();
+    final linea = (v['linea'] ?? '').toString().trim().toUpperCase();
+    return 'fallback:$placas:$fecha:$marca:$linea';
+  }
+
   String _unidadFiltroLabel() {
     if (_unidadFiltroId == 2) return 'Delegaciones';
     return 'Siniestros';
@@ -1154,6 +1304,50 @@ class _GruasScreenState extends State<GruasScreen> {
     if (nombre.isEmpty) return 'Delegación';
     if (clave.isEmpty) return nombre;
     return '$nombre ($clave)';
+  }
+
+  String _delegacionServicioLabel(Map<String, dynamic> servicio) {
+    final nested = servicio['delegacion'];
+    if (nested is Map) {
+      final nombre = _delegacionNombre(Map<String, dynamic>.from(nested));
+      if (nombre.trim().isNotEmpty && nombre != 'Delegación') return nombre;
+    }
+
+    final nombreDirecto =
+        (servicio['delegacion_nombre_con_clave'] ??
+                servicio['delegacion_nombre'] ??
+                servicio['nombre_delegacion'] ??
+                '')
+            .toString()
+            .trim();
+    if (nombreDirecto.isNotEmpty) return nombreDirecto;
+
+    final id = _toInt(servicio['delegacion_id']);
+    if (id <= 0) return '';
+
+    for (final delegacion in _delegaciones) {
+      if (_toInt(delegacion['id']) == id) {
+        return _delegacionNombre(delegacion);
+      }
+    }
+
+    return 'Delegación #$id';
+  }
+
+  String _origenServicioLabel(Map<String, dynamic> servicio) {
+    final actividadId = _toInt(servicio['actividad_id']);
+    if (actividadId > 0) return 'Actividad #$actividadId';
+
+    final puestaId = _toInt(servicio['puesta_disposicion_id']);
+    if (puestaId > 0) return 'Puesta a disposición #$puestaId';
+
+    final operativoId = _toInt(servicio['operativo_dispositivo_id']);
+    if (operativoId > 0) return 'Operativo/dispositivo #$operativoId';
+
+    final hechoId = _toInt(servicio['hecho_id']);
+    if (hechoId > 0) return 'Hecho #$hechoId';
+
+    return '';
   }
 
   List<int> _extractUnidadIds(Map<String, dynamic> raw) {

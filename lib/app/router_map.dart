@@ -42,12 +42,14 @@ import '../screens/busqueda/hechos_busqueda_screen.dart';
 
 import '../screens/estadisticas/estadisticas_globales_home_screen.dart';
 import '../screens/estadisticas/estadisticas_globales_hechos_screen.dart';
+import '../screens/estadisticas/estadisticas_actividades_home_screen.dart';
 
 import '../screens/dictamenes/dictamenes_screen.dart';
 import '../screens/dictamenes/dictamen_create_screen.dart';
 import '../screens/dictamenes/dictamen_show_screen.dart';
 import '../screens/dictamenes/dictamen_busqueda_screen.dart';
 import '../screens/puestas_disposicion/puesta_disposicion_create_screen.dart';
+import '../screens/puestas_disposicion/puesta_disposicion_show_screen.dart';
 import '../screens/puestas_disposicion/puestas_disposicion_screen.dart';
 import '../screens/offline/offline_failed_operations_screen.dart';
 
@@ -118,6 +120,8 @@ final Map<String, WidgetBuilder> appRoutesMap = {
       const EstadisticasGlobalesHomeScreen(),
   AppRoutes.estadisticasGlobalesHechos: (context) =>
       const EstadisticasGlobalesHechosScreen(),
+  AppRoutes.estadisticasActividades: (context) =>
+      const EstadisticasActividadesHomeScreen(),
 
   AppRoutes.dictamenes: (context) => const DictamenesScreen(),
   AppRoutes.dictamenesCreate: (context) => const DictamenCreateScreen(),
@@ -126,6 +130,8 @@ final Map<String, WidgetBuilder> appRoutesMap = {
   AppRoutes.puestasDisposicion: (context) => const PuestasDisposicionScreen(),
   AppRoutes.puestasDisposicionCreate: (context) =>
       const PuestaDisposicionCreateScreen(),
+  AppRoutes.puestasDisposicionShow: (context) =>
+      const PuestaDisposicionShowScreen(),
   AppRoutes.offlineSyncErrors: (context) =>
       const OfflineFailedOperationsScreen(),
 

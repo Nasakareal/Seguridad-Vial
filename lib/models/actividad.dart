@@ -61,7 +61,9 @@ class ActividadVehiculo {
   final int capacidadPersonas;
   final String tipoServicio;
   final String? tarjetaCirculacionNombre;
+  final int? gruaId;
   final String? grua;
+  final int? corralonId;
   final String? corralon;
   final String? aseguradora;
   final bool antecedenteVehiculo;
@@ -83,7 +85,9 @@ class ActividadVehiculo {
     required this.capacidadPersonas,
     required this.tipoServicio,
     this.tarjetaCirculacionNombre,
+    this.gruaId,
     this.grua,
+    this.corralonId,
     this.corralon,
     this.aseguradora,
     required this.antecedenteVehiculo,
@@ -109,8 +113,23 @@ class ActividadVehiculo {
       tarjetaCirculacionNombre: _asNullableString(
         json['tarjeta_circulacion_nombre'],
       ),
-      grua: _asNullableString(json['grua']),
-      corralon: _asNullableString(json['corralon']),
+      gruaId:
+          _asNullableInt(json['grua_id']) ??
+          _asNullableInt(json['gruaId']) ??
+          _asNestedNullableInt(json['grua']),
+      grua:
+          _asNullableString(json['grua_nombre']) ??
+          _asNestedNullableString(json['grua']) ??
+          _asNullableString(json['grua']),
+      corralonId:
+          _asNullableInt(json['corralon_id']) ??
+          _asNullableInt(json['corralonGruaId']) ??
+          _asNullableInt(json['corralon_grua_id']) ??
+          _asNestedNullableInt(json['corralon']),
+      corralon:
+          _asNullableString(json['corralon_nombre']) ??
+          _asNestedNullableString(json['corralon']) ??
+          _asNullableString(json['corralon']),
       aseguradora: _asNullableString(json['aseguradora']),
       antecedenteVehiculo: _asBool(json['antecedente_vehiculo']),
       montoDanos: _asNullableDouble(json['monto_danos']),
@@ -131,6 +150,7 @@ class ActividadVehiculo {
       'capacidad_personas': capacidadPersonas,
       'tipo_servicio': tipoServicio,
       'tarjeta_circulacion_nombre': tarjetaCirculacionNombre,
+      'grua_id': gruaId,
       'grua': grua,
       'corralon': corralon,
       'aseguradora': aseguradora,
@@ -163,7 +183,9 @@ class ActividadVehiculo {
     'capacidad_personas': capacidadPersonas,
     'tipo_servicio': tipoServicio,
     'tarjeta_circulacion_nombre': tarjetaCirculacionNombre,
+    'grua_id': gruaId,
     'grua': grua,
+    'corralon_id': corralonId,
     'corralon': corralon,
     'aseguradora': aseguradora,
     'antecedente_vehiculo': antecedenteVehiculo,
@@ -413,6 +435,11 @@ int? _asNullableInt(dynamic v) {
   return int.tryParse(v.toString());
 }
 
+int? _asNestedNullableInt(dynamic v) {
+  if (v is! Map) return null;
+  return _asNullableInt(v['id'] ?? v['value']);
+}
+
 double? _asNullableDouble(dynamic v) {
   if (v == null) return null;
   if (v is double) return v;
@@ -429,8 +456,15 @@ bool _asBool(dynamic v) {
 
 String? _asNullableString(dynamic v) {
   if (v == null) return null;
+  if (v is Map) return null;
   final s = v.toString().trim();
   return s.isEmpty ? null : s;
+}
+
+String? _asNestedNullableString(dynamic v) {
+  if (v is! Map) return null;
+  final raw = v['nombre'] ?? v['name'] ?? v['label'];
+  return _asNullableString(raw);
 }
 
 DateTime? _asNullableDate(dynamic v) {

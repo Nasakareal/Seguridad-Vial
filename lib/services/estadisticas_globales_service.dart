@@ -133,6 +133,31 @@ class EstadisticasGlobalesService {
     return (data as Map).cast<String, dynamic>();
   }
 
+  Future<List<Map<String, dynamic>>> catalogoDelegaciones() async {
+    final uri = _u('/estadisticas-actividades/catalogos/delegaciones');
+    final res = await http.get(uri, headers: await _headersJson());
+    if (res.statusCode != 200) {
+      throw _err(res, 'No se pudieron cargar delegaciones.');
+    }
+
+    final data = _decodeJson(res);
+    if (data is List) {
+      return data
+          .whereType<Map>()
+          .map((e) => Map<String, dynamic>.from(e))
+          .toList();
+    }
+
+    if (data is Map && data['data'] is List) {
+      return (data['data'] as List)
+          .whereType<Map>()
+          .map((e) => Map<String, dynamic>.from(e))
+          .toList();
+    }
+
+    return const <Map<String, dynamic>>[];
+  }
+
   /// Export hechos (CSV/Word/lo que expongas)
   /// GET /estadisticas-globales/export/hechos?...filtros
   Future<Uint8List> exportHechos({Map<String, dynamic>? params}) async {

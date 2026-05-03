@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import 'package:seguridad_vial_app/app/routes.dart';
 
+import '../../core/hechos/hecho_capture_status.dart';
 import '../../services/auth_service.dart';
 import '../../services/tracking_service.dart';
 import '../../services/app_version_service.dart';
@@ -31,7 +32,9 @@ class AccidentesScreen extends StatefulWidget {
 class _AccidentesScreenState extends State<AccidentesScreen>
     with WidgetsBindingObserver {
   List<Map<String, dynamic>> _hechos = [];
+  List<Map<String, dynamic>> _delegaciones = [];
   bool _cargando = true;
+  bool _cargandoDelegaciones = false;
 
   late String _fechaSeleccionada;
 
@@ -42,7 +45,13 @@ class _AccidentesScreenState extends State<AccidentesScreen>
   bool _bootstrapped = false;
   bool _busy = false;
   bool _canCreateHechos = false;
+  bool _canChooseUnidadFiltro = false;
+  int _unidadFiltroId = 1;
+  int? _delegacionFiltroId;
   HechoEditAccess _editAccess = HechoEditAccess.none;
+
+  static const int _unidadSiniestrosId = 1;
+  static const int _soloDelegacionesConHechosId = -1;
 
   @override
   void initState() {
@@ -65,6 +74,11 @@ class _AccidentesScreenState extends State<AccidentesScreen>
       } catch (_) {}
 
       try {
+        await _bootstrapFiltrosHechos();
+        if (!mounted) return;
+      } catch (_) {}
+
+      try {
         await _loadCreateAccess(refresh: true);
         if (!mounted) return;
       } catch (_) {}
@@ -83,6 +97,44 @@ class _AccidentesScreenState extends State<AccidentesScreen>
     final running = await TrackingService.isRunning();
     if (!mounted) return;
     setState(() => _trackingOn = running);
+  }
+
+  Future<void> _bootstrapFiltrosHechos() async {
+    final canChooseUnidad = await AuthService.hasFullOperationalAccess();
+    final unidadId = await AuthService.getUnidadId();
+    final isDelegaciones = await AuthService.isDelegacionesUser();
+
+    if (!mounted) return;
+    setState(() {
+      _canChooseUnidadFiltro = canChooseUnidad;
+      if (!canChooseUnidad) {
+        _unidadFiltroId = isDelegaciones
+            ? AuthService.unidadDelegacionesId
+            : (unidadId == AuthService.unidadDelegacionesId
+                  ? AuthService.unidadDelegacionesId
+                  : _unidadSiniestrosId);
+      }
+    });
+
+    await _cargarDelegaciones();
+  }
+
+  Future<void> _cargarDelegaciones() async {
+    if (_cargandoDelegaciones) return;
+
+    if (!mounted) return;
+    setState(() => _cargandoDelegaciones = true);
+
+    try {
+      final delegaciones = await AccidentesService.fetchDelegacionesCatalogo();
+      if (!mounted) return;
+      setState(() => _delegaciones = delegaciones);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _delegaciones = <Map<String, dynamic>>[]);
+    } finally {
+      if (mounted) setState(() => _cargandoDelegaciones = false);
+    }
   }
 
   Future<void> _loadCreateAccess({bool refresh = false}) async {
@@ -153,6 +205,197 @@ class _AccidentesScreenState extends State<AccidentesScreen>
   String _safeText(dynamic v) {
     final s = (v ?? '').toString().trim();
     return s.isEmpty ? '—' : s;
+  }
+
+  int _toInt(dynamic v) {
+    if (v == null) return 0;
+    if (v is int) return v;
+    if (v is num) return v.toInt();
+    return int.tryParse(v.toString()) ?? 0;
+  }
+
+  bool _asBool(dynamic v) {
+    if (v is bool) return v;
+    if (v is num) return v != 0;
+    final s = (v ?? '').toString().trim().toLowerCase();
+    return s == '1' || s == 'true' || s == 'si' || s == 'sí' || s == 'yes';
+  }
+
+  String _normalize(String value) {
+    return value
+        .trim()
+        .toUpperCase()
+        .replaceAll('Á', 'A')
+        .replaceAll('É', 'E')
+        .replaceAll('Í', 'I')
+        .replaceAll('Ó', 'O')
+        .replaceAll('Ú', 'U')
+        .replaceAll('Ü', 'U')
+        .replaceAll('Ñ', 'N');
+  }
+
+  int _unidadOrgId(Map<String, dynamic> hecho) {
+    final direct = _toInt(
+      hecho['unidad_org_id'] ??
+          hecho['unidadOrganizacionalId'] ??
+          hecho['unidad_id'],
+    );
+    if (direct > 0) return direct;
+
+    final unidad = _normalize((hecho['unidad'] ?? '').toString());
+    if (unidad.contains('DELEGACIONES')) {
+      return AuthService.unidadDelegacionesId;
+    }
+    if (unidad.contains('SINIESTROS')) return _unidadSiniestrosId;
+
+    return 0;
+  }
+
+  int _delegacionId(Map<String, dynamic> hecho) {
+    final direct = _toInt(hecho['delegacion_id'] ?? hecho['delegacionId']);
+    if (direct > 0) return direct;
+
+    final delegacion = hecho['delegacion'];
+    if (delegacion is Map) {
+      return _toInt(delegacion['id'] ?? delegacion['delegacion_id']);
+    }
+
+    return 0;
+  }
+
+  bool _esHechoDelegaciones(Map<String, dynamic> hecho) {
+    final unidadId = _unidadOrgId(hecho);
+    if (unidadId == AuthService.unidadDelegacionesId) return true;
+    return unidadId == 0 && _delegacionId(hecho) > 0;
+  }
+
+  bool _esDelegacionesIncompleto(Map<String, dynamic> hecho) {
+    return _esHechoDelegaciones(hecho) && !_asBool(hecho['captura_completa']);
+  }
+
+  String _unidadFiltroLabel() {
+    if (_unidadFiltroId == AuthService.unidadDelegacionesId) {
+      return 'Delegaciones';
+    }
+    return 'Siniestros';
+  }
+
+  String _delegacionNombre(Map<String, dynamic> delegacion) {
+    final nombreConClave = (delegacion['nombre_con_clave'] ?? '')
+        .toString()
+        .trim();
+    if (nombreConClave.isNotEmpty) return nombreConClave;
+
+    final nombre = (delegacion['nombre'] ?? '').toString().trim();
+    final clave = (delegacion['clave'] ?? '').toString().trim();
+    if (nombre.isEmpty) return 'Delegación';
+    if (clave.isEmpty) return nombre;
+    return '$nombre ($clave)';
+  }
+
+  String _delegacionLabel(Map<String, dynamic> hecho) {
+    final nested = hecho['delegacion'];
+    if (nested is Map) {
+      final label = _delegacionNombre(Map<String, dynamic>.from(nested));
+      if (label.trim().isNotEmpty && label != 'Delegación') return label;
+    }
+
+    final direct =
+        (hecho['delegacion_nombre_con_clave'] ??
+                hecho['delegacion_nombre'] ??
+                hecho['nombre_delegacion'] ??
+                '')
+            .toString()
+            .trim();
+    if (direct.isNotEmpty) return direct;
+
+    final id = _delegacionId(hecho);
+    if (id <= 0) return '';
+
+    for (final delegacion in _delegacionesVisiblesParaSelect()) {
+      if (_toInt(delegacion['id']) == id) {
+        return _delegacionNombre(delegacion);
+      }
+    }
+
+    return 'Delegación #$id';
+  }
+
+  Set<int> _delegacionesConHechosIds() {
+    return _hechos
+        .where(_esHechoDelegaciones)
+        .map(_delegacionId)
+        .where((id) => id > 0)
+        .toSet();
+  }
+
+  List<Map<String, dynamic>> _delegacionesVisiblesParaSelect() {
+    final byId = <int, Map<String, dynamic>>{};
+
+    for (final d in _delegaciones) {
+      final id = _toInt(d['id']);
+      if (id > 0) byId[id] = d;
+    }
+
+    for (final hecho in _hechos.where(_esHechoDelegaciones)) {
+      final id = _delegacionId(hecho);
+      if (id <= 0 || byId.containsKey(id)) continue;
+      final label = _delegacionLabelFromRawHecho(hecho);
+      byId[id] = {
+        'id': id,
+        'nombre': label.isEmpty ? 'Delegación #$id' : label,
+      };
+    }
+
+    final items = byId.values.toList()
+      ..sort((a, b) => _delegacionNombre(a).compareTo(_delegacionNombre(b)));
+    return items;
+  }
+
+  String _delegacionLabelFromRawHecho(Map<String, dynamic> hecho) {
+    final direct =
+        (hecho['delegacion_nombre_con_clave'] ??
+                hecho['delegacion_nombre'] ??
+                hecho['nombre_delegacion'] ??
+                '')
+            .toString()
+            .trim();
+    if (direct.isNotEmpty) return direct;
+
+    final nested = hecho['delegacion'];
+    if (nested is Map) {
+      final nombre = (nested['nombre_con_clave'] ?? nested['nombre'] ?? '')
+          .toString()
+          .trim();
+      if (nombre.isNotEmpty) return nombre;
+    }
+
+    return '';
+  }
+
+  List<Map<String, dynamic>> _hechosFiltrados() {
+    var list = _hechos.where((hecho) {
+      if (_unidadFiltroId == AuthService.unidadDelegacionesId) {
+        return _esHechoDelegaciones(hecho);
+      }
+
+      return _unidadOrgId(hecho) == _unidadSiniestrosId;
+    }).toList();
+
+    if (_unidadFiltroId == AuthService.unidadDelegacionesId) {
+      if (_delegacionFiltroId == _soloDelegacionesConHechosId) {
+        final ids = _delegacionesConHechosIds();
+        list = list
+            .where((hecho) => ids.contains(_delegacionId(hecho)))
+            .toList();
+      } else if (_delegacionFiltroId != null && _delegacionFiltroId! > 0) {
+        list = list
+            .where((hecho) => _delegacionId(hecho) == _delegacionFiltroId)
+            .toList();
+      }
+    }
+
+    return list;
   }
 
   String _ubicacion(Map<String, dynamic> h) {
@@ -314,6 +557,21 @@ class _AccidentesScreenState extends State<AccidentesScreen>
   bool _puedeEditarHecho(Map<String, dynamic> hecho) =>
       _editAccess.canEditHecho(hecho);
 
+  void _setUnidadFiltro(int unidadId) {
+    if (!_canChooseUnidadFiltro) return;
+    if (_unidadFiltroId == unidadId) return;
+
+    setState(() {
+      _unidadFiltroId = unidadId;
+      _delegacionFiltroId = null;
+    });
+  }
+
+  void _setDelegacionFiltro(int? delegacionId) {
+    if (_delegacionFiltroId == delegacionId) return;
+    setState(() => _delegacionFiltroId = delegacionId);
+  }
+
   Future<void> _obtenerHechos() async {
     if (!mounted) return;
     setState(() => _cargando = true);
@@ -458,9 +716,129 @@ class _AccidentesScreenState extends State<AccidentesScreen>
     }
   }
 
+  Widget _buildFiltrosCard({required int totalFiltrado}) {
+    final delegaciones = _delegacionesVisiblesParaSelect();
+    final delegacionIds = delegaciones.map((d) => _toInt(d['id'])).toSet();
+    final delegacionValue = _delegacionFiltroId == _soloDelegacionesConHechosId
+        ? _soloDelegacionesConHechosId
+        : _delegacionFiltroId != null &&
+              delegacionIds.contains(_delegacionFiltroId)
+        ? _delegacionFiltroId
+        : null;
+
+    final totalLabel = totalFiltrado == _hechos.length
+        ? '$totalFiltrado hechos'
+        : '$totalFiltrado de ${_hechos.length} hechos';
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16),
+        color: Colors.blue.withValues(alpha: 0.06),
+        border: Border.all(color: Colors.blue.withValues(alpha: 0.18)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Mostrando hechos del día: $_fechaSeleccionada',
+            style: TextStyle(
+              color: Colors.blue.shade900,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            '$totalLabel · Unidad: ${_unidadFiltroLabel()}',
+            style: TextStyle(color: Colors.blue.shade900),
+          ),
+          const SizedBox(height: 12),
+          if (_canChooseUnidadFiltro)
+            SegmentedButton<int>(
+              segments: const [
+                ButtonSegment<int>(
+                  value: _unidadSiniestrosId,
+                  label: Text('Siniestros'),
+                  icon: Icon(Icons.car_crash),
+                ),
+                ButtonSegment<int>(
+                  value: AuthService.unidadDelegacionesId,
+                  label: Text('Delegaciones'),
+                  icon: Icon(Icons.local_police),
+                ),
+              ],
+              selected: {_unidadFiltroId},
+              onSelectionChanged: (selection) {
+                if (selection.isEmpty) return;
+                _setUnidadFiltro(selection.first);
+              },
+            )
+          else
+            InputDecorator(
+              decoration: InputDecoration(
+                labelText: 'Unidad',
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 10,
+                ),
+              ),
+              child: Text(_unidadFiltroLabel()),
+            ),
+          if (_unidadFiltroId == AuthService.unidadDelegacionesId) ...[
+            const SizedBox(height: 12),
+            DropdownButtonFormField<int?>(
+              value: delegacionValue,
+              isExpanded: true,
+              decoration: InputDecoration(
+                labelText: 'Delegación',
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 10,
+                ),
+              ),
+              items: [
+                const DropdownMenuItem<int?>(
+                  value: null,
+                  child: Text('Todas las delegaciones'),
+                ),
+                const DropdownMenuItem<int?>(
+                  value: _soloDelegacionesConHechosId,
+                  child: Text('Solo delegaciones con hechos en este día'),
+                ),
+                ...delegaciones.map((d) {
+                  final id = _toInt(d['id']);
+                  return DropdownMenuItem<int?>(
+                    value: id,
+                    child: Text(_delegacionNombre(d)),
+                  );
+                }),
+              ],
+              onChanged: _setDelegacionFiltro,
+            ),
+            if (_cargandoDelegaciones)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Text(
+                  'Cargando catálogo de delegaciones...',
+                  style: TextStyle(color: Colors.grey.shade700, fontSize: 12),
+                ),
+              ),
+          ],
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final hoy = _fmtYmd(DateTime.now());
+    final hechosFiltrados = _hechosFiltrados();
 
     return Scaffold(
       backgroundColor: const Color(0xFFF6F7FB),
@@ -500,44 +878,39 @@ class _AccidentesScreenState extends State<AccidentesScreen>
             children: [
               if (_trackingOn) HeaderCard(trackingOn: _trackingOn),
               if (_trackingOn) const SizedBox(height: 16),
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(16),
-                  color: Colors.blue.withValues(alpha: 0.06),
-                  border: Border.all(
-                    color: Colors.blue.withValues(alpha: 0.18),
-                  ),
-                ),
-                child: Text(
-                  'Mostrando hechos del día: $_fechaSeleccionada',
-                  style: TextStyle(color: Colors.blue.shade900),
-                ),
-              ),
+              _buildFiltrosCard(totalFiltrado: hechosFiltrados.length),
               const SizedBox(height: 12),
               if (_cargando)
                 const Padding(
                   padding: EdgeInsets.only(top: 40),
                   child: Center(child: CircularProgressIndicator()),
                 )
-              else if (_hechos.isEmpty)
+              else if (hechosFiltrados.isEmpty)
                 const Padding(
                   padding: EdgeInsets.only(top: 40),
-                  child: Center(child: Text('No hay hechos para esta fecha.')),
+                  child: Center(
+                    child: Text('No hay hechos con los filtros actuales.'),
+                  ),
                 )
               else
                 ListView.builder(
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),
-                  itemCount: _hechos.length,
+                  itemCount: hechosFiltrados.length,
                   itemBuilder: (context, index) {
-                    final hecho = _hechos[index];
+                    final hecho = hechosFiltrados[index];
 
                     final folio = _safeText(hecho['folio_c5i']);
                     final fecha = _safeText(hecho['fecha']);
                     final hora = _safeText(hecho['hora']);
                     final situacion = _safeText(hecho['situacion']);
                     final perito = _safeText(hecho['perito']);
+                    final delegacionesIncompleto = _esDelegacionesIncompleto(
+                      hecho,
+                    );
+                    final capturaFaltanteDetalles =
+                        HechoCaptureStatus.detallesFaltantes(hecho);
+                    final delegacionLabel = _delegacionLabel(hecho);
 
                     final fotoHecho = _fotoHechoUrl(hecho);
                     final fotoSituacion = _fotoSituacionUrl(hecho);
@@ -576,6 +949,13 @@ class _AccidentesScreenState extends State<AccidentesScreen>
                       onEnviarWhatsapp: (hechoId == null || isSending)
                           ? null
                           : () => _compartirWhatsapp(hechoId),
+                      delegacionesIncompleto: delegacionesIncompleto,
+                      capturaFaltanteDetalles: delegacionesIncompleto
+                          ? capturaFaltanteDetalles
+                          : const [],
+                      delegacionLabel: _esHechoDelegaciones(hecho)
+                          ? delegacionLabel
+                          : null,
                     );
                   },
                 ),

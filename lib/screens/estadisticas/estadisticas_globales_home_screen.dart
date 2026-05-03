@@ -32,7 +32,10 @@ class _EstadisticasGlobalesHomeScreenState
   String _tipoHecho = '';
   String _vehTipo = '';
   String _conLesionados = ''; // '', '1', '0'
+  String _conFallecidos = ''; // '', '1', '0'
   String _group = 'day'; // day|month
+  int _unidadOrgId = 0;
+  int? _delegacionId;
 
   final TextEditingController _q = TextEditingController();
   final TextEditingController _vehPlacas = TextEditingController();
@@ -42,9 +45,11 @@ class _EstadisticasGlobalesHomeScreenState
   bool _loading = true;
   bool _busy = false;
   bool _loggingOut = false;
+  bool _loadingDelegaciones = false;
   String? _error;
 
   Map<String, dynamic>? _kpis;
+  List<Map<String, dynamic>> _delegaciones = [];
 
   // dists para selects + charts
   Map<String, dynamic>? _distSector;
@@ -64,6 +69,7 @@ class _EstadisticasGlobalesHomeScreenState
   void initState() {
     super.initState();
     _setDefaultDates();
+    _loadDelegaciones();
     _loadAll(resetPage: true);
   }
 
@@ -112,6 +118,13 @@ class _EstadisticasGlobalesHomeScreenState
     if (_tipoHecho.trim().isNotEmpty) p['tipo_hecho'] = _tipoHecho.trim();
     if (_vehTipo.trim().isNotEmpty) p['veh_tipo'] = _vehTipo.trim();
     if (_conLesionados.trim().isNotEmpty) p['con_lesionados'] = _conLesionados;
+    if (_conFallecidos.trim().isNotEmpty) p['con_fallecidos'] = _conFallecidos;
+    if (_unidadOrgId > 0) {
+      p['unidad_org_id'] = _unidadOrgId;
+    }
+    if (_delegacionId != null && _delegacionId! > 0) {
+      p['delegacion_id'] = _delegacionId;
+    }
 
     p['group'] = _group;
 
@@ -137,6 +150,39 @@ class _EstadisticasGlobalesHomeScreenState
       (r) => (r is Map) && (r['label']?.toString() == current),
     );
     return ok ? current : '';
+  }
+
+  int _toInt(dynamic value) {
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    return int.tryParse((value ?? '').toString()) ?? 0;
+  }
+
+  String _delegacionNombre(Map<String, dynamic> item) {
+    final nombre =
+        item['nombre'] ??
+        item['name'] ??
+        item['delegacion'] ??
+        item['descripcion'] ??
+        '';
+    final text = nombre.toString().trim();
+    return text.isEmpty ? 'Delegación ${_toInt(item['id'])}' : text;
+  }
+
+  Future<void> _loadDelegaciones() async {
+    if (_loadingDelegaciones) return;
+    setState(() => _loadingDelegaciones = true);
+
+    try {
+      final delegaciones = await _svc.catalogoDelegaciones();
+      if (!mounted) return;
+      setState(() => _delegaciones = delegaciones);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _delegaciones = <Map<String, dynamic>>[]);
+    } finally {
+      if (mounted) setState(() => _loadingDelegaciones = false);
+    }
   }
 
   Future<void> _loadAll({required bool resetPage}) async {
@@ -465,6 +511,7 @@ class _EstadisticasGlobalesHomeScreenState
 
     final totalHechos = _kpis?['totales']?['hechos']?.toString() ?? '0';
     final totalLesionados = _kpis?['totales']?['lesionados']?.toString() ?? '0';
+    final totalFallecidos = _kpis?['totales']?['fallecidos']?.toString() ?? '0';
     final totalVehiculos = _kpis?['totales']?['vehiculos']?.toString() ?? '0';
 
     return Scaffold(
@@ -578,6 +625,29 @@ class _EstadisticasGlobalesHomeScreenState
                           children: [
                             Expanded(
                               child: _dropdown(
+                                label: 'Fallecidos',
+                                value: _conFallecidos,
+                                items: const [
+                                  DropdownMenuItem(
+                                    value: '',
+                                    child: Text('(Todos)'),
+                                  ),
+                                  DropdownMenuItem(
+                                    value: '1',
+                                    child: Text('Solo con fallecidos'),
+                                  ),
+                                  DropdownMenuItem(
+                                    value: '0',
+                                    child: Text('Solo sin fallecidos'),
+                                  ),
+                                ],
+                                onChanged: (v) =>
+                                    setState(() => _conFallecidos = v ?? ''),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: _dropdown(
                                 label: 'Agrupar',
                                 value: _group,
                                 items: const [
@@ -594,21 +664,14 @@ class _EstadisticasGlobalesHomeScreenState
                                     setState(() => _group = v ?? 'day'),
                               ),
                             ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            Expanded(child: _unidadDropdown()),
                             const SizedBox(width: 12),
-                            Expanded(
-                              child: SizedBox(
-                                height: 56,
-                                child: ElevatedButton.icon(
-                                  onPressed: (_busy)
-                                      ? null
-                                      : () => _runBusy(() async {
-                                          await _loadAll(resetPage: true);
-                                        }),
-                                  icon: const Icon(Icons.sync),
-                                  label: const Text('Aplicar'),
-                                ),
-                              ),
-                            ),
+                            Expanded(child: _delegacionDropdown()),
                           ],
                         ),
                         const SizedBox(height: 12),
@@ -651,6 +714,19 @@ class _EstadisticasGlobalesHomeScreenState
                         SizedBox(
                           width: double.infinity,
                           child: OutlinedButton.icon(
+                            onPressed: (_busy)
+                                ? null
+                                : () => _runBusy(() async {
+                                    await _loadAll(resetPage: true);
+                                  }),
+                            icon: const Icon(Icons.sync),
+                            label: const Text('Aplicar filtros'),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        SizedBox(
+                          width: double.infinity,
+                          child: OutlinedButton.icon(
                             onPressed: (_busy) ? null : _exportCsv,
                             icon: const Icon(Icons.file_download),
                             label: const Text('Export CSV'),
@@ -666,7 +742,13 @@ class _EstadisticasGlobalesHomeScreenState
                     children: [
                       _kpiBox('Hechos', totalHechos, Colors.blue),
                       const SizedBox(width: 12),
-                      _kpiBox('Lesionados', totalLesionados, Colors.red),
+                      _kpiBox('Lesionados', totalLesionados, Colors.orange),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      _kpiBox('Fallecidos', totalFallecidos, Colors.red),
                       const SizedBox(width: 12),
                       _kpiBox('Vehículos', totalVehiculos, Colors.green),
                     ],
@@ -900,6 +982,83 @@ class _EstadisticasGlobalesHomeScreenState
       decoration: InputDecoration(
         labelText: label,
         border: const OutlineInputBorder(),
+      ),
+    );
+  }
+
+  Widget _delegacionDropdown() {
+    final selected = _delegacionId ?? 0;
+    final enabled =
+        !_loadingDelegaciones &&
+        (_unidadOrgId == 0 || _unidadOrgId == AuthService.unidadDelegacionesId);
+    final items = <DropdownMenuItem<int>>[
+      const DropdownMenuItem(value: 0, child: Text('(Todas)')),
+    ];
+
+    final seen = <int>{0};
+    for (final delegacion in _delegaciones) {
+      final id = _toInt(delegacion['id']);
+      if (id <= 0 || !seen.add(id)) continue;
+      items.add(
+        DropdownMenuItem(
+          value: id,
+          child: Text(
+            _delegacionNombre(delegacion),
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      );
+    }
+
+    return DropdownButtonFormField<int>(
+      value: seen.contains(selected) ? selected : 0,
+      items: items,
+      onChanged: !enabled
+          ? null
+          : (value) {
+              final id = value ?? 0;
+              setState(() {
+                _delegacionId = id > 0 ? id : null;
+                if (id > 0) _unidadOrgId = AuthService.unidadDelegacionesId;
+              });
+            },
+      decoration: InputDecoration(
+        labelText: _loadingDelegaciones
+            ? 'Delegación (cargando...)'
+            : 'Delegación',
+        border: const OutlineInputBorder(),
+      ),
+    );
+  }
+
+  Widget _unidadDropdown() {
+    final value =
+        (_unidadOrgId == 1 || _unidadOrgId == AuthService.unidadDelegacionesId)
+        ? _unidadOrgId
+        : 0;
+
+    return DropdownButtonFormField<int>(
+      value: value,
+      items: const [
+        DropdownMenuItem(value: 0, child: Text('(Todas)')),
+        DropdownMenuItem(value: 1, child: Text('Siniestros')),
+        DropdownMenuItem(
+          value: AuthService.unidadDelegacionesId,
+          child: Text('Delegaciones'),
+        ),
+      ],
+      onChanged: (value) {
+        final id = value ?? 0;
+        setState(() {
+          _unidadOrgId = id;
+          if (id != 0 && id != AuthService.unidadDelegacionesId) {
+            _delegacionId = null;
+          }
+        });
+      },
+      decoration: const InputDecoration(
+        labelText: 'Unidad',
+        border: OutlineInputBorder(),
       ),
     );
   }

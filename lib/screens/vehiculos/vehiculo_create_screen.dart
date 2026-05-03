@@ -1,11 +1,9 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
 import 'package:mobile_scanner/mobile_scanner.dart';
 
 import '../../app/routes.dart';
-import '../../services/auth_service.dart';
 import '../../core/vehiculos/vehiculo_taxonomia.dart';
 import '../../core/vehiculos/aseguradoras_vehiculo.dart';
 import '../../core/vehiculos/colores_vehiculo.dart';
@@ -13,6 +11,7 @@ import '../../core/vehiculos/estados_republica.dart';
 import '../../services/local_draft_service.dart';
 import '../../services/offline_sync_service.dart';
 import '../../services/vehiculo_form_service.dart';
+import '../../services/gruas_catalog_service.dart';
 
 class VehiculoCreateScreen extends StatefulWidget {
   const VehiculoCreateScreen({super.key});
@@ -53,7 +52,6 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
   int? _corralonGruaIdSeleccionada;
 
   static const String _baseApi = 'https://seguridadvial-mich.com/api';
-  static const String _urlGruas = '$_baseApi/gruas';
 
   int _hechoIdFromArgs(BuildContext context) {
     final args = ModalRoute.of(context)?.settings.arguments;
@@ -156,26 +154,6 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
     return null;
   }
 
-  Future<Map<String, String>> _headers() async {
-    final token = await AuthService.getToken();
-    if (token == null || token.isEmpty) {
-      throw Exception('Sin token. Inicia sesión otra vez.');
-    }
-    return {
-      'Authorization': 'Bearer $token',
-      'Accept': 'application/json',
-      'Content-Type': 'application/json',
-    };
-  }
-
-  String _decodeBody(http.Response res) {
-    try {
-      return utf8.decode(res.bodyBytes);
-    } catch (_) {
-      return res.body;
-    }
-  }
-
   Map<String, dynamic>? _tryJsonMap(String body) {
     try {
       final raw = jsonDecode(body);
@@ -239,103 +217,23 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
     return next;
   }
 
-  String _errorsToText(dynamic errors) {
-    if (errors is Map) {
-      final sb = StringBuffer();
-      for (final entry in errors.entries) {
-        final key = entry.key.toString();
-        final val = entry.value;
-        if (val is List) {
-          for (final m in val) {
-            final msg = m?.toString().trim() ?? '';
-            if (msg.isNotEmpty) sb.writeln('• $key: $msg');
-          }
-        } else {
-          final msg = val?.toString().trim() ?? '';
-          if (msg.isNotEmpty) sb.writeln('• $key: $msg');
-        }
-      }
-      final out = sb.toString().trim();
-      return out.isEmpty ? '' : out;
-    }
-    if (errors is List) {
-      final msgs = errors
-          .map((e) => e?.toString().trim() ?? '')
-          .where((s) => s.isNotEmpty)
-          .toList();
-      if (msgs.isEmpty) return '';
-      return msgs.map((m) => '• $m').join('\n');
-    }
-    final s = errors?.toString().trim() ?? '';
-    return s.isEmpty ? '' : '• $s';
-  }
-
-  String _apiErrorText(http.Response res, {String? fallbackTitle}) {
-    final body = _decodeBody(res);
-    final map = _tryJsonMap(body);
-
-    final status = res.statusCode;
-    final title = (fallbackTitle ?? 'No se pudo completar la acción').trim();
-
-    if (map != null) {
-      final msg = (map['message'] ?? '').toString().trim();
-      final errors = _errorsToText(map['errors']);
-
-      if (errors.isNotEmpty) {
-        final head = msg.isNotEmpty ? msg : title;
-        return '$head\n\n$errors';
-      }
-
-      if (msg.isNotEmpty) return msg;
-      return '$title (HTTP $status)';
-    }
-
-    final cleaned = body.trim();
-    if (cleaned.isEmpty) return '$title (HTTP $status)';
-    if (cleaned.startsWith('<!doctype') || cleaned.startsWith('<html')) {
-      return '$title (HTTP $status)';
-    }
-    if (cleaned.length > 600) return '$title (HTTP $status)';
-    return '$title (HTTP $status)\n\n$cleaned';
-  }
-
   Future<void> _cargarGruas() async {
     try {
-      final h = await _headers();
-      final res = await http.get(Uri.parse(_urlGruas), headers: h);
-
-      if (res.statusCode != 200) {
-        final msg = _apiErrorText(
-          res,
-          fallbackTitle: 'No se pudieron cargar grúas',
-        );
-        if (!mounted) return;
-        setState(() => _cargandoGruas = false);
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(msg)));
-        return;
-      }
-
-      final body = _decodeBody(res);
-      final raw = jsonDecode(body);
-
-      List list;
-      if (raw is Map && raw['data'] is List) {
-        list = raw['data'] as List;
-      } else if (raw is List) {
-        list = raw;
-      } else {
-        list = [];
-      }
-
-      _gruas = list
-          .whereType<Map>()
-          .map((e) => Map<String, dynamic>.from(e))
-          .toList();
-
+      final gruas = await GruasCatalogService.fetchVisibleGruas();
       if (!mounted) return;
-      setState(() => _cargandoGruas = false);
+      setState(() {
+        _gruas = gruas;
+        if (!GruasCatalogService.containsId(_gruas, _gruaIdSeleccionada)) {
+          _gruaIdSeleccionada = null;
+        }
+        if (!GruasCatalogService.containsId(
+          _gruas,
+          _corralonGruaIdSeleccionada,
+        )) {
+          _corralonGruaIdSeleccionada = null;
+        }
+        _cargandoGruas = false;
+      });
     } catch (e) {
       if (!mounted) return;
       setState(() => _cargandoGruas = false);
@@ -1112,11 +1010,13 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
                           child: Text('SIN GRÚA / N/A'),
                         ),
                         ..._gruas.map((g) {
-                          final id = int.tryParse((g['id'] ?? '').toString());
-                          final nombre = (g['nombre'] ?? '').toString();
+                          final id = GruasCatalogService.idOf(g);
                           return DropdownMenuItem<int?>(
                             value: id,
-                            child: Text(nombre.isEmpty ? 'GRÚA #$id' : nombre),
+                            child: Text(
+                              GruasCatalogService.displayName(g),
+                              overflow: TextOverflow.ellipsis,
+                            ),
                           );
                         }),
                       ],
@@ -1140,12 +1040,15 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
                           child: Text('SIN CORRALÓN / N/A'),
                         ),
                         ..._gruas.map((g) {
-                          final id = int.tryParse((g['id'] ?? '').toString());
-                          final nombre = (g['nombre'] ?? '').toString();
+                          final id = GruasCatalogService.idOf(g);
                           return DropdownMenuItem<int?>(
                             value: id,
                             child: Text(
-                              nombre.isEmpty ? 'CORRALÓN #$id' : nombre,
+                              GruasCatalogService.displayName(
+                                g,
+                                fallbackPrefix: 'CORRALÓN',
+                              ),
+                              overflow: TextOverflow.ellipsis,
                             ),
                           );
                         }),

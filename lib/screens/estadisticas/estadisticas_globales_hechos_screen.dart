@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../services/auth_service.dart';
 import '../../services/estadisticas_globales_service.dart';
 import '../../app/routes.dart';
 
@@ -17,12 +18,17 @@ class _EstadisticasGlobalesHechosScreenState
 
   bool _loading = true;
   bool _paging = false;
+  bool _loadingDelegaciones = false;
   Map<String, dynamic>? _data;
   String? _error;
 
   int _page = 1;
   int _lastPage = 1;
   int _total = 0;
+  int _unidadOrgId = 0;
+  String _conFallecidos = '';
+  int? _delegacionFiltroId;
+  List<Map<String, dynamic>> _delegaciones = [];
 
   // Filtros recibidos (desde dashboard)
   Map<String, dynamic> _filters = <String, dynamic>{};
@@ -37,9 +43,47 @@ class _EstadisticasGlobalesHechosScreenState
       final args = ModalRoute.of(context)?.settings.arguments;
       if (args is Map) {
         _filters = Map<String, dynamic>.from(args);
+        _unidadOrgId = _toInt(_filters['unidad_org_id']);
+        _conFallecidos = (_filters['con_fallecidos'] ?? '').toString().trim();
+        final rawDelegacionId = _toInt(_filters['delegacion_id']);
+        _delegacionFiltroId = rawDelegacionId > 0 ? rawDelegacionId : null;
       }
+      _loadDelegaciones();
       _load(reset: true);
     });
+  }
+
+  int _toInt(dynamic value) {
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    return int.tryParse((value ?? '').toString()) ?? 0;
+  }
+
+  String _delegacionNombre(Map<String, dynamic> item) {
+    final nombre =
+        item['nombre'] ??
+        item['name'] ??
+        item['delegacion'] ??
+        item['descripcion'] ??
+        '';
+    final text = nombre.toString().trim();
+    return text.isEmpty ? 'Delegación ${_toInt(item['id'])}' : text;
+  }
+
+  Future<void> _loadDelegaciones() async {
+    if (_loadingDelegaciones) return;
+    setState(() => _loadingDelegaciones = true);
+
+    try {
+      final delegaciones = await _service.catalogoDelegaciones();
+      if (!mounted) return;
+      setState(() => _delegaciones = delegaciones);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _delegaciones = <Map<String, dynamic>>[]);
+    } finally {
+      if (mounted) setState(() => _loadingDelegaciones = false);
+    }
   }
 
   Future<void> _load({required bool reset}) async {
@@ -111,6 +155,8 @@ class _EstadisticasGlobalesHechosScreenState
               child: ListView(
                 padding: const EdgeInsets.all(12),
                 children: [
+                  _filtersPanel(),
+                  const SizedBox(height: 10),
                   _topInfo(items.length),
                   const SizedBox(height: 10),
 
@@ -199,6 +245,150 @@ class _EstadisticasGlobalesHechosScreenState
               child: CircularProgressIndicator(strokeWidth: 2),
             ),
         ],
+      ),
+    );
+  }
+
+  Widget _filtersPanel() {
+    final selected = _delegacionFiltroId ?? 0;
+    final enabled =
+        !_loadingDelegaciones &&
+        (_unidadOrgId == 0 || _unidadOrgId == AuthService.unidadDelegacionesId);
+    final items = <DropdownMenuItem<int>>[
+      const DropdownMenuItem(value: 0, child: Text('(Todas)')),
+    ];
+
+    final seen = <int>{0};
+    for (final delegacion in _delegaciones) {
+      final id = _toInt(delegacion['id']);
+      if (id <= 0 || !seen.add(id)) continue;
+      items.add(
+        DropdownMenuItem(
+          value: id,
+          child: Text(
+            _delegacionNombre(delegacion),
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      );
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Expanded(child: _unidadDropdown()),
+              const SizedBox(width: 12),
+              Expanded(
+                child: DropdownButtonFormField<int>(
+                  value: seen.contains(selected) ? selected : 0,
+                  items: items,
+                  onChanged: !enabled
+                      ? null
+                      : (value) {
+                          final id = value ?? 0;
+                          setState(() {
+                            _delegacionFiltroId = id > 0 ? id : null;
+                            if (id > 0) {
+                              _unidadOrgId = AuthService.unidadDelegacionesId;
+                              _filters['unidad_org_id'] = _unidadOrgId;
+                              _filters['delegacion_id'] = id;
+                            } else {
+                              _filters.remove('delegacion_id');
+                            }
+                          });
+                          _load(reset: true);
+                        },
+                  decoration: InputDecoration(
+                    labelText: _loadingDelegaciones
+                        ? 'Delegación (cargando...)'
+                        : 'Delegación',
+                    border: const OutlineInputBorder(),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          _fallecidosDropdown(),
+        ],
+      ),
+    );
+  }
+
+  Widget _unidadDropdown() {
+    final value =
+        (_unidadOrgId == 1 || _unidadOrgId == AuthService.unidadDelegacionesId)
+        ? _unidadOrgId
+        : 0;
+
+    return DropdownButtonFormField<int>(
+      value: value,
+      items: const [
+        DropdownMenuItem(value: 0, child: Text('(Todas)')),
+        DropdownMenuItem(value: 1, child: Text('Siniestros')),
+        DropdownMenuItem(
+          value: AuthService.unidadDelegacionesId,
+          child: Text('Delegaciones'),
+        ),
+      ],
+      onChanged: (value) {
+        final id = value ?? 0;
+        setState(() {
+          _unidadOrgId = id;
+          if (id > 0) {
+            _filters['unidad_org_id'] = id;
+          } else {
+            _filters.remove('unidad_org_id');
+          }
+          if (id != 0 && id != AuthService.unidadDelegacionesId) {
+            _delegacionFiltroId = null;
+            _filters.remove('delegacion_id');
+          }
+        });
+        _load(reset: true);
+      },
+      decoration: const InputDecoration(
+        labelText: 'Unidad',
+        border: OutlineInputBorder(),
+      ),
+    );
+  }
+
+  Widget _fallecidosDropdown() {
+    final value = const ['', '1', '0'].contains(_conFallecidos)
+        ? _conFallecidos
+        : '';
+
+    return DropdownButtonFormField<String>(
+      value: value,
+      items: const [
+        DropdownMenuItem(value: '', child: Text('Fallecidos: todos')),
+        DropdownMenuItem(value: '1', child: Text('Solo con fallecidos')),
+        DropdownMenuItem(value: '0', child: Text('Solo sin fallecidos')),
+      ],
+      onChanged: (value) {
+        final v = value ?? '';
+        setState(() {
+          _conFallecidos = v;
+          if (v.isEmpty) {
+            _filters.remove('con_fallecidos');
+          } else {
+            _filters['con_fallecidos'] = v;
+          }
+        });
+        _load(reset: true);
+      },
+      decoration: const InputDecoration(
+        labelText: 'Fallecidos',
+        border: OutlineInputBorder(),
       ),
     );
   }

@@ -62,6 +62,23 @@ class _PuestasDisposicionScreenState extends State<PuestasDisposicionScreen> {
     return '${two(parsed.day)}/${two(parsed.month)}/${parsed.year}';
   }
 
+  int _toInt(dynamic value) {
+    if (value == null) return 0;
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    return int.tryParse(value.toString()) ?? 0;
+  }
+
+  Future<void> _openShow(Map<String, dynamic> item) async {
+    final id = _toInt(item['id']);
+    if (id <= 0) return;
+
+    await Navigator.of(context).pushNamed(
+      AppRoutes.puestasDisposicionShow,
+      arguments: {'puesta_disposicion_id': id},
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -129,54 +146,58 @@ class _PuestasDisposicionScreenState extends State<PuestasDisposicionScreen> {
                 return Material(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(12),
-                  child: Container(
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.grey.shade200),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                'Puesta $numero/$anio',
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w900,
-                                  color: Color(0xFF0F172A),
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(12),
+                    onTap: () => _openShow(item),
+                    child: Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.grey.shade200),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  'Puesta $numero/$anio',
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w900,
+                                    color: Color(0xFF0F172A),
+                                  ),
                                 ),
                               ),
-                            ),
-                            Text(
-                              _date(item['fecha_puesta']),
-                              style: TextStyle(
-                                color: Colors.grey.shade700,
-                                fontWeight: FontWeight.w700,
+                              Text(
+                                _date(item['fecha_puesta']),
+                                style: TextStyle(
+                                  color: Colors.grey.shade700,
+                                  fontWeight: FontWeight.w700,
+                                ),
                               ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          '${_text(item['tipo_puesta'])} · ${_text(item['motivo'])}',
-                          style: TextStyle(
-                            color: Colors.grey.shade800,
-                            fontWeight: FontWeight.w700,
+                            ],
                           ),
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          unidad,
-                          style: TextStyle(color: Colors.grey.shade700),
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          _text(item['nombre_policia'], 'Sin policia'),
-                          style: TextStyle(color: Colors.grey.shade700),
-                        ),
-                      ],
+                          const SizedBox(height: 8),
+                          Text(
+                            '${_text(item['tipo_puesta'])} · ${_text(item['motivo'])}',
+                            style: TextStyle(
+                              color: Colors.grey.shade800,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            unidad,
+                            style: TextStyle(color: Colors.grey.shade700),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            _text(item['nombre_policia'], 'Sin policia'),
+                            style: TextStyle(color: Colors.grey.shade700),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 );

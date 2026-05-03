@@ -1,13 +1,16 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../models/actividad.dart';
 import '../../models/actividad_categoria.dart';
 import '../../models/actividad_subcategoria.dart';
 import '../../services/actividades_service.dart';
+import '../../widgets/actividad_people_count_guard.dart';
 import '../../widgets/landscape_photo_crop_screen.dart';
+import '../../widgets/normalized_integer_input_formatter.dart';
 import '../../widgets/safe_network_image.dart';
 import 'widgets/actividad_vehiculo_modal.dart';
 
@@ -211,6 +214,11 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
     return value.isEmpty ? null : value;
   }
 
+  String? _trimInteger(TextEditingController ctrl) {
+    final value = NormalizedIntegerInputFormatter.normalize(ctrl.text.trim());
+    return value.isEmpty ? null : value;
+  }
+
   ActividadUpsertData _buildPayload() {
     return ActividadUpsertData(
       actividadCategoriaId: _categoriaId ?? 0,
@@ -228,9 +236,9 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
       narrativa: _trim(_narrativaCtrl),
       accionesRealizadas: null,
       observaciones: null,
-      personasAlcanzadas: _trim(_personasAlcanzadasCtrl),
-      personasParticipantes: _trim(_personasParticipantesCtrl),
-      personasDetenidas: _trim(_personasDetenidasCtrl),
+      personasAlcanzadas: _trimInteger(_personasAlcanzadasCtrl),
+      personasParticipantes: _trimInteger(_personasParticipantesCtrl),
+      personasDetenidas: _trimInteger(_personasDetenidasCtrl),
       elementosParticipantesTexto: _trim(_elementosCtrl),
       patrullasParticipantesTexto: _trim(_patrullasCtrl),
     );
@@ -253,6 +261,13 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
       setState(() => _error = validation);
       return;
     }
+
+    if (!mounted) return;
+    final confirmedCounts = await ActividadPeopleCountGuard.confirmIfNeeded(
+      context,
+      payload,
+    );
+    if (!confirmedCounts || !mounted) return;
 
     if (_saving) return;
     setState(() => _saving = true);
@@ -374,11 +389,13 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
     String? hint,
     int maxLines = 1,
     TextInputType? keyboardType,
+    List<TextInputFormatter>? inputFormatters,
   }) {
     return TextField(
       controller: controller,
       maxLines: maxLines,
       keyboardType: keyboardType,
+      inputFormatters: inputFormatters,
       decoration: _dec(label, hint: hint),
     );
   }
@@ -642,6 +659,9 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
                             _personasAlcanzadasCtrl,
                             'Personas alcanzadas *',
                             keyboardType: TextInputType.number,
+                            inputFormatters: const [
+                              NormalizedIntegerInputFormatter(),
+                            ],
                           ),
                         ),
                         const SizedBox(width: 10),
@@ -650,6 +670,9 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
                             _personasParticipantesCtrl,
                             'Personas participantes',
                             keyboardType: TextInputType.number,
+                            inputFormatters: const [
+                              NormalizedIntegerInputFormatter(),
+                            ],
                           ),
                         ),
                       ],
@@ -659,6 +682,9 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
                       _personasDetenidasCtrl,
                       'Personas detenidas',
                       keyboardType: TextInputType.number,
+                      inputFormatters: const [
+                        NormalizedIntegerInputFormatter(),
+                      ],
                     ),
                     const SizedBox(height: 12),
                     _textField(
