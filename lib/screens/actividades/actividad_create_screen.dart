@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 
+import '../../app/routes.dart';
 import '../../models/actividad.dart';
 import '../../models/actividad_categoria.dart';
 import '../../models/actividad_subcategoria.dart';
@@ -12,6 +13,7 @@ import '../../services/actividades_service.dart';
 import '../../services/auth_service.dart';
 import '../../services/geo_service.dart';
 import '../../services/local_draft_service.dart';
+import '../../widgets/actividad_detenidos_field.dart';
 import '../../widgets/actividad_people_count_guard.dart';
 import '../../widgets/landscape_photo_crop_screen.dart';
 import '../../widgets/normalized_integer_input_formatter.dart';
@@ -28,6 +30,7 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
   bool _saving = false;
   bool _locating = false;
   bool _draftHydrated = false;
+  bool _redirectingToHecho = false;
   String? _error;
   String? _userLabel;
   String? _clientUuid;
@@ -85,7 +88,6 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
             'observaciones': _observacionesCtrl,
             'personas_alcanzadas': _personasAlcanzadasCtrl,
             'personas_participantes': _personasParticipantesCtrl,
-            'personas_detenidas': _personasDetenidasCtrl,
             'elementos': _elementosCtrl,
             'patrullas': _patrullasCtrl,
           });
@@ -191,6 +193,7 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
           _subcategoriaId = null;
         }
       });
+      _scheduleC5iHechoRedirectCheck();
     } catch (e) {
       if (!mounted) return;
       setState(() => _error = 'No se pudieron cargar subcategorias.\n$e');
@@ -236,9 +239,7 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
     _personasParticipantesCtrl.text = NormalizedIntegerInputFormatter.normalize(
       (fields['personas_participantes'] ?? '0').trim(),
     );
-    _personasDetenidasCtrl.text = NormalizedIntegerInputFormatter.normalize(
-      (fields['personas_detenidas'] ?? '0').trim(),
-    );
+    _personasDetenidasCtrl.text = '0';
     _elementosCtrl.text = (fields['elementos_participantes_texto'] ?? '')
         .trim();
     _patrullasCtrl.text = (fields['patrullas_participantes_texto'] ?? '')
@@ -299,9 +300,7 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
     _personasParticipantesCtrl.text = NormalizedIntegerInputFormatter.normalize(
       _stringValue(draft['personas_participantes']) ?? '0',
     );
-    _personasDetenidasCtrl.text = NormalizedIntegerInputFormatter.normalize(
-      _stringValue(draft['personas_detenidas']) ?? '0',
-    );
+    _personasDetenidasCtrl.text = '0';
     _elementosCtrl.text = _stringValue(draft['elementos']) ?? '';
     _patrullasCtrl.text = _stringValue(draft['patrullas']) ?? '';
 
@@ -339,7 +338,6 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
       'observaciones': _observacionesCtrl.text,
       'personas_alcanzadas': _integerText(_personasAlcanzadasCtrl),
       'personas_participantes': _integerText(_personasParticipantesCtrl),
-      'personas_detenidas': _integerText(_personasDetenidasCtrl),
       'elementos': _elementosCtrl.text,
       'patrullas': _patrullasCtrl.text,
       'fotos': _fotos.map((file) => file.path).toList(),
@@ -468,6 +466,72 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
       if (clean.isNotEmpty) return clean;
     }
     return null;
+  }
+
+  ActividadCategoria? _selectedCategoria() {
+    final id = _categoriaId;
+    if (id == null) return null;
+    for (final categoria in _categorias) {
+      if (categoria.id == id) return categoria;
+    }
+    return null;
+  }
+
+  ActividadSubcategoria? _selectedSubcategoria() {
+    final id = _subcategoriaId;
+    if (id == null) return null;
+    for (final subcategoria in _subcategorias) {
+      if (subcategoria.id == id) return subcategoria;
+    }
+    return null;
+  }
+
+  void _scheduleC5iHechoRedirectCheck() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      unawaited(_redirectToHechoIfC5iReport());
+    });
+  }
+
+  Future<void> _redirectToHechoIfC5iReport() async {
+    if (_redirectingToHecho || !mounted) return;
+
+    final categoria = _selectedCategoria();
+    final subcategoria = _selectedSubcategoria();
+    if (categoria == null || subcategoria == null) return;
+
+    final shouldRedirect = ActividadesService.shouldRedirectC5iReportToHecho(
+      categoriaNombre: categoria.nombre,
+      subcategoriaNombre: subcategoria.nombre,
+    );
+    if (!shouldRedirect) return;
+
+    _redirectingToHecho = true;
+    await _draft.discard();
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Ese reporte C5i debe capturarse como hecho.'),
+      ),
+    );
+    Navigator.pushReplacementNamed(
+      context,
+      AppRoutes.accidentesCreate,
+      arguments: {
+        'prefill': {
+          'source': 'actividad_c5i_redirect',
+          'lugar': _lugarCtrl.text.trim(),
+          'municipio': _municipioCtrl.text.trim(),
+          'lat': _latCtrl.text.trim(),
+          'lng': _lngCtrl.text.trim(),
+          'coordenadas_texto': _coordenadasCtrl.text.trim(),
+          'fuente_ubicacion': _fuenteUbicacionCtrl.text.trim(),
+          'nota_geo': _notaGeoCtrl.text.trim(),
+          'situacion': 'REPORTE',
+        },
+      },
+    );
   }
 
   Future<void> _pickFromGallery() async {
@@ -859,6 +923,7 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
                         : (v) {
                             setState(() => _subcategoriaId = v);
                             _draft.notifyChanged();
+                            _scheduleC5iHechoRedirectCheck();
                           },
                     decoration: _dec('Subcategoria'),
                   ),
@@ -1020,12 +1085,7 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
                     ],
                   ),
                   const SizedBox(height: 12),
-                  _textField(
-                    _personasDetenidasCtrl,
-                    'Personas detenidas',
-                    keyboardType: TextInputType.number,
-                    inputFormatters: const [NormalizedIntegerInputFormatter()],
-                  ),
+                  ActividadDetenidosField(controller: _personasDetenidasCtrl),
                   const SizedBox(height: 12),
                   _textField(
                     _elementosCtrl,

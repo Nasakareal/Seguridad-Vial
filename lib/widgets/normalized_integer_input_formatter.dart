@@ -1,7 +1,9 @@
 import 'package:flutter/services.dart';
 
 class NormalizedIntegerInputFormatter extends TextInputFormatter {
-  const NormalizedIntegerInputFormatter();
+  final int? max;
+
+  const NormalizedIntegerInputFormatter({this.max});
 
   static String normalize(String value) {
     final digits = value.replaceAll(RegExp(r'[^0-9]'), '');
@@ -14,7 +16,14 @@ class NormalizedIntegerInputFormatter extends TextInputFormatter {
     TextEditingValue oldValue,
     TextEditingValue newValue,
   ) {
-    final normalized = normalize(newValue.text);
+    var normalized = normalize(newValue.text);
+    final maxValue = max;
+    if (maxValue != null) {
+      final parsed = int.tryParse(normalized);
+      if (parsed != null && parsed > maxValue) {
+        normalized = maxValue.toString();
+      }
+    }
     return TextEditingValue(
       text: normalized,
       selection: TextSelection.collapsed(offset: normalized.length),

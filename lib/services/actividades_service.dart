@@ -159,6 +159,7 @@ class ActividadesService {
   static const int suspiciousReachedCount = 1000;
   static const int suspiciousParticipantsCount = 5;
   static const int suspiciousDetainedCount = 3;
+  static const int maxDetainedCount = 3;
 
   static String _subcategoriasCacheKey(int categoriaId) =>
       'actividades_subcategorias_cache_v1_$categoriaId';
@@ -203,6 +204,24 @@ class ActividadesService {
     return warnings;
   }
 
+  static bool shouldRedirectC5iReportToHecho({
+    required String categoriaNombre,
+    required String subcategoriaNombre,
+  }) {
+    final categoria = _normalizeCatalogLabel(categoriaNombre);
+    final subcategoria = _normalizeCatalogLabel(subcategoriaNombre);
+
+    final isC5iReport =
+        categoria.contains('REPORTE') &&
+        (categoria.contains('C5I') || categoria.contains('C5'));
+    final isHechoOrSiniestro =
+        subcategoria.contains('HECHO DE TRANSITO') ||
+        subcategoria.contains('HECHOS DE TRANSITO') ||
+        subcategoria.contains('SINIESTRO');
+
+    return isC5iReport && isHechoOrSiniestro;
+  }
+
   static String toPublicUrl(String pathOrUrl) {
     final p = pathOrUrl.trim();
     if (p.isEmpty) return '';
@@ -229,6 +248,25 @@ class ActividadesService {
       'Content-Type': 'application/json',
       'Authorization': 'Bearer $token',
     };
+  }
+
+  static String _normalizeCatalogLabel(String value) {
+    const accents = <String, String>{
+      'Á': 'A',
+      'É': 'E',
+      'Í': 'I',
+      'Ó': 'O',
+      'Ú': 'U',
+      'Ü': 'U',
+      'Ñ': 'N',
+    };
+
+    final upper = value.trim().toUpperCase();
+    final buffer = StringBuffer();
+    for (final char in upper.split('')) {
+      buffer.write(accents[char] ?? char);
+    }
+    return buffer.toString().replaceAll(RegExp(r'\s+'), ' ');
   }
 
   static String _parseBackendError(String body, int statusCode) {
@@ -335,6 +373,7 @@ class ActividadesService {
       errors,
       data.personasDetenidas,
       'Personas detenidas',
+      max: maxDetainedCount,
     );
 
     if (requirePhotos && fotos.isEmpty) {
@@ -719,6 +758,7 @@ class ActividadesService {
     String? value,
     String label, {
     int min = 0,
+    int? max,
   }) {
     final text = (value ?? '').trim();
     if (text.isEmpty) {
@@ -739,6 +779,9 @@ class ActividadesService {
             ? '$label no puede ser negativo.'
             : '$label debe ser al menos $min.',
       );
+    }
+    if (max != null && parsed > max) {
+      errors.add('$label no puede ser mayor a $max.');
     }
   }
 

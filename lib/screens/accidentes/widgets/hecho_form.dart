@@ -859,12 +859,8 @@ class _HechoFormState extends State<HechoForm> {
                 child: TextFormField(
                   key: _folioFieldKey,
                   controller: _folioCtrl,
-                  decoration: _dec(
-                    _usesRelaxedHechosRules ? 'Folio C5i' : 'Folio C5i *',
-                  ),
-                  validator: (v) => _usesRelaxedHechosRules
-                      ? _maxLengthValidator(v, 20, 'Folio C5i')
-                      : _requiredMaxValidator(v, 20, 'Folio C5i'),
+                  decoration: _dec('Folio C5i'),
+                  validator: (v) => _maxLengthValidator(v, 20, 'Folio C5i'),
                 ),
               ),
               const SizedBox(width: 8),

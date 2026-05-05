@@ -93,6 +93,41 @@ void main() {
     expect(format('000').text, '0');
   });
 
+  test('caps detained activity input at three', () {
+    const formatter = NormalizedIntegerInputFormatter(
+      max: ActividadesService.maxDetainedCount,
+    );
+
+    final result = formatter.formatEditUpdate(
+      TextEditingValue.empty,
+      const TextEditingValue(text: '40'),
+    );
+
+    expect(result.text, '3');
+  });
+
+  test(
+    'rejects activity captures with more than three detained people',
+    () async {
+      final error = await ActividadesService.validateBeforeSubmit(
+        data: const ActividadUpsertData(
+          actividadCategoriaId: 1,
+          actividadSubcategoriaId: 2,
+          fecha: '2026-04-25',
+          lat: '19.7000000',
+          lng: '-101.2000000',
+          personasAlcanzadas: '1',
+          personasParticipantes: '1',
+          personasDetenidas: '4',
+        ),
+        fotos: const <File>[],
+        requirePhotos: false,
+      );
+
+      expect(error, contains('Personas detenidas no puede ser mayor a 3.'));
+    },
+  );
+
   test('warns before saving suspicious activity people counts', () {
     final warnings = ActividadesService.peopleCountWarnings(
       const ActividadUpsertData(
@@ -127,5 +162,29 @@ void main() {
     );
 
     expect(warnings, anyElement(contains('Personas participantes está en 0')));
+  });
+
+  test('redirects C5i transit reports to hechos capture', () {
+    expect(
+      ActividadesService.shouldRedirectC5iReportToHecho(
+        categoriaNombre: 'Reportes C5i',
+        subcategoriaNombre: 'Hechos de tránsito',
+      ),
+      isTrue,
+    );
+    expect(
+      ActividadesService.shouldRedirectC5iReportToHecho(
+        categoriaNombre: 'REPORTES C5I',
+        subcategoriaNombre: 'Siniestros',
+      ),
+      isTrue,
+    );
+    expect(
+      ActividadesService.shouldRedirectC5iReportToHecho(
+        categoriaNombre: 'Reportes C5i',
+        subcategoriaNombre: 'Apoyo ciudadano',
+      ),
+      isFalse,
+    );
   });
 }

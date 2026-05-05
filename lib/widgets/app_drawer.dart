@@ -346,6 +346,16 @@ class AppDrawer extends StatelessWidget {
                             ),
                           ),
                           _DrawerSubItem(
+                            icon: Icons.fact_check_outlined,
+                            label: 'Seguimiento de hechos',
+                            subtitle: 'Pendientes, turnados y faltantes',
+                            onTap: () => _nav(
+                              context,
+                              AppRoutes.hechosSeguimiento,
+                              requiredPerm: permHechos,
+                            ),
+                          ),
+                          _DrawerSubItem(
                             icon: Icons.assignment_late,
                             label: 'Cortes pendientes',
                             subtitle: 'Revisar pendientes por corte',

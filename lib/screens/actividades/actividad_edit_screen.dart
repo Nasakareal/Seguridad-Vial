@@ -8,6 +8,7 @@ import '../../models/actividad.dart';
 import '../../models/actividad_categoria.dart';
 import '../../models/actividad_subcategoria.dart';
 import '../../services/actividades_service.dart';
+import '../../widgets/actividad_detenidos_field.dart';
 import '../../widgets/actividad_people_count_guard.dart';
 import '../../widgets/landscape_photo_crop_screen.dart';
 import '../../widgets/normalized_integer_input_formatter.dart';
@@ -678,14 +679,7 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
                       ],
                     ),
                     const SizedBox(height: 12),
-                    _textField(
-                      _personasDetenidasCtrl,
-                      'Personas detenidas',
-                      keyboardType: TextInputType.number,
-                      inputFormatters: const [
-                        NormalizedIntegerInputFormatter(),
-                      ],
-                    ),
+                    ActividadDetenidosField(controller: _personasDetenidasCtrl),
                     const SizedBox(height: 12),
                     _textField(
                       _elementosCtrl,

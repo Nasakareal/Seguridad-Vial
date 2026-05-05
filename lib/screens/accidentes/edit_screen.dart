@@ -1,8 +1,13 @@
+import 'dart:io';
+
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:path/path.dart' as p;
 
 import '../../app/routes.dart';
 import '../../core/hechos/hechos_catalogos.dart';
 import '../../models/hecho_form_data.dart';
+import '../../services/auth_service.dart';
 import '../../services/hecho_access_service.dart';
 import '../../services/hechos_form_service.dart';
 import '../../services/hechos_service.dart';
@@ -24,6 +29,9 @@ class _EditHechoScreenState extends State<EditHechoScreen> {
   String? _error;
   HechoEditAccess _editAccess = HechoEditAccess.none;
   bool _downloadingReporte = false;
+  bool _canUploadDelegacionesIph = false;
+  bool _uploadingIph = false;
+  String? _iphArchivoName;
 
   @override
   void initState() {
@@ -59,6 +67,9 @@ class _EditHechoScreenState extends State<EditHechoScreen> {
 
   Future<void> _loadEditAccess() async {
     _editAccess = await HechoAccessService.loadEditAccess(refresh: true);
+    _canUploadDelegacionesIph = await AuthService.isDelegacionesUser(
+      refresh: true,
+    );
   }
 
   bool _puedeEditarHecho(Map<String, dynamic> raw) {
@@ -214,6 +225,114 @@ class _EditHechoScreenState extends State<EditHechoScreen> {
     return d;
   }
 
+  bool _esTurnadoActual() {
+    final situacion = (_data?.situacion ?? '').trim().toUpperCase();
+    return situacion == 'TURNADO';
+  }
+
+  String? _iphArchivoUrlFromRaw(Map<String, dynamic> raw) {
+    final direct =
+        _asString(raw['iph_delegaciones_url']) ??
+        _asString(raw['descargo_url']);
+    if (direct != null) return direct;
+
+    return null;
+  }
+
+  String? _iphArchivoNameFromRaw(Map<String, dynamic> raw) {
+    final direct =
+        _asString(raw['iph_delegaciones_path']) ??
+        _asString(raw['descargo_path']) ??
+        _asString(raw['archivo_iph']);
+    if (direct != null) return p.basename(direct);
+
+    final url = _iphArchivoUrlFromRaw(raw);
+    if (url == null) return null;
+
+    final uri = Uri.tryParse(url);
+    final segments = uri?.pathSegments;
+    if (segments != null && segments.isNotEmpty) {
+      return segments.last;
+    }
+
+    return p.basename(url);
+  }
+
+  Future<void> _subirIphDelegacion() async {
+    if (_uploadingIph) return;
+
+    final data = _data;
+    if (data == null) return;
+
+    if (!_esTurnadoActual()) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Guarda el hecho como TURNADO antes de subir el PDF.'),
+        ),
+      );
+      return;
+    }
+
+    try {
+      final picked = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: const ['pdf'],
+        allowMultiple: false,
+        withData: false,
+      );
+
+      if (picked == null || picked.files.isEmpty) return;
+
+      final path = picked.files.single.path;
+      if (path == null || path.trim().isEmpty) {
+        throw Exception('No se pudo leer la ruta del PDF seleccionado.');
+      }
+
+      final file = File(path);
+      if (!await file.exists()) {
+        throw Exception('No se encontró el PDF seleccionado.');
+      }
+
+      final size = await file.length();
+      if (size > 10 * 1024 * 1024) {
+        throw Exception('El PDF es muy pesado (máximo 10 MB).');
+      }
+
+      if (!mounted) return;
+      setState(() => _uploadingIph = true);
+
+      final res = await HechosService.uploadIphDelegacion(
+        hechoId: widget.hechoId,
+        archivoPdf: file,
+        nombrePolicia: data.perito,
+      );
+
+      final raw = res['data'];
+      if (raw is Map) {
+        final mappedRaw = Map<String, dynamic>.from(raw);
+        setState(() {
+          _data = _mapHecho(mappedRaw);
+          _iphArchivoName = _iphArchivoNameFromRaw(mappedRaw);
+        });
+      } else {
+        await _loadHecho();
+      }
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('IPH PDF subido correctamente.')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      final message = HechosFormService.cleanExceptionMessage(e);
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(message)));
+    } finally {
+      if (mounted) setState(() => _uploadingIph = false);
+    }
+  }
+
   Future<void> _loadHecho() async {
     if (!mounted) return;
 
@@ -240,6 +359,7 @@ class _EditHechoScreenState extends State<EditHechoScreen> {
       if (!mounted) return;
       setState(() {
         _data = mapped;
+        _iphArchivoName = _iphArchivoNameFromRaw(raw);
         _loading = false;
       });
     } catch (e) {
@@ -323,6 +443,7 @@ class _EditHechoScreenState extends State<EditHechoScreen> {
   @override
   Widget build(BuildContext context) {
     final bottomSafe = MediaQuery.of(context).padding.bottom;
+    final puedeSubirIph = _canUploadDelegacionesIph && _esTurnadoActual();
 
     return Scaffold(
       appBar: AppBar(
@@ -417,6 +538,52 @@ class _EditHechoScreenState extends State<EditHechoScreen> {
                               ),
                             ],
                           ),
+                          if (puedeSubirIph) ...[
+                            const SizedBox(height: 10),
+                            SizedBox(
+                              width: double.infinity,
+                              child: OutlinedButton.icon(
+                                onPressed: _uploadingIph
+                                    ? null
+                                    : _subirIphDelegacion,
+                                icon: _uploadingIph
+                                    ? const SizedBox(
+                                        width: 18,
+                                        height: 18,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                        ),
+                                      )
+                                    : const Icon(Icons.picture_as_pdf),
+                                label: Text(
+                                  _iphArchivoName == null
+                                      ? 'Subir IPH PDF'
+                                      : 'Reemplazar IPH PDF',
+                                ),
+                              ),
+                            ),
+                            if (_iphArchivoName != null)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 6),
+                                child: Row(
+                                  children: [
+                                    const Icon(Icons.check_circle, size: 16),
+                                    const SizedBox(width: 6),
+                                    Expanded(
+                                      child: Text(
+                                        _iphArchivoName!,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.w700,
+                                          fontSize: 12,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                          ],
                         ],
                       ),
                     ),
@@ -441,6 +608,15 @@ class _EditHechoScreenState extends State<EditHechoScreen> {
                             fotoSituacion: fotoSituacion,
                           );
                         },
+                    onSubmitted: _canUploadDelegacionesIph
+                        ? (result, data) async {
+                            if (!mounted) return;
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text(result.message)),
+                            );
+                            await _loadHecho();
+                          }
+                        : null,
                   ),
                 ],
               ),

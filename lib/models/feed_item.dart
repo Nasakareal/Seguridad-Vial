@@ -6,6 +6,8 @@ class FeedItem {
   final int userId;
   final String userName;
   final String resumen;
+  final String? categoriaNombre;
+  final String? subcategoriaNombre;
   final String? fotoUrl;
   final DateTime? createdAt;
   final String? showUrl;
@@ -17,6 +19,8 @@ class FeedItem {
     required this.userId,
     required this.userName,
     required this.resumen,
+    required this.categoriaNombre,
+    required this.subcategoriaNombre,
     required this.fotoUrl,
     required this.createdAt,
     required this.showUrl,
@@ -30,6 +34,8 @@ class FeedItem {
       userId: userId,
       userName: userName,
       resumen: resumen,
+      categoriaNombre: categoriaNombre,
+      subcategoriaNombre: subcategoriaNombre,
       fotoUrl: fotoUrl ?? this.fotoUrl,
       createdAt: createdAt,
       showUrl: showUrl,
@@ -76,6 +82,14 @@ class FeedItem {
       userId: _asInt(json['user_id']),
       userName: (json['user_name'] ?? '').toString(),
       resumen: (json['resumen'] ?? '').toString(),
+      categoriaNombre: _asNullableString(
+        json['categoria_nombre'] ?? json['categoria'] ?? json['category_name'],
+      ),
+      subcategoriaNombre: _asNullableString(
+        json['subcategoria_nombre'] ??
+            json['subcategoria'] ??
+            json['subcategory_name'],
+      ),
       fotoUrl: _asNullableString(
         json['foto_url'] ??
             json['fotoUrl'] ??

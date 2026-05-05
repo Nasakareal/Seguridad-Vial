@@ -21,11 +21,13 @@ class ActividadFoto {
   final int id;
   final int? orden;
   final String? fotoPath;
+  final String? fotoPreviewPath;
 
   const ActividadFoto({
     required this.id,
     required this.orden,
     required this.fotoPath,
+    required this.fotoPreviewPath,
   });
 
   factory ActividadFoto.fromJson(Map<String, dynamic> json) {
@@ -33,9 +35,15 @@ class ActividadFoto {
       id: _asInt(json['id']),
       orden: _asNullableInt(json['orden']),
       fotoPath:
-          _asNullableString(json['foto_path']) ??
           _asNullableString(json['foto_url']) ??
+          _asNullableString(json['foto_path']) ??
           _asNullableString(json['foto']),
+      fotoPreviewPath:
+          _asNullableString(json['foto_preview_url']) ??
+          _asNullableString(json['foto_thumbnail_url']) ??
+          _asNullableString(json['foto_thumbnail_path']) ??
+          _asNullableString(json['thumb_url']) ??
+          _asNullableString(json['thumbnail_url']),
     );
   }
 
@@ -43,6 +51,7 @@ class ActividadFoto {
     'id': id,
     'orden': orden,
     'foto_path': fotoPath,
+    'foto_preview_path': fotoPreviewPath,
   };
 }
 
@@ -201,6 +210,7 @@ class Actividad {
   final String nombre;
   final int cantidad;
   final String? fotoPath;
+  final String? fotoPreviewPath;
   final String? fotoNombreOriginal;
   final String? fotoHash;
   final DateTime? createdAt;
@@ -242,6 +252,7 @@ class Actividad {
     required this.nombre,
     required this.cantidad,
     required this.fotoPath,
+    required this.fotoPreviewPath,
     required this.fotoNombreOriginal,
     required this.fotoHash,
     required this.createdAt,
@@ -295,9 +306,15 @@ class Actividad {
       nombre: _asNullableString(json['nombre']) ?? '',
       cantidad: _asInt(json['cantidad']),
       fotoPath:
-          _asNullableString(json['foto_path']) ??
           _asNullableString(json['foto_url']) ??
+          _asNullableString(json['foto_path']) ??
           _asNullableString(json['foto']),
+      fotoPreviewPath:
+          _asNullableString(json['foto_preview_url']) ??
+          _asNullableString(json['foto_thumbnail_url']) ??
+          _asNullableString(json['foto_thumbnail_path']) ??
+          _asNullableString(json['thumb_url']) ??
+          _asNullableString(json['thumbnail_url']),
       fotoNombreOriginal: _asNullableString(json['foto_nombre_original']),
       fotoHash: _asNullableString(json['foto_hash']),
       createdAt: _asNullableDate(json['created_at']),
@@ -381,6 +398,24 @@ class Actividad {
     return items;
   }
 
+  List<String> get previewPhotoPaths {
+    final items = <String>[];
+
+    for (final foto in fotos) {
+      final path = (foto.fotoPreviewPath ?? foto.fotoPath ?? '').trim();
+      if (path.isNotEmpty && !items.contains(path)) {
+        items.add(path);
+      }
+    }
+
+    final main = (fotoPreviewPath ?? fotoPath ?? '').trim();
+    if (main.isNotEmpty && !items.contains(main)) {
+      items.add(main);
+    }
+
+    return items;
+  }
+
   Map<String, dynamic> toJson() => {
     'id': id,
     'actividad_categoria_id': actividadCategoriaId,
@@ -388,6 +423,7 @@ class Actividad {
     'nombre': nombre,
     'cantidad': cantidad,
     'foto_path': fotoPath,
+    'foto_preview_path': fotoPreviewPath,
     'foto_nombre_original': fotoNombreOriginal,
     'foto_hash': fotoHash,
     'created_at': createdAt?.toIso8601String(),

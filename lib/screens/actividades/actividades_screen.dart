@@ -445,7 +445,7 @@ class _ActividadesScreenState extends State<ActividadesScreen>
   }
 
   Widget _thumb(Actividad a) {
-    final photos = a.allPhotoPaths;
+    final photos = a.previewPhotoPaths;
     if (photos.isEmpty) {
       return Container(
         width: 58,

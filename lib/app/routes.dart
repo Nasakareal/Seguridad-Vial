@@ -11,6 +11,7 @@ class AppRoutes {
   static const String accidentesShow = '/accidentes/show';
   static const String accidentesEdit = '/accidentes/edit';
   static const String accidentesCroquis = '/accidentes/croquis';
+  static const String hechosSeguimiento = '/hechos/seguimiento';
   static const String pendingHechoCapture = '/accidentes/pending-capture';
 
   static const String vehiculos = '/accidentes/vehiculos';

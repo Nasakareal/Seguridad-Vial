@@ -5,6 +5,19 @@ import 'package:http/http.dart' as http;
 
 import 'auth_service.dart';
 
+int _seguimientoReadInt(dynamic value, {required int fallback}) {
+  if (value is int) return value;
+  if (value is num) return value.toInt();
+  return int.tryParse((value ?? '').toString()) ?? fallback;
+}
+
+bool _seguimientoReadBool(dynamic value) {
+  if (value is bool) return value;
+  if (value is num) return value != 0;
+  final s = (value ?? '').toString().trim().toLowerCase();
+  return s == '1' || s == 'true' || s == 'si' || s == 'sí' || s == 'yes';
+}
+
 class HechoNativeShareData {
   final String title;
   final String message;
@@ -72,6 +85,127 @@ class HechoNativeShareData {
   }
 }
 
+class SeguimientoHechosMeta {
+  final int currentPage;
+  final int perPage;
+  final int total;
+  final int lastPage;
+
+  const SeguimientoHechosMeta({
+    required this.currentPage,
+    required this.perPage,
+    required this.total,
+    required this.lastPage,
+  });
+
+  factory SeguimientoHechosMeta.fromJson(dynamic raw) {
+    final map = raw is Map ? Map<String, dynamic>.from(raw) : const {};
+    return SeguimientoHechosMeta(
+      currentPage: _seguimientoReadInt(map['current_page'], fallback: 1),
+      perPage: _seguimientoReadInt(map['per_page'], fallback: 20),
+      total: _seguimientoReadInt(map['total'], fallback: 0),
+      lastPage: _seguimientoReadInt(map['last_page'], fallback: 1),
+    );
+  }
+}
+
+class SeguimientoHechosFilters {
+  final String periodo;
+  final String situacion;
+  final String unidadFiltro;
+  final bool puedeFiltrarUnidad;
+  final Map<String, String> unidadesFiltro;
+
+  const SeguimientoHechosFilters({
+    required this.periodo,
+    required this.situacion,
+    required this.unidadFiltro,
+    required this.puedeFiltrarUnidad,
+    required this.unidadesFiltro,
+  });
+
+  factory SeguimientoHechosFilters.fromJson(dynamic raw) {
+    final map = raw is Map ? Map<String, dynamic>.from(raw) : const {};
+    final unidadesRaw = map['unidades_filtro'];
+    final unidades = <String, String>{};
+
+    if (unidadesRaw is Map) {
+      unidadesRaw.forEach((key, value) {
+        final k = key.toString().trim();
+        final v = (value ?? '').toString().trim();
+        if (k.isNotEmpty && v.isNotEmpty) {
+          unidades[k] = v;
+        }
+      });
+    }
+
+    return SeguimientoHechosFilters(
+      periodo: ((map['periodo'] ?? 'SEMANA').toString()).toUpperCase(),
+      situacion: ((map['situacion'] ?? 'PENDIENTE').toString()).toUpperCase(),
+      unidadFiltro: (map['unidad_filtro'] ?? '').toString(),
+      puedeFiltrarUnidad: _seguimientoReadBool(map['puede_filtrar_unidad']),
+      unidadesFiltro: unidades,
+    );
+  }
+}
+
+class SeguimientoHechosResponse {
+  final List<Map<String, dynamic>> hechos;
+  final Map<String, Map<String, int>> conteos;
+  final SeguimientoHechosFilters filters;
+  final SeguimientoHechosMeta meta;
+
+  const SeguimientoHechosResponse({
+    required this.hechos,
+    required this.conteos,
+    required this.filters,
+    required this.meta,
+  });
+
+  factory SeguimientoHechosResponse.fromJson(Map<String, dynamic> raw) {
+    final dataRaw = raw['data'];
+    final hechos = dataRaw is List
+        ? dataRaw
+              .whereType<Map>()
+              .map((item) => Map<String, dynamic>.from(item))
+              .toList()
+        : <Map<String, dynamic>>[];
+
+    return SeguimientoHechosResponse(
+      hechos: hechos,
+      conteos: _parseConteos(raw['conteos']),
+      filters: SeguimientoHechosFilters.fromJson(raw['filters']),
+      meta: SeguimientoHechosMeta.fromJson(raw['meta']),
+    );
+  }
+
+  static Map<String, Map<String, int>> _parseConteos(dynamic raw) {
+    final out = <String, Map<String, int>>{
+      'semana': <String, int>{},
+      'mes': <String, int>{},
+      'anio': <String, int>{},
+    };
+
+    if (raw is! Map) return out;
+
+    raw.forEach((periodoKey, values) {
+      final key = periodoKey.toString().trim().toLowerCase();
+      if (key.isEmpty || values is! Map) return;
+
+      final mapped = <String, int>{};
+      values.forEach((estadoKey, value) {
+        final estado = estadoKey.toString().trim().toUpperCase();
+        if (estado.isNotEmpty) {
+          mapped[estado] = _seguimientoReadInt(value, fallback: 0);
+        }
+      });
+      out[key] = mapped;
+    });
+
+    return out;
+  }
+}
+
 class AccidentesService {
   static Future<List<Map<String, dynamic>>> fetchHechos({
     required String fecha,
@@ -124,6 +258,53 @@ class AccidentesService {
         .whereType<Map>()
         .map((e) => Map<String, dynamic>.from(e))
         .toList();
+  }
+
+  static Future<SeguimientoHechosResponse> fetchSeguimientoHechos({
+    String periodo = 'SEMANA',
+    String situacion = 'PENDIENTE',
+    String unidadFiltro = '',
+    int page = 1,
+    int perPage = 20,
+  }) async {
+    final token = await AuthService.getToken();
+
+    final query = <String, String>{
+      'periodo': periodo,
+      'situacion': situacion,
+      'page': '$page',
+      'per_page': '$perPage',
+    };
+
+    if (unidadFiltro.trim().isNotEmpty) {
+      query['unidad_filtro'] = unidadFiltro.trim();
+    }
+
+    final uri = Uri.parse(
+      '${AuthService.baseUrl}/hechos/seguimiento',
+    ).replace(queryParameters: query);
+
+    final headers = <String, String>{
+      'Accept': 'application/json',
+      'Content-Type': 'application/json',
+    };
+
+    if (token != null && token.isNotEmpty) {
+      headers['Authorization'] = 'Bearer $token';
+    }
+
+    final response = await http.get(uri, headers: headers);
+
+    if (response.statusCode != 200) {
+      throw Exception(_parseBackendError(response.body, response.statusCode));
+    }
+
+    final raw = jsonDecode(response.body);
+    if (raw is! Map<String, dynamic>) {
+      throw Exception('Respuesta inválida del servidor.');
+    }
+
+    return SeguimientoHechosResponse.fromJson(raw);
   }
 
   static Future<List<Map<String, dynamic>>> fetchDelegacionesCatalogo() async {
@@ -181,6 +362,26 @@ class AccidentesService {
     }
 
     return resp.bodyBytes;
+  }
+
+  static Future<void> deleteHecho({required int hechoId}) async {
+    final token = await AuthService.getToken();
+    if (token == null || token.isEmpty) {
+      throw Exception('Sesión inválida. Vuelve a iniciar sesión.');
+    }
+
+    final uri = Uri.parse('${AuthService.baseUrl}/hechos/$hechoId');
+
+    final headers = <String, String>{
+      'Accept': 'application/json',
+      'Authorization': 'Bearer $token',
+    };
+
+    final resp = await http.delete(uri, headers: headers);
+
+    if (resp.statusCode != 200 && resp.statusCode != 204) {
+      throw Exception(_parseBackendError(resp.body, resp.statusCode));
+    }
   }
 
   static Future<HechoNativeShareData> fetchNativeShareData({

@@ -63,7 +63,14 @@ class _CreateHechoScreenState extends State<CreateHechoScreen> {
 
   void _hydrateDraftFromArgs() {
     final args = ModalRoute.of(context)?.settings.arguments;
-    if (args is! Map || args['offlineDraft'] is! Map) return;
+    if (args is! Map) return;
+
+    final prefill = args['prefill'];
+    if (prefill is Map) {
+      _applyPrefillFromArgs(Map<String, dynamic>.from(prefill));
+    }
+
+    if (args['offlineDraft'] is! Map) return;
     _usingOfflineDraft = true;
 
     final draft = Map<String, dynamic>.from(args['offlineDraft'] as Map);
@@ -125,6 +132,19 @@ class _CreateHechoScreenState extends State<CreateHechoScreen> {
 
     _initialFotoLugar = _fileForField(files, 'foto_lugar');
     _initialFotoSituacion = _fileForField(files, 'foto_situacion');
+  }
+
+  void _applyPrefillFromArgs(Map<String, dynamic> values) {
+    String text(String key) => (values[key] ?? '').toString().trim();
+
+    _data.calle = text('lugar');
+    _data.municipio = text('municipio');
+    _data.lat = _parseDouble(text('lat'));
+    _data.lng = _parseDouble(text('lng'));
+    _data.fuenteUbicacion = _blankToNull(text('fuente_ubicacion'));
+    _data.notaGeo = _blankToNull(text('nota_geo'));
+    _data.ubicacionFormateada = _blankToNull(text('coordenadas_texto'));
+    _data.situacion = _blankToNull(text('situacion')) ?? 'REPORTE';
   }
 
   Map<String, String> _stringMapFrom(dynamic value) {

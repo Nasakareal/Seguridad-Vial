@@ -15,6 +15,7 @@ import '../screens/accidentes/croquis/croquis_screen.dart';
 import '../screens/accidentes/edit_screen.dart';
 import '../screens/accidentes/hecho_show_screen.dart';
 import '../screens/accidentes/pending_capture_screen.dart';
+import '../screens/accidentes/seguimiento_hechos_screen.dart';
 
 import '../screens/vehiculos/vehiculos_screen.dart';
 import '../screens/vehiculos/vehiculo_create_screen.dart';
@@ -86,6 +87,7 @@ final Map<String, WidgetBuilder> appRoutesMap = {
   AppRoutes.accidentesCreate: (context) => const CreateHechoScreen(),
   AppRoutes.accidentesShow: (context) => const HechoShowScreen(),
   AppRoutes.accidentesCroquis: (context) => const CroquisScreen(),
+  AppRoutes.hechosSeguimiento: (context) => const SeguimientoHechosScreen(),
   AppRoutes.pendingHechoCapture: (context) => const PendingHechoCaptureScreen(),
 
   AppRoutes.vehiculos: (context) => const VehiculosScreen(),

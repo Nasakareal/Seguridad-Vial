@@ -1,8 +1,8 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart';
 
 import '../../services/dictamenes_service.dart';
 import '../../services/local_draft_service.dart';
@@ -28,7 +28,6 @@ class _DictamenCreateScreenState extends State<DictamenCreateScreen> {
   File? _pdf;
   String? _pdfName;
 
-  final _picker = ImagePicker();
   late final LocalDraftAutosave _draft;
 
   @override
@@ -84,21 +83,19 @@ class _DictamenCreateScreenState extends State<DictamenCreateScreen> {
   }
 
   Future<void> _pickPdf() async {
-    // Usamos image_picker porque ya lo traes en el proyecto.
-    // Para PDF normalmente lo ideal es file_picker, pero aquí lo resolvemos con lo que ya tienes:
-    // En Android/iOS recientes, pickMedia puede permitir seleccionar documentos según proveedor.
-    // Si tu dispositivo no deja escoger PDF, te paso versión con file_picker.
     try {
-      final x = await _picker.pickMedia(); // puede abrir selector de archivos
-      if (x == null) return;
+      final picked = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: const ['pdf'],
+        allowMultiple: false,
+        withData: false,
+      );
 
-      final path = x.path;
-      if (!path.toLowerCase().endsWith('.pdf')) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Selecciona un archivo .pdf')),
-        );
-        return;
+      if (picked == null || picked.files.isEmpty) return;
+
+      final path = picked.files.single.path;
+      if (path == null || path.trim().isEmpty) {
+        throw Exception('No se pudo leer la ruta del PDF seleccionado.');
       }
 
       setState(() {

@@ -35,11 +35,30 @@ class FeedItemCard extends StatelessWidget {
     }
   }
 
+  String get _actividadTaxonomia {
+    final parts = <String>[
+      if ((item.categoriaNombre ?? '').trim().isNotEmpty)
+        item.categoriaNombre!.trim(),
+      if ((item.subcategoriaNombre ?? '').trim().isNotEmpty)
+        item.subcategoriaNombre!.trim(),
+    ];
+
+    return parts.join(' • ');
+  }
+
   @override
   Widget build(BuildContext context) {
     final resumen = item.resumen.trim().isNotEmpty
         ? item.resumen.trim()
         : 'Publicación';
+    final actividadTaxonomia = _actividadTaxonomia;
+    final isActividad = item.type == FeedItemType.actividad;
+    final title = isActividad && actividadTaxonomia.isNotEmpty
+        ? actividadTaxonomia
+        : (item.userName.isNotEmpty ? item.userName : 'Usuario');
+    final capturo = isActividad && item.userName.trim().isNotEmpty
+        ? 'Capturó: ${item.userName.trim()}'
+        : null;
     final rawFoto = (item.fotoUrl ?? '').trim();
     final normalizedFoto = rawFoto.isEmpty
         ? ''
@@ -105,9 +124,7 @@ class FeedItemCard extends StatelessWidget {
                         const SizedBox(width: 10),
                         Expanded(
                           child: Text(
-                            item.userName.isNotEmpty
-                                ? item.userName
-                                : 'Usuario',
+                            title,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
@@ -129,6 +146,19 @@ class FeedItemCard extends StatelessWidget {
                         fontWeight: FontWeight.w700,
                       ),
                     ),
+                    if (capturo != null) ...[
+                      const SizedBox(height: 3),
+                      Text(
+                        capturo,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: Colors.grey.shade600,
+                          fontSize: 11.8,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),

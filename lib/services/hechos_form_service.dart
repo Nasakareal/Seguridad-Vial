@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
@@ -13,6 +14,11 @@ import 'photo_orientation_service.dart';
 
 class HechosFormService {
   static const int _maxImageBytes = 5 * 1024 * 1024;
+  static const double _officeLat = 19.6808588;
+  static const double _officeLng = -101.2339535;
+  static const double _officeBlockRadiusMeters = 50.0;
+  static const String _officeLocationMessage =
+      'El hecho debe ser capturado en el lugar donde se suscitó.';
 
   static String parseBackendError(String body, int statusCode) {
     try {
@@ -171,9 +177,6 @@ class HechosFormService {
       return 'Completa todos los campos obligatorios.';
     }
 
-    if (!usesRelaxedHechosRules && data.folioC5i.trim().isEmpty) {
-      return 'Captura el Folio C5i.';
-    }
     if (_trimmedLength(data.folioC5i) > 20) {
       return 'El Folio C5i no puede exceder 20 caracteres.';
     }
@@ -286,6 +289,9 @@ class HechosFormService {
     }
     if (hasLng && (data.lng! < -180 || data.lng! > 180)) {
       return 'Longitud inválida.';
+    }
+    if (hasLat && hasLng && _isBlockedOfficeLocation(data.lat!, data.lng!)) {
+      return _officeLocationMessage;
     }
 
     final fotoLugarError = await _validateImageFile(
@@ -575,6 +581,36 @@ class HechosFormService {
   }
 
   static int _trimmedLength(String value) => value.trim().length;
+
+  static bool _isBlockedOfficeLocation(double lat, double lng) {
+    return _distanceMeters(lat, lng, _officeLat, _officeLng) <=
+        _officeBlockRadiusMeters;
+  }
+
+  static double _distanceMeters(
+    double latA,
+    double lngA,
+    double latB,
+    double lngB,
+  ) {
+    const earthRadiusMeters = 6371000.0;
+    final latDelta = _degreesToRadians(latB - latA);
+    final lngDelta = _degreesToRadians(lngB - lngA);
+    final a =
+        math.pow(math.sin(latDelta / 2), 2).toDouble() +
+        math.cos(_degreesToRadians(latA)) *
+            math.cos(_degreesToRadians(latB)) *
+            math.pow(math.sin(lngDelta / 2), 2).toDouble();
+    final clampedA = a.clamp(0.0, 1.0).toDouble();
+
+    return earthRadiusMeters *
+        2 *
+        math.atan2(math.sqrt(clampedA), math.sqrt(1 - clampedA));
+  }
+
+  static double _degreesToRadians(double degrees) {
+    return degrees * math.pi / 180;
+  }
 
   static String _collapseSpaces(String value) =>
       value.trim().replaceAll(RegExp(r'\s+'), ' ');

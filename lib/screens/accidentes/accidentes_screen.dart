@@ -48,10 +48,15 @@ class _AccidentesScreenState extends State<AccidentesScreen>
   bool _canChooseUnidadFiltro = false;
   int _unidadFiltroId = 1;
   int? _delegacionFiltroId;
+  String _estadoFiltro = _estadoTodos;
   HechoEditAccess _editAccess = HechoEditAccess.none;
 
   static const int _unidadSiniestrosId = 1;
   static const int _soloDelegacionesConHechosId = -1;
+  static const String _estadoTodos = 'todos';
+  static const String _estadoResuelto = 'resuelto';
+  static const String _estadoPendiente = 'pendiente';
+  static const String _estadoIncompleto = 'incompleto';
 
   @override
   void initState() {
@@ -273,6 +278,41 @@ class _AccidentesScreenState extends State<AccidentesScreen>
     return _esHechoDelegaciones(hecho) && !_asBool(hecho['captura_completa']);
   }
 
+  String _situacionNormalizada(Map<String, dynamic> hecho) {
+    return _normalize((hecho['situacion'] ?? '').toString());
+  }
+
+  String _estadoFiltroLabel() {
+    switch (_estadoFiltro) {
+      case _estadoResuelto:
+        return 'Resuelto';
+      case _estadoPendiente:
+        return 'Pendiente';
+      case _estadoIncompleto:
+        return 'Incompleto';
+      default:
+        return 'Todos';
+    }
+  }
+
+  bool _coincideEstadoFiltro(Map<String, dynamic> hecho) {
+    if (_estadoFiltro == _estadoTodos) return true;
+
+    final incompleto = _esDelegacionesIncompleto(hecho);
+    if (_estadoFiltro == _estadoIncompleto) return incompleto;
+    if (incompleto) return false;
+
+    final situacion = _situacionNormalizada(hecho);
+    if (_estadoFiltro == _estadoResuelto) {
+      return situacion == 'RESUELTO' || situacion == 'RESUELTA';
+    }
+    if (_estadoFiltro == _estadoPendiente) {
+      return situacion == 'PENDIENTE' || situacion == 'PENDIENTES';
+    }
+
+    return true;
+  }
+
   String _unidadFiltroLabel() {
     if (_unidadFiltroId == AuthService.unidadDelegacionesId) {
       return 'Delegaciones';
@@ -393,6 +433,10 @@ class _AccidentesScreenState extends State<AccidentesScreen>
             .where((hecho) => _delegacionId(hecho) == _delegacionFiltroId)
             .toList();
       }
+    }
+
+    if (_estadoFiltro != _estadoTodos) {
+      list = list.where(_coincideEstadoFiltro).toList();
     }
 
     return list;
@@ -572,6 +616,12 @@ class _AccidentesScreenState extends State<AccidentesScreen>
     setState(() => _delegacionFiltroId = delegacionId);
   }
 
+  void _setEstadoFiltro(String? estado) {
+    final next = estado ?? _estadoTodos;
+    if (_estadoFiltro == next) return;
+    setState(() => _estadoFiltro = next);
+  }
+
   Future<void> _obtenerHechos() async {
     if (!mounted) return;
     setState(() => _cargando = true);
@@ -749,8 +799,42 @@ class _AccidentesScreenState extends State<AccidentesScreen>
           ),
           const SizedBox(height: 4),
           Text(
-            '$totalLabel · Unidad: ${_unidadFiltroLabel()}',
+            '$totalLabel · Unidad: ${_unidadFiltroLabel()} · Estado: ${_estadoFiltroLabel()}',
             style: TextStyle(color: Colors.blue.shade900),
+          ),
+          const SizedBox(height: 12),
+          DropdownButtonFormField<String>(
+            value: _estadoFiltro,
+            isExpanded: true,
+            decoration: InputDecoration(
+              labelText: 'Estado',
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 10,
+              ),
+            ),
+            items: const [
+              DropdownMenuItem<String>(
+                value: _estadoTodos,
+                child: Text('Todos'),
+              ),
+              DropdownMenuItem<String>(
+                value: _estadoResuelto,
+                child: Text('Resuelto'),
+              ),
+              DropdownMenuItem<String>(
+                value: _estadoPendiente,
+                child: Text('Pendiente'),
+              ),
+              DropdownMenuItem<String>(
+                value: _estadoIncompleto,
+                child: Text('Incompleto'),
+              ),
+            ],
+            onChanged: _setEstadoFiltro,
           ),
           const SizedBox(height: 12),
           if (_canChooseUnidadFiltro)
