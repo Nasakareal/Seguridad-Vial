@@ -160,7 +160,7 @@ class _ActividadVehiculoModalState extends State<_ActividadVehiculoModal> {
         estadoPlacas: placasClean.isEmpty ? null : estadoClean,
         serie: serieClean,
         capacidadPersonas: capacidad,
-        tipoServicio: _tipoServicio ?? 'PARTICULAR',
+        tipoServicio: VehiculoFormService.tipoServicioPlacaValue(_tipoServicio),
         tarjetaCirculacionNombre: _nullIfEmpty(_t(_tarjetaCtrl)),
         gruaId: _gruaIdSeleccionada,
         grua: _nullIfEmpty(gruaNombre ?? ''),
@@ -443,27 +443,22 @@ class _ActividadVehiculoModalState extends State<_ActividadVehiculoModal> {
               ),
               const SizedBox(height: 10),
               DropdownButtonFormField<String>(
-                value: _tipoServicio,
+                isExpanded: true,
+                value: VehiculoFormService.tipoServicioPlacaValue(
+                  _tipoServicio,
+                ),
                 decoration: _dec(
-                  'Tipo de servicio *',
+                  'Tipo de servicio de placa *',
                   icon: Icons.miscellaneous_services,
                 ),
-                items: const [
-                  DropdownMenuItem<String>(
-                    value: 'PARTICULAR',
-                    child: Text('Particular'),
-                  ),
-                  DropdownMenuItem<String>(
-                    value: 'OFICIAL',
-                    child: Text('Oficial'),
-                  ),
-                  DropdownMenuItem<String>(
-                    value: 'PUBLICO',
-                    child: Text('Público'),
-                  ),
-                ],
+                items: VehiculoFormService.tiposServicioPlaca
+                    .map(
+                      (value) =>
+                          DropdownMenuItem(value: value, child: Text(value)),
+                    )
+                    .toList(),
                 onChanged: (value) => setState(() => _tipoServicio = value),
-                validator: _requiredSelect,
+                validator: VehiculoFormService.validateTipoServicioPlaca,
               ),
               const SizedBox(height: 10),
               TextFormField(

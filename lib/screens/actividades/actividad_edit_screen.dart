@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 
+import '../../core/municipios_michoacan.dart';
 import '../../models/actividad.dart';
 import '../../models/actividad_categoria.dart';
 import '../../models/actividad_subcategoria.dart';
@@ -11,6 +12,7 @@ import '../../services/actividades_service.dart';
 import '../../widgets/actividad_detenidos_field.dart';
 import '../../widgets/actividad_people_count_guard.dart';
 import '../../widgets/landscape_photo_crop_screen.dart';
+import '../../widgets/municipio_autocomplete_field.dart';
 import '../../widgets/normalized_integer_input_formatter.dart';
 import '../../widgets/safe_network_image.dart';
 import 'widgets/actividad_vehiculo_modal.dart';
@@ -215,6 +217,11 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
     return value.isEmpty ? null : value;
   }
 
+  String? _trimMunicipio(TextEditingController ctrl) {
+    final canonical = MunicipiosMichoacan.canonical(ctrl.text);
+    return canonical ?? _trim(ctrl);
+  }
+
   String? _trimInteger(TextEditingController ctrl) {
     final value = NormalizedIntegerInputFormatter.normalize(ctrl.text.trim());
     return value.isEmpty ? null : value;
@@ -227,7 +234,7 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
       fecha: _trim(_fechaCtrl),
       hora: _trim(_horaCtrl),
       lugar: _trim(_lugarCtrl),
-      municipio: _trim(_municipioCtrl),
+      municipio: _trimMunicipio(_municipioCtrl),
       lat: _trim(_latCtrl),
       lng: _trim(_lngCtrl),
       coordenadasTexto: _trim(_coordenadasCtrl),
@@ -597,7 +604,11 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
                     const SizedBox(height: 12),
                     _textField(_lugarCtrl, 'Lugar'),
                     const SizedBox(height: 12),
-                    _textField(_municipioCtrl, 'Municipio'),
+                    MunicipioAutocompleteField(
+                      controller: _municipioCtrl,
+                      decoration: _dec('Municipio'),
+                      enabled: !_saving,
+                    ),
                     const SizedBox(height: 12),
                     Row(
                       children: [

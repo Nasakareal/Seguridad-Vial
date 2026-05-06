@@ -129,6 +129,9 @@ class _CreateHechoScreenState extends State<CreateHechoScreen> {
     _data.ubicacionFormateada = _blankToNull(fields['ubicacion_formateada']);
     _data.placeId = _blankToNull(fields['place_id']);
     _data.dictamenId = int.tryParse((fields['dictamen_id'] ?? '').trim());
+    _data.puestaDisposicionId = int.tryParse(
+      (fields['puesta_disposicion_id'] ?? '').trim(),
+    );
 
     _initialFotoLugar = _fileForField(files, 'foto_lugar');
     _initialFotoSituacion = _fileForField(files, 'foto_situacion');
@@ -268,6 +271,43 @@ class _CreateHechoScreenState extends State<CreateHechoScreen> {
     if (!result.queued) {
       final hechoId = HechosFormService.hechoIdFromCreateResult(result);
       if (hechoId != null && hechoId > 0) {
+        final isDelegaciones = await AuthService.isDelegacionesUser();
+        if (!mounted) return;
+        final situacion = (data.situacion ?? '').trim().toUpperCase();
+        final personasMp = int.tryParse(data.personasMp.trim()) ?? 0;
+        final vehiculosMp = int.tryParse(data.vehiculosMp.trim()) ?? 0;
+        if (isDelegaciones &&
+            situacion == 'TURNADO' &&
+            data.puestaDisposicionId == null &&
+            (personasMp > 0 || vehiculosMp > 0)) {
+          Navigator.pushReplacementNamed(
+            context,
+            AppRoutes.puestasDisposicionCreate,
+            arguments: {
+              'hecho_id': hechoId,
+              'personas_mp': personasMp,
+              'vehiculos_mp': vehiculosMp,
+              'prefill': {
+                'motivo': 'HECHO DE TRANSITO TURNADO',
+                'lugar': [
+                  data.calle.trim(),
+                  data.colonia.trim(),
+                  data.municipio.trim(),
+                ].where((part) => part.isNotEmpty).join(', '),
+                'policia': data.perito,
+                'oficio': data.folioC5i,
+                'fecha': data.fecha == null
+                    ? ''
+                    : HechosFormService.ymd(data.fecha!),
+                'hora': data.hora == null
+                    ? ''
+                    : HechosFormService.horaStr(data.hora!),
+              },
+            },
+          );
+          return;
+        }
+
         Navigator.pushReplacementNamed(
           context,
           AppRoutes.vehiculos,
@@ -487,7 +527,7 @@ class _CaptureTotalsDialogState extends State<_CaptureTotalsDialog> {
     return PopScope(
       canPop: false,
       child: AlertDialog(
-        title: const Text('Participantes del hecho'),
+        title: const Text('Participantes esperados del hecho'),
         content: SingleChildScrollView(
           child: Form(
             key: _formKey,
@@ -502,7 +542,7 @@ class _CaptureTotalsDialogState extends State<_CaptureTotalsDialog> {
                   controller: _vehiculosCtrl,
                   keyboardType: TextInputType.number,
                   decoration: const InputDecoration(
-                    labelText: 'Vehículos participantes',
+                    labelText: 'Vehículos esperados',
                     prefixIcon: Icon(Icons.directions_car),
                   ),
                   validator: _requiredInt,
@@ -512,7 +552,7 @@ class _CaptureTotalsDialogState extends State<_CaptureTotalsDialog> {
                   controller: _conductoresCtrl,
                   keyboardType: TextInputType.number,
                   decoration: const InputDecoration(
-                    labelText: 'Conductores participantes',
+                    labelText: 'Conductores esperados',
                     prefixIcon: Icon(Icons.person),
                   ),
                   validator: (value) {
@@ -534,7 +574,7 @@ class _CaptureTotalsDialogState extends State<_CaptureTotalsDialog> {
                   controller: _lesionadosCtrl,
                   keyboardType: TextInputType.number,
                   decoration: const InputDecoration(
-                    labelText: 'Lesionados',
+                    labelText: 'Lesionados esperados',
                     prefixIcon: Icon(Icons.personal_injury),
                   ),
                   validator: _requiredInt,

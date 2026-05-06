@@ -12,10 +12,12 @@ import '../../../services/local_draft_service.dart';
 import '../../../services/offline_sync_service.dart';
 import '../../../services/reverse_geocode_service.dart';
 import '../../../widgets/landscape_photo_crop_screen.dart';
+import '../../../widgets/municipio_autocomplete_field.dart';
 import 'ubicacion_card.dart';
 import 'photo_card.dart';
 import 'danos_patrimoniales_card.dart';
 import 'dictamen_selector.dart';
+import 'puesta_disposicion_selector.dart';
 
 enum HechoFormMode { create, edit }
 
@@ -34,6 +36,7 @@ class HechoForm extends StatefulWidget {
   onSubmit;
   final Future<void> Function(OfflineActionResult result, HechoFormData data)?
   onSubmitted;
+  final Future<void> Function()? onCreatePuestaDisposicion;
 
   const HechoForm({
     super.key,
@@ -44,6 +47,7 @@ class HechoForm extends StatefulWidget {
     this.draftId,
     required this.onSubmit,
     this.onSubmitted,
+    this.onCreatePuestaDisposicion,
   });
 
   @override
@@ -64,6 +68,8 @@ class _HechoFormState extends State<HechoForm> {
   bool _usesRelaxedHechosRules = false;
   bool _hideDelegacionesAdminFields = false;
   bool _canUseDictamenes = false;
+  bool _canUsePuestasDisposicion = false;
+  bool _canCaptureMpTurnado = false;
 
   TimeOfDay? _hora;
   DateTime? _fecha;
@@ -109,6 +115,12 @@ class _HechoFormState extends State<HechoForm> {
 
   void _syncFromData() {
     final d = widget.data;
+    if (!_isTurnadoValue(d.situacion)) {
+      d.vehiculosMp = '0';
+      d.personasMp = '0';
+      d.dictamenId = null;
+      d.puestaDisposicionId = null;
+    }
 
     _hora = d.hora;
     _fecha = d.fecha;
@@ -133,6 +145,14 @@ class _HechoFormState extends State<HechoForm> {
     _fotoSituacion ??= widget.initialFotoSituacion;
   }
 
+  static bool _isTurnadoValue(String? value) {
+    return (value ?? '').trim().toUpperCase() == 'TURNADO';
+  }
+
+  bool _shouldCaptureMpTurnado() {
+    return _canCaptureMpTurnado && _isTurnadoValue(widget.data.situacion);
+  }
+
   Future<void> _loadRoleFlags() async {
     final isPerito = await AuthService.isPerito();
     final usesRelaxedHechosRules =
@@ -142,6 +162,7 @@ class _HechoFormState extends State<HechoForm> {
     final isDelegaciones = await AuthService.isDelegacionesUser();
     final canUseDictamenes =
         !isDelegaciones && await AuthService.isSiniestrosUser();
+    final canCaptureMpTurnado = canUseDictamenes || isDelegaciones;
     if (!mounted) return;
 
     setState(() {
@@ -150,6 +171,8 @@ class _HechoFormState extends State<HechoForm> {
       _usesRelaxedHechosRules = usesRelaxedHechosRules;
       _hideDelegacionesAdminFields = hideDelegacionesAdminFields;
       _canUseDictamenes = canUseDictamenes;
+      _canUsePuestasDisposicion = isDelegaciones;
+      _canCaptureMpTurnado = canCaptureMpTurnado;
       if (_usesRelaxedHechosRules) {
         widget.data.sector = null;
       }
@@ -166,6 +189,11 @@ class _HechoFormState extends State<HechoForm> {
       if (!_canUseDictamenes) {
         widget.data.dictamenId = null;
         _dictamenSelected = null;
+      }
+      if (!_canUsePuestasDisposicion) {
+        widget.data.puestaDisposicionId = null;
+      }
+      if (!_canCaptureMpTurnado) {
         _resetMpFields();
       }
     });
@@ -247,6 +275,12 @@ class _HechoFormState extends State<HechoForm> {
     d.situacion = _blankToNull(draft['situacion']);
     d.vehiculosMp = _str(draft['vehiculos_mp'], fallback: '0');
     d.personasMp = _str(draft['personas_mp'], fallback: '0');
+    if (!_isTurnadoValue(d.situacion)) {
+      d.vehiculosMp = '0';
+      d.personasMp = '0';
+      d.dictamenId = null;
+      d.puestaDisposicionId = null;
+    }
     d.vehiculosEsperados = _str(
       draft['vehiculos_esperados'],
       fallback: d.vehiculosEsperados,
@@ -270,6 +304,13 @@ class _HechoFormState extends State<HechoForm> {
     d.ubicacionFormateada = _blankToNull(draft['ubicacion_formateada']);
     d.placeId = _blankToNull(draft['place_id']);
     d.dictamenId = _intValue(draft['dictamen_id']);
+    d.puestaDisposicionId = _intValue(draft['puesta_disposicion_id']);
+    if (!_isTurnadoValue(d.situacion)) {
+      d.vehiculosMp = '0';
+      d.personasMp = '0';
+      d.dictamenId = null;
+      d.puestaDisposicionId = null;
+    }
 
     final fotoLugarPath = _blankToNull(draft['foto_lugar_path']);
     if (fotoLugarPath != null) {
@@ -287,6 +328,7 @@ class _HechoFormState extends State<HechoForm> {
 
   Map<String, dynamic> _draftValues() {
     final d = widget.data;
+    final shouldStoreMp = _isTurnadoValue(d.situacion);
     return <String, dynamic>{
       'client_uuid': d.clientUuid,
       'folio_c5i': _folioCtrl.text,
@@ -312,8 +354,8 @@ class _HechoFormState extends State<HechoForm> {
       'responsable': d.responsable,
       'colision_camino': d.colisionCamino,
       'situacion': d.situacion,
-      'vehiculos_mp': _vehMpCtrl.text,
-      'personas_mp': _persMpCtrl.text,
+      'vehiculos_mp': shouldStoreMp ? _vehMpCtrl.text : '0',
+      'personas_mp': shouldStoreMp ? _persMpCtrl.text : '0',
       'vehiculos_esperados': d.vehiculosEsperados,
       'conductores_esperados': d.conductoresEsperados,
       'lesionados_esperados': d.lesionadosEsperados,
@@ -328,6 +370,7 @@ class _HechoFormState extends State<HechoForm> {
       'ubicacion_formateada': d.ubicacionFormateada,
       'place_id': d.placeId,
       'dictamen_id': d.dictamenId,
+      'puesta_disposicion_id': d.puestaDisposicionId,
       'foto_lugar_path': _fotoLugar?.path,
       'foto_situacion_path': _fotoSituacion?.path,
     };
@@ -677,12 +720,20 @@ class _HechoFormState extends State<HechoForm> {
     d.entreCalles = _entreCtrl.text;
     d.municipio = HechosFormService.normalizeMunicipio(_municipioCtrl.text);
 
-    if (_canUseDictamenes && d.situacion == 'TURNADO') {
+    if (_shouldCaptureMpTurnado()) {
       d.vehiculosMp = _vehMpCtrl.text;
       d.personasMp = _persMpCtrl.text;
+      if (!_canUseDictamenes) {
+        d.dictamenId = null;
+        _dictamenSelected = null;
+      }
+      if (!_canUsePuestasDisposicion) {
+        d.puestaDisposicionId = null;
+      }
     } else {
       d.dictamenId = null;
       _dictamenSelected = null;
+      d.puestaDisposicionId = null;
       d.vehiculosMp = '0';
       d.personasMp = '0';
     }
@@ -700,6 +751,8 @@ class _HechoFormState extends State<HechoForm> {
   Future<void> _submit() async {
     if (_submitting) return;
 
+    _syncToData();
+
     final invalidFields =
         _formKey.currentState?.validateGranularly() ??
         const <FormFieldState<Object?>>{};
@@ -708,7 +761,6 @@ class _HechoFormState extends State<HechoForm> {
       return;
     }
 
-    _syncToData();
     if (!await _validateBusinessRules()) return;
 
     setState(() => _submitting = true);
@@ -990,9 +1042,11 @@ class _HechoFormState extends State<HechoForm> {
             validator: (v) => _maxLengthValidator(v, 255, 'Entre calles'),
           ),
           const SizedBox(height: 8),
-          TextFormField(
+          MunicipioAutocompleteField(
             controller: _municipioCtrl,
             decoration: _dec('Municipio *'),
+            enabled: !_submitting,
+            onChanged: (_) => _markDraftChanged(),
             validator: (v) => _requiredMaxValidator(v, 100, 'Municipio'),
           ),
 
@@ -1195,10 +1249,17 @@ class _HechoFormState extends State<HechoForm> {
                 : (v) {
                     setState(() {
                       d.situacion = v;
-                      if (d.situacion != 'TURNADO' || !_canUseDictamenes) {
+                      if (!_isTurnadoValue(d.situacion)) {
                         d.dictamenId = null;
                         _dictamenSelected = null;
+                        d.puestaDisposicionId = null;
                         _resetMpFields();
+                      } else if (!_canUseDictamenes) {
+                        d.dictamenId = null;
+                        _dictamenSelected = null;
+                      }
+                      if (!_canUsePuestasDisposicion) {
+                        d.puestaDisposicionId = null;
                       }
                     });
                     _markDraftChanged();
@@ -1216,7 +1277,17 @@ class _HechoFormState extends State<HechoForm> {
               },
             ),
 
-          if (_canUseDictamenes && d.situacion == 'TURNADO') ...[
+          if (_canUsePuestasDisposicion)
+            PuestaDisposicionSelector(
+              data: d,
+              disabled: _submitting,
+              onCreatePuesta: widget.onCreatePuestaDisposicion,
+              onSelected: (sel) {
+                _markDraftChanged();
+              },
+            ),
+
+          if (_shouldCaptureMpTurnado()) ...[
             const SizedBox(height: 12),
             Row(
               children: [
@@ -1225,12 +1296,15 @@ class _HechoFormState extends State<HechoForm> {
                     controller: _vehMpCtrl,
                     decoration: _dec('Vehículos MP *'),
                     keyboardType: TextInputType.number,
-                    validator: (v) => _nonNegativeIntValidator(
-                      v,
-                      label: 'Vehículos MP',
-                      required: true,
-                      min: 1,
-                    ),
+                    validator: (v) {
+                      if (!_shouldCaptureMpTurnado()) return null;
+                      return _nonNegativeIntValidator(
+                        v,
+                        label: 'Vehículos MP',
+                        required: true,
+                        min: 1,
+                      );
+                    },
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -1239,11 +1313,14 @@ class _HechoFormState extends State<HechoForm> {
                     controller: _persMpCtrl,
                     decoration: _dec('Personas MP *'),
                     keyboardType: TextInputType.number,
-                    validator: (v) => _nonNegativeIntValidator(
-                      v,
-                      label: 'Personas MP',
-                      required: true,
-                    ),
+                    validator: (v) {
+                      if (!_shouldCaptureMpTurnado()) return null;
+                      return _nonNegativeIntValidator(
+                        v,
+                        label: 'Personas MP',
+                        required: true,
+                      );
+                    },
                   ),
                 ),
               ],

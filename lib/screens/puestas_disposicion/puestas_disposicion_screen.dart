@@ -69,6 +69,16 @@ class _PuestasDisposicionScreenState extends State<PuestasDisposicionScreen> {
     return int.tryParse(value.toString()) ?? 0;
   }
 
+  int _hechoId(Map<String, dynamic> item) {
+    final direct = _toInt(item['hecho_id']);
+    if (direct > 0) return direct;
+
+    final nested = item['hecho'];
+    if (nested is Map) return _toInt(nested['id'] ?? nested['hecho_id']);
+
+    return 0;
+  }
+
   Future<void> _openShow(Map<String, dynamic> item) async {
     final id = _toInt(item['id']);
     if (id <= 0) return;
@@ -139,6 +149,7 @@ class _PuestasDisposicionScreenState extends State<PuestasDisposicionScreen> {
                 final item = _items[index];
                 final numero = _text(item['numero_puesta']);
                 final anio = _text(item['anio']);
+                final hechoId = _hechoId(item);
                 final unidad = _nestedName(item, 'unidad') == '-'
                     ? _text(item['area'])
                     : _nestedName(item, 'unidad');
@@ -191,6 +202,13 @@ class _PuestasDisposicionScreenState extends State<PuestasDisposicionScreen> {
                             unidad,
                             style: TextStyle(color: Colors.grey.shade700),
                           ),
+                          if (hechoId > 0) ...[
+                            const SizedBox(height: 6),
+                            Text(
+                              'Hecho vinculado: #$hechoId',
+                              style: TextStyle(color: Colors.grey.shade700),
+                            ),
+                          ],
                           const SizedBox(height: 6),
                           Text(
                             _text(item['nombre_policia'], 'Sin policia'),

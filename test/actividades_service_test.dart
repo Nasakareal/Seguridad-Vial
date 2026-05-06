@@ -42,6 +42,7 @@ void main() {
         actividadSubcategoriaId: 2,
         fecha: '2026-04-25',
         hora: '09:30',
+        municipio: 'MORELIA',
         lat: '19.7000000',
         lng: '-101.2000000',
         personasAlcanzadas: '1',
@@ -52,6 +53,26 @@ void main() {
     );
 
     expect(error, isNull);
+  });
+
+  test('rejects activity captures with unknown municipalities', () async {
+    final error = await ActividadesService.validateBeforeSubmit(
+      data: const ActividadUpsertData(
+        actividadCategoriaId: 1,
+        actividadSubcategoriaId: 2,
+        fecha: '2026-04-25',
+        municipio: 'mirilia',
+        lat: '19.7000000',
+        lng: '-101.2000000',
+        personasAlcanzadas: '1',
+        personasParticipantes: '0',
+        personasDetenidas: '0',
+      ),
+      fotos: const <File>[],
+      requirePhotos: false,
+    );
+
+    expect(error, contains('Selecciona un municipio de Michoacan.'));
   });
 
   test('activity vehicle api payload keeps selected grua id and name', () {

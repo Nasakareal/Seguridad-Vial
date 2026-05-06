@@ -140,10 +140,7 @@ class _DispositivoRelacionadoModalState
   }
 
   String _tipoServicioFromQr(String? value) {
-    final clean = (value ?? '').trim().toUpperCase();
-    if (clean.contains('PUBLIC')) return 'PUBLICO';
-    if (clean.contains('OFICIAL')) return 'OFICIAL';
-    return 'PARTICULAR';
+    return VehiculoFormService.tipoServicioPlacaValue(value);
   }
 
   bool _isTipoGeneralDisponible(String? value) {
@@ -246,7 +243,7 @@ class _DispositivoRelacionadoModalState
       marca: _t(_marcaCtrl),
       linea: _t(_lineaCtrl),
       color: _t(_colorCtrl),
-      tipoServicio: _tipoServicio,
+      tipoServicio: VehiculoFormService.tipoServicioPlacaValue(_tipoServicio),
       partesDanadas: '',
       tipoGeneral: _tipoGeneral,
       tipoCarroceria: _carroceria,
@@ -284,7 +281,7 @@ class _DispositivoRelacionadoModalState
       ),
       serie: VehiculoFormService.normalizeSerie(_t(_serieCtrl)),
       capacidadPersonas: int.tryParse(_t(_capacidadCtrl)) ?? 0,
-      tipoServicio: _tipoServicio,
+      tipoServicio: VehiculoFormService.tipoServicioPlacaValue(_tipoServicio),
       tarjetaCirculacionNombre: _nullIfEmpty(_upper(_t(_tarjetaCtrl))),
       grua: _nullIfEmpty(_upper(_t(_gruaCtrl))),
       corralon: _nullIfEmpty(_upper(_t(_corralonCtrl))),
@@ -521,18 +518,22 @@ class _DispositivoRelacionadoModalState
           ),
           const SizedBox(height: 10),
           DropdownButtonFormField<String>(
-            value: _tipoServicio,
+            isExpanded: true,
+            value: VehiculoFormService.tipoServicioPlacaValue(_tipoServicio),
             decoration: _dec(
-              'Tipo de servicio *',
+              'Tipo de servicio de placa *',
               icon: Icons.miscellaneous_services,
             ),
-            items: const [
-              DropdownMenuItem(value: 'PARTICULAR', child: Text('Particular')),
-              DropdownMenuItem(value: 'OFICIAL', child: Text('Oficial')),
-              DropdownMenuItem(value: 'PUBLICO', child: Text('Público')),
-            ],
-            onChanged: (value) =>
-                setState(() => _tipoServicio = value ?? 'PARTICULAR'),
+            items: VehiculoFormService.tiposServicioPlaca
+                .map(
+                  (value) => DropdownMenuItem(value: value, child: Text(value)),
+                )
+                .toList(),
+            onChanged: (value) => setState(
+              () => _tipoServicio =
+                  value ?? VehiculoFormService.tipoServicioParticular,
+            ),
+            validator: VehiculoFormService.validateTipoServicioPlaca,
           ),
           const SizedBox(height: 10),
           TextFormField(

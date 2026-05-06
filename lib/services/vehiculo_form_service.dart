@@ -79,6 +79,60 @@ class ConductorLicenseQrData {
 }
 
 class VehiculoFormService {
+  static const String tipoServicioParticular = 'PARTICULAR';
+  static const String tipoServicioPublicoEstatal = 'SERVICIO PÚBLICO ESTATAL';
+  static const String tipoServicioPublicoFederal = 'SERVICIO PÚBLICO FEDERAL';
+  static const String tipoServicioOficial = 'OFICIAL';
+
+  static const List<String> tiposServicioPlaca = <String>[
+    tipoServicioParticular,
+    tipoServicioPublicoEstatal,
+    tipoServicioPublicoFederal,
+    tipoServicioOficial,
+  ];
+
+  static String tipoServicioPlacaValue(String? value) {
+    return normalizeTipoServicioPlaca(value) ?? tipoServicioParticular;
+  }
+
+  static String? normalizeTipoServicioPlaca(String? value) {
+    final normalized = _upper(value);
+    if (normalized == null) return null;
+
+    for (final option in tiposServicioPlaca) {
+      if (normalized == _removeAccents(option).toUpperCase()) {
+        return option;
+      }
+    }
+
+    if (normalized.contains('FEDERAL') ||
+        normalized.contains('SCT') ||
+        normalized == 'SPF') {
+      return tipoServicioPublicoFederal;
+    }
+    if (normalized.contains('PUBLIC') ||
+        normalized.contains('ESTATAL') ||
+        normalized.contains('ESTADO') ||
+        normalized.contains('TAXI')) {
+      return tipoServicioPublicoEstatal;
+    }
+    if (normalized.contains('PARTICULAR') || normalized.contains('PRIVAD')) {
+      return tipoServicioParticular;
+    }
+    if (normalized.contains('OFICIAL') ||
+        normalized.contains('GOBIERNO') ||
+        normalized.contains('DEPENDENCIA')) {
+      return tipoServicioOficial;
+    }
+
+    return null;
+  }
+
+  static String? validateTipoServicioPlaca(String? value) {
+    if (tiposServicioPlaca.contains((value ?? '').trim())) return null;
+    return 'Selecciona un tipo de servicio válido.';
+  }
+
   static VehiculoQrData parseTarjetaCirculacionQr(String raw) {
     final rawText = raw.trim();
     if (rawText.isEmpty) return const VehiculoQrData(rawText: '');
@@ -439,11 +493,7 @@ class VehiculoFormService {
     final capacidadError = validateCapacidad(capacidad);
     if (capacidadError != null) return capacidadError;
 
-    final tipoServicioError = validateRequiredText(
-      tipoServicio,
-      max: 50,
-      label: 'Tipo de servicio',
-    );
+    final tipoServicioError = validateTipoServicioPlaca(tipoServicio);
     if (tipoServicioError != null) return tipoServicioError;
 
     final tarjetaError = validateOptionalText(
@@ -943,16 +993,7 @@ class VehiculoFormService {
   }
 
   static String? _normalizeTipoServicio(String? value) {
-    final normalized = _upper(value);
-    if (normalized == null) return null;
-    if (normalized.contains('PUBLIC')) return 'PÚBLICO';
-    if (normalized.contains('PARTICULAR') || normalized.contains('PRIVAD')) {
-      return 'PARTICULAR';
-    }
-    if (normalized.contains('OFICIAL') || normalized.contains('GOBIERNO')) {
-      return 'OFICIAL';
-    }
-    return normalized;
+    return normalizeTipoServicioPlaca(value);
   }
 
   static String? _inferTipoGeneral(String? rawTipo, String? linea) {

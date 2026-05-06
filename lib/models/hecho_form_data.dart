@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 class HechoFormData {
+  int? hechoId;
   String? clientUuid;
   bool hasFotoSituacionActual = false;
 
@@ -53,6 +54,7 @@ class HechoFormData {
   String? placeId;
 
   int? dictamenId;
+  int? puestaDisposicionId;
 
   bool get hasClientUuid => (clientUuid?.trim().isNotEmpty ?? false);
   bool get hasCoords => lat != null && lng != null;

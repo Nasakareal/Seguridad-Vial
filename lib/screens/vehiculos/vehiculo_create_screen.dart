@@ -301,7 +301,9 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
     _placasCtrl.text = (body['placas'] ?? '').toString();
     _serieCtrl.text = (body['serie'] ?? '').toString();
     _capacidadCtrl.text = (body['capacidad_personas'] ?? '5').toString();
-    _tipoServicioCtrl.text = (body['tipo_servicio'] ?? 'PARTICULAR').toString();
+    _tipoServicioCtrl.text = VehiculoFormService.tipoServicioPlacaValue(
+      (body['tipo_servicio'] ?? '').toString(),
+    );
     _tarjetaCirculacionNombreCtrl.text =
         (body['tarjeta_circulacion_nombre'] ?? '').toString();
     _aseguradoraCtrl.text =
@@ -336,7 +338,9 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
       'estado_placas': _estadoPlacasSeleccionado,
       'serie': _serieCtrl.text,
       'capacidad_personas': _capacidadCtrl.text,
-      'tipo_servicio': _tipoServicioCtrl.text,
+      'tipo_servicio': VehiculoFormService.tipoServicioPlacaValue(
+        _tipoServicioCtrl.text,
+      ),
       'tarjeta_circulacion_nombre': _tarjetaCirculacionNombreCtrl.text,
       'grua_id': _gruaIdSeleccionada,
       'corralon_id': _corralonGruaIdSeleccionada,
@@ -453,7 +457,10 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
       if (setText(_colorCtrl, parsed.color)) applied += 1;
       if (setText(_placasCtrl, parsed.placas)) applied += 1;
       if (setText(_serieCtrl, parsed.serie)) applied += 1;
-      if (setText(_tipoServicioCtrl, parsed.tipoServicio)) applied += 1;
+      final tipoServicio = VehiculoFormService.normalizeTipoServicioPlaca(
+        parsed.tipoServicio,
+      );
+      if (setText(_tipoServicioCtrl, tipoServicio)) applied += 1;
       if (setText(
         _tarjetaCirculacionNombreCtrl,
         parsed.tarjetaCirculacionNombre,
@@ -555,11 +562,14 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
 
     if (!await _validateFormAndScroll()) return;
 
+    final tipoServicio = VehiculoFormService.tipoServicioPlacaValue(
+      _t(_tipoServicioCtrl),
+    );
     final validationError = VehiculoFormService.validateVehiculoBeforeSubmit(
       marca: _t(_marcaCtrl),
       linea: _t(_lineaCtrl),
       color: _t(_colorCtrl),
-      tipoServicio: _t(_tipoServicioCtrl),
+      tipoServicio: tipoServicio,
       partesDanadas: _t(_partesDanadasCtrl),
       tipoGeneral: _tipoGeneralSeleccionado,
       tipoCarroceria: _tipoCarroceriaSeleccionada,
@@ -630,7 +640,7 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
         'estado_placas': placasClean.isEmpty ? null : estadoClean,
         'serie': VehiculoFormService.normalizeSerie(_t(_serieCtrl)),
         'capacidad_personas': _toIntOrNull(_t(_capacidadCtrl)) ?? 0,
-        'tipo_servicio': _t(_tipoServicioCtrl),
+        'tipo_servicio': tipoServicio,
         'tarjeta_circulacion_nombre': _t(_tarjetaCirculacionNombreCtrl).isEmpty
             ? null
             : _t(_tarjetaCirculacionNombreCtrl),
@@ -962,17 +972,27 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
                 validator: VehiculoFormService.validateCapacidad,
               ),
               const SizedBox(height: 10),
-              TextFormField(
-                controller: _tipoServicioCtrl,
+              DropdownButtonFormField<String>(
+                isExpanded: true,
+                value: VehiculoFormService.tipoServicioPlacaValue(
+                  _tipoServicioCtrl.text,
+                ),
                 decoration: const InputDecoration(
-                  labelText: 'Tipo de servicio * (PARTICULAR, PÚBLICO, etc.)',
+                  labelText: 'Tipo de servicio de placa *',
                   prefixIcon: Icon(Icons.miscellaneous_services),
                 ),
-                validator: (v) => VehiculoFormService.validateRequiredText(
-                  v,
-                  max: 50,
-                  label: 'Tipo de servicio',
-                ),
+                items: VehiculoFormService.tiposServicioPlaca
+                    .map(
+                      (value) =>
+                          DropdownMenuItem(value: value, child: Text(value)),
+                    )
+                    .toList(),
+                onChanged: (value) {
+                  if (value == null) return;
+                  setState(() => _tipoServicioCtrl.text = value);
+                  _markDraftChanged();
+                },
+                validator: VehiculoFormService.validateTipoServicioPlaca,
               ),
               const SizedBox(height: 10),
               TextFormField(

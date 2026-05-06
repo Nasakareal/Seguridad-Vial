@@ -3,12 +3,14 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
+import '../../core/municipios_michoacan.dart';
 import '../../models/vialidades_urbanas_dispositivo.dart';
 import '../../services/auth_service.dart';
 import '../../services/local_draft_service.dart';
 import '../../services/vialidades_urbanas_form_service.dart';
 import '../../services/vialidades_urbanas_service.dart';
 import '../../widgets/landscape_photo_crop_screen.dart';
+import '../../widgets/municipio_autocomplete_field.dart';
 
 class VialidadesUrbanasCreateScreen extends StatefulWidget {
   const VialidadesUrbanasCreateScreen({super.key});
@@ -36,7 +38,7 @@ class _VialidadesUrbanasCreateScreenState
   TimeOfDay _hora = TimeOfDay.now();
 
   final _asuntoCtrl = TextEditingController();
-  final _municipioCtrl = TextEditingController(text: 'MORELIA, MICHOACAN');
+  final _municipioCtrl = TextEditingController(text: 'MORELIA');
   final _lugarCtrl = TextEditingController();
   final _eventoCtrl = TextEditingController();
   final _supervisionCtrl = TextEditingController();
@@ -264,6 +266,11 @@ class _VialidadesUrbanasCreateScreenState
     return int.tryParse(controller.text.trim()) ?? 0;
   }
 
+  String _readMunicipio() {
+    return MunicipiosMichoacan.canonical(_municipioCtrl.text) ??
+        _municipioCtrl.text.trim();
+  }
+
   InputDecoration _dec(String label) {
     return InputDecoration(
       labelText: label,
@@ -360,7 +367,7 @@ class _VialidadesUrbanasCreateScreenState
       fecha: _fecha,
       hora: _hora,
       asunto: _asuntoCtrl.text,
-      municipio: _municipioCtrl.text,
+      municipio: _readMunicipio(),
       lugar: _lugarCtrl.text,
       evento: _eventoCtrl.text,
       objetivo: _objetivoCtrl.text,
@@ -512,9 +519,18 @@ class _VialidadesUrbanasCreateScreenState
                             },
                           ),
                           const SizedBox(height: 12),
-                          TextFormField(
+                          MunicipioAutocompleteField(
                             controller: _municipioCtrl,
                             decoration: _dec('Municipio'),
+                            enabled: !_saving,
+                            onChanged: (_) => _markDraftChanged(),
+                            onSelected: (_) => _markDraftChanged(),
+                            validator: (value) {
+                              if ((value ?? '').trim().isEmpty) {
+                                return 'El municipio es obligatorio.';
+                              }
+                              return null;
+                            },
                           ),
                           const SizedBox(height: 12),
                           TextFormField(

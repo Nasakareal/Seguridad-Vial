@@ -533,7 +533,9 @@ class _VehiculoEditScreenState extends State<VehiculoEditScreen> {
     _placasCtrl.text = (data['placas'] ?? '').toString();
     _serieCtrl.text = (data['serie'] ?? '').toString();
     _capacidadCtrl.text = (data['capacidad_personas'] ?? '5').toString();
-    _tipoServicioCtrl.text = (data['tipo_servicio'] ?? 'PARTICULAR').toString();
+    _tipoServicioCtrl.text = VehiculoFormService.tipoServicioPlacaValue(
+      (data['tipo_servicio'] ?? '').toString(),
+    );
     _tarjetaCirculacionNombreCtrl.text =
         (data['tarjeta_circulacion_nombre'] ?? '').toString();
     _aseguradoraCtrl.text =
@@ -672,11 +674,14 @@ class _VehiculoEditScreenState extends State<VehiculoEditScreen> {
 
     if (!await _validateFormAndScroll()) return;
 
+    final tipoServicio = VehiculoFormService.tipoServicioPlacaValue(
+      _t(_tipoServicioCtrl),
+    );
     final validationError = VehiculoFormService.validateVehiculoBeforeSubmit(
       marca: _t(_marcaCtrl),
       linea: _t(_lineaCtrl),
       color: _t(_colorCtrl),
-      tipoServicio: _t(_tipoServicioCtrl),
+      tipoServicio: tipoServicio,
       partesDanadas: _t(_partesDanadasCtrl),
       tipoGeneral: _tipoGeneralSeleccionado,
       tipoCarroceria: _tipoCarroceriaSeleccionada,
@@ -743,7 +748,7 @@ class _VehiculoEditScreenState extends State<VehiculoEditScreen> {
         'estado_placas': placasClean.isEmpty ? null : estadoClean,
         'serie': VehiculoFormService.normalizeSerie(_t(_serieCtrl)),
         'capacidad_personas': _toIntOrNull(_t(_capacidadCtrl)) ?? 0,
-        'tipo_servicio': _t(_tipoServicioCtrl),
+        'tipo_servicio': tipoServicio,
         'tarjeta_circulacion_nombre': _t(_tarjetaCirculacionNombreCtrl).isEmpty
             ? null
             : _t(_tarjetaCirculacionNombreCtrl),
@@ -1033,19 +1038,28 @@ class _VehiculoEditScreenState extends State<VehiculoEditScreen> {
                       validator: VehiculoFormService.validateCapacidad,
                     ),
                     const SizedBox(height: 10),
-                    TextFormField(
-                      controller: _tipoServicioCtrl,
+                    DropdownButtonFormField<String>(
+                      isExpanded: true,
+                      value: VehiculoFormService.tipoServicioPlacaValue(
+                        _tipoServicioCtrl.text,
+                      ),
                       decoration: const InputDecoration(
-                        labelText:
-                            'Tipo de servicio * (PARTICULAR, PÚBLICO, etc.)',
+                        labelText: 'Tipo de servicio de placa *',
                         prefixIcon: Icon(Icons.miscellaneous_services),
                       ),
-                      validator: (v) =>
-                          VehiculoFormService.validateRequiredText(
-                            v,
-                            max: 50,
-                            label: 'Tipo de servicio',
-                          ),
+                      items: VehiculoFormService.tiposServicioPlaca
+                          .map(
+                            (value) => DropdownMenuItem(
+                              value: value,
+                              child: Text(value),
+                            ),
+                          )
+                          .toList(),
+                      onChanged: (value) {
+                        if (value == null) return;
+                        setState(() => _tipoServicioCtrl.text = value);
+                      },
+                      validator: VehiculoFormService.validateTipoServicioPlaca,
                     ),
                     const SizedBox(height: 10),
                     TextFormField(

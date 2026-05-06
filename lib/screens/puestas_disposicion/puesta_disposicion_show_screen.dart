@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../app/routes.dart';
 import '../../services/puestas_disposicion_service.dart';
 
 class PuestaDisposicionShowScreen extends StatefulWidget {
@@ -142,11 +143,31 @@ class _PuestaDisposicionShowScreenState
     return <Map<String, dynamic>>[];
   }
 
+  int _toInt(dynamic value) {
+    if (value == null) return 0;
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    return int.tryParse(value.toString()) ?? 0;
+  }
+
+  int _hechoId(Map<String, dynamic> p) {
+    final direct = _toInt(p['hecho_id']);
+    if (direct > 0) return direct;
+
+    final nested = p['hecho'];
+    if (nested is Map) {
+      return _toInt(nested['id'] ?? nested['hecho_id']);
+    }
+
+    return 0;
+  }
+
   @override
   Widget build(BuildContext context) {
     final p = _puesta ?? <String, dynamic>{};
     final numero = _text(p['numero_puesta']);
     final anio = _text(p['anio']);
+    final hechoId = _hechoId(p);
 
     return Scaffold(
       backgroundColor: const Color(0xFFF6F7FB),
@@ -195,9 +216,23 @@ class _PuestaDisposicionShowScreenState
                       _kv('ID', _text(p['id'])),
                       _kv('Numero', numero),
                       _kv('Anio', anio),
+                      if (hechoId > 0) _kv('Hecho vinculado', '#$hechoId'),
                       _kv('Tipo', _text(p['tipo_puesta'])),
                       _kv('Motivo', _text(p['motivo'])),
                       _kv('Estatus', _text(p['estatus'])),
+                      if (hechoId > 0)
+                        SizedBox(
+                          width: double.infinity,
+                          child: OutlinedButton.icon(
+                            onPressed: () => Navigator.pushNamed(
+                              context,
+                              AppRoutes.accidentesShow,
+                              arguments: {'hechoId': hechoId},
+                            ),
+                            icon: const Icon(Icons.open_in_new),
+                            label: const Text('Abrir hecho'),
+                          ),
+                        ),
                     ],
                   ),
                 ),
@@ -278,6 +313,13 @@ class _PuestaDisposicionShowScreenState
                         'Mandamiento: ${_text(item['mandamiento_judicial'])}',
                       if (_text(item['observaciones'], '').isNotEmpty)
                         'Obs: ${_text(item['observaciones'])}',
+                      if (_text(
+                        item['archivo_uso_fuerza_url'] ??
+                            item['uso_fuerza_pdf_url'] ??
+                            item['archivo_uso_fuerza'],
+                        '',
+                      ).isNotEmpty)
+                        'PDF uso de fuerza: cargado',
                     ],
                   ),
                 ),

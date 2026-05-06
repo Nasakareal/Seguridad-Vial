@@ -3,6 +3,8 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
+import '../core/municipios_michoacan.dart';
+
 class ReverseGeocodeResult {
   final String? municipio;
   final String? calle;
@@ -257,144 +259,10 @@ class ReverseGeocodeService {
   }
 
   static String? _canonicalMunicipio(String? value) {
-    final token = _normalizeToken(value);
-    if (token.isEmpty) return null;
-    return _municipiosMichoacan[token];
+    return MunicipiosMichoacan.canonical(value);
   }
 
   static String _normalizeToken(dynamic value) {
-    final text = _cleanText(value) ?? '';
-    return text
-        .toUpperCase()
-        .replaceAll('Á', 'A')
-        .replaceAll('É', 'E')
-        .replaceAll('Í', 'I')
-        .replaceAll('Ó', 'O')
-        .replaceAll('Ú', 'U')
-        .replaceAll('Ü', 'U')
-        .replaceAll('Ñ', 'N')
-        .replaceAll(RegExp(r'[^A-Z0-9]'), '');
+    return MunicipiosMichoacan.normalizeToken(value);
   }
-
-  static const Map<String, String> _municipiosMichoacan = {
-    'ACUITZIO': 'ACUITZIO',
-    'AGUILILLA': 'AGUILILLA',
-    'ALVAROOBREGON': 'ALVARO OBREGON',
-    'ANGAMACUTIRO': 'ANGAMACUTIRO',
-    'ANGANGUEO': 'ANGANGUEO',
-    'APATZINGAN': 'APATZINGAN',
-    'APORO': 'APORO',
-    'AQUILA': 'AQUILA',
-    'ARIO': 'ARIO',
-    'ARTEAGA': 'ARTEAGA',
-    'BRISENAS': 'BRISENAS',
-    'BUENAVISTA': 'BUENAVISTA',
-    'CARACUARO': 'CARACUARO',
-    'COAHUAYANA': 'COAHUAYANA',
-    'COALCOMANDEVAZQUEZPALLARES': 'COALCOMAN DE VAZQUEZ PALLARES',
-    'COENEO': 'COENEO',
-    'CONTEPEC': 'CONTEPEC',
-    'COPANDARO': 'COPANDARO',
-    'COTIJA': 'COTIJA',
-    'CUITZEO': 'CUITZEO',
-    'CHARAPAN': 'CHARAPAN',
-    'CHARO': 'CHARO',
-    'CHAVINDA': 'CHAVINDA',
-    'CHERAN': 'CHERAN',
-    'CHILCHOTA': 'CHILCHOTA',
-    'CHINICUILA': 'CHINICUILA',
-    'CHUCANDIRO': 'CHUCANDIRO',
-    'CHURINTZIO': 'CHURINTZIO',
-    'CHURUMUCO': 'CHURUMUCO',
-    'ECUANDUREO': 'ECUANDUREO',
-    'EPITACIOHUERTA': 'EPITACIO HUERTA',
-    'ERONGARICUARO': 'ERONGARICUARO',
-    'GABRIELZAMORA': 'GABRIEL ZAMORA',
-    'HIDALGO': 'HIDALGO',
-    'LAHUACANA': 'LA HUACANA',
-    'HUANDACAREO': 'HUANDACAREO',
-    'HUANIQUEO': 'HUANIQUEO',
-    'HUETAMO': 'HUETAMO',
-    'HUIRAMBA': 'HUIRAMBA',
-    'INDAPARAPEO': 'INDAPARAPEO',
-    'IRIMBO': 'IRIMBO',
-    'IXTLAN': 'IXTLAN',
-    'JACONA': 'JACONA',
-    'JIMENEZ': 'JIMENEZ',
-    'JIQUILPAN': 'JIQUILPAN',
-    'JOSE SIXTO VERDUZCO': 'JOSE SIXTO VERDUZCO',
-    'JOSESIXTOVERDUZCO': 'JOSE SIXTO VERDUZCO',
-    'JUAREZ': 'JUAREZ',
-    'JUNGAPEO': 'JUNGAPEO',
-    'LAGUNILLAS': 'LAGUNILLAS',
-    'MADERO': 'MADERO',
-    'MARAVATIO': 'MARAVATIO',
-    'MARCOSCASTELLANOS': 'MARCOS CASTELLANOS',
-    'LAZARO CARDENAS': 'LAZARO CARDENAS',
-    'LAZAROCARDENAS': 'LAZARO CARDENAS',
-    'MORELIA': 'MORELIA',
-    'MORELOS': 'MORELOS',
-    'MUGICA': 'MUGICA',
-    'NAHUATZEN': 'NAHUATZEN',
-    'NOCUPETARO': 'NOCUPETARO',
-    'NUEVOPARANGARICUTIRO': 'NUEVO PARANGARICUTIRO',
-    'NUEVOURECHO': 'NUEVO URECHO',
-    'NUMARAN': 'NUMARAN',
-    'OCAMPO': 'OCAMPO',
-    'PAJACUARAN': 'PAJACUARAN',
-    'PANINDICUARO': 'PANINDICUARO',
-    'PARACUARO': 'PARACUARO',
-    'PARACHO': 'PARACHO',
-    'PATZCUARO': 'PATZCUARO',
-    'PENJAMILLO': 'PENJAMILLO',
-    'PERIBAN': 'PERIBAN',
-    'LAPIEDAD': 'LA PIEDAD',
-    'PUREPERO': 'PUREPERO',
-    'PURUANDIRO': 'PURUANDIRO',
-    'QUERENDARO': 'QUERENDARO',
-    'QUIROGA': 'QUIROGA',
-    'COJUMATLAN DE REGULES': 'COJUMATLAN DE REGULES',
-    'COJUMATLANDEREGULES': 'COJUMATLAN DE REGULES',
-    'LOSCREYES': 'LOS REYES',
-    'SAHUAYO': 'SAHUAYO',
-    'SANLUCAS': 'SAN LUCAS',
-    'SANTACLARA': 'SANTA CLARA',
-    'SALVADORESCALANTE': 'SALVADOR ESCALANTE',
-    'SENGUIO': 'SENGUIO',
-    'SUSUPUATO': 'SUSUPUATO',
-    'TACAMBARO': 'TACAMBARO',
-    'TANCITARO': 'TANCITARO',
-    'TANGAMANDAPIO': 'TANGAMANDAPIO',
-    'TANGANCICUARO': 'TANGANCICUARO',
-    'TANHUATO': 'TANHUATO',
-    'TARETAN': 'TARETAN',
-    'TARIMBARO': 'TARIMBARO',
-    'TEPALCATEPEC': 'TEPALCATEPEC',
-    'TINGAMBATO': 'TINGAMBATO',
-    'TINGUINDIN': 'TINGUINDIN',
-    'TIQUICHEODE NICOLAS ROMERO': 'TIQUICHEO DE NICOLAS ROMERO',
-    'TIQUICHEODENICOLASROMERO': 'TIQUICHEO DE NICOLAS ROMERO',
-    'TLALPUJAHUA': 'TLALPUJAHUA',
-    'TLAZAZALCA': 'TLAZAZALCA',
-    'TOCUMBO': 'TOCUMBO',
-    'TUMBISCATIO': 'TUMBISCATIO',
-    'TURICATO': 'TURICATO',
-    'TUXPAN': 'TUXPAN',
-    'TUZANTLA': 'TUZANTLA',
-    'TZINTZUNTZAN': 'TZINTZUNTZAN',
-    'TZITZIO': 'TZITZIO',
-    'URUAPAN': 'URUAPAN',
-    'VENUSTIANOCARRANZA': 'VENUSTIANO CARRANZA',
-    'VILLAMAR': 'VILLAMAR',
-    'VISTAHERMOSA': 'VISTA HERMOSA',
-    'YURECUARO': 'YURECUARO',
-    'ZACAPU': 'ZACAPU',
-    'ZAMORA': 'ZAMORA',
-    'ZINAPARO': 'ZINAPARO',
-    'ZINAPECUARO': 'ZINAPECUARO',
-    'ZIRACUARETIRO': 'ZIRACUARETIRO',
-    'ZITACUARO': 'ZITACUARO',
-    'JOSEMARIA MORELOS': 'JOSE MARIA MORELOS',
-    'JOSEMARIAMORELOS': 'JOSE MARIA MORELOS',
-  };
 }

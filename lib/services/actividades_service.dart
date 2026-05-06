@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../core/municipios_michoacan.dart';
 import '../models/actividad.dart';
 import '../models/actividad_categoria.dart';
 import '../models/actividad_subcategoria.dart';
@@ -11,6 +12,7 @@ import 'auth_service.dart';
 import 'delegacion_distance_service.dart';
 import 'offline_sync_service.dart';
 import 'photo_orientation_service.dart';
+import 'vehiculo_form_service.dart';
 
 class ActividadUpsertData {
   final String? clientUuid;
@@ -89,7 +91,7 @@ class ActividadUpsertData {
     add('fecha', fecha);
     add('hora', hora);
     add('lugar', lugar);
-    add('municipio', municipio);
+    add('municipio', MunicipiosMichoacan.canonical(municipio) ?? municipio);
     add('lat', lat);
     add('lng', lng);
     add('coordenadas_texto', coordenadasTexto);
@@ -337,6 +339,7 @@ class ActividadesService {
 
     _validateLength(errors, data.lugar, 255, 'Lugar');
     _validateLength(errors, data.municipio, 255, 'Municipio');
+    _validateMunicipio(errors, data.municipio);
     _validateLength(errors, data.carretera, 255, 'Carretera');
     _validateLength(errors, data.tramo, 255, 'Tramo');
     _validateLength(errors, data.kilometro, 50, 'Kilómetro');
@@ -753,6 +756,17 @@ class ActividadesService {
     }
   }
 
+  static void _validateMunicipio(List<String> errors, String? value) {
+    final text = (value ?? '').trim();
+    if (text.isEmpty) {
+      errors.add('Selecciona un municipio de Michoacan.');
+      return;
+    }
+    if (!MunicipiosMichoacan.isKnown(text)) {
+      errors.add('Selecciona un municipio de Michoacan.');
+    }
+  }
+
   static void _validateNonNegativeInt(
     List<String> errors,
     String? value,
@@ -816,7 +830,12 @@ class ActividadesService {
     optionalText(vehiculo.placas, 'placas', 15);
     optionalText(vehiculo.estadoPlacas, 'estado de placas', 15);
     optionalText(vehiculo.serie, 'serie', 17);
-    requiredText(vehiculo.tipoServicio, 'tipo de servicio', 50);
+    final tipoServicioError = VehiculoFormService.validateTipoServicioPlaca(
+      vehiculo.tipoServicio,
+    );
+    if (tipoServicioError != null) {
+      errors.add('$prefix: $tipoServicioError');
+    }
     optionalText(
       vehiculo.tarjetaCirculacionNombre,
       'nombre de tarjeta de circulación',

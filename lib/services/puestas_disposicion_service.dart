@@ -14,6 +14,13 @@ class PuestaUnidad {
   const PuestaUnidad({required this.id, required this.nombre});
 }
 
+class PuestaUploadFile {
+  final String field;
+  final File file;
+
+  const PuestaUploadFile({required this.field, required this.file});
+}
+
 class PuestasDisposicionService {
   Uri _uri(String path, [Map<String, dynamic>? query]) {
     return Uri.parse('${AuthService.baseUrl}$path').replace(
@@ -71,6 +78,7 @@ class PuestasDisposicionService {
   Future<Map<String, dynamic>> store({
     required Map<String, String> fields,
     File? archivoPuesta,
+    List<PuestaUploadFile> archivosExtra = const <PuestaUploadFile>[],
   }) async {
     final request = http.MultipartRequest('POST', _uri('/puestas-disposicion'));
     request.headers.addAll(await _headers());
@@ -86,9 +94,19 @@ class PuestasDisposicionService {
       );
     }
 
+    for (final extra in archivosExtra) {
+      request.files.add(
+        await http.MultipartFile.fromPath(
+          extra.field,
+          extra.file.path,
+          filename: p.basename(extra.file.path),
+        ),
+      );
+    }
+
     if (kDebugMode) {
       debugPrint(
-        'Puestas API POST ${request.url} fields=${request.fields.keys.join(',')} file=${archivoPuesta != null}',
+        'Puestas API POST ${request.url} fields=${request.fields.keys.join(',')} files=${request.files.length}',
       );
     }
 

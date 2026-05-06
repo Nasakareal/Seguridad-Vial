@@ -1,9 +1,9 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart';
 
 import '../../services/puestas_disposicion_service.dart';
 import '../../services/local_draft_service.dart';
@@ -20,7 +20,6 @@ class _PuestaDisposicionCreateScreenState
     extends State<PuestaDisposicionCreateScreen> {
   final _formKey = GlobalKey<FormState>();
   final _service = PuestasDisposicionService();
-  final _picker = ImagePicker();
 
   final _motivo = TextEditingController();
   final _lugar = TextEditingController();
@@ -39,6 +38,9 @@ class _PuestaDisposicionCreateScreenState
   TimeOfDay? _hora;
   String _tipoPuesta = 'PERSONA';
   List<PuestaUnidad> _unidades = <PuestaUnidad>[];
+  int? _hechoId;
+  String? _hechoClientUuid;
+  bool _routeArgsApplied = false;
 
   File? _pdf;
   String? _pdfName;
@@ -67,6 +69,14 @@ class _PuestaDisposicionCreateScreenState
           'observaciones': _observaciones,
         });
     _loadUnidades();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_loadingUnidades) {
+      _applyRouteArgsIfNeeded();
+    }
   }
 
   @override
@@ -103,6 +113,8 @@ class _PuestaDisposicionCreateScreenState
         _loadingUnidades = false;
       });
       await _restoreLocalDraft();
+      if (!mounted) return;
+      _applyRouteArgsIfNeeded();
     } catch (_) {
       if (!mounted) return;
       setState(() => _loadingUnidades = false);
@@ -128,10 +140,102 @@ class _PuestaDisposicionCreateScreenState
     if (text.isNotEmpty) fields[key] = text;
   }
 
+  int _intFrom(dynamic value) {
+    if (value == null) return 0;
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    return int.tryParse(value.toString()) ?? 0;
+  }
+
+  void _applyRouteArgsIfNeeded() {
+    if (_routeArgsApplied) return;
+    final args = ModalRoute.of(context)?.settings.arguments;
+    if (args is! Map) {
+      _routeArgsApplied = true;
+      if (_hechoId != null || (_hechoClientUuid ?? '').isNotEmpty) {
+        setState(() {
+          _hechoId = null;
+          _hechoClientUuid = null;
+        });
+      }
+      return;
+    }
+
+    _routeArgsApplied = true;
+
+    final hechoId = _intFrom(args['hecho_id'] ?? args['hechoId']);
+    final hechoClientUuid = (args['hecho_client_uuid'] ?? '').toString().trim();
+    final personasMp = _intFrom(args['personas_mp']);
+    final vehiculosMp = _intFrom(args['vehiculos_mp']);
+    final prefill = args['prefill'] is Map
+        ? Map<String, dynamic>.from(args['prefill'] as Map)
+        : const <String, dynamic>{};
+
+    String text(String key) => (prefill[key] ?? '').toString().trim();
+
+    setState(() {
+      if (hechoId > 0) _hechoId = hechoId;
+      if (hechoClientUuid.isNotEmpty) _hechoClientUuid = hechoClientUuid;
+
+      final motivo = text('motivo');
+      if (motivo.isNotEmpty) _motivo.text = motivo;
+
+      final lugar = text('lugar');
+      if (lugar.isNotEmpty) _lugar.text = lugar;
+
+      final policia = text('policia');
+      if (policia.isNotEmpty) _policia.text = policia;
+
+      final oficio = text('oficio');
+      if (oficio.isNotEmpty) _oficio.text = oficio;
+
+      final fecha = DateTime.tryParse(text('fecha'));
+      if (fecha != null) _fecha = fecha;
+
+      final hora = _parseTime(text('hora'));
+      if (hora != null) _hora = hora;
+
+      if (personasMp > 0 && vehiculosMp > 0) {
+        _tipoPuesta = 'MIXTA';
+      } else if (vehiculosMp > 0) {
+        _tipoPuesta = 'VEHICULO';
+      } else if (personasMp > 0) {
+        _tipoPuesta = 'PERSONA';
+      }
+
+      _ensureRequiredPersonas(personasMp);
+      _ensureRequiredVehiculos(vehiculosMp);
+    });
+    _attachDynamicDraftControllers();
+    _markDraftChanged();
+  }
+
+  void _ensureRequiredPersonas(int count) {
+    if (count <= 0) return;
+    while (_personas.length < count) {
+      _personas.add(_PersonaFields(requiredEntry: true));
+    }
+    for (var i = 0; i < count && i < _personas.length; i += 1) {
+      _personas[i].requiredEntry = true;
+    }
+  }
+
+  void _ensureRequiredVehiculos(int count) {
+    if (count <= 0) return;
+    while (_vehiculos.length < count) {
+      _vehiculos.add(_VehiculoFields(requiredEntry: true));
+    }
+    for (var i = 0; i < count && i < _vehiculos.length; i += 1) {
+      _vehiculos[i].requiredEntry = true;
+    }
+  }
+
   Map<String, dynamic> _draftValues() {
     return <String, dynamic>{
       'tipo_puesta': _tipoPuesta,
       'unidad_id': _unidadId,
+      'hecho_id': _hechoId,
+      'hecho_client_uuid': _hechoClientUuid,
       'fecha': _ymd(_fecha),
       'hora': _hora == null
           ? null
@@ -166,6 +270,9 @@ class _PuestaDisposicionCreateScreenState
   void _applyLocalDraft(Map<String, dynamic> draft) {
     _tipoPuesta = (draft['tipo_puesta'] ?? _tipoPuesta).toString();
     _unidadId = _intValue(draft['unidad_id']) ?? _unidadId;
+    _hechoId = _intValue(draft['hecho_id']);
+    _hechoClientUuid = (draft['hecho_client_uuid'] ?? '').toString().trim();
+    if ((_hechoClientUuid ?? '').isEmpty) _hechoClientUuid = null;
     _fecha = DateTime.tryParse((draft['fecha'] ?? '').toString()) ?? _fecha;
     _hora = _parseTime(draft['hora']) ?? _hora;
     _motivo.text = (draft['motivo'] ?? '').toString();
@@ -310,6 +417,9 @@ class _PuestaDisposicionCreateScreenState
       'orden_aprehension': item.ordenAprehension,
       'mandamiento': item.mandamiento.text,
       'observaciones': item.observaciones.text,
+      'required_entry': item.requiredEntry,
+      'uso_fuerza_pdf_path': item.usoFuerzaPdf?.path,
+      'uso_fuerza_pdf_name': item.usoFuerzaPdfName,
     };
   }
 
@@ -327,7 +437,12 @@ class _PuestaDisposicionCreateScreenState
       ..delito.text = (data['delito'] ?? '').toString()
       ..ordenAprehension = _boolValue(data['orden_aprehension'])
       ..mandamiento.text = (data['mandamiento'] ?? '').toString()
-      ..observaciones.text = (data['observaciones'] ?? '').toString();
+      ..observaciones.text = (data['observaciones'] ?? '').toString()
+      ..requiredEntry = _boolValue(data['required_entry'])
+      ..restoreUsoFuerzaPdf(
+        (data['uso_fuerza_pdf_path'] ?? '').toString(),
+        (data['uso_fuerza_pdf_name'] ?? '').toString(),
+      );
   }
 
   List<_PersonaFields> _personasFromDraft(dynamic value) {
@@ -352,6 +467,7 @@ class _PuestaDisposicionCreateScreenState
       'con_reporte_robo': item.conReporteRobo,
       'numero_reporte_robo': item.numeroReporteRobo.text,
       'observaciones': item.observaciones.text,
+      'required_entry': item.requiredEntry,
     };
   }
 
@@ -368,7 +484,8 @@ class _PuestaDisposicionCreateScreenState
       ..motivoRelacion.text = (data['motivo_relacion'] ?? '').toString()
       ..conReporteRobo = _boolValue(data['con_reporte_robo'])
       ..numeroReporteRobo.text = (data['numero_reporte_robo'] ?? '').toString()
-      ..observaciones.text = (data['observaciones'] ?? '').toString();
+      ..observaciones.text = (data['observaciones'] ?? '').toString()
+      ..requiredEntry = _boolValue(data['required_entry']);
   }
 
   List<_VehiculoFields> _vehiculosFromDraft(dynamic value) {
@@ -436,20 +553,23 @@ class _PuestaDisposicionCreateScreenState
 
   Future<void> _pickPdf() async {
     try {
-      final selected = await _picker.pickMedia();
-      if (selected == null) return;
+      final selected = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: const ['pdf'],
+        allowMultiple: false,
+        withData: false,
+      );
+      if (selected == null || selected.files.isEmpty) return;
 
-      if (!selected.path.toLowerCase().endsWith('.pdf')) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Selecciona un archivo PDF.')),
-        );
-        return;
+      final picked = selected.files.single;
+      final path = picked.path;
+      if (path == null || path.trim().isEmpty) {
+        throw Exception('No se pudo leer el PDF seleccionado.');
       }
 
       setState(() {
-        _pdf = File(selected.path);
-        _pdfName = selected.name;
+        _pdf = File(path);
+        _pdfName = picked.name;
       });
       _markDraftChanged();
     } catch (_) {
@@ -457,6 +577,42 @@ class _PuestaDisposicionCreateScreenState
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('No se pudo seleccionar el PDF.')),
       );
+    }
+  }
+
+  Future<void> _pickUsoFuerzaPdf(_PersonaFields item) async {
+    try {
+      final selected = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: const ['pdf'],
+        allowMultiple: false,
+        withData: false,
+      );
+      if (selected == null || selected.files.isEmpty) return;
+
+      final picked = selected.files.single;
+      final path = picked.path;
+      if (path == null || path.trim().isEmpty) {
+        throw Exception('No se pudo leer el PDF seleccionado.');
+      }
+
+      final file = File(path);
+      if (!await file.exists()) {
+        throw Exception('No se encontró el PDF seleccionado.');
+      }
+      if (await file.length() > 10 * 1024 * 1024) {
+        throw Exception('El PDF es muy pesado (máximo 10 MB).');
+      }
+
+      if (!mounted) return;
+      setState(() {
+        item.usoFuerzaPdf = file;
+        item.usoFuerzaPdfName = picked.name;
+      });
+      _markDraftChanged();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
     }
   }
 
@@ -479,6 +635,30 @@ class _PuestaDisposicionCreateScreenState
       return;
     }
 
+    final personasIncluidas = _personas
+        .where((item) => item.isIncluded)
+        .toList(growable: false);
+    for (var i = 0; i < personasIncluidas.length; i += 1) {
+      final persona = personasIncluidas[i];
+      if (persona.usoFuerzaPdf == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Agrega el PDF de uso de fuerza en Persona ${i + 1}.',
+            ),
+          ),
+        );
+        return;
+      }
+    }
+
+    final vehiculosIncluidos = _vehiculos
+        .where((item) => item.isIncluded)
+        .toList(growable: false);
+    final objetosIncluidos = _objetos
+        .where((item) => item.hasAny)
+        .toList(growable: false);
+
     final fields = <String, String>{
       'unidad_id': _unidadId.toString(),
       'tipo_puesta': _tipoPuesta,
@@ -487,6 +667,14 @@ class _PuestaDisposicionCreateScreenState
       'nombre_policia': _policia.text.trim(),
       'fecha_puesta': _ymd(_fecha),
     };
+
+    if ((_hechoId ?? 0) > 0) {
+      fields['hecho_id'] = _hechoId.toString();
+    }
+    final hechoClientUuid = (_hechoClientUuid ?? '').trim();
+    if (hechoClientUuid.isNotEmpty) {
+      fields['hecho_client_uuid'] = hechoClientUuid;
+    }
 
     if (_hora != null) {
       fields['hora_puesta'] =
@@ -502,30 +690,44 @@ class _PuestaDisposicionCreateScreenState
     _put(fields, 'observaciones', _observaciones.text);
 
     var index = 0;
-    for (final item in _personas.where((item) => item.hasAny)) {
+    final archivosExtra = <PuestaUploadFile>[];
+    for (final item in personasIncluidas) {
+      item.write(fields, index++);
+      final usoFuerzaPdf = item.usoFuerzaPdf;
+      if (usoFuerzaPdf != null) {
+        archivosExtra.add(
+          PuestaUploadFile(
+            field: 'personas[${index - 1}][archivo_uso_fuerza]',
+            file: usoFuerzaPdf,
+          ),
+        );
+      }
+    }
+
+    index = 0;
+    for (final item in vehiculosIncluidos) {
       item.write(fields, index++);
     }
 
     index = 0;
-    for (final item in _vehiculos.where((item) => item.hasAny)) {
-      item.write(fields, index++);
-    }
-
-    index = 0;
-    for (final item in _objetos.where((item) => item.hasAny)) {
+    for (final item in objetosIncluidos) {
       item.write(fields, index++);
     }
 
     if (kDebugMode) {
       debugPrint(
-        'Puesta a disposicion: enviando unidad=$_unidadId tipo=$_tipoPuesta personas=${_personas.where((item) => item.hasAny).length} vehiculos=${_vehiculos.where((item) => item.hasAny).length} objetos=${_objetos.where((item) => item.hasAny).length}',
+        'Puesta a disposicion: enviando unidad=$_unidadId tipo=$_tipoPuesta hecho=$_hechoId personas=${personasIncluidas.length} vehiculos=${vehiculosIncluidos.length} objetos=${objetosIncluidos.length}',
       );
     }
 
     setState(() => _saving = true);
 
     try {
-      await _service.store(fields: fields, archivoPuesta: _pdf);
+      await _service.store(
+        fields: fields,
+        archivoPuesta: _pdf,
+        archivosExtra: archivosExtra,
+      );
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
@@ -563,6 +765,10 @@ class _PuestaDisposicionCreateScreenState
                     title: 'Llene los Datos',
                     children: [
                       _readonly('Número de Puesta', 'Se asigna al registrar'),
+                      if ((_hechoId ?? 0) > 0) ...[
+                        const SizedBox(height: 12),
+                        _readonly('Hecho vinculado', '#$_hechoId'),
+                      ],
                       const SizedBox(height: 12),
                       DropdownButtonFormField<String>(
                         value: _tipoPuesta,
@@ -836,7 +1042,7 @@ class _PuestaDisposicionCreateScreenState
         _field(
           item.nombre,
           'Nombre Completo',
-          validator: (_) => item.hasAny && item.nombre.text.trim().isEmpty
+          validator: (_) => item.isIncluded && item.nombre.text.trim().isEmpty
               ? 'Campo requerido'
               : null,
         ),
@@ -870,7 +1076,45 @@ class _PuestaDisposicionCreateScreenState
         _field(item.mandamiento, 'Mandamiento Judicial'),
         const SizedBox(height: 10),
         _field(item.observaciones, 'Observaciones'),
+        const SizedBox(height: 10),
+        _personaUsoFuerzaPdfField(item),
       ],
+    );
+  }
+
+  Widget _personaUsoFuerzaPdfField(_PersonaFields item) {
+    return InputDecorator(
+      decoration: _decoration('PDF uso de fuerza *'),
+      child: Row(
+        children: [
+          const Icon(Icons.picture_as_pdf_outlined),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              item.usoFuerzaPdfName ?? 'Sin archivo',
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          if (item.usoFuerzaPdf == null)
+            OutlinedButton(
+              onPressed: _saving ? null : () => _pickUsoFuerzaPdf(item),
+              child: const Text('Elegir'),
+            )
+          else
+            IconButton(
+              onPressed: _saving
+                  ? null
+                  : () {
+                      setState(() {
+                        item.usoFuerzaPdf = null;
+                        item.usoFuerzaPdfName = null;
+                      });
+                      _markDraftChanged();
+                    },
+              icon: const Icon(Icons.close),
+            ),
+        ],
+      ),
     );
   }
 
@@ -882,7 +1126,16 @@ class _PuestaDisposicionCreateScreenState
         _markDraftChanged();
       },
       children: [
-        _field(item.tipo, 'Tipo'),
+        _field(
+          item.tipo,
+          'Tipo',
+          validator: (_) =>
+              item.isIncluded &&
+                  item.tipo.text.trim().isEmpty &&
+                  item.placas.text.trim().isEmpty
+              ? 'Captura tipo o placas'
+              : null,
+        ),
         const SizedBox(height: 10),
         _field(item.marca, 'Marca'),
         const SizedBox(height: 10),
@@ -892,7 +1145,16 @@ class _PuestaDisposicionCreateScreenState
         const SizedBox(height: 10),
         _field(item.color, 'Color'),
         const SizedBox(height: 10),
-        _field(item.placas, 'Placas'),
+        _field(
+          item.placas,
+          'Placas',
+          validator: (_) =>
+              item.isIncluded &&
+                  item.tipo.text.trim().isEmpty &&
+                  item.placas.text.trim().isEmpty
+              ? 'Captura tipo o placas'
+              : null,
+        ),
         const SizedBox(height: 10),
         _field(item.serie, 'Serie'),
         const SizedBox(height: 10),
@@ -1045,6 +1307,8 @@ class _DynamicBlock extends StatelessWidget {
 }
 
 class _PersonaFields {
+  _PersonaFields({this.requiredEntry = false});
+
   final nombre = TextEditingController();
   final alias = TextEditingController();
   final edad = TextEditingController();
@@ -1057,7 +1321,10 @@ class _PersonaFields {
   final delito = TextEditingController();
   final mandamiento = TextEditingController();
   final observaciones = TextEditingController();
+  File? usoFuerzaPdf;
+  String? usoFuerzaPdfName;
   bool ordenAprehension = false;
+  bool requiredEntry;
 
   bool get hasAny => [
     nombre,
@@ -1073,6 +1340,21 @@ class _PersonaFields {
     mandamiento,
     observaciones,
   ].any((controller) => controller.text.trim().isNotEmpty);
+
+  bool get isIncluded => requiredEntry || hasAny || usoFuerzaPdf != null;
+
+  void restoreUsoFuerzaPdf(String path, String name) {
+    final cleanPath = path.trim();
+    if (cleanPath.isEmpty) return;
+
+    final file = File(cleanPath);
+    if (!file.existsSync()) return;
+
+    usoFuerzaPdf = file;
+    usoFuerzaPdfName = name.trim().isEmpty
+        ? cleanPath.split(Platform.pathSeparator).last
+        : name.trim();
+  }
 
   void write(Map<String, String> fields, int index) {
     void put(String key, TextEditingController controller) {
@@ -1116,6 +1398,8 @@ class _PersonaFields {
 }
 
 class _VehiculoFields {
+  _VehiculoFields({this.requiredEntry = false});
+
   final tipo = TextEditingController();
   final marca = TextEditingController();
   final submarca = TextEditingController();
@@ -1128,6 +1412,7 @@ class _VehiculoFields {
   final numeroReporteRobo = TextEditingController();
   final observaciones = TextEditingController();
   bool conReporteRobo = false;
+  bool requiredEntry;
 
   bool get hasAny => [
     tipo,
@@ -1142,6 +1427,8 @@ class _VehiculoFields {
     numeroReporteRobo,
     observaciones,
   ].any((controller) => controller.text.trim().isNotEmpty);
+
+  bool get isIncluded => requiredEntry || hasAny;
 
   void write(Map<String, String> fields, int index) {
     void put(String key, TextEditingController controller) {

@@ -65,6 +65,22 @@ class _EditHechoScreenState extends State<EditHechoScreen> {
     return s == '1' || s == 'true' || s == 'si' || s == 'sí';
   }
 
+  int? _puestaDisposicionIdFromRaw(Map<String, dynamic> raw) {
+    final direct =
+        _asInt(raw['puesta_disposicion_id']) ?? _asInt(raw['puesta_id']);
+    if (direct != null) return direct;
+
+    final nested = raw['puesta_disposicion'] ?? raw['puestaDisposicion'];
+    if (nested is Map) return _asInt(nested['id']);
+
+    final list = raw['puestas_disposicion'] ?? raw['puestasDisposicion'];
+    if (list is List && list.isNotEmpty && list.first is Map) {
+      return _asInt((list.first as Map)['id']);
+    }
+
+    return null;
+  }
+
   Future<void> _loadEditAccess() async {
     _editAccess = await HechoAccessService.loadEditAccess(refresh: true);
     _canUploadDelegacionesIph = await AuthService.isDelegacionesUser(
@@ -125,6 +141,7 @@ class _EditHechoScreenState extends State<EditHechoScreen> {
   HechoFormData _mapHecho(Map<String, dynamic> raw) {
     final d = HechoFormData();
 
+    d.hechoId = widget.hechoId;
     d.clientUuid = _asString(raw['client_uuid']);
     d.folioC5i = _asString(raw['folio_c5i']) ?? '';
     d.perito = _asString(raw['perito']) ?? '';
@@ -218,6 +235,7 @@ class _EditHechoScreenState extends State<EditHechoScreen> {
     d.placeId = _asString(raw['place_id']);
 
     d.dictamenId = _asInt(raw['dictamen_id']);
+    d.puestaDisposicionId = _puestaDisposicionIdFromRaw(raw);
     d.hasFotoSituacionActual =
         (_asString(raw['foto_situacion']) ?? '').isNotEmpty ||
         (_asString(raw['foto_situacion_url']) ?? '').isNotEmpty;
@@ -404,6 +422,40 @@ class _EditHechoScreenState extends State<EditHechoScreen> {
     await _loadHecho();
   }
 
+  Future<void> _irPuestaDisposicion() async {
+    final data = _data;
+    if (data == null) return;
+
+    final created = await Navigator.pushNamed(
+      context,
+      AppRoutes.puestasDisposicionCreate,
+      arguments: {
+        'hecho_id': widget.hechoId,
+        'personas_mp': data.personasMp,
+        'vehiculos_mp': data.vehiculosMp,
+        'prefill': {
+          'motivo': 'HECHO DE TRANSITO TURNADO',
+          'lugar': [
+            data.calle.trim(),
+            data.colonia.trim(),
+            data.municipio.trim(),
+          ].where((part) => part.isNotEmpty).join(', '),
+          'policia': data.perito,
+          'oficio': data.folioC5i,
+          'fecha': data.fecha == null ? '' : HechosFormService.ymd(data.fecha!),
+          'hora': data.hora == null
+              ? ''
+              : HechosFormService.horaStr(data.hora!),
+        },
+      },
+    );
+
+    if (!mounted) return;
+    if (created == true) {
+      await _loadHecho();
+    }
+  }
+
   Future<void> _irDescargo() async {
     if (_downloadingReporte) return;
 
@@ -543,6 +595,19 @@ class _EditHechoScreenState extends State<EditHechoScreen> {
                             SizedBox(
                               width: double.infinity,
                               child: OutlinedButton.icon(
+                                onPressed: _loading || _data == null
+                                    ? null
+                                    : _irPuestaDisposicion,
+                                icon: const Icon(Icons.assignment_ind),
+                                label: const Text(
+                                  'Crear puesta vinculada al hecho',
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                            SizedBox(
+                              width: double.infinity,
+                              child: OutlinedButton.icon(
                                 onPressed: _uploadingIph
                                     ? null
                                     : _subirIphDelegacion,
@@ -616,6 +681,9 @@ class _EditHechoScreenState extends State<EditHechoScreen> {
                             );
                             await _loadHecho();
                           }
+                        : null,
+                    onCreatePuestaDisposicion: _canUploadDelegacionesIph
+                        ? _irPuestaDisposicion
                         : null,
                   ),
                 ],

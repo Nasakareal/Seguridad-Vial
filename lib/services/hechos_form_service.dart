@@ -5,6 +5,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../core/hechos/hechos_catalogos.dart';
+import '../core/municipios_michoacan.dart';
 import '../models/dictamen_item.dart';
 import '../models/hecho_form_data.dart';
 import 'auth_service.dart';
@@ -108,6 +109,9 @@ class HechosFormService {
     final cleaned = _collapseSpaces(value);
     if (cleaned.isEmpty) return '';
 
+    final canonical = MunicipiosMichoacan.canonical(cleaned);
+    if (canonical != null) return canonical;
+
     final key = _normalizeKey(cleaned);
     if (key.isEmpty) return cleaned;
 
@@ -201,6 +205,9 @@ class HechosFormService {
     if (_trimmedLength(data.municipio) > 100) {
       return 'El municipio no puede exceder 100 caracteres.';
     }
+    if (!MunicipiosMichoacan.isKnown(data.municipio)) {
+      return 'Selecciona un municipio de Michoacan.';
+    }
     if (_trimmedLength(data.propiedadesAfectadas) > 2000) {
       return 'Propiedades afectadas no puede exceder 2000 caracteres.';
     }
@@ -218,6 +225,8 @@ class HechosFormService {
 
     final situacion = (data.situacion ?? '').trim().toUpperCase();
     final canUseDictamenes = await _canUseDictamenes();
+    final canUsePuestasDisposicion = await AuthService.isDelegacionesUser();
+    final canCaptureMpTurnado = canUseDictamenes || canUsePuestasDisposicion;
 
     if (canUseDictamenes &&
         situacion == 'TURNADO' &&
@@ -232,22 +241,22 @@ class HechosFormService {
       return 'Para marcar el hecho como RESUELTO o TURNADO debes subir la foto de situación.';
     }
 
-    if (canUseDictamenes) {
+    if (canCaptureMpTurnado && situacion == 'TURNADO') {
       final vehiculosMp = data.vehiculosMp.trim();
-      if (situacion == 'TURNADO' && vehiculosMp.isEmpty) {
+      if (vehiculosMp.isEmpty) {
         return 'Indica cuántos vehículos se turnaron.';
       }
       if (vehiculosMp.isNotEmpty) {
         final parsed = int.tryParse(vehiculosMp);
         if (parsed == null) return 'En Vehículos MP solo se permiten números.';
         if (parsed < 0) return 'Vehículos MP no puede ser negativo.';
-        if (situacion == 'TURNADO' && parsed < 1) {
+        if (parsed < 1) {
           return 'Cuando el hecho está TURNADO, Vehículos MP debe ser mayor que cero.';
         }
       }
 
       final personasMp = data.personasMp.trim();
-      if (situacion == 'TURNADO' && personasMp.isEmpty) {
+      if (personasMp.isEmpty) {
         return 'Indica cuántas personas se turnaron.';
       }
       if (personasMp.isNotEmpty) {
@@ -319,11 +328,15 @@ class HechosFormService {
     final usesRelaxedHechosRules =
         await AuthService.isHechosCaptureRelaxedUser();
     final canUseDictamenes = await _canUseDictamenes();
+    final canUsePuestasDisposicion = await AuthService.isDelegacionesUser();
+    final canCaptureMpTurnado = canUseDictamenes || canUsePuestasDisposicion;
     final fields = _buildFields(
       data,
       dictamenSelected,
       usesRelaxedHechosRules: usesRelaxedHechosRules,
       canUseDictamenes: canUseDictamenes,
+      canUsePuestasDisposicion: canUsePuestasDisposicion,
+      canCaptureMpTurnado: canCaptureMpTurnado,
     );
     await _addKilometrosRecorridos(fields, lat: data.lat, lng: data.lng);
     fields['client_uuid'] = clientUuid;
@@ -363,11 +376,15 @@ class HechosFormService {
     final usesRelaxedHechosRules =
         await AuthService.isHechosCaptureRelaxedUser();
     final canUseDictamenes = await _canUseDictamenes();
+    final canUsePuestasDisposicion = await AuthService.isDelegacionesUser();
+    final canCaptureMpTurnado = canUseDictamenes || canUsePuestasDisposicion;
     final fields = _buildFields(
       data,
       dictamenSelected,
       usesRelaxedHechosRules: usesRelaxedHechosRules,
       canUseDictamenes: canUseDictamenes,
+      canUsePuestasDisposicion: canUsePuestasDisposicion,
+      canCaptureMpTurnado: canCaptureMpTurnado,
     );
     fields['_method'] = 'PUT';
     final landscapeFotoLugar = fotoLugar == null
@@ -404,6 +421,8 @@ class HechosFormService {
     DictamenItem? dict, {
     required bool usesRelaxedHechosRules,
     required bool canUseDictamenes,
+    required bool canUsePuestasDisposicion,
+    required bool canCaptureMpTurnado,
   }) {
     final fields = <String, String>{
       'folio_c5i': d.folioC5i.trim(),
@@ -435,7 +454,7 @@ class HechosFormService {
       'colision_camino': HechosCatalogos.normalizeColisionCamino(
         d.colisionCamino!,
       ),
-      'situacion': d.situacion ?? '',
+      'situacion': (d.situacion ?? '').trim().toUpperCase(),
       'vehiculos_esperados': _intField(d.vehiculosEsperados),
       'conductores_esperados': _intField(d.conductoresEsperados),
       'lesionados_esperados': _intField(d.lesionadosEsperados),
@@ -445,17 +464,14 @@ class HechosFormService {
     final unidadOrg = d.unidadOrgId.trim();
     if (unidadOrg.isNotEmpty) fields['unidad_org_id'] = unidadOrg;
 
-    if (canUseDictamenes) {
-      fields['vehiculos_mp'] = d.situacion == 'TURNADO'
-          ? d.vehiculosMp.trim()
-          : '0';
-      fields['personas_mp'] = d.situacion == 'TURNADO'
-          ? d.personasMp.trim()
-          : '0';
+    final isTurnado = _isTurnado(d.situacion);
+    if (canCaptureMpTurnado) {
+      fields['vehiculos_mp'] = isTurnado ? d.vehiculosMp.trim() : '0';
+      fields['personas_mp'] = isTurnado ? d.personasMp.trim() : '0';
       fields['oficio_mp'] = '';
     }
 
-    if (canUseDictamenes && d.situacion == 'TURNADO' && dict != null) {
+    if (canUseDictamenes && isTurnado && dict != null) {
       fields['dictamen_id'] = dict.id.toString();
       fields['oficio_mp'] = buildOficio(dict);
 
@@ -482,6 +498,12 @@ class HechosFormService {
       if (dict.updatedBy != null) {
         fields['dictamen_updated_by'] = dict.updatedBy.toString();
       }
+    }
+
+    if (canUsePuestasDisposicion &&
+        isTurnado &&
+        d.puestaDisposicionId != null) {
+      fields['puesta_disposicion_id'] = d.puestaDisposicionId.toString();
     }
 
     if (d.danosPatrimoniales) {
@@ -518,6 +540,24 @@ class HechosFormService {
     return fields;
   }
 
+  static Map<String, String> buildFieldsForTesting(
+    HechoFormData d,
+    DictamenItem? dict, {
+    required bool usesRelaxedHechosRules,
+    required bool canUseDictamenes,
+    required bool canUsePuestasDisposicion,
+    required bool canCaptureMpTurnado,
+  }) {
+    return _buildFields(
+      d,
+      dict,
+      usesRelaxedHechosRules: usesRelaxedHechosRules,
+      canUseDictamenes: canUseDictamenes,
+      canUsePuestasDisposicion: canUsePuestasDisposicion,
+      canCaptureMpTurnado: canCaptureMpTurnado,
+    );
+  }
+
   static Future<void> _addKilometrosRecorridos(
     Map<String, String> fields, {
     required double? lat,
@@ -535,6 +575,10 @@ class HechosFormService {
   static Future<bool> _canUseDictamenes() async {
     if (await AuthService.isDelegacionesUser()) return false;
     return AuthService.isSiniestrosUser();
+  }
+
+  static bool _isTurnado(String? situacion) {
+    return (situacion ?? '').trim().toUpperCase() == 'TURNADO';
   }
 
   static String? _validateExpectedCaptureTotals(HechoFormData data) {

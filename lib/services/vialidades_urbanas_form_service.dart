@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 
+import '../core/municipios_michoacan.dart';
 import 'auth_service.dart';
 import 'offline_sync_service.dart';
 import 'photo_orientation_service.dart';
@@ -107,6 +108,9 @@ class VialidadesUrbanasFormService {
     if (payload.asunto.trim().isEmpty) {
       return 'El asunto es obligatorio.';
     }
+    if (!MunicipiosMichoacan.isKnown(payload.municipio)) {
+      return 'Selecciona un municipio de Michoacan.';
+    }
 
     for (final foto in payload.fotos) {
       final ext = foto.path.split('.').last.toLowerCase();
@@ -152,7 +156,10 @@ class VialidadesUrbanasFormService {
       }
     }
 
-    addText('municipio', payload.municipio);
+    addText(
+      'municipio',
+      MunicipiosMichoacan.canonical(payload.municipio) ?? payload.municipio,
+    );
     addText('lugar', payload.lugar);
     addText('evento', payload.evento);
     addText('objetivo', payload.objetivo);
