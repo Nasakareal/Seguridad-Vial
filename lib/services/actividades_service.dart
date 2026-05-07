@@ -161,6 +161,7 @@ class ActividadesService {
   static const int suspiciousReachedCount = 1000;
   static const int suspiciousParticipantsCount = 5;
   static const int suspiciousDetainedCount = 3;
+  static const int maxParticipantsCount = 15;
   static const int maxDetainedCount = 3;
 
   static String _subcategoriasCacheKey(int categoriaId) =>
@@ -371,6 +372,7 @@ class ActividadesService {
       errors,
       data.personasParticipantes,
       'Personas participantes',
+      max: maxParticipantsCount,
     );
     _validateNonNegativeInt(
       errors,

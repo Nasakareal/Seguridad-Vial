@@ -1,8 +1,7 @@
-import 'dart:io' show Platform;
-
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
+import '../app/routes.dart';
+import '../services/auth_service.dart';
 import '../services/tracking_service.dart';
 import '../widgets/location_disclosure_dialog.dart';
 
@@ -19,16 +18,34 @@ class _LocationConsentScreenState extends State<LocationConsentScreen> {
   bool _busy = false;
   String? _error;
 
-  Future<void> _deny() async {
+  Future<void> _logout() async {
     if (_busy) return;
 
-    if (Platform.isAndroid) {
-      await SystemNavigator.pop();
-      return;
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+
+    await _logoutAndReturnToLogin();
+
+    if (mounted) {
+      setState(() => _busy = false);
     }
+  }
+
+  Future<void> _logoutAndReturnToLogin() async {
+    try {
+      await TrackingService.stop();
+    } catch (_) {}
+
+    try {
+      await AuthService.logout();
+    } catch (_) {}
 
     if (!mounted) return;
-    Navigator.of(context).pop(false);
+    Navigator.of(
+      context,
+    ).pushNamedAndRemoveUntil(AppRoutes.login, (_) => false);
   }
 
   Future<void> _accept() async {
@@ -42,7 +59,7 @@ class _LocationConsentScreenState extends State<LocationConsentScreen> {
     try {
       final ok = await LocationDisclosure.show(context);
       if (!ok) {
-        await _deny();
+        await _logoutAndReturnToLogin();
         return;
       }
 
@@ -198,8 +215,8 @@ class _LocationConsentScreenState extends State<LocationConsentScreen> {
                                           1.25;
 
                                   final denyButton = OutlinedButton(
-                                    onPressed: _busy ? null : _deny,
-                                    child: const Text('No acepto'),
+                                    onPressed: _busy ? null : _logout,
+                                    child: const Text('Cerrar sesión'),
                                   );
                                   final acceptButton = ElevatedButton(
                                     onPressed: _busy ? null : _accept,

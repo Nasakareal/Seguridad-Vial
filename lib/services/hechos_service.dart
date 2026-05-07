@@ -34,6 +34,36 @@ class HechosService {
     return {};
   }
 
+  static Future<List<Map<String, dynamic>>> fetchVehiculos(int hechoId) async {
+    final token = await AuthService.getToken();
+
+    final headers = <String, String>{'Accept': 'application/json'};
+    if (token != null && token.isNotEmpty) {
+      headers['Authorization'] = 'Bearer $token';
+    }
+
+    final uri = Uri.parse('${AuthService.baseUrl}/hechos/$hechoId/vehiculos');
+    final res = await http.get(uri, headers: headers);
+
+    if (res.statusCode != 200) {
+      throw Exception('HTTP ${res.statusCode}: ${res.body}');
+    }
+
+    final raw = jsonDecode(res.body);
+    final rawItems = raw is List
+        ? raw
+        : (raw is Map<String, dynamic>
+              ? (raw['data'] ?? raw['vehiculos'])
+              : null);
+
+    if (rawItems is! List) return const <Map<String, dynamic>>[];
+
+    return rawItems
+        .whereType<Map>()
+        .map((item) => Map<String, dynamic>.from(item))
+        .toList();
+  }
+
   static Future<Map<String, dynamic>> uploadIphDelegacion({
     required int hechoId,
     required File archivoPdf,

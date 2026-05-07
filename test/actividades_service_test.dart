@@ -127,6 +127,44 @@ void main() {
     expect(result.text, '3');
   });
 
+  test('caps activity participants input at fifteen', () {
+    const formatter = NormalizedIntegerInputFormatter(
+      max: ActividadesService.maxParticipantsCount,
+    );
+
+    final result = formatter.formatEditUpdate(
+      TextEditingValue.empty,
+      const TextEditingValue(text: '15000'),
+    );
+
+    expect(result.text, '15');
+  });
+
+  test(
+    'rejects activity captures with more than fifteen participants',
+    () async {
+      final error = await ActividadesService.validateBeforeSubmit(
+        data: const ActividadUpsertData(
+          actividadCategoriaId: 1,
+          actividadSubcategoriaId: 2,
+          fecha: '2026-04-25',
+          lat: '19.7000000',
+          lng: '-101.2000000',
+          personasAlcanzadas: '1',
+          personasParticipantes: '16',
+          personasDetenidas: '0',
+        ),
+        fotos: const <File>[],
+        requirePhotos: false,
+      );
+
+      expect(
+        error,
+        contains('Personas participantes no puede ser mayor a 15.'),
+      );
+    },
+  );
+
   test(
     'rejects activity captures with more than three detained people',
     () async {

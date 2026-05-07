@@ -117,6 +117,21 @@ void main() {
     );
   });
 
+  test('desktop builds do not force the location consent gate', () async {
+    SharedPreferences.setMockInitialValues(<String, Object>{
+      'auth_role': 'Delegado',
+      'auth_unidad_id': AuthService.unidadDelegacionesId,
+      'auth_user_payload': jsonEncode(<String, Object>{
+        'id': 34,
+        'role': <String, Object>{'name': 'Delegado'},
+        'unidad_id': AuthService.unidadDelegacionesId,
+      }),
+    });
+
+    expect(await AuthService.canShareLocationTracking(), isTrue);
+    expect(await AuthService.shouldAskLocation(), isFalse);
+  });
+
   test(
     'delegaciones subdelegado is not delegado for location tracking',
     () async {

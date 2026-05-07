@@ -89,7 +89,9 @@ void main() {
     expect(data.personasMp, '0');
   });
 
-  testWidgets('delegaciones turnado shows puesta selector', (tester) async {
+  testWidgets('delegaciones turnado does not show existing puesta selector', (
+    tester,
+  ) async {
     final data = validDelegacionesData()
       ..vehiculosMp = '1'
       ..personasMp = '0'
@@ -120,6 +122,7 @@ void main() {
 
     await tester.pumpAndSettle();
 
-    expect(find.text('Puesta a disposicion'), findsOneWidget);
+    expect(find.text('Puesta a disposicion'), findsNothing);
+    expect(find.text('Vehículos MP *'), findsOneWidget);
   });
 }

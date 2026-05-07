@@ -129,10 +129,6 @@ class _CreateHechoScreenState extends State<CreateHechoScreen> {
     _data.ubicacionFormateada = _blankToNull(fields['ubicacion_formateada']);
     _data.placeId = _blankToNull(fields['place_id']);
     _data.dictamenId = int.tryParse((fields['dictamen_id'] ?? '').trim());
-    _data.puestaDisposicionId = int.tryParse(
-      (fields['puesta_disposicion_id'] ?? '').trim(),
-    );
-
     _initialFotoLugar = _fileForField(files, 'foto_lugar');
     _initialFotoSituacion = _fileForField(files, 'foto_situacion');
   }
@@ -278,7 +274,6 @@ class _CreateHechoScreenState extends State<CreateHechoScreen> {
         final vehiculosMp = int.tryParse(data.vehiculosMp.trim()) ?? 0;
         if (isDelegaciones &&
             situacion == 'TURNADO' &&
-            data.puestaDisposicionId == null &&
             (personasMp > 0 || vehiculosMp > 0)) {
           Navigator.pushReplacementNamed(
             context,

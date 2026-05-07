@@ -17,7 +17,6 @@ import 'ubicacion_card.dart';
 import 'photo_card.dart';
 import 'danos_patrimoniales_card.dart';
 import 'dictamen_selector.dart';
-import 'puesta_disposicion_selector.dart';
 
 enum HechoFormMode { create, edit }
 
@@ -36,7 +35,6 @@ class HechoForm extends StatefulWidget {
   onSubmit;
   final Future<void> Function(OfflineActionResult result, HechoFormData data)?
   onSubmitted;
-  final Future<void> Function()? onCreatePuestaDisposicion;
 
   const HechoForm({
     super.key,
@@ -47,7 +45,6 @@ class HechoForm extends StatefulWidget {
     this.draftId,
     required this.onSubmit,
     this.onSubmitted,
-    this.onCreatePuestaDisposicion,
   });
 
   @override
@@ -68,7 +65,6 @@ class _HechoFormState extends State<HechoForm> {
   bool _usesRelaxedHechosRules = false;
   bool _hideDelegacionesAdminFields = false;
   bool _canUseDictamenes = false;
-  bool _canUsePuestasDisposicion = false;
   bool _canCaptureMpTurnado = false;
 
   TimeOfDay? _hora;
@@ -171,7 +167,6 @@ class _HechoFormState extends State<HechoForm> {
       _usesRelaxedHechosRules = usesRelaxedHechosRules;
       _hideDelegacionesAdminFields = hideDelegacionesAdminFields;
       _canUseDictamenes = canUseDictamenes;
-      _canUsePuestasDisposicion = isDelegaciones;
       _canCaptureMpTurnado = canCaptureMpTurnado;
       if (_usesRelaxedHechosRules) {
         widget.data.sector = null;
@@ -190,9 +185,7 @@ class _HechoFormState extends State<HechoForm> {
         widget.data.dictamenId = null;
         _dictamenSelected = null;
       }
-      if (!_canUsePuestasDisposicion) {
-        widget.data.puestaDisposicionId = null;
-      }
+      widget.data.puestaDisposicionId = null;
       if (!_canCaptureMpTurnado) {
         _resetMpFields();
       }
@@ -304,7 +297,7 @@ class _HechoFormState extends State<HechoForm> {
     d.ubicacionFormateada = _blankToNull(draft['ubicacion_formateada']);
     d.placeId = _blankToNull(draft['place_id']);
     d.dictamenId = _intValue(draft['dictamen_id']);
-    d.puestaDisposicionId = _intValue(draft['puesta_disposicion_id']);
+    d.puestaDisposicionId = null;
     if (!_isTurnadoValue(d.situacion)) {
       d.vehiculosMp = '0';
       d.personasMp = '0';
@@ -370,7 +363,6 @@ class _HechoFormState extends State<HechoForm> {
       'ubicacion_formateada': d.ubicacionFormateada,
       'place_id': d.placeId,
       'dictamen_id': d.dictamenId,
-      'puesta_disposicion_id': d.puestaDisposicionId,
       'foto_lugar_path': _fotoLugar?.path,
       'foto_situacion_path': _fotoSituacion?.path,
     };
@@ -727,9 +719,7 @@ class _HechoFormState extends State<HechoForm> {
         d.dictamenId = null;
         _dictamenSelected = null;
       }
-      if (!_canUsePuestasDisposicion) {
-        d.puestaDisposicionId = null;
-      }
+      d.puestaDisposicionId = null;
     } else {
       d.dictamenId = null;
       _dictamenSelected = null;
@@ -1258,9 +1248,7 @@ class _HechoFormState extends State<HechoForm> {
                         d.dictamenId = null;
                         _dictamenSelected = null;
                       }
-                      if (!_canUsePuestasDisposicion) {
-                        d.puestaDisposicionId = null;
-                      }
+                      d.puestaDisposicionId = null;
                     });
                     _markDraftChanged();
                   },
@@ -1273,16 +1261,6 @@ class _HechoFormState extends State<HechoForm> {
               disabled: _submitting,
               onSelected: (sel) {
                 _dictamenSelected = sel;
-                _markDraftChanged();
-              },
-            ),
-
-          if (_canUsePuestasDisposicion)
-            PuestaDisposicionSelector(
-              data: d,
-              disabled: _submitting,
-              onCreatePuesta: widget.onCreatePuestaDisposicion,
-              onSelected: (sel) {
                 _markDraftChanged();
               },
             ),

@@ -54,15 +54,17 @@ class DrawerHeaderPanel extends StatelessWidget {
               fontWeight: FontWeight.w900,
             ),
           ),
-          const SizedBox(height: 6),
-          Text(
-            subtitle,
-            style: TextStyle(
-              color: Colors.white.withValues(alpha: .92),
-              fontWeight: FontWeight.w700,
-              height: 1.35,
+          if (subtitle.trim().isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Text(
+              subtitle,
+              style: TextStyle(
+                color: Colors.white.withValues(alpha: .92),
+                fontWeight: FontWeight.w700,
+                height: 1.35,
+              ),
             ),
-          ),
+          ],
           if (chips.isNotEmpty) ...[
             const SizedBox(height: 12),
             Wrap(

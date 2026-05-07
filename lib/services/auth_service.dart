@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../core/platform_support.dart';
 import 'push_service.dart';
 
 class AuthService {
@@ -596,6 +597,10 @@ class AuthService {
   }
 
   static Future<bool> shouldAskLocation() async {
+    if (!supportsBackgroundLocationTracking) {
+      return false;
+    }
+
     return await canShareLocationTracking();
   }
 

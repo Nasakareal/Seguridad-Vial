@@ -30,6 +30,7 @@ class VehiculoTaxonomia {
       'Rabón',
       'Tracto',
       'Redilas',
+      'Autobús',
     ],
 
     'motocicleta': [

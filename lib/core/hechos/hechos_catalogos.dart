@@ -44,10 +44,6 @@ class HechosCatalogos {
     'EXPLOSIÓN',
   ];
 
-  // -----------------------------
-  // NUEVOS SELECTS
-  // -----------------------------
-
   static const List<String> superficiesViaUi = [
     'Asfalto',
     'Concreto',
@@ -100,10 +96,6 @@ class HechosCatalogos {
     'Vehículo E',
     'Vehículo F',
   ];
-
-  // -----------------------------
-  // NORMALIZADORES
-  // -----------------------------
 
   static String normalizeSector(String v) {
     final x = v.trim().toUpperCase();

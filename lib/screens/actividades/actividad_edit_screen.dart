@@ -9,6 +9,7 @@ import '../../models/actividad.dart';
 import '../../models/actividad_categoria.dart';
 import '../../models/actividad_subcategoria.dart';
 import '../../services/actividades_service.dart';
+import '../../widgets/actividad_count_field.dart';
 import '../../widgets/actividad_detenidos_field.dart';
 import '../../widgets/actividad_people_count_guard.dart';
 import '../../widgets/landscape_photo_crop_screen.dart';
@@ -667,24 +668,24 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
                     Row(
                       children: [
                         Expanded(
-                          child: _textField(
-                            _personasAlcanzadasCtrl,
-                            'Personas alcanzadas *',
-                            keyboardType: TextInputType.number,
-                            inputFormatters: const [
-                              NormalizedIntegerInputFormatter(),
-                            ],
+                          child: ActividadCountField(
+                            controller: _personasAlcanzadasCtrl,
+                            label: 'Personas alcanzadas *',
+                            icon: Icons.diversity_3_rounded,
+                            color: const Color(0xFF0284C7),
+                            helperText: 'Minimo 1',
                           ),
                         ),
                         const SizedBox(width: 10),
                         Expanded(
-                          child: _textField(
-                            _personasParticipantesCtrl,
-                            'Personas participantes',
-                            keyboardType: TextInputType.number,
-                            inputFormatters: const [
-                              NormalizedIntegerInputFormatter(),
-                            ],
+                          child: ActividadCountField(
+                            controller: _personasParticipantesCtrl,
+                            label: 'Personas participantes',
+                            icon: Icons.groups_2_rounded,
+                            color: const Color(0xFF7C3AED),
+                            helperText: 'Maximo 15 por actividad',
+                            badgeText: 'MAX 15',
+                            max: ActividadesService.maxParticipantsCount,
                           ),
                         ),
                       ],

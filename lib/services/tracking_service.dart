@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:geolocator/geolocator.dart';
 
+import '../core/platform_support.dart';
 import '../widgets/location_disclosure_dialog.dart';
 import 'auth_service.dart';
 import 'location_service.dart';
@@ -27,6 +28,7 @@ class TrackingService {
   static DateTime? _iosLastSentAt;
 
   static Future<bool> startAfterConsent(BuildContext context) async {
+    if (!supportsBackgroundLocationTracking) return false;
     return await startWithDisclosure(context);
   }
 
@@ -79,6 +81,8 @@ class TrackingService {
   }
 
   static Future<bool> isRunning() async {
+    if (!supportsBackgroundLocationTracking) return false;
+
     if (Platform.isAndroid) {
       try {
         return await FlutterForegroundTask.isRunningService;
@@ -91,6 +95,8 @@ class TrackingService {
   }
 
   static Future<bool> startWithDisclosure(BuildContext context) async {
+    if (!supportsBackgroundLocationTracking) return false;
+
     if (_starting) return true;
     _starting = true;
 
@@ -134,6 +140,8 @@ class TrackingService {
   }
 
   static Future<bool> start() async {
+    if (!supportsBackgroundLocationTracking) return false;
+
     if (_starting) return true;
     _starting = true;
 
@@ -167,6 +175,8 @@ class TrackingService {
 
   static Future<void> stop() async {
     try {
+      if (!supportsBackgroundLocationTracking) return;
+
       if (Platform.isAndroid) {
         final running = await isRunning();
         await TrackingGuardNotificationService.cancel();

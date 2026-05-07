@@ -163,11 +163,7 @@ class AppDrawer extends StatelessWidget {
           DrawerHeaderPanel(
             icon: Icons.shield_outlined,
             title: 'Seguridad Vial',
-            subtitle: trackingOn
-                ? 'Navegación principal con ubicación activa.'
-                : 'Navegación principal del sistema.',
-            helper:
-                'Tu perfil, contraseña y cierre de sesión están en el menú derecho.',
+            subtitle: '',
             chips: <String>[
               trackingOn ? 'Ubicación activa' : 'Ubicación inactiva',
               'Menú principal',

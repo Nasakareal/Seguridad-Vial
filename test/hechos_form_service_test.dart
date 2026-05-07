@@ -55,7 +55,7 @@ void main() {
     expect(error, isNull);
   });
 
-  test('delegaciones turnado payload can link a puesta disposicion', () {
+  test('delegaciones turnado payload no longer links existing puesta', () {
     final data = validDelegacionesData()..puestaDisposicionId = 42;
 
     final fields = HechosFormService.buildFieldsForTesting(
@@ -67,7 +67,7 @@ void main() {
       canCaptureMpTurnado: true,
     );
 
-    expect(fields['puesta_disposicion_id'], '42');
+    expect(fields.containsKey('puesta_disposicion_id'), isFalse);
     expect(fields.containsKey('dictamen_id'), isFalse);
   });
 
@@ -86,7 +86,7 @@ void main() {
     expect(fields.containsKey('puesta_disposicion_id'), isFalse);
   });
 
-  test('delegaciones turnado still requires expected vehicle count', () async {
+  test('delegaciones turnado uses MP vehicle count for minimum', () async {
     SharedPreferences.setMockInitialValues(<String, Object>{
       'auth_unidad_id': AuthService.unidadDelegacionesId,
       'auth_role': 'Policia',
@@ -97,10 +97,7 @@ void main() {
       dictamenSelected: null,
     );
 
-    expect(
-      error,
-      'Cuando el hecho está TURNADO, debe capturarse al menos 1 vehículo.',
-    );
+    expect(error, isNull);
   });
 
   test('delegaciones turnado requires MP vehicle count', () async {

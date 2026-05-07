@@ -17,6 +17,11 @@ bool get supportsForegroundTaskShell {
   return Platform.isAndroid;
 }
 
+bool get supportsBackgroundLocationTracking {
+  if (kIsWeb) return false;
+  return Platform.isAndroid || Platform.isIOS;
+}
+
 bool get isDesktopTestPlatform {
   if (kIsWeb) return false;
   return Platform.isWindows || Platform.isLinux || Platform.isMacOS;

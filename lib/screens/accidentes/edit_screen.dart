@@ -65,22 +65,6 @@ class _EditHechoScreenState extends State<EditHechoScreen> {
     return s == '1' || s == 'true' || s == 'si' || s == 'sí';
   }
 
-  int? _puestaDisposicionIdFromRaw(Map<String, dynamic> raw) {
-    final direct =
-        _asInt(raw['puesta_disposicion_id']) ?? _asInt(raw['puesta_id']);
-    if (direct != null) return direct;
-
-    final nested = raw['puesta_disposicion'] ?? raw['puestaDisposicion'];
-    if (nested is Map) return _asInt(nested['id']);
-
-    final list = raw['puestas_disposicion'] ?? raw['puestasDisposicion'];
-    if (list is List && list.isNotEmpty && list.first is Map) {
-      return _asInt((list.first as Map)['id']);
-    }
-
-    return null;
-  }
-
   Future<void> _loadEditAccess() async {
     _editAccess = await HechoAccessService.loadEditAccess(refresh: true);
     _canUploadDelegacionesIph = await AuthService.isDelegacionesUser(
@@ -235,7 +219,6 @@ class _EditHechoScreenState extends State<EditHechoScreen> {
     d.placeId = _asString(raw['place_id']);
 
     d.dictamenId = _asInt(raw['dictamen_id']);
-    d.puestaDisposicionId = _puestaDisposicionIdFromRaw(raw);
     d.hasFotoSituacionActual =
         (_asString(raw['foto_situacion']) ?? '').isNotEmpty ||
         (_asString(raw['foto_situacion_url']) ?? '').isNotEmpty;
@@ -426,6 +409,12 @@ class _EditHechoScreenState extends State<EditHechoScreen> {
     final data = _data;
     if (data == null) return;
 
+    List<Map<String, dynamic>> vehiculosHecho = const <Map<String, dynamic>>[];
+    try {
+      vehiculosHecho = await HechosService.fetchVehiculos(widget.hechoId);
+    } catch (_) {}
+    if (!mounted) return;
+
     final created = await Navigator.pushNamed(
       context,
       AppRoutes.puestasDisposicionCreate,
@@ -433,6 +422,7 @@ class _EditHechoScreenState extends State<EditHechoScreen> {
         'hecho_id': widget.hechoId,
         'personas_mp': data.personasMp,
         'vehiculos_mp': data.vehiculosMp,
+        'vehiculos_hecho': vehiculosHecho,
         'prefill': {
           'motivo': 'HECHO DE TRANSITO TURNADO',
           'lugar': [
@@ -681,9 +671,6 @@ class _EditHechoScreenState extends State<EditHechoScreen> {
                             );
                             await _loadHecho();
                           }
-                        : null,
-                    onCreatePuestaDisposicion: _canUploadDelegacionesIph
-                        ? _irPuestaDisposicion
                         : null,
                   ),
                 ],

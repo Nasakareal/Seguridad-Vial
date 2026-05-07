@@ -48,6 +48,11 @@ class _PuestaDisposicionCreateScreenState
   final _personas = <_PersonaFields>[];
   final _vehiculos = <_VehiculoFields>[];
   final _objetos = <_ObjetoFields>[];
+  List<Map<String, dynamic>> _hechoVehiculos = const <Map<String, dynamic>>[];
+  final Set<String> _selectedHechoVehiculos = <String>{};
+  final Set<String> _selectedHechoConductores = <String>{};
+  int _requiredPersonasCount = 0;
+  int _requiredVehiculosCount = 0;
   late final LocalDraftAutosave _draft;
 
   @override
@@ -147,6 +152,22 @@ class _PuestaDisposicionCreateScreenState
     return int.tryParse(value.toString()) ?? 0;
   }
 
+  String _textFrom(dynamic value) => (value ?? '').toString().trim();
+
+  bool _truthy(dynamic value) {
+    if (value is bool) return value;
+    final text = _textFrom(value).toLowerCase();
+    return text == '1' || text == 'true' || text == 'si' || text == 'sí';
+  }
+
+  List<Map<String, dynamic>> _mapListFrom(dynamic value) {
+    if (value is! List) return const <Map<String, dynamic>>[];
+    return value
+        .whereType<Map>()
+        .map((item) => Map<String, dynamic>.from(item))
+        .toList();
+  }
+
   void _applyRouteArgsIfNeeded() {
     if (_routeArgsApplied) return;
     final args = ModalRoute.of(context)?.settings.arguments;
@@ -167,6 +188,7 @@ class _PuestaDisposicionCreateScreenState
     final hechoClientUuid = (args['hecho_client_uuid'] ?? '').toString().trim();
     final personasMp = _intFrom(args['personas_mp']);
     final vehiculosMp = _intFrom(args['vehiculos_mp']);
+    final hechoVehiculos = _mapListFrom(args['vehiculos_hecho']);
     final prefill = args['prefill'] is Map
         ? Map<String, dynamic>.from(args['prefill'] as Map)
         : const <String, dynamic>{};
@@ -176,6 +198,9 @@ class _PuestaDisposicionCreateScreenState
     setState(() {
       if (hechoId > 0) _hechoId = hechoId;
       if (hechoClientUuid.isNotEmpty) _hechoClientUuid = hechoClientUuid;
+      _hechoVehiculos = hechoVehiculos;
+      _requiredPersonasCount = personasMp;
+      _requiredVehiculosCount = vehiculosMp;
 
       final motivo = text('motivo');
       if (motivo.isNotEmpty) _motivo.text = motivo;
@@ -228,6 +253,196 @@ class _PuestaDisposicionCreateScreenState
     for (var i = 0; i < count && i < _vehiculos.length; i += 1) {
       _vehiculos[i].requiredEntry = true;
     }
+  }
+
+  String _firstText(Map<String, dynamic> source, List<String> keys) {
+    for (final key in keys) {
+      final text = _textFrom(source[key]);
+      if (text.isNotEmpty && text != '—') return text;
+    }
+    return '';
+  }
+
+  String _hechoVehiculoKey(Map<String, dynamic> vehiculo, int index) {
+    final id = _intFrom(vehiculo['id']);
+    if (id > 0) return 'vehiculo:$id';
+    return 'vehiculo:index:$index';
+  }
+
+  String _hechoVehiculoLabel(Map<String, dynamic> vehiculo, int index) {
+    final marca = _firstText(vehiculo, const ['marca']);
+    final linea = _firstText(vehiculo, const ['linea', 'submarca']);
+    final placas = _firstText(vehiculo, const ['placas']);
+    final serie = _firstText(vehiculo, const ['serie']);
+    final parts = <String>[
+      if (marca.isNotEmpty || linea.isNotEmpty)
+        [marca, linea].where((part) => part.isNotEmpty).join(' '),
+      if (placas.isNotEmpty) 'Placas $placas',
+      if (placas.isEmpty && serie.isNotEmpty) 'Serie $serie',
+    ];
+    return parts.isEmpty ? 'Vehículo ${index + 1}' : parts.join(' - ');
+  }
+
+  List<Map<String, dynamic>> _conductoresFromHechoVehiculo(
+    Map<String, dynamic> vehiculo,
+  ) {
+    final conductores = vehiculo['conductores'];
+    if (conductores is List) {
+      return conductores
+          .whereType<Map>()
+          .map((item) => Map<String, dynamic>.from(item))
+          .where((item) => _firstText(item, const ['nombre']).isNotEmpty)
+          .toList();
+    }
+
+    final nombre = _firstText(vehiculo, const [
+      'conductor_nombre',
+      'nombre_conductor',
+    ]);
+    if (nombre.isEmpty) return const <Map<String, dynamic>>[];
+
+    return <Map<String, dynamic>>[
+      <String, dynamic>{
+        'nombre': nombre,
+        'telefono': vehiculo['conductor_telefono'],
+        'domicilio': vehiculo['conductor_domicilio'],
+        'sexo': vehiculo['conductor_sexo'],
+        'edad': vehiculo['conductor_edad'],
+      },
+    ];
+  }
+
+  String _hechoConductorKey({
+    required Map<String, dynamic> vehiculo,
+    required int vehiculoIndex,
+    required Map<String, dynamic> conductor,
+    required int conductorIndex,
+  }) {
+    final conductorId = _intFrom(conductor['id']);
+    if (conductorId > 0) return 'conductor:$conductorId';
+    return '${_hechoVehiculoKey(vehiculo, vehiculoIndex)}:conductor:$conductorIndex';
+  }
+
+  String _hechoConductorLabel(
+    Map<String, dynamic> conductor,
+    Map<String, dynamic> vehiculo,
+    int vehiculoIndex,
+  ) {
+    final nombre = _firstText(conductor, const ['nombre', 'nombre_completo']);
+    final vehiculoLabel = _hechoVehiculoLabel(vehiculo, vehiculoIndex);
+    return nombre.isEmpty ? vehiculoLabel : '$nombre - $vehiculoLabel';
+  }
+
+  _VehiculoFields _emptyRequiredVehiculoSlot() {
+    for (final item in _vehiculos) {
+      if (item.requiredEntry &&
+          !item.hasAny &&
+          (item.sourceKey ?? '').isEmpty) {
+        return item;
+      }
+    }
+    final item = _VehiculoFields(requiredEntry: true);
+    _vehiculos.add(item);
+    return item;
+  }
+
+  _PersonaFields _emptyRequiredPersonaSlot() {
+    for (final item in _personas) {
+      if (item.requiredEntry &&
+          !item.hasAny &&
+          (item.sourceKey ?? '').isEmpty) {
+        return item;
+      }
+    }
+    final item = _PersonaFields(requiredEntry: true);
+    _personas.add(item);
+    return item;
+  }
+
+  void _copyHechoVehiculo(Map<String, dynamic> vehiculo, String sourceKey) {
+    final target = _emptyRequiredVehiculoSlot();
+    target
+      ..sourceKey = sourceKey
+      ..tipo.text = _firstText(vehiculo, const ['tipo', 'tipo_general'])
+      ..marca.text = _firstText(vehiculo, const ['marca'])
+      ..submarca.text = _firstText(vehiculo, const ['linea', 'submarca'])
+      ..modelo.text = _firstText(vehiculo, const ['modelo'])
+      ..color.text = _firstText(vehiculo, const ['color'])
+      ..placas.text = _firstText(vehiculo, const ['placas'])
+      ..serie.text = _firstText(vehiculo, const ['serie'])
+      ..calidad.text = 'RELACIONADO'
+      ..motivoRelacion.text = 'HECHO DE TRANSITO TURNADO'
+      ..conReporteRobo = _truthy(vehiculo['antecedente_vehiculo'])
+      ..observaciones.text = _firstText(vehiculo, const ['partes_danadas']);
+  }
+
+  void _copyHechoConductor(Map<String, dynamic> conductor, String sourceKey) {
+    final target = _emptyRequiredPersonaSlot();
+    target
+      ..sourceKey = sourceKey
+      ..nombre.text = _firstText(conductor, const ['nombre', 'nombre_completo'])
+      ..edad.text = _firstText(conductor, const ['edad'])
+      ..sexo.text = _firstText(conductor, const ['sexo'])
+      ..domicilio.text = _firstText(conductor, const ['domicilio'])
+      ..calidad.text = 'CONDUCTOR'
+      ..delito.text = 'HECHO DE TRANSITO TURNADO';
+  }
+
+  void _toggleHechoVehiculo(
+    Map<String, dynamic> vehiculo,
+    int index,
+    bool selected,
+  ) {
+    final key = _hechoVehiculoKey(vehiculo, index);
+    setState(() {
+      if (selected) {
+        if (_selectedHechoVehiculos.add(key)) {
+          _copyHechoVehiculo(vehiculo, key);
+        }
+      } else {
+        _selectedHechoVehiculos.remove(key);
+        _vehiculos.removeWhere((item) {
+          final remove = item.sourceKey == key;
+          if (remove) item.dispose();
+          return remove;
+        });
+        _ensureRequiredVehiculos(_requiredVehiculosCount);
+      }
+    });
+    _attachDynamicDraftControllers();
+    _markDraftChanged();
+  }
+
+  void _toggleHechoConductor(
+    Map<String, dynamic> vehiculo,
+    int vehiculoIndex,
+    Map<String, dynamic> conductor,
+    int conductorIndex,
+    bool selected,
+  ) {
+    final key = _hechoConductorKey(
+      vehiculo: vehiculo,
+      vehiculoIndex: vehiculoIndex,
+      conductor: conductor,
+      conductorIndex: conductorIndex,
+    );
+    setState(() {
+      if (selected) {
+        if (_selectedHechoConductores.add(key)) {
+          _copyHechoConductor(conductor, key);
+        }
+      } else {
+        _selectedHechoConductores.remove(key);
+        _personas.removeWhere((item) {
+          final remove = item.sourceKey == key;
+          if (remove) item.dispose();
+          return remove;
+        });
+        _ensureRequiredPersonas(_requiredPersonasCount);
+      }
+    });
+    _attachDynamicDraftControllers();
+    _markDraftChanged();
   }
 
   Map<String, dynamic> _draftValues() {
@@ -301,10 +516,26 @@ class _PuestaDisposicionCreateScreenState
       ..forEach((item) => item.dispose())
       ..clear()
       ..addAll(_personasFromDraft(draft['personas']));
+    _selectedHechoConductores
+      ..clear()
+      ..addAll(
+        _personas
+            .map((item) => item.sourceKey)
+            .whereType<String>()
+            .where((key) => key.isNotEmpty),
+      );
     _vehiculos
       ..forEach((item) => item.dispose())
       ..clear()
       ..addAll(_vehiculosFromDraft(draft['vehiculos']));
+    _selectedHechoVehiculos
+      ..clear()
+      ..addAll(
+        _vehiculos
+            .map((item) => item.sourceKey)
+            .whereType<String>()
+            .where((key) => key.isNotEmpty),
+      );
     _objetos
       ..forEach((item) => item.dispose())
       ..clear()
@@ -420,6 +651,7 @@ class _PuestaDisposicionCreateScreenState
       'required_entry': item.requiredEntry,
       'uso_fuerza_pdf_path': item.usoFuerzaPdf?.path,
       'uso_fuerza_pdf_name': item.usoFuerzaPdfName,
+      'source_key': item.sourceKey,
     };
   }
 
@@ -439,6 +671,7 @@ class _PuestaDisposicionCreateScreenState
       ..mandamiento.text = (data['mandamiento'] ?? '').toString()
       ..observaciones.text = (data['observaciones'] ?? '').toString()
       ..requiredEntry = _boolValue(data['required_entry'])
+      ..sourceKey = (data['source_key'] ?? '').toString().trim()
       ..restoreUsoFuerzaPdf(
         (data['uso_fuerza_pdf_path'] ?? '').toString(),
         (data['uso_fuerza_pdf_name'] ?? '').toString(),
@@ -468,6 +701,7 @@ class _PuestaDisposicionCreateScreenState
       'numero_reporte_robo': item.numeroReporteRobo.text,
       'observaciones': item.observaciones.text,
       'required_entry': item.requiredEntry,
+      'source_key': item.sourceKey,
     };
   }
 
@@ -485,7 +719,8 @@ class _PuestaDisposicionCreateScreenState
       ..conReporteRobo = _boolValue(data['con_reporte_robo'])
       ..numeroReporteRobo.text = (data['numero_reporte_robo'] ?? '').toString()
       ..observaciones.text = (data['observaciones'] ?? '').toString()
-      ..requiredEntry = _boolValue(data['required_entry']);
+      ..requiredEntry = _boolValue(data['required_entry'])
+      ..sourceKey = (data['source_key'] ?? '').toString().trim();
   }
 
   List<_VehiculoFields> _vehiculosFromDraft(dynamic value) {
@@ -745,6 +980,88 @@ class _PuestaDisposicionCreateScreenState
     }
   }
 
+  Widget _hechoReuseSection() {
+    if (_hechoVehiculos.isEmpty) return const SizedBox.shrink();
+
+    final conductorTiles = <Widget>[];
+    for (
+      var vehiculoIndex = 0;
+      vehiculoIndex < _hechoVehiculos.length;
+      vehiculoIndex += 1
+    ) {
+      final vehiculo = _hechoVehiculos[vehiculoIndex];
+      final conductores = _conductoresFromHechoVehiculo(vehiculo);
+      for (
+        var conductorIndex = 0;
+        conductorIndex < conductores.length;
+        conductorIndex += 1
+      ) {
+        final conductor = conductores[conductorIndex];
+        final key = _hechoConductorKey(
+          vehiculo: vehiculo,
+          vehiculoIndex: vehiculoIndex,
+          conductor: conductor,
+          conductorIndex: conductorIndex,
+        );
+        conductorTiles.add(
+          CheckboxListTile(
+            contentPadding: EdgeInsets.zero,
+            value: _selectedHechoConductores.contains(key),
+            title: Text(
+              _hechoConductorLabel(conductor, vehiculo, vehiculoIndex),
+            ),
+            subtitle: const Text('Copiar como persona de la puesta'),
+            onChanged: _saving
+                ? null
+                : (value) => _toggleHechoConductor(
+                    vehiculo,
+                    vehiculoIndex,
+                    conductor,
+                    conductorIndex,
+                    value ?? false,
+                  ),
+          ),
+        );
+      }
+    }
+
+    return _Section(
+      title: 'Datos ya capturados del hecho',
+      children: [
+        Text(
+          'Selecciona lo que se va a turnar para copiarlo a esta puesta.',
+          style: TextStyle(color: Colors.grey.shade700),
+        ),
+        const SizedBox(height: 8),
+        const Text('Vehículos', style: TextStyle(fontWeight: FontWeight.w900)),
+        for (var i = 0; i < _hechoVehiculos.length; i++)
+          CheckboxListTile(
+            contentPadding: EdgeInsets.zero,
+            value: _selectedHechoVehiculos.contains(
+              _hechoVehiculoKey(_hechoVehiculos[i], i),
+            ),
+            title: Text(_hechoVehiculoLabel(_hechoVehiculos[i], i)),
+            subtitle: const Text('Copiar como vehículo de la puesta'),
+            onChanged: _saving
+                ? null
+                : (value) => _toggleHechoVehiculo(
+                    _hechoVehiculos[i],
+                    i,
+                    value ?? false,
+                  ),
+          ),
+        if (conductorTiles.isNotEmpty) ...[
+          const SizedBox(height: 10),
+          const Text(
+            'Conductores',
+            style: TextStyle(fontWeight: FontWeight.w900),
+          ),
+          ...conductorTiles,
+        ],
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -923,6 +1240,10 @@ class _PuestaDisposicionCreateScreenState
                       _field(_observaciones, 'Observaciones', maxLines: 3),
                     ],
                   ),
+                  if (_hechoVehiculos.isNotEmpty) ...[
+                    const SizedBox(height: 14),
+                    _hechoReuseSection(),
+                  ],
                   const SizedBox(height: 14),
                   _dynamicSection(
                     title: 'Personas',
@@ -1325,6 +1646,7 @@ class _PersonaFields {
   String? usoFuerzaPdfName;
   bool ordenAprehension = false;
   bool requiredEntry;
+  String? sourceKey;
 
   bool get hasAny => [
     nombre,
@@ -1413,6 +1735,7 @@ class _VehiculoFields {
   final observaciones = TextEditingController();
   bool conReporteRobo = false;
   bool requiredEntry;
+  String? sourceKey;
 
   bool get hasAny => [
     tipo,

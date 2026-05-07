@@ -500,12 +500,6 @@ class HechosFormService {
       }
     }
 
-    if (canUsePuestasDisposicion &&
-        isTurnado &&
-        d.puestaDisposicionId != null) {
-      fields['puesta_disposicion_id'] = d.puestaDisposicionId.toString();
-    }
-
     if (d.danosPatrimoniales) {
       final props = d.propiedadesAfectadas.trim();
       final monto = d.montoDanos.trim();
@@ -606,7 +600,8 @@ class HechosFormService {
     }
 
     final situacion = (data.situacion ?? '').trim().toUpperCase();
-    if (situacion == 'TURNADO' && vehiculos < 1) {
+    final vehiculosMp = _parseNonNegativeInt(data.vehiculosMp) ?? 0;
+    if (situacion == 'TURNADO' && vehiculos < 1 && vehiculosMp < 1) {
       return 'Cuando el hecho está TURNADO, debe capturarse al menos 1 vehículo.';
     }
 
