@@ -52,7 +52,15 @@ class AppAccountDrawer extends StatelessWidget {
         (await AuthService.getUserEmail()) ??
         '';
 
-    return _AccountSummary(name: name, email: email, role: role, unit: unit);
+    final isSuperadmin = await AuthService.isSuperadmin();
+
+    return _AccountSummary(
+      name: name,
+      email: email,
+      role: role,
+      unit: unit,
+      isSuperadmin: isSuperadmin,
+    );
   }
 
   Future<void> _goTo(BuildContext context, String route) async {
@@ -130,6 +138,18 @@ class AppAccountDrawer extends StatelessWidget {
                         ],
                       ),
                     ),
+                    if (summary?.isSuperadmin == true) ...[
+                      const SizedBox(height: 12),
+                      const DrawerSectionLabel(label: 'Configuración'),
+                      DrawerSurface(
+                        child: DrawerActionTile(
+                          icon: Icons.settings,
+                          title: 'Configuraciones',
+                          subtitle: 'Usuarios del sistema',
+                          onTap: () => _goTo(context, AppRoutes.users),
+                        ),
+                      ),
+                    ],
                     const SizedBox(height: 12),
                     const DrawerSectionLabel(label: 'Sesión'),
                     DrawerSurface(
@@ -157,12 +177,14 @@ class _AccountSummary {
   final String email;
   final String role;
   final String unit;
+  final bool isSuperadmin;
 
   const _AccountSummary({
     required this.name,
     required this.email,
     required this.role,
     required this.unit,
+    required this.isSuperadmin,
   });
 }
 

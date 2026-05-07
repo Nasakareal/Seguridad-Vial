@@ -5,6 +5,10 @@ class AppRoutes {
   static const String homeAgenteUpec = '/home-agente-upec';
   static const String profile = '/profile';
   static const String changePassword = '/profile/change-password';
+  static const String users = '/settings/users';
+  static const String usersCreate = '/settings/users/create';
+  static const String usersShow = '/settings/users/show';
+  static const String usersEdit = '/settings/users/edit';
 
   static const String accidentes = '/accidentes';
   static const String accidentesCreate = '/accidentes/create';

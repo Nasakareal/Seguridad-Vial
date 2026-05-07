@@ -159,6 +159,11 @@ class DelegacionDistanceService {
       payload['delegacionMeta'],
       payload['delegacion_principal'],
       payload['delegacionPrincipal'],
+      payload['destacamento'],
+      payload['destacamento_meta'],
+      payload['destacamentoMeta'],
+      payload['destacamento_principal'],
+      payload['destacamentoPrincipal'],
       payload,
     ];
 
@@ -166,6 +171,7 @@ class DelegacionDistanceService {
     if (user != null) {
       candidates
         ..add(user['delegacion'])
+        ..add(user['destacamento'])
         ..add(user);
     }
 
@@ -173,12 +179,27 @@ class DelegacionDistanceService {
     if (userMeta != null) {
       candidates
         ..add(userMeta['delegacion'])
+        ..add(userMeta['destacamento'])
         ..add(userMeta);
     }
 
     final delegaciones = payload['delegaciones'];
     if (delegaciones is Iterable) {
       final items = delegaciones.toList();
+      candidates.addAll(
+        items.where((item) {
+          final map = _asMap(item);
+          if (map == null) return false;
+          final pivot = _asMap(map['pivot']);
+          return _truthy(map['principal']) || _truthy(pivot?['principal']);
+        }),
+      );
+      candidates.addAll(items);
+    }
+
+    final destacamentos = payload['destacamentos'];
+    if (destacamentos is Iterable) {
+      final items = destacamentos.toList();
       candidates.addAll(
         items.where((item) {
           final map = _asMap(item);

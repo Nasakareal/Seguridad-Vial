@@ -131,14 +131,34 @@ class EstadisticasActividadesService {
 
   Future<List<Map<String, dynamic>>> catalogoSubcategorias({
     int? actividadCategoriaId,
+    int? unidadId,
   }) async {
     final uri = _u('/estadisticas-actividades/catalogos/subcategorias', {
       if (actividadCategoriaId != null && actividadCategoriaId > 0)
         'actividad_categoria_id': actividadCategoriaId,
+      if (unidadId != null && unidadId > 0) 'unidad_id': unidadId,
     });
     final res = await http.get(uri, headers: await _headersJson());
     if (res.statusCode != 200) {
       throw _err(res, 'No se pudieron cargar subcategorías.');
+    }
+
+    final data = _decodeJson(res);
+    if (data is List) {
+      return data
+          .whereType<Map>()
+          .map((e) => Map<String, dynamic>.from(e))
+          .toList();
+    }
+
+    return const <Map<String, dynamic>>[];
+  }
+
+  Future<List<Map<String, dynamic>>> catalogoUnidades() async {
+    final uri = _u('/estadisticas-actividades/catalogos/unidades');
+    final res = await http.get(uri, headers: await _headersJson());
+    if (res.statusCode != 200) {
+      throw _err(res, 'No se pudieron cargar unidades.');
     }
 
     final data = _decodeJson(res);

@@ -37,7 +37,8 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
 
   int? _categoriaId;
   int? _subcategoriaId;
-  File? _fotoNueva;
+  final List<File> _fotosNuevas = [];
+  final Set<int> _fotoIdsEliminar = <int>{};
 
   final _fechaCtrl = TextEditingController();
   final _horaCtrl = TextEditingController();
@@ -123,6 +124,8 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
       if (!mounted) return;
 
       _fillControllers(a);
+      _fotosNuevas.clear();
+      _fotoIdsEliminar.clear();
 
       setState(() {
         _categorias = cats;
@@ -191,10 +194,42 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
     }
   }
 
-  Future<void> _pickImage(ImageSource source) async {
+  Future<void> _pickFromGallery() async {
+    setState(() => _error = null);
+
+    final picker = ImagePicker();
+    final picked = await picker.pickMultiImage(
+      imageQuality: 85,
+      maxWidth: 2000,
+      maxHeight: 2000,
+    );
+    if (picked.isEmpty || !mounted) return;
+
+    final files = <File>[];
+    for (final item in picked) {
+      final file = await LandscapePhotoCropScreen.cropIfNeeded(
+        context,
+        File(item.path),
+      );
+      if (!mounted) return;
+      if (file != null) files.add(file);
+    }
+
+    if (files.isEmpty) return;
+
+    setState(() {
+      for (final file in files) {
+        _addNewPhoto(file);
+      }
+    });
+  }
+
+  Future<void> _pickFromCamera() async {
+    setState(() => _error = null);
+
     final picker = ImagePicker();
     final x = await picker.pickImage(
-      source: source,
+      source: ImageSource.camera,
       imageQuality: 85,
       maxWidth: 2000,
       maxHeight: 2000,
@@ -209,8 +244,14 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
     if (!mounted) return;
 
     setState(() {
-      _fotoNueva = file;
+      _addNewPhoto(file);
     });
+  }
+
+  void _addNewPhoto(File file) {
+    if (!_fotosNuevas.any((current) => current.path == file.path)) {
+      _fotosNuevas.add(file);
+    }
   }
 
   String? _trim(TextEditingController ctrl) {
@@ -260,9 +301,21 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
     if (a == null) return;
 
     final payload = _buildPayload();
+    final fotosActualesRestantes = a.fotos
+        .where((foto) => !_fotoIdsEliminar.contains(foto.id))
+        .length;
+    final tieneFotoLegacy = a.fotos.isEmpty && (a.fotoPath ?? '').isNotEmpty;
+    if (fotosActualesRestantes +
+            (tieneFotoLegacy ? 1 : 0) +
+            _fotosNuevas.length <
+        1) {
+      setState(() => _error = 'La actividad debe conservar al menos una foto.');
+      return;
+    }
+
     final validation = await ActividadesService.validateBeforeSubmit(
       data: payload,
-      fotos: _fotoNueva == null ? const <File>[] : <File>[_fotoNueva!],
+      fotos: List<File>.from(_fotosNuevas),
       requirePhotos: false,
       requireCoords: false,
     );
@@ -285,7 +338,8 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
       final result = await ActividadesService.update(
         id: a.id,
         data: payload,
-        foto: _fotoNueva,
+        fotos: List<File>.from(_fotosNuevas),
+        eliminarFotos: _fotoIdsEliminar.toList(),
       );
 
       if (!mounted) return;
@@ -409,19 +463,13 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
     );
   }
 
-  Widget _currentPhoto(Actividad a) {
-    if (_fotoNueva != null) {
-      return ClipRRect(
-        borderRadius: BorderRadius.circular(14),
-        child: AspectRatio(
-          aspectRatio: 16 / 9,
-          child: Image.file(_fotoNueva!, fit: BoxFit.cover),
-        ),
-      );
-    }
+  Widget _photosEditor(Actividad a) {
+    final existingFotos = a.fotos;
+    final hasLegacyPhoto = existingFotos.isEmpty && a.allPhotoPaths.isNotEmpty;
+    final totalVisible =
+        existingFotos.length + (hasLegacyPhoto ? 1 : 0) + _fotosNuevas.length;
 
-    final photoPaths = a.allPhotoPaths;
-    if (photoPaths.isEmpty) {
+    if (totalVisible == 0) {
       return Container(
         height: 160,
         decoration: BoxDecoration(
@@ -441,32 +489,179 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
       );
     }
 
-    final url = ActividadesService.toPublicUrl(photoPaths.first);
+    return GridView(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2,
+        crossAxisSpacing: 10,
+        mainAxisSpacing: 10,
+        childAspectRatio: 1.1,
+      ),
+      children: [
+        if (hasLegacyPhoto) _legacyPhotoTile(a.allPhotoPaths.first),
+        ...existingFotos.map(_existingPhotoTile),
+        ..._fotosNuevas.asMap().entries.map((entry) {
+          return _newPhotoTile(entry.key, entry.value);
+        }),
+      ],
+    );
+  }
+
+  Widget _legacyPhotoTile(String path) {
+    final url = ActividadesService.toPublicUrl(path);
 
     return ClipRRect(
       borderRadius: BorderRadius.circular(14),
-      child: AspectRatio(
-        aspectRatio: 16 / 9,
-        child: SafeNetworkImage(
-          url,
-          fit: BoxFit.cover,
-          errorBuilder: (_, __, ___) => Container(
-            color: Colors.grey.shade200,
-            child: const Center(child: Text('No se pudo cargar la imagen.')),
-          ),
-          loadingBuilder: (context, progress) {
-            return Container(
-              color: Colors.grey.shade200,
-              alignment: Alignment.center,
-              child: const SizedBox(
-                width: 18,
-                height: 18,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              ),
-            );
-          },
+      child: SafeNetworkImage(
+        url,
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => Container(
+          color: Colors.grey.shade200,
+          child: const Center(child: Text('No se pudo cargar la imagen.')),
         ),
+        loadingBuilder: (context, progress) {
+          return Container(
+            color: Colors.grey.shade200,
+            alignment: Alignment.center,
+            child: const SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+          );
+        },
       ),
+    );
+  }
+
+  Widget _existingPhotoTile(ActividadFoto foto) {
+    final marked = _fotoIdsEliminar.contains(foto.id);
+    final path = foto.fotoPreviewPath ?? foto.fotoPath ?? '';
+    final url = ActividadesService.toPublicUrl(path);
+
+    return Stack(
+      children: [
+        Positioned.fill(
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(14),
+            child: SafeNetworkImage(
+              url,
+              fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) => Container(
+                color: Colors.grey.shade200,
+                child: const Center(child: Text('No se pudo cargar.')),
+              ),
+              loadingBuilder: (context, progress) {
+                return Container(
+                  color: Colors.grey.shade200,
+                  alignment: Alignment.center,
+                  child: const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                );
+              },
+            ),
+          ),
+        ),
+        if (marked)
+          Positioned.fill(
+            child: Container(
+              decoration: BoxDecoration(
+                color: Colors.black.withValues(alpha: .58),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              alignment: Alignment.center,
+              child: const Text(
+                'Se quitara',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ),
+          ),
+        Positioned(
+          right: 8,
+          top: 8,
+          child: InkWell(
+            onTap: _saving
+                ? null
+                : () {
+                    setState(() {
+                      if (marked) {
+                        _fotoIdsEliminar.remove(foto.id);
+                      } else {
+                        _fotoIdsEliminar.add(foto.id);
+                      }
+                    });
+                  },
+            child: Container(
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                color: Colors.black.withValues(alpha: .64),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                marked ? Icons.undo : Icons.close,
+                color: Colors.white,
+                size: 18,
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _newPhotoTile(int index, File file) {
+    return Stack(
+      children: [
+        Positioned.fill(
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(14),
+            child: Image.file(file, fit: BoxFit.cover),
+          ),
+        ),
+        Positioned(
+          left: 8,
+          bottom: 8,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color: Colors.blue.withValues(alpha: .88),
+              borderRadius: BorderRadius.circular(999),
+            ),
+            child: const Text(
+              'Nueva',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 12,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ),
+        ),
+        Positioned(
+          right: 8,
+          top: 8,
+          child: InkWell(
+            onTap: _saving
+                ? null
+                : () => setState(() => _fotosNuevas.removeAt(index)),
+            child: Container(
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                color: Colors.black.withValues(alpha: .64),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.close, color: Colors.white, size: 18),
+            ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -765,18 +960,22 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
               const SizedBox(height: 12),
 
               _card(
-                title: 'Foto',
+                title: 'Fotos',
                 child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _currentPhoto(a),
+                    Text(
+                      '${a.fotos.where((foto) => !_fotoIdsEliminar.contains(foto.id)).length + (a.fotos.isEmpty && a.allPhotoPaths.isNotEmpty ? 1 : 0) + _fotosNuevas.length} foto(s) activas',
+                      style: TextStyle(color: Colors.grey.shade700),
+                    ),
+                    const SizedBox(height: 10),
+                    _photosEditor(a),
                     const SizedBox(height: 10),
                     Row(
                       children: [
                         Expanded(
                           child: ElevatedButton.icon(
-                            onPressed: _saving
-                                ? null
-                                : () => _pickImage(ImageSource.gallery),
+                            onPressed: _saving ? null : _pickFromGallery,
                             icon: const Icon(Icons.photo_library),
                             label: const Text('Galeria'),
                           ),
@@ -784,9 +983,7 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
                         const SizedBox(width: 10),
                         Expanded(
                           child: ElevatedButton.icon(
-                            onPressed: _saving
-                                ? null
-                                : () => _pickImage(ImageSource.camera),
+                            onPressed: _saving ? null : _pickFromCamera,
                             icon: const Icon(Icons.camera_alt),
                             label: const Text('Camara'),
                           ),

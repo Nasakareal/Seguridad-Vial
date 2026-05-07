@@ -224,6 +224,7 @@ class Actividad {
   final String? kilometro;
   final double? lat;
   final double? lng;
+  final double? kmRecorridos;
   final String? coordenadasTexto;
   final String? fuenteUbicacion;
   final String? notaGeo;
@@ -266,6 +267,7 @@ class Actividad {
     required this.kilometro,
     required this.lat,
     required this.lng,
+    required this.kmRecorridos,
     required this.coordenadasTexto,
     required this.fuenteUbicacion,
     required this.notaGeo,
@@ -328,6 +330,7 @@ class Actividad {
       kilometro: _asNullableString(json['kilometro']),
       lat: _asNullableDouble(json['lat']),
       lng: _asNullableDouble(json['lng']),
+      kmRecorridos: _asNullableDouble(json['km_recorridos']),
       coordenadasTexto: _asNullableString(json['coordenadas_texto']),
       fuenteUbicacion: _asNullableString(json['fuente_ubicacion']),
       notaGeo: _asNullableString(json['nota_geo']),

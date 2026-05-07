@@ -30,6 +30,7 @@ class _EstadisticasActividadesHomeScreenState
   DateTime? _hasta;
   int? _categoriaId;
   int? _subcategoriaId;
+  int? _unidadId;
   int? _delegacionId;
   String _estadoRevision = '';
   String _group = 'day';
@@ -37,6 +38,7 @@ class _EstadisticasActividadesHomeScreenState
   bool _loading = true;
   bool _busy = false;
   bool _loggingOut = false;
+  bool _canFilterUnidad = false;
   bool _canFilterDelegacion = false;
   bool _mostrarGruasEnGraficas = false;
   String? _error;
@@ -50,6 +52,7 @@ class _EstadisticasActividadesHomeScreenState
 
   List<Map<String, dynamic>> _categorias = const <Map<String, dynamic>>[];
   List<Map<String, dynamic>> _subcategorias = const <Map<String, dynamic>>[];
+  List<Map<String, dynamic>> _unidades = const <Map<String, dynamic>>[];
   List<Map<String, dynamic>> _delegaciones = const <Map<String, dynamic>>[];
 
   int _page = 1;
@@ -96,6 +99,9 @@ class _EstadisticasActividadesHomeScreenState
     if (_subcategoriaId != null && _subcategoriaId! > 0) {
       p['actividad_subcategoria_id'] = _subcategoriaId;
     }
+    if (_unidadId != null && _unidadId! > 0) {
+      p['unidad_id'] = _unidadId;
+    }
     if (_delegacionId != null && _delegacionId! > 0) {
       p['delegacion_id'] = _delegacionId;
     }
@@ -115,11 +121,14 @@ class _EstadisticasActividadesHomeScreenState
 
   Future<void> _bootstrapAccessAndLoad() async {
     try {
+      final canFilterUnidad = await AuthService.hasFullOperationalAccess();
       final canFilterDelegacion =
-          await AuthService.hasFullOperationalAccess() ||
-          await AuthService.isDelegacionesUser();
+          canFilterUnidad || await AuthService.isDelegacionesUser();
       if (!mounted) return;
-      setState(() => _canFilterDelegacion = canFilterDelegacion);
+      setState(() {
+        _canFilterUnidad = canFilterUnidad;
+        _canFilterDelegacion = canFilterDelegacion;
+      });
     } catch (_) {}
 
     if (!mounted) return;
@@ -152,8 +161,15 @@ class _EstadisticasActividadesHomeScreenState
         _svc.distribution('subcategoria', params: params),
         _svc.distribution('delegacion', params: params),
         _svc.actividades(params: params),
+        if (_canFilterUnidad)
+          _svc.catalogoUnidades()
+        else
+          Future.value(const <Map<String, dynamic>>[]),
         _svc.catalogoCategorias(),
-        _svc.catalogoSubcategorias(actividadCategoriaId: _categoriaId),
+        _svc.catalogoSubcategorias(
+          actividadCategoriaId: _categoriaId,
+          unidadId: _unidadId,
+        ),
         if (_canFilterDelegacion)
           _svc.catalogoDelegaciones()
         else
@@ -166,15 +182,19 @@ class _EstadisticasActividadesHomeScreenState
           ? lpRaw
           : int.tryParse(lpRaw?.toString() ?? '1') ?? 1;
 
-      final cats = (results[6] as List)
+      final unidades = (results[6] as List)
           .whereType<Map>()
           .map((e) => Map<String, dynamic>.from(e))
           .toList();
-      final subs = (results[7] as List)
+      final cats = (results[7] as List)
           .whereType<Map>()
           .map((e) => Map<String, dynamic>.from(e))
           .toList();
-      final delegs = (results[8] as List)
+      final subs = (results[8] as List)
+          .whereType<Map>()
+          .map((e) => Map<String, dynamic>.from(e))
+          .toList();
+      final delegs = (results[9] as List)
           .whereType<Map>()
           .map((e) => Map<String, dynamic>.from(e))
           .toList();
@@ -187,12 +207,19 @@ class _EstadisticasActividadesHomeScreenState
         _distSubcategoria = (results[3] as Map).cast<String, dynamic>();
         _distDelegacion = (results[4] as Map).cast<String, dynamic>();
         _actividadesPage = actividades;
+        _unidades = unidades;
         _categorias = cats;
         _subcategorias = subs;
         _delegaciones = delegs;
         _lastPage = lp <= 0 ? 1 : lp;
         _loading = false;
 
+        if (_unidadId != null &&
+            !_unidades.any((u) => _asInt(u['id']) == _unidadId)) {
+          _unidadId = null;
+          _delegacionId = null;
+          _subcategoriaId = null;
+        }
         if (_categoriaId != null &&
             !_categorias.any((c) => _asInt(c['id']) == _categoriaId)) {
           _categoriaId = null;
@@ -411,6 +438,10 @@ class _EstadisticasActividadesHomeScreenState
             ),
           ],
         ),
+        if (_canFilterUnidad) ...[
+          const SizedBox(height: 12),
+          _unidadDropdown(),
+        ],
         const SizedBox(height: 12),
         Row(
           children: [
@@ -419,7 +450,9 @@ class _EstadisticasActividadesHomeScreenState
             Expanded(child: _subcategoriaDropdown()),
           ],
         ),
-        if (_canFilterDelegacion) ...[
+        if (_canFilterDelegacion &&
+            (_unidadId == null ||
+                _unidadId == AuthService.unidadDelegacionesId)) ...[
           const SizedBox(height: 12),
           _delegacionDropdown(),
         ],
@@ -908,6 +941,42 @@ class _EstadisticasActividadesHomeScreenState
         labelText: label,
         border: const OutlineInputBorder(),
       ),
+    );
+  }
+
+  Widget _unidadDropdown() {
+    return DropdownButtonFormField<int?>(
+      value: _unidadId,
+      isExpanded: true,
+      decoration: const InputDecoration(
+        labelText: 'Unidad',
+        border: OutlineInputBorder(),
+      ),
+      items: [
+        const DropdownMenuItem<int?>(
+          value: null,
+          child: Text('(Todas las unidades)'),
+        ),
+        ..._unidades.map((u) {
+          final nombre = (u['nombre'] ?? '').toString().trim();
+          return DropdownMenuItem<int?>(
+            value: _asInt(u['id']),
+            child: Text(
+              nombre.isEmpty ? 'Unidad' : nombre,
+              overflow: TextOverflow.ellipsis,
+            ),
+          );
+        }),
+      ],
+      onChanged: (value) {
+        setState(() {
+          _unidadId = value;
+          _subcategoriaId = null;
+          if (value != null && value != AuthService.unidadDelegacionesId) {
+            _delegacionId = null;
+          }
+        });
+      },
     );
   }
 

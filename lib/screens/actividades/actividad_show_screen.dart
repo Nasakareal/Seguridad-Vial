@@ -109,6 +109,12 @@ class _ActividadShowScreenState extends State<ActividadShowScreen>
     return text.isEmpty ? '—' : text;
   }
 
+  String _displayKm(double? value) {
+    if (value == null) return '—';
+    if (!value.isFinite) return '—';
+    return '${value.toStringAsFixed(2)} km';
+  }
+
   Widget _photoCarousel(Actividad a) {
     final photos = a.allPhotoPaths;
     if (photos.isEmpty) {
@@ -292,6 +298,7 @@ class _ActividadShowScreenState extends State<ActividadShowScreen>
                         a.personasParticipantes.toString(),
                       ),
                       _kv('Personas detenidas', a.personasDetenidas.toString()),
+                      _kv('Km recorridos', _displayKm(a.kmRecorridos)),
                       _sectionText(
                         'Elementos participantes',
                         a.elementosParticipantesTexto,

@@ -26,6 +26,7 @@ class PushService {
 
     try {
       final messaging = FirebaseMessaging.instance;
+      await messaging.setAutoInitEnabled(true);
       await messaging.requestPermission(
         alert: true,
         badge: true,
@@ -69,7 +70,12 @@ class PushService {
       final apiToken = await AuthService.getToken();
       if (apiToken == null || apiToken.isEmpty) return;
 
-      final fcm = await _getFcmTokenSafely(maxWait: const Duration(seconds: 6));
+      await ensurePermissions();
+
+      final maxWait = !kIsWeb && (Platform.isIOS || Platform.isMacOS)
+          ? const Duration(seconds: 15)
+          : const Duration(seconds: 6);
+      final fcm = await _getFcmTokenSafely(maxWait: maxWait);
       if (fcm == null || fcm.isEmpty) return;
       final ownerKey = await AuthService.getSessionOwnerKey();
 

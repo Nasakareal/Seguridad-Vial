@@ -37,6 +37,7 @@ class _GruasScreenState extends State<GruasScreen> {
   bool _hideZero = false;
   int _unidadFiltroId = 1;
   int? _delegacionFiltroId;
+  int? _delegacionUsoFiltroId;
   int? _gruaFiltroId;
   static const int _soloDelegacionesConServiciosId = -1;
 
@@ -350,8 +351,21 @@ class _GruasScreenState extends State<GruasScreen> {
       });
     }
 
+    final delegacionesConUso = _delegacionesConUsoGruas(merged);
+    final delegacionUsoIds = delegacionesConUso
+        .map((d) => _toInt(d['id']))
+        .where((id) => id > 0)
+        .toSet();
+
     if (!mounted) return;
-    setState(() => _gruasView = merged);
+    setState(() {
+      _gruasView = merged;
+      if (_delegacionUsoFiltroId != null &&
+          !delegacionUsoIds.contains(_delegacionUsoFiltroId)) {
+        _delegacionUsoFiltroId = null;
+        _gruaFiltroId = null;
+      }
+    });
   }
 
   void _refresh() => _cargarTodo();
@@ -423,6 +437,7 @@ class _GruasScreenState extends State<GruasScreen> {
     setState(() {
       _unidadFiltroId = unidadId;
       _delegacionFiltroId = null;
+      _delegacionUsoFiltroId = null;
       _gruaFiltroId = null;
       _hiddenGruas.clear();
     });
@@ -434,10 +449,21 @@ class _GruasScreenState extends State<GruasScreen> {
 
     setState(() {
       _delegacionFiltroId = delegacionId;
+      _delegacionUsoFiltroId = null;
       _gruaFiltroId = null;
       _hiddenGruas.clear();
     });
     _cargarTodo();
+  }
+
+  void _setDelegacionUsoFiltro(int? delegacionId) {
+    if (_delegacionUsoFiltroId == delegacionId) return;
+
+    setState(() {
+      _delegacionUsoFiltroId = delegacionId;
+      _gruaFiltroId = null;
+      _hiddenGruas.clear();
+    });
   }
 
   void _setGruaFiltro(int? gruaId) {
@@ -456,7 +482,12 @@ class _GruasScreenState extends State<GruasScreen> {
       if (!ids.contains(_unidadFiltroId)) return false;
       if (_unidadFiltroId == 2 &&
           _delegacionFiltroId == _soloDelegacionesConServiciosId) {
-        return _toInt(g['servicios_semana']) > 0;
+        if (_toInt(g['servicios_semana']) <= 0) return false;
+        final delegacionUsoId = _delegacionUsoFiltroId;
+        if (delegacionUsoId != null && delegacionUsoId > 0) {
+          return _gruaTieneUsoDeDelegacion(g, delegacionUsoId);
+        }
+        return true;
       }
       return true;
     }).toList();
@@ -743,6 +774,7 @@ class _GruasScreenState extends State<GruasScreen> {
       return const SizedBox.shrink();
     }
 
+    final delegacionesUso = _delegacionesConUsoGruas();
     final list = _unitFilteredGruasView();
     list.sort(
       (a, b) => (a['nombre'] ?? '').toString().compareTo(
@@ -755,6 +787,13 @@ class _GruasScreenState extends State<GruasScreen> {
         : _delegacionFiltroId != null &&
               _delegaciones.any((d) => _toInt(d['id']) == _delegacionFiltroId)
         ? _delegacionFiltroId
+        : null;
+    final delegacionUsoValue =
+        _delegacionUsoFiltroId != null &&
+            delegacionesUso.any(
+              (d) => _toInt(d['id']) == _delegacionUsoFiltroId,
+            )
+        ? _delegacionUsoFiltroId
         : null;
     final gruaValue =
         _gruaFiltroId != null &&
@@ -854,6 +893,40 @@ class _GruasScreenState extends State<GruasScreen> {
               ],
               onChanged: _setDelegacionFiltro,
             ),
+            if (_delegacionFiltroId == _soloDelegacionesConServiciosId) ...[
+              const SizedBox(height: 10),
+              DropdownButtonFormField<int?>(
+                value: delegacionUsoValue,
+                isExpanded: true,
+                decoration: InputDecoration(
+                  labelText: 'Delegación que usó grúa',
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 10,
+                  ),
+                ),
+                items: [
+                  const DropdownMenuItem<int?>(
+                    value: null,
+                    child: Text('Todas con uso de grúa'),
+                  ),
+                  ...delegacionesUso.map((d) {
+                    final id = _toInt(d['id']);
+                    final nombre = (d['nombre'] ?? 'Delegación').toString();
+                    final total = _toInt(d['servicios_count']);
+                    final label = total > 0 ? '$nombre ($total)' : nombre;
+                    return DropdownMenuItem<int?>(
+                      value: id,
+                      child: Text(label, overflow: TextOverflow.ellipsis),
+                    );
+                  }),
+                ],
+                onChanged: _setDelegacionUsoFiltro,
+              ),
+            ],
             const SizedBox(height: 10),
             DropdownButtonFormField<int?>(
               value: gruaValue,
@@ -1291,6 +1364,116 @@ class _GruasScreenState extends State<GruasScreen> {
   String _unidadFiltroLabel() {
     if (_unidadFiltroId == 2) return 'Delegaciones';
     return 'Siniestros';
+  }
+
+  List<Map<String, dynamic>> _delegacionesConUsoGruas([
+    List<Map<String, dynamic>>? source,
+  ]) {
+    final byId = <int, Map<String, dynamic>>{};
+    final rows = source ?? _gruasView;
+
+    void addUso(int id, int total, {Map<String, dynamic>? servicio}) {
+      if (id <= 0 || total <= 0) return;
+
+      final labelFromService = servicio == null
+          ? ''
+          : _delegacionServicioLabel(servicio);
+      final nombre = labelFromService.trim().isNotEmpty
+          ? labelFromService
+          : _delegacionNombrePorId(id);
+
+      final current = byId[id];
+      if (current == null) {
+        byId[id] = {'id': id, 'nombre': nombre, 'servicios_count': total};
+        return;
+      }
+
+      current['servicios_count'] = _toInt(current['servicios_count']) + total;
+    }
+
+    for (final grua in rows) {
+      if (!_extractUnidadIds(grua).contains(AuthService.unidadDelegacionesId)) {
+        continue;
+      }
+
+      final servicios = _toInt(grua['servicios_semana']);
+      if (servicios <= 0) continue;
+
+      final vehiculos = _serviciosDeGrua(grua);
+      if (vehiculos.isEmpty) {
+        for (final id in GruasCatalogService.extractDelegacionIds(grua)) {
+          addUso(id, servicios);
+        }
+        continue;
+      }
+
+      var tieneDelegacionEnServicios = false;
+      for (final servicio in vehiculos) {
+        final ids = GruasCatalogService.extractDelegacionIds(servicio);
+        if (ids.isNotEmpty) tieneDelegacionEnServicios = true;
+
+        for (final id in ids) {
+          addUso(id, 1, servicio: servicio);
+        }
+      }
+
+      if (!tieneDelegacionEnServicios) {
+        for (final id in GruasCatalogService.extractDelegacionIds(grua)) {
+          addUso(id, servicios);
+        }
+      }
+    }
+
+    final list = byId.values.toList();
+    list.sort(
+      (a, b) => (a['nombre'] ?? '').toString().compareTo(
+        (b['nombre'] ?? '').toString(),
+      ),
+    );
+    return list;
+  }
+
+  bool _gruaTieneUsoDeDelegacion(Map<String, dynamic> grua, int delegacionId) {
+    final vehiculos = _serviciosDeGrua(grua);
+    if (vehiculos.isEmpty) {
+      return GruasCatalogService.extractDelegacionIds(
+        grua,
+      ).contains(delegacionId);
+    }
+
+    var foundDelegacionIds = false;
+    for (final servicio in vehiculos) {
+      final ids = GruasCatalogService.extractDelegacionIds(servicio);
+      if (ids.isNotEmpty) foundDelegacionIds = true;
+      if (ids.contains(delegacionId)) return true;
+    }
+
+    if (!foundDelegacionIds) {
+      return GruasCatalogService.extractDelegacionIds(
+        grua,
+      ).contains(delegacionId);
+    }
+
+    return false;
+  }
+
+  List<Map<String, dynamic>> _serviciosDeGrua(Map<String, dynamic> grua) {
+    final raw = grua['vehiculos'];
+    if (raw is! List) return const <Map<String, dynamic>>[];
+    return raw
+        .whereType<Map>()
+        .map((m) => Map<String, dynamic>.from(m))
+        .toList();
+  }
+
+  String _delegacionNombrePorId(int id) {
+    for (final delegacion in _delegaciones) {
+      if (_toInt(delegacion['id']) == id) {
+        return _delegacionNombre(delegacion);
+      }
+    }
+
+    return 'Delegación #$id';
   }
 
   String _delegacionNombre(Map<String, dynamic> delegacion) {

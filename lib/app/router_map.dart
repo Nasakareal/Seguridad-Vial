@@ -8,6 +8,9 @@ import '../screens/home_screen.dart';
 import '../screens/home_perito_screen.dart';
 import '../screens/account/change_password_screen.dart';
 import '../screens/account/profile_screen.dart';
+import '../screens/settings/user_form_screen.dart';
+import '../screens/settings/user_show_screen.dart';
+import '../screens/settings/users_screen.dart';
 
 import '../screens/accidentes/accidentes_screen.dart';
 import '../screens/accidentes/create_screen.dart';
@@ -82,6 +85,10 @@ final Map<String, WidgetBuilder> appRoutesMap = {
   AppRoutes.homeAgenteUpec: (context) => const HomeAgenteUpecScreen(),
   AppRoutes.profile: (context) => const ProfileScreen(),
   AppRoutes.changePassword: (context) => const ChangePasswordScreen(),
+  AppRoutes.users: (context) => const SettingsUsersScreen(),
+  AppRoutes.usersCreate: (context) => const UserCreateScreen(),
+  AppRoutes.usersShow: (context) => const UserShowScreen(),
+  AppRoutes.usersEdit: (context) => const UserEditScreen(),
 
   AppRoutes.accidentes: (context) => const AccidentesScreen(),
   AppRoutes.accidentesCreate: (context) => const CreateHechoScreen(),

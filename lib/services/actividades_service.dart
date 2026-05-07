@@ -686,13 +686,23 @@ class ActividadesService {
   static Future<OfflineActionResult> update({
     required int id,
     required ActividadUpsertData data,
-    File? foto,
+    List<File> fotos = const <File>[],
+    List<int> eliminarFotos = const <int>[],
   }) async {
     final fields = data.toFields();
+    await _addKilometrosRecorridos(fields, lat: data.lat, lng: data.lng);
     fields['_method'] = 'PUT';
-    final landscapeFoto = foto == null
-        ? null
-        : await PhotoOrientationService.forceLandscape(foto);
+
+    for (var index = 0; index < eliminarFotos.length; index += 1) {
+      final fotoId = eliminarFotos[index];
+      if (fotoId > 0) {
+        fields['eliminar_fotos[$index]'] = fotoId.toString();
+      }
+    }
+
+    final landscapeFotos = await PhotoOrientationService.forceLandscapeAll(
+      fotos,
+    );
 
     return OfflineSyncService.submitMultipart(
       label: 'Actividad',
@@ -700,8 +710,8 @@ class ActividadesService {
       uri: Uri.parse('$_base/$id'),
       fields: fields,
       files: <OfflineUploadFile>[
-        if (landscapeFoto != null)
-          OfflineUploadFile(field: 'foto', path: landscapeFoto.path),
+        for (final foto in landscapeFotos)
+          OfflineUploadFile(field: 'fotos[]', path: foto.path),
       ],
       successCodes: const <int>{200},
       errorParser: _parseBackendError,
@@ -737,10 +747,11 @@ class ActividadesService {
     required String? lat,
     required String? lng,
   }) async {
-    final km = await DelegacionDistanceService.distanceForNextCaptureKmField(
-      lat: double.tryParse(lat?.trim() ?? ''),
-      lng: double.tryParse(lng?.trim() ?? ''),
-    );
+    final km =
+        await DelegacionDistanceService.distanceFromCurrentDelegacionKmField(
+          lat: double.tryParse(lat?.trim() ?? ''),
+          lng: double.tryParse(lng?.trim() ?? ''),
+        );
     if (km == null) return;
 
     fields[DelegacionDistanceService.kilometrosRecorridosField] = km;

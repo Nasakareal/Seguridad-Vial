@@ -26,6 +26,23 @@ void main() {
     expect(coords.lng, -101.2);
   });
 
+  test('extracts destacamento coordinates from nested payload', () {
+    final coords = DelegacionDistanceService.coordsFromPayload(
+      <String, dynamic>{
+        'destacamento': <String, dynamic>{
+          'id': 3,
+          'nombre': 'La Piedad',
+          'lat': '20.3350000',
+          'lng': '-102.0200000',
+        },
+      },
+    );
+
+    expect(coords, isNotNull);
+    expect(coords!.lat, 20.335);
+    expect(coords.lng, -102.02);
+  });
+
   test('calculates haversine distance in kilometers', () {
     final distance = DelegacionDistanceService.distanceKm(0, 0, 0, 1);
 
@@ -82,6 +99,30 @@ void main() {
 
     expect(value, isNotNull);
     expect(double.parse(value!), closeTo(111.2, 0.3));
+  });
+
+  test('keeps direct base distance even with a recent capture', () async {
+    SharedPreferences.setMockInitialValues(<String, Object>{
+      'auth_session_owner_key': 'user:22',
+      'auth_user_payload': jsonEncode(<String, Object>{
+        'delegacion': <String, Object>{'lat': '0', 'lng': '0'},
+      }),
+    });
+
+    await DelegacionDistanceService.markCaptureSubmitted(
+      lat: 0,
+      lng: 1,
+      capturedAt: DateTime.utc(2026, 1, 1, 8),
+    );
+
+    final value =
+        await DelegacionDistanceService.distanceFromCurrentDelegacionKmField(
+          lat: 0,
+          lng: 2,
+        );
+
+    expect(value, isNotNull);
+    expect(double.parse(value!), closeTo(222.4, 0.3));
   });
 
   test(
