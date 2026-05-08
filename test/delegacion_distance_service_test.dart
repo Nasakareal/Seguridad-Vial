@@ -101,6 +101,101 @@ void main() {
     expect(double.parse(value!), closeTo(111.2, 0.3));
   });
 
+  test('accumulates local mileage between accepted GPS points', () async {
+    SharedPreferences.setMockInitialValues(<String, Object>{
+      'auth_session_owner_key': 'user:22',
+    });
+
+    await DelegacionDistanceService.recordLocalMileagePoint(
+      lat: 0,
+      lng: 0,
+      capturedAt: DateTime.utc(2026, 1, 1, 8),
+    );
+    await DelegacionDistanceService.recordLocalMileagePoint(
+      lat: 0,
+      lng: 1,
+      accuracyMeters: 12,
+      capturedAt: DateTime.utc(2026, 1, 1, 9),
+    );
+
+    final value = await DelegacionDistanceService.localMileageForCaptureKmField(
+      lat: 0,
+      lng: 1,
+      capturedAt: DateTime.utc(2026, 1, 1, 9, 1),
+    );
+
+    expect(value, isNotNull);
+    expect(double.parse(value!), closeTo(111.2, 0.3));
+  });
+
+  test('ignores local mileage points with poor accuracy', () async {
+    SharedPreferences.setMockInitialValues(<String, Object>{
+      'auth_session_owner_key': 'user:22',
+    });
+
+    await DelegacionDistanceService.recordLocalMileagePoint(
+      lat: 0,
+      lng: 0,
+      capturedAt: DateTime.utc(2026, 1, 1, 8),
+    );
+    await DelegacionDistanceService.recordLocalMileagePoint(
+      lat: 0,
+      lng: 1,
+      accuracyMeters: 250,
+      capturedAt: DateTime.utc(2026, 1, 1, 9),
+    );
+
+    final value = await DelegacionDistanceService.localMileageForCaptureKmField(
+      lat: 0,
+      lng: 0,
+      capturedAt: DateTime.utc(2026, 1, 1, 9, 1),
+    );
+
+    expect(value, '0.00');
+  });
+
+  test(
+    'caps excessive local mileage until the next capture resets it',
+    () async {
+      SharedPreferences.setMockInitialValues(<String, Object>{
+        'auth_session_owner_key': 'user:22',
+      });
+
+      for (var lng = 0; lng <= 5; lng += 1) {
+        await DelegacionDistanceService.recordLocalMileagePoint(
+          lat: 0,
+          lng: lng.toDouble(),
+          accuracyMeters: 10,
+          capturedAt: DateTime.utc(2026, 1, 1, 8 + lng),
+        );
+      }
+
+      final capped =
+          await DelegacionDistanceService.localMileageForCaptureKmField(
+            lat: 0,
+            lng: 5,
+            capturedAt: DateTime.utc(2026, 1, 1, 13, 1),
+          );
+
+      expect(capped, '500.00');
+
+      await DelegacionDistanceService.markCaptureSubmitted(
+        lat: 0,
+        lng: 5,
+        capturedAt: DateTime.utc(2026, 1, 1, 13, 2),
+      );
+
+      final reset =
+          await DelegacionDistanceService.localMileageForCaptureKmField(
+            lat: 0,
+            lng: 5,
+            capturedAt: DateTime.utc(2026, 1, 1, 13, 3),
+          );
+
+      expect(reset, '0.00');
+    },
+  );
+
   test('keeps direct base distance even with a recent capture', () async {
     SharedPreferences.setMockInitialValues(<String, Object>{
       'auth_session_owner_key': 'user:22',

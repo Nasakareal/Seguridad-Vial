@@ -6,6 +6,7 @@ class ConstanciaManejo {
   final String? modulo;
   final int? delegacionId;
   final String? nombreSolicitante;
+  final String? sexo;
   final String? curp;
   final String? telefono;
   final String? tipoLicencia;
@@ -16,13 +17,18 @@ class ConstanciaManejo {
   final String? accesoExamenExpira;
   final String? urlExamen;
   final String? urlExamenQr;
+  final String? urlExamenEscrito;
+  final String? urlExamenEscritoQr;
   final String? urlImprimir;
   final String? qrExamenBase64;
+  final String? qrExamenEscritoBase64;
   final String? resultado;
   final ConstanciaExamen? examen;
   final String? peritoActivador;
   final bool puedeGenerarAcceso;
+  final bool puedeGenerarExamenEscrito;
   final bool puedeCapturarImpreso;
+  final bool puedeImprimir;
   final bool puedeActivar;
 
   const ConstanciaManejo({
@@ -33,6 +39,7 @@ class ConstanciaManejo {
     required this.modulo,
     required this.delegacionId,
     required this.nombreSolicitante,
+    required this.sexo,
     required this.curp,
     required this.telefono,
     required this.tipoLicencia,
@@ -43,13 +50,18 @@ class ConstanciaManejo {
     required this.accesoExamenExpira,
     required this.urlExamen,
     required this.urlExamenQr,
+    required this.urlExamenEscrito,
+    required this.urlExamenEscritoQr,
     required this.urlImprimir,
     required this.qrExamenBase64,
+    required this.qrExamenEscritoBase64,
     required this.resultado,
     required this.examen,
     required this.peritoActivador,
     required this.puedeGenerarAcceso,
+    required this.puedeGenerarExamenEscrito,
     required this.puedeCapturarImpreso,
+    required this.puedeImprimir,
     required this.puedeActivar,
   });
 
@@ -57,9 +69,16 @@ class ConstanciaManejo {
       (urlExamen ?? '').trim().isNotEmpty &&
       (urlExamenQr ?? '').trim().isNotEmpty;
 
+  bool get tieneExamenEscrito =>
+      (urlExamenEscrito ?? '').trim().isNotEmpty &&
+      (urlExamenEscritoQr ?? '').trim().isNotEmpty;
+
   bool get estaActiva => estatus.trim().toUpperCase() == 'ACTIVA';
 
-  bool get estaInactiva => estatus.trim().toUpperCase() == 'IMPRESA_INACTIVA';
+  bool get estaInactiva {
+    final value = estatus.trim().toUpperCase();
+    return value == 'IMPRESA_INACTIVA' || value == 'PENDIENTE_EXAMEN';
+  }
 
   bool get examenAprobado => resultado?.trim().toUpperCase() == 'APROBADO';
 
@@ -72,6 +91,7 @@ class ConstanciaManejo {
       modulo: _readNullableString(json['modulo']),
       delegacionId: _readInt(json['delegacion_id']),
       nombreSolicitante: _readNullableString(json['nombre_solicitante']),
+      sexo: _readNullableString(json['sexo']),
       curp: _readNullableString(json['curp']),
       telefono: _readNullableString(json['telefono']),
       tipoLicencia: _readNullableString(json['tipo_licencia']),
@@ -82,11 +102,18 @@ class ConstanciaManejo {
       accesoExamenExpira: _readNullableString(json['acceso_examen_expira']),
       urlExamen: _readNullableString(json['url_examen']),
       urlExamenQr: _readNullableString(json['url_examen_qr']),
+      urlExamenEscrito: _readNullableString(json['url_examen_escrito']),
+      urlExamenEscritoQr: _readNullableString(json['url_examen_escrito_qr']),
       urlImprimir: _readNullableString(json['url_imprimir']),
       qrExamenBase64: _readNullableString(
         json['qr_examen_base64'] ??
             json['examen_qr_base64'] ??
             json['url_examen_qr_base64'],
+      ),
+      qrExamenEscritoBase64: _readNullableString(
+        json['qr_examen_escrito_base64'] ??
+            json['examen_escrito_qr_base64'] ??
+            json['url_examen_escrito_qr_base64'],
       ),
       resultado: _readNullableString(json['resultado']),
       examen: json['examen'] is Map
@@ -96,7 +123,11 @@ class ConstanciaManejo {
           : null,
       peritoActivador: _readNullableString(json['perito_activador']),
       puedeGenerarAcceso: _readBool(json['puede_generar_acceso']),
+      puedeGenerarExamenEscrito: _readBool(
+        json['puede_generar_examen_escrito'],
+      ),
       puedeCapturarImpreso: _readBool(json['puede_capturar_impreso']),
+      puedeImprimir: _readBool(json['puede_imprimir']),
       puedeActivar: _readBool(json['puede_activar']),
     );
   }
@@ -167,6 +198,106 @@ class ConstanciasManejoCreateResult {
     required this.urlImprimirLote,
     required this.message,
   });
+}
+
+class ConstanciaExamenSolicitud {
+  final int id;
+  final String folioExamen;
+  final String token;
+  final int? moduloId;
+  final String? modulo;
+  final int? delegacionId;
+  final int? constanciaId;
+  final String? constanciaFolio;
+  final String nombreSolicitante;
+  final String sexo;
+  final String? curp;
+  final String? telefono;
+  final String tipoLicencia;
+  final String modalidad;
+  final String estatus;
+  final double? calificacion;
+  final int? totalPreguntas;
+  final int? aciertos;
+  final int? errores;
+  final String? fechaExamen;
+  final String? tokenExpira;
+  final String? observaciones;
+  final String? urlExamen;
+  final String? urlExamenQr;
+  final String? qrExamenBase64;
+  final bool puedeCapturarImpreso;
+  final bool puedeActivarConstancia;
+
+  const ConstanciaExamenSolicitud({
+    required this.id,
+    required this.folioExamen,
+    required this.token,
+    required this.moduloId,
+    required this.modulo,
+    required this.delegacionId,
+    required this.constanciaId,
+    required this.constanciaFolio,
+    required this.nombreSolicitante,
+    required this.sexo,
+    required this.curp,
+    required this.telefono,
+    required this.tipoLicencia,
+    required this.modalidad,
+    required this.estatus,
+    required this.calificacion,
+    required this.totalPreguntas,
+    required this.aciertos,
+    required this.errores,
+    required this.fechaExamen,
+    required this.tokenExpira,
+    required this.observaciones,
+    required this.urlExamen,
+    required this.urlExamenQr,
+    required this.qrExamenBase64,
+    required this.puedeCapturarImpreso,
+    required this.puedeActivarConstancia,
+  });
+
+  bool get aprobado => estatus.trim().toUpperCase() == 'APROBADO';
+
+  bool get esImpreso => modalidad.trim().toUpperCase() == 'IMPRESO';
+
+  bool get tieneLiga =>
+      (urlExamen ?? '').trim().isNotEmpty &&
+      (urlExamenQr ?? '').trim().isNotEmpty;
+
+  factory ConstanciaExamenSolicitud.fromJson(Map<String, dynamic> json) {
+    return ConstanciaExamenSolicitud(
+      id: _readInt(json['id']) ?? 0,
+      folioExamen: (json['folio_examen'] ?? '').toString(),
+      token: (json['token'] ?? '').toString(),
+      moduloId: _readInt(json['modulo_id']),
+      modulo: _readNullableString(json['modulo']),
+      delegacionId: _readInt(json['delegacion_id']),
+      constanciaId: _readInt(json['constancia_id']),
+      constanciaFolio: _readNullableString(json['constancia_folio']),
+      nombreSolicitante: _readNullableString(json['nombre_solicitante']) ?? '',
+      sexo: _readNullableString(json['sexo']) ?? '',
+      curp: _readNullableString(json['curp']),
+      telefono: _readNullableString(json['telefono']),
+      tipoLicencia: _readNullableString(json['tipo_licencia']) ?? '',
+      modalidad: _readNullableString(json['modalidad']) ?? '',
+      estatus: _readNullableString(json['estatus']) ?? '',
+      calificacion: _readDouble(json['calificacion']),
+      totalPreguntas: _readInt(json['total_preguntas']),
+      aciertos: _readInt(json['aciertos']),
+      errores: _readInt(json['errores']),
+      fechaExamen: _readNullableString(json['fecha_examen']),
+      tokenExpira: _readNullableString(json['token_expira']),
+      observaciones: _readNullableString(json['observaciones']),
+      urlExamen: _readNullableString(json['url_examen']),
+      urlExamenQr: _readNullableString(json['url_examen_qr']),
+      qrExamenBase64: _readNullableString(json['qr_examen_base64']),
+      puedeCapturarImpreso: _readBool(json['puede_capturar_impreso']),
+      puedeActivarConstancia: _readBool(json['puede_activar_constancia']),
+    );
+  }
 }
 
 class ConstanciaExamen {

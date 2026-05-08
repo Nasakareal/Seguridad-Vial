@@ -15,8 +15,90 @@ class DelegacionCoords {
 class DelegacionDistanceService {
   static const String kilometrosRecorridosField = 'km_recorridos';
   static const Duration maxIdleBeforeDelegacionOrigin = Duration(hours: 24);
+  static const Duration maxIdleBeforeLocalMileageReset = Duration(hours: 24);
+  static const Duration maxLocalMileageSegmentGap = Duration(hours: 2);
+  static const double maxAcceptedLocalMileageAccuracyMeters = 150.0;
+  static const double minLocalMileageSegmentMeters = 15.0;
+  static const double maxLocalMileageSegmentSpeedMps = 60.0;
+  static const double maxLocalMileageKmPerCapture = 500.0;
   static const double _earthRadiusKm = 6371.0088;
   static const String _lastCapturePrefix = 'delegacion_last_capture_v1_';
+  static const String _localMileagePrefix = 'local_capture_mileage_v1_';
+
+  static Future<String?> localMileageForCaptureKmField({
+    required double? lat,
+    required double? lng,
+    double? accuracyMeters,
+    DateTime? capturedAt,
+  }) async {
+    final totalKm = await recordLocalMileagePoint(
+      lat: lat,
+      lng: lng,
+      accuracyMeters: accuracyMeters,
+      capturedAt: capturedAt,
+    );
+    if (totalKm == null) return null;
+
+    return totalKm.clamp(0.0, maxLocalMileageKmPerCapture).toStringAsFixed(2);
+  }
+
+  static Future<double?> recordLocalMileagePoint({
+    required double? lat,
+    required double? lng,
+    double? accuracyMeters,
+    DateTime? capturedAt,
+  }) async {
+    if (!_validCoords(lat, lng)) return null;
+    if (!_acceptableAccuracy(accuracyMeters)) {
+      final current = await _loadLocalMileage();
+      return current?.totalKm;
+    }
+
+    final key = await _localMileageKey();
+    if (key == null) return null;
+
+    final currentAt = (capturedAt ?? DateTime.now()).toUtc();
+    final currentPoint = _LocalMileagePoint(
+      lat: lat!,
+      lng: lng!,
+      capturedAt: currentAt,
+    );
+
+    final previous = await _loadLocalMileage();
+    final next = _nextLocalMileageState(previous, currentPoint);
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(key, jsonEncode(next.toJson()));
+    return next.totalKm;
+  }
+
+  static Future<void> resetLocalMileageAfterCapture({
+    required double? lat,
+    required double? lng,
+    DateTime? capturedAt,
+  }) async {
+    final key = await _localMileageKey();
+    if (key == null) return;
+
+    final prefs = await SharedPreferences.getInstance();
+    if (!_validCoords(lat, lng)) {
+      await prefs.remove(key);
+      return;
+    }
+
+    final point = _LocalMileagePoint(
+      lat: lat!,
+      lng: lng!,
+      capturedAt: (capturedAt ?? DateTime.now()).toUtc(),
+    );
+    final state = _LocalMileageState(
+      totalKm: 0,
+      lastPoint: point,
+      startedAt: point.capturedAt,
+      locked: false,
+    );
+    await prefs.setString(key, jsonEncode(state.toJson()));
+  }
 
   static Future<String?> distanceForNextCaptureKmField({
     required double? lat,
@@ -64,8 +146,11 @@ class DelegacionDistanceService {
   }) async {
     if (!_validCoords(lat, lng)) return;
 
-    final delegationCoords = await currentDelegacionCoords();
-    if (delegationCoords == null) return;
+    await resetLocalMileageAfterCapture(
+      lat: lat,
+      lng: lng,
+      capturedAt: capturedAt,
+    );
 
     final key = await _lastCaptureKey();
     if (key == null) return;
@@ -81,10 +166,15 @@ class DelegacionDistanceService {
 
   static Future<void> clearLocalCaptureState() async {
     final key = await _lastCaptureKey();
-    if (key == null) return;
-
     final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(key);
+    if (key != null) {
+      await prefs.remove(key);
+    }
+
+    final mileageKey = await _localMileageKey();
+    if (mileageKey != null) {
+      await prefs.remove(mileageKey);
+    }
   }
 
   static Future<String?> distanceFromCurrentDelegacionKmField({
@@ -299,6 +389,93 @@ class DelegacionDistanceService {
     return '$_lastCapturePrefix$ownerKey';
   }
 
+  static Future<String?> _localMileageKey() async {
+    final ownerKey = (await AuthService.getSessionOwnerKey())?.trim() ?? '';
+    if (ownerKey.isEmpty) return null;
+    return '$_localMileagePrefix$ownerKey';
+  }
+
+  static Future<_LocalMileageState?> _loadLocalMileage() async {
+    final key = await _localMileageKey();
+    if (key == null) return null;
+
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(key);
+    if (raw == null || raw.trim().isEmpty) return null;
+
+    try {
+      final decoded = jsonDecode(raw);
+      final map = _asMap(decoded);
+      if (map == null) return null;
+      return _LocalMileageState.fromJson(map);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static _LocalMileageState _nextLocalMileageState(
+    _LocalMileageState? previous,
+    _LocalMileagePoint current,
+  ) {
+    if (previous == null) {
+      return _LocalMileageState(
+        totalKm: 0,
+        lastPoint: current,
+        startedAt: current.capturedAt,
+        locked: false,
+      );
+    }
+
+    if (previous.locked) return previous;
+
+    final gap = current.capturedAt.difference(previous.lastPoint.capturedAt);
+    if (gap.isNegative || gap >= maxIdleBeforeLocalMileageReset) {
+      return _LocalMileageState(
+        totalKm: 0,
+        lastPoint: current,
+        startedAt: current.capturedAt,
+        locked: false,
+      );
+    }
+
+    final segmentKm = distanceKm(
+      previous.lastPoint.lat,
+      previous.lastPoint.lng,
+      current.lat,
+      current.lng,
+    );
+    final segmentMeters = segmentKm * 1000;
+
+    if (segmentMeters < minLocalMileageSegmentMeters ||
+        gap > maxLocalMileageSegmentGap ||
+        _looksLikeImpossibleSegment(segmentMeters, gap)) {
+      return previous.copyWith(lastPoint: current);
+    }
+
+    final total = previous.totalKm + segmentKm;
+    if (total >= maxLocalMileageKmPerCapture) {
+      return previous.copyWith(
+        totalKm: maxLocalMileageKmPerCapture,
+        lastPoint: current,
+        locked: true,
+      );
+    }
+
+    return previous.copyWith(totalKm: total, lastPoint: current);
+  }
+
+  static bool _acceptableAccuracy(double? accuracyMeters) {
+    if (accuracyMeters == null) return true;
+    if (accuracyMeters.isNaN || !accuracyMeters.isFinite) return false;
+    return accuracyMeters <= maxAcceptedLocalMileageAccuracyMeters;
+  }
+
+  static bool _looksLikeImpossibleSegment(double meters, Duration gap) {
+    final seconds = gap.inMilliseconds / 1000.0;
+    if (seconds <= 0) return meters > minLocalMileageSegmentMeters;
+    return meters / seconds > maxLocalMileageSegmentSpeedMps;
+  }
+
   static double _degToRad(double degrees) => degrees * math.pi / 180;
 }
 
@@ -332,5 +509,95 @@ class _LastCapturePoint {
     'lat': lat,
     'lng': lng,
     'captured_at': capturedAt.toUtc().toIso8601String(),
+  };
+}
+
+class _LocalMileagePoint {
+  const _LocalMileagePoint({
+    required this.lat,
+    required this.lng,
+    required this.capturedAt,
+  });
+
+  final double lat;
+  final double lng;
+  final DateTime capturedAt;
+
+  factory _LocalMileagePoint.fromJson(Map<String, dynamic> json) {
+    final lat = DelegacionDistanceService._parseDouble(json['lat']);
+    final lng = DelegacionDistanceService._parseDouble(json['lng']);
+    final capturedAt = DateTime.tryParse(
+      (json['captured_at'] ?? '').toString(),
+    )?.toUtc();
+
+    if (!DelegacionDistanceService._validCoords(lat, lng) ||
+        capturedAt == null) {
+      throw const FormatException('Invalid local mileage point');
+    }
+
+    return _LocalMileagePoint(lat: lat!, lng: lng!, capturedAt: capturedAt);
+  }
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+    'lat': lat,
+    'lng': lng,
+    'captured_at': capturedAt.toUtc().toIso8601String(),
+  };
+}
+
+class _LocalMileageState {
+  const _LocalMileageState({
+    required this.totalKm,
+    required this.lastPoint,
+    required this.startedAt,
+    required this.locked,
+  });
+
+  final double totalKm;
+  final _LocalMileagePoint lastPoint;
+  final DateTime startedAt;
+  final bool locked;
+
+  factory _LocalMileageState.fromJson(Map<String, dynamic> json) {
+    final totalKm =
+        DelegacionDistanceService._parseDouble(json['total_km']) ?? 0;
+    final lastPointRaw = DelegacionDistanceService._asMap(json['last_point']);
+    if (lastPointRaw == null) {
+      throw const FormatException('Invalid local mileage state');
+    }
+
+    final startedAt =
+        DateTime.tryParse((json['started_at'] ?? '').toString())?.toUtc() ??
+        _LocalMileagePoint.fromJson(lastPointRaw).capturedAt;
+
+    return _LocalMileageState(
+      totalKm: totalKm
+          .clamp(0.0, DelegacionDistanceService.maxLocalMileageKmPerCapture)
+          .toDouble(),
+      lastPoint: _LocalMileagePoint.fromJson(lastPointRaw),
+      startedAt: startedAt,
+      locked: DelegacionDistanceService._truthy(json['locked']),
+    );
+  }
+
+  _LocalMileageState copyWith({
+    double? totalKm,
+    _LocalMileagePoint? lastPoint,
+    DateTime? startedAt,
+    bool? locked,
+  }) {
+    return _LocalMileageState(
+      totalKm: totalKm ?? this.totalKm,
+      lastPoint: lastPoint ?? this.lastPoint,
+      startedAt: startedAt ?? this.startedAt,
+      locked: locked ?? this.locked,
+    );
+  }
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+    'total_km': totalKm,
+    'last_point': lastPoint.toJson(),
+    'started_at': startedAt.toUtc().toIso8601String(),
+    'locked': locked,
   };
 }

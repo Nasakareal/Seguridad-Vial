@@ -338,7 +338,15 @@ class HechosFormService {
       canUsePuestasDisposicion: canUsePuestasDisposicion,
       canCaptureMpTurnado: canCaptureMpTurnado,
     );
-    await _addKilometrosRecorridos(fields, lat: data.lat, lng: data.lng);
+    await _addKilometrosRecorridos(
+      fields,
+      lat: data.lat,
+      lng: data.lng,
+      accuracyMeters: _accuracyMetersFromGeoFields(
+        calidadGeo: data.calidadGeo,
+        notaGeo: data.notaGeo,
+      ),
+    );
     fields['client_uuid'] = clientUuid;
     final landscapeFotoLugar = fotoLugar == null
         ? null
@@ -556,14 +564,37 @@ class HechosFormService {
     Map<String, String> fields, {
     required double? lat,
     required double? lng,
+    double? accuracyMeters,
   }) async {
-    final km = await DelegacionDistanceService.distanceForNextCaptureKmField(
+    final km = await DelegacionDistanceService.localMileageForCaptureKmField(
       lat: lat,
       lng: lng,
+      accuracyMeters: accuracyMeters,
     );
     if (km == null) return;
 
     fields[DelegacionDistanceService.kilometrosRecorridosField] = km;
+  }
+
+  static double? _accuracyMetersFromGeoFields({
+    required String? calidadGeo,
+    required String? notaGeo,
+  }) {
+    final calidad = _parseAccuracyMeters(calidadGeo);
+    if (calidad != null) return calidad;
+    return _parseAccuracyMeters(notaGeo);
+  }
+
+  static double? _parseAccuracyMeters(String? value) {
+    final text = (value ?? '').trim();
+    if (text.isEmpty) return null;
+
+    final accMatch = RegExp(
+      r'ACC:\s*([0-9]+(?:[\.,][0-9]+)?)',
+      caseSensitive: false,
+    ).firstMatch(text);
+    final raw = accMatch?.group(1) ?? text;
+    return double.tryParse(raw.replaceAll(',', '.'));
   }
 
   static Future<bool> _canUseDictamenes() async {

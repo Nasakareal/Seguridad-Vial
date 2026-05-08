@@ -3,6 +3,7 @@ import 'dart:io' show Platform;
 import 'package:geolocator/geolocator.dart';
 
 import 'auth_service.dart';
+import 'delegacion_distance_service.dart';
 import 'offline_sync_service.dart';
 
 class LocationService {
@@ -51,6 +52,13 @@ class LocationService {
       if (age.inMinutes >= 2) {
         return false;
       }
+
+      await DelegacionDistanceService.recordLocalMileagePoint(
+        lat: pos.latitude,
+        lng: pos.longitude,
+        accuracyMeters: acc,
+        capturedAt: pos.timestamp,
+      );
 
       final payload = <String, dynamic>{
         'lat': pos.latitude,

@@ -89,4 +89,7 @@ class AppRoutes {
 
   static const String pendientesCortes = '/pendientes/cortes';
   static const String pendientesCorteShow = '/pendientes/cortes/show';
+
+  static const String delegacionesExcelRevision =
+      '/delegaciones/excel-revision';
 }

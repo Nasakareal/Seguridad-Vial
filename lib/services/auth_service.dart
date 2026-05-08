@@ -330,6 +330,11 @@ class AuthService {
     return role.trim().toLowerCase() == 'superadmin';
   }
 
+  static Future<bool> canEditCaptureTimestamp() async {
+    if (await isSuperadmin()) return true;
+    return hasRoleName('administrador');
+  }
+
   static Future<bool> hasFullOperationalAccess() async {
     if (await isSuperadmin()) return true;
 

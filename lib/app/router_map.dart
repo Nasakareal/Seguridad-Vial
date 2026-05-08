@@ -70,6 +70,7 @@ import '../screens/dispositivos/dispositivo_create_screen.dart';
 import '../screens/dispositivos/dispositivo_show_screen.dart';
 import '../screens/dispositivos/dispositivos_revision_screen.dart';
 import '../screens/dispositivos/dispositivos_screen.dart';
+import '../screens/delegaciones/delegaciones_excel_revision_screen.dart';
 import '../screens/vialidades_urbanas/vialidades_urbanas_create_screen.dart';
 import '../screens/vialidades_urbanas/vialidades_urbanas_dispositivo_form_screen.dart';
 import '../screens/vialidades_urbanas/vialidades_urbanas_dispositivo_show_screen.dart';
@@ -168,6 +169,8 @@ final Map<String, WidgetBuilder> appRoutesMap = {
 
   AppRoutes.pendientesCortes: (context) => const PendientesCortesScreen(),
   AppRoutes.pendientesCorteShow: (context) => const PendienteCorteShowScreen(),
+  AppRoutes.delegacionesExcelRevision: (context) =>
+      const DelegacionesExcelRevisionScreen(),
 };
 
 int? _readHechoIdFromArgs(Object? args) {

@@ -9,6 +9,7 @@ import '../../models/actividad.dart';
 import '../../models/actividad_categoria.dart';
 import '../../models/actividad_subcategoria.dart';
 import '../../services/actividades_service.dart';
+import '../../services/auth_service.dart';
 import '../../widgets/actividad_count_field.dart';
 import '../../widgets/actividad_detenidos_field.dart';
 import '../../widgets/actividad_people_count_guard.dart';
@@ -28,6 +29,7 @@ class ActividadEditScreen extends StatefulWidget {
 class _ActividadEditScreenState extends State<ActividadEditScreen> {
   bool _loading = true;
   bool _saving = false;
+  bool _canEditCaptureTimestamp = false;
   String? _error;
 
   Actividad? _actividad;
@@ -120,6 +122,7 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
     try {
       final cats = await ActividadesService.fetchCategorias();
       final a = await ActividadesService.fetchShow(id);
+      final canEditTimestamp = await AuthService.canEditCaptureTimestamp();
 
       if (!mounted) return;
 
@@ -132,6 +135,7 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
         _actividad = a;
         _categoriaId = a.actividadCategoriaId;
         _subcategoriaId = a.actividadSubcategoriaId;
+        _canEditCaptureTimestamp = canEditTimestamp;
         _loading = false;
       });
 
@@ -453,12 +457,14 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
     int maxLines = 1,
     TextInputType? keyboardType,
     List<TextInputFormatter>? inputFormatters,
+    bool readOnly = false,
   }) {
     return TextField(
       controller: controller,
       maxLines: maxLines,
       keyboardType: keyboardType,
       inputFormatters: inputFormatters,
+      readOnly: readOnly,
       decoration: _dec(label, hint: hint),
     );
   }
@@ -789,14 +795,33 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
                             _fechaCtrl,
                             'Fecha',
                             hint: 'YYYY-MM-DD',
+                            readOnly: !_canEditCaptureTimestamp,
                           ),
                         ),
                         const SizedBox(width: 10),
                         Expanded(
-                          child: _textField(_horaCtrl, 'Hora', hint: 'HH:mm'),
+                          child: _textField(
+                            _horaCtrl,
+                            'Hora',
+                            hint: 'HH:mm',
+                            readOnly: !_canEditCaptureTimestamp,
+                          ),
                         ),
                       ],
                     ),
+                    if (!_canEditCaptureTimestamp) ...[
+                      const SizedBox(height: 8),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          'Solo Administrador y Superadmin pueden modificar fecha u hora.',
+                          style: TextStyle(
+                            color: Colors.grey.shade700,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ),
+                    ],
                     const SizedBox(height: 12),
                     _textField(_lugarCtrl, 'Lugar'),
                     const SizedBox(height: 12),

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../models/constancia_manejo.dart';
 import '../../services/auth_service.dart';
@@ -39,9 +40,12 @@ class _ConstanciaManejoScanScreenState
   Future<void> _handleRaw(String raw) async {
     if (_busy) return;
 
-    final token = ConstanciasManejoService.parseQrToken(raw);
-    if (token.isEmpty) {
-      setState(() => _error = 'El QR no contiene una constancia valida.');
+    final examToken = ConstanciasManejoService.parseExamRequestToken(raw);
+    final constanciaToken = ConstanciasManejoService.parseQrToken(raw);
+    if (examToken.isEmpty && constanciaToken.isEmpty) {
+      setState(
+        () => _error = 'El QR no contiene una constancia o examen valido.',
+      );
       return;
     }
 
@@ -52,7 +56,40 @@ class _ConstanciaManejoScanScreenState
 
     try {
       unawaited(_controller.stop());
-      final constancia = await ConstanciasManejoService.buscarPorQr(token);
+      if (examToken.isNotEmpty) {
+        try {
+          final examen = await ConstanciasManejoService.buscarExamenPorQr(
+            examToken,
+          );
+          if (!mounted) return;
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+              builder: (_) =>
+                  ConstanciaExamenSolicitudDetailScreen(initialExamen: examen),
+            ),
+          );
+          return;
+        } catch (_) {
+          final constancia =
+              await ConstanciasManejoService.buscarExamenEscritoPorQr(
+                examToken,
+              );
+          if (!mounted) return;
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+              builder: (_) =>
+                  ConstanciaManejoDetailScreen(initialConstancia: constancia),
+            ),
+          );
+          return;
+        }
+      }
+
+      final constancia = await ConstanciasManejoService.buscarPorQr(
+        constanciaToken,
+      );
       if (!mounted) return;
       Navigator.pushReplacement(
         context,
@@ -88,7 +125,7 @@ class _ConstanciaManejoScanScreenState
     return Scaffold(
       backgroundColor: const Color(0xFF0F172A),
       appBar: AppBar(
-        title: const Text('Escanear constancia'),
+        title: const Text('Escanear examen o constancia'),
         backgroundColor: Colors.black,
         foregroundColor: Colors.white,
         actions: [
@@ -156,7 +193,7 @@ class _ConstanciaManejoScanScreenState
                   TextField(
                     controller: _manualCtrl,
                     decoration: const InputDecoration(
-                      labelText: 'URL o token de constancia',
+                      labelText: 'URL o token de examen/constancia',
                       prefixIcon: Icon(Icons.link),
                       border: OutlineInputBorder(),
                     ),
@@ -179,7 +216,7 @@ class _ConstanciaManejoScanScreenState
                         ? null
                         : () => _handleRaw(_manualCtrl.text),
                     icon: const Icon(Icons.search),
-                    label: Text(_busy ? 'Buscando...' : 'Abrir constancia'),
+                    label: Text(_busy ? 'Buscando...' : 'Abrir registro'),
                   ),
                 ],
               ),
@@ -187,6 +224,497 @@ class _ConstanciaManejoScanScreenState
           ],
         ),
       ),
+    );
+  }
+}
+
+class ConstanciaExamenSolicitudDetailScreen extends StatefulWidget {
+  final ConstanciaExamenSolicitud initialExamen;
+
+  const ConstanciaExamenSolicitudDetailScreen({
+    super.key,
+    required this.initialExamen,
+  });
+
+  @override
+  State<ConstanciaExamenSolicitudDetailScreen> createState() =>
+      _ConstanciaExamenSolicitudDetailScreenState();
+}
+
+class _ConstanciaExamenSolicitudDetailScreenState
+    extends State<ConstanciaExamenSolicitudDetailScreen> {
+  final _totalCtrl = TextEditingController(text: '20');
+  final _aciertosCtrl = TextEditingController(text: '0');
+  final _erroresCtrl = TextEditingController(text: '0');
+  final _calificacionCtrl = TextEditingController(text: '0');
+  final _observacionesCtrl = TextEditingController();
+  final _constanciaQrCtrl = TextEditingController();
+
+  late ConstanciaExamenSolicitud _examen;
+  bool _busy = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _examen = widget.initialExamen;
+    _syncExam(_examen);
+    _totalCtrl.addListener(_syncScorePreview);
+    _aciertosCtrl.addListener(_syncScorePreview);
+    _erroresCtrl.addListener(_syncScorePreview);
+  }
+
+  @override
+  void dispose() {
+    _totalCtrl.removeListener(_syncScorePreview);
+    _aciertosCtrl.removeListener(_syncScorePreview);
+    _erroresCtrl.removeListener(_syncScorePreview);
+    _totalCtrl.dispose();
+    _aciertosCtrl.dispose();
+    _erroresCtrl.dispose();
+    _calificacionCtrl.dispose();
+    _observacionesCtrl.dispose();
+    _constanciaQrCtrl.dispose();
+    super.dispose();
+  }
+
+  void _syncExam(ConstanciaExamenSolicitud examen) {
+    _totalCtrl.text = (examen.totalPreguntas ?? 20).toString();
+    _aciertosCtrl.text = (examen.aciertos ?? 0).toString();
+    _erroresCtrl.text = (examen.errores ?? 0).toString();
+    _calificacionCtrl.text = _fmtNumber(examen.calificacion ?? 0);
+    _observacionesCtrl.text = examen.observaciones ?? '';
+    _syncScorePreview();
+  }
+
+  void _syncScorePreview() {
+    final total = int.tryParse(_totalCtrl.text.trim()) ?? 0;
+    final aciertos = int.tryParse(_aciertosCtrl.text.trim()) ?? -1;
+    if (total <= 0 || aciertos < 0 || aciertos > total) return;
+
+    final next = _fmtNumber(_calculateWrittenScore(total, aciertos));
+    if (_calificacionCtrl.text != next) {
+      _calificacionCtrl.text = next;
+    }
+  }
+
+  Future<void> _captureWritten() async {
+    if (_busy) return;
+    final total = int.tryParse(_totalCtrl.text.trim()) ?? 0;
+    final aciertos = int.tryParse(_aciertosCtrl.text.trim()) ?? -1;
+    final errores = int.tryParse(_erroresCtrl.text.trim()) ?? -1;
+
+    if (total <= 0 || aciertos < 0 || errores < 0) {
+      _showSnack('Revisa el total, aciertos y errores.');
+      return;
+    }
+    if (aciertos + errores != total) {
+      _showSnack('Aciertos y errores deben sumar el total.');
+      return;
+    }
+
+    setState(() => _busy = true);
+    try {
+      final updated =
+          await ConstanciasManejoService.capturarExamenSolicitudImpresa(
+            id: _examen.id,
+            totalPreguntas: total,
+            aciertos: aciertos,
+            errores: errores,
+            observaciones: _observacionesCtrl.text,
+          );
+      if (!mounted) return;
+      _syncExam(updated);
+      setState(() => _examen = updated);
+      _showSnack(updated.aprobado ? 'Examen aprobado.' : 'Examen reprobado.');
+    } catch (e) {
+      if (!mounted) return;
+      _showSnack(ConstanciasManejoService.cleanExceptionMessage(e));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _activateWithConstancia() async {
+    if (_busy) return;
+    final qr = _constanciaQrCtrl.text.trim();
+    if (qr.isEmpty) {
+      _showSnack('Escanea o pega el QR de la constancia impresa.');
+      return;
+    }
+
+    setState(() => _busy = true);
+    try {
+      final constancia = await ConstanciasManejoService.activarConExamen(
+        examenId: _examen.id,
+        constanciaQr: qr,
+      );
+      if (!mounted) return;
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (_) =>
+              ConstanciaManejoDetailScreen(initialConstancia: constancia),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      _showSnack(ConstanciasManejoService.cleanExceptionMessage(e));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _refreshExam() async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    try {
+      final updated = await ConstanciasManejoService.buscarExamenPorQr(
+        _examen.token,
+      );
+      if (!mounted) return;
+      _syncExam(updated);
+      setState(() => _examen = updated);
+    } catch (e) {
+      if (!mounted) return;
+      _showSnack(ConstanciasManejoService.cleanExceptionMessage(e));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _scanConstanciaQr() async {
+    final value = await Navigator.push<String>(
+      context,
+      MaterialPageRoute(builder: (_) => const _ConstanciaQrReturnScanner()),
+    );
+    if (value == null || value.trim().isEmpty || !mounted) return;
+    _constanciaQrCtrl.text = value.trim();
+  }
+
+  void _copyUrl() {
+    final url = _examen.urlExamen?.trim() ?? '';
+    if (url.isEmpty) return;
+    Clipboard.setData(ClipboardData(text: url));
+    _showSnack('Liga copiada.');
+  }
+
+  Future<void> _openUrl() async {
+    final value = _examen.urlExamen?.trim() ?? '';
+    if (value.isEmpty) {
+      _showSnack('No hay liga disponible.');
+      return;
+    }
+
+    final uri = Uri.tryParse(value);
+    if (uri == null) {
+      _showSnack('La liga no es valida.');
+      return;
+    }
+
+    final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (!opened) _showSnack('No se pudo abrir la liga.');
+  }
+
+  void _showSnack(String message) {
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final canCapture =
+        !_busy && _examen.esImpreso && _examen.puedeCapturarImpreso;
+    final canActivate =
+        !_busy && _examen.aprobado && _examen.puedeActivarConstancia;
+
+    return Scaffold(
+      backgroundColor: const Color(0xFFF6F7FB),
+      appBar: AppBar(
+        title: const Text('Examen de manejo'),
+        actions: [
+          IconButton(
+            tooltip: 'Actualizar',
+            icon: const Icon(Icons.refresh),
+            onPressed: _busy ? null : _refreshExam,
+          ),
+        ],
+      ),
+      body: SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+          children: [
+            _Panel(
+              icon: Icons.assignment_turned_in,
+              title: _examen.folioExamen,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _LightInfoLine(
+                    label: 'Nombre completo',
+                    value: _examen.nombreSolicitante,
+                  ),
+                  _LightInfoLine(label: 'Sexo', value: _examen.sexo),
+                  _LightInfoLine(
+                    label: 'Licencia',
+                    value: _examen.tipoLicencia.replaceAll('_', ' '),
+                  ),
+                  _LightInfoLine(label: 'Modalidad', value: _examen.modalidad),
+                  _LightInfoLine(label: 'Resultado', value: _examen.estatus),
+                  if ((_examen.constanciaFolio ?? '').trim().isNotEmpty)
+                    _LightInfoLine(
+                      label: 'Constancia',
+                      value: _examen.constanciaFolio!,
+                    ),
+                ],
+              ),
+            ),
+            if (_examen.tieneLiga) ...[
+              const SizedBox(height: 14),
+              _Panel(
+                icon: Icons.qr_code_2,
+                title: _examen.esImpreso
+                    ? 'Hoja de examen escrito'
+                    : 'Liga de examen en linea',
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Center(
+                      child: FutureBuilder<Uint8List>(
+                        future:
+                            ConstanciasManejoService.fetchExamRequestQrImage(
+                              _examen,
+                            ),
+                        builder: (context, snap) {
+                          if (snap.connectionState != ConnectionState.done) {
+                            return const SizedBox(
+                              height: 220,
+                              child: Center(child: CircularProgressIndicator()),
+                            );
+                          }
+
+                          return ClipRRect(
+                            borderRadius: BorderRadius.circular(12),
+                            child: snap.hasData
+                                ? Image.memory(
+                                    snap.data!,
+                                    width: 220,
+                                    height: 220,
+                                    fit: BoxFit.cover,
+                                  )
+                                : Container(
+                                    width: 220,
+                                    height: 220,
+                                    alignment: Alignment.center,
+                                    color: Colors.grey.shade100,
+                                    child: const Text(
+                                      'No se pudo cargar el QR.',
+                                      textAlign: TextAlign.center,
+                                    ),
+                                  ),
+                          );
+                        },
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    SelectableText(
+                      _examen.urlExamen ?? '',
+                      style: const TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                    const SizedBox(height: 12),
+                    ElevatedButton.icon(
+                      onPressed: _busy ? null : _openUrl,
+                      icon: const Icon(Icons.open_in_new),
+                      label: Text(
+                        _examen.esImpreso
+                            ? 'Abrir / imprimir examen'
+                            : 'Abrir examen',
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    OutlinedButton.icon(
+                      onPressed: _busy ? null : _copyUrl,
+                      icon: const Icon(Icons.copy),
+                      label: const Text('Copiar liga'),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+            if (_examen.esImpreso) ...[
+              const SizedBox(height: 14),
+              _Panel(
+                icon: Icons.edit_note,
+                title: 'Validar examen escrito',
+                child: Column(
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: _totalCtrl,
+                            enabled: canCapture,
+                            keyboardType: TextInputType.number,
+                            decoration: const InputDecoration(
+                              labelText: 'Total',
+                              border: OutlineInputBorder(),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: TextField(
+                            controller: _aciertosCtrl,
+                            enabled: canCapture,
+                            keyboardType: TextInputType.number,
+                            decoration: const InputDecoration(
+                              labelText: 'Aciertos',
+                              border: OutlineInputBorder(),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: TextField(
+                            controller: _erroresCtrl,
+                            enabled: canCapture,
+                            keyboardType: TextInputType.number,
+                            decoration: const InputDecoration(
+                              labelText: 'Errores',
+                              border: OutlineInputBorder(),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: _calificacionCtrl,
+                      enabled: false,
+                      decoration: const InputDecoration(
+                        labelText: 'Calificacion automatica',
+                        prefixIcon: Icon(Icons.grade),
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: _observacionesCtrl,
+                      enabled: canCapture,
+                      minLines: 2,
+                      maxLines: 4,
+                      decoration: const InputDecoration(
+                        labelText: 'Observaciones',
+                        prefixIcon: Icon(Icons.notes),
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        onPressed: canCapture ? _captureWritten : null,
+                        icon: const Icon(Icons.save),
+                        label: Text(
+                          _busy ? 'Guardando...' : 'Guardar resultado',
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+            const SizedBox(height: 14),
+            _Panel(
+              icon: Icons.verified,
+              title: 'Activar folio impreso',
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    canActivate
+                        ? 'Escanea la constancia fisica que se va a entregar. Se activara con este examen aprobado.'
+                        : _examen.constanciaId != null
+                        ? 'Este examen ya fue asignado a una constancia.'
+                        : 'Solo se activa cuando el examen esta aprobado.',
+                    style: TextStyle(color: Colors.grey.shade700),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: _constanciaQrCtrl,
+                    enabled: canActivate,
+                    decoration: const InputDecoration(
+                      labelText: 'QR de constancia impresa',
+                      prefixIcon: Icon(Icons.qr_code_scanner),
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  OutlinedButton.icon(
+                    onPressed: canActivate ? _scanConstanciaQr : null,
+                    icon: const Icon(Icons.qr_code_scanner),
+                    label: const Text('Escanear constancia'),
+                  ),
+                  const SizedBox(height: 8),
+                  ElevatedButton.icon(
+                    onPressed: canActivate ? _activateWithConstancia : null,
+                    icon: const Icon(Icons.verified_user),
+                    label: Text(_busy ? 'Activando...' : 'Activar constancia'),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ConstanciaQrReturnScanner extends StatefulWidget {
+  const _ConstanciaQrReturnScanner();
+
+  @override
+  State<_ConstanciaQrReturnScanner> createState() =>
+      _ConstanciaQrReturnScannerState();
+}
+
+class _ConstanciaQrReturnScannerState
+    extends State<_ConstanciaQrReturnScanner> {
+  final MobileScannerController _controller = MobileScannerController(
+    formats: const <BarcodeFormat>[BarcodeFormat.qrCode],
+    detectionSpeed: DetectionSpeed.noDuplicates,
+    autoZoom: true,
+  );
+  bool _done = false;
+
+  @override
+  void dispose() {
+    unawaited(_controller.dispose());
+    super.dispose();
+  }
+
+  void _handleDetect(BarcodeCapture capture) {
+    if (_done) return;
+    for (final barcode in capture.barcodes) {
+      final raw = barcode.rawValue?.trim() ?? '';
+      if (raw.isEmpty) continue;
+      _done = true;
+      Navigator.pop(context, raw);
+      return;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFF0F172A),
+      appBar: AppBar(
+        title: const Text('Escanear constancia'),
+        backgroundColor: Colors.black,
+        foregroundColor: Colors.white,
+      ),
+      body: MobileScanner(controller: _controller, onDetect: _handleDetect),
     );
   }
 }
@@ -217,6 +745,7 @@ class _ConstanciaManejoDetailScreenState
     'MOTOCICLISTA': 'Motociclista',
     'PERMISO': 'Permiso',
   };
+  static const _sexos = <String, String>{'HOMBRE': 'Hombre', 'MUJER': 'Mujer'};
 
   final _nombreCtrl = TextEditingController();
   final _curpCtrl = TextEditingController();
@@ -234,6 +763,7 @@ class _ConstanciaManejoDetailScreenState
   bool _canEditModuloExamenes = false;
   String? _error;
   String? _tipoLicencia;
+  String? _sexo;
   String? _examMode;
   LocalDraftAutosave? _draft;
   int? _draftForId;
@@ -306,6 +836,7 @@ class _ConstanciaManejoDetailScreenState
   Map<String, dynamic> _draftValues() {
     return <String, dynamic>{
       'nombre_solicitante': _nombreCtrl.text,
+      'sexo': _sexo,
       'curp': _curpCtrl.text,
       'telefono': _telefonoCtrl.text,
       'tipo_licencia': _tipoLicencia,
@@ -357,6 +888,10 @@ class _ConstanciaManejoDetailScreenState
       final tipo = (data['tipo_licencia'] ?? '').toString();
       if (_tiposLicencia.containsKey(tipo)) {
         _tipoLicencia = tipo;
+      }
+      final sexo = (data['sexo'] ?? '').toString();
+      if (_sexos.containsKey(sexo)) {
+        _sexo = sexo;
       }
       final mode = (data['tipo_examen'] ?? '').toString();
       if (mode == 'LINEA' || mode == 'IMPRESO') {
@@ -420,6 +955,7 @@ class _ConstanciaManejoDetailScreenState
 
   void _syncForm(ConstanciaManejo constancia) {
     _nombreCtrl.text = constancia.nombreSolicitante ?? '';
+    _sexo = _sexos.containsKey(constancia.sexo) ? constancia.sexo : null;
     _curpCtrl.text = constancia.curp ?? '';
     _telefonoCtrl.text = constancia.telefono ?? '';
     final tipo = constancia.tipoLicencia ?? '';
@@ -479,6 +1015,10 @@ class _ConstanciaManejoDetailScreenState
       _showSnack('Captura el nombre del solicitante.');
       return;
     }
+    if (_sexo == null) {
+      _showSnack('Selecciona el sexo.');
+      return;
+    }
     if (tipoLicencia == null || tipoLicencia.trim().isEmpty) {
       _showSnack('Selecciona el tipo de licencia.');
       return;
@@ -489,6 +1029,7 @@ class _ConstanciaManejoDetailScreenState
       final updated = await ConstanciasManejoService.generarAcceso(
         id: constancia.id,
         nombreSolicitante: nombre,
+        sexo: _sexo!,
         curp: _curpCtrl.text,
         telefono: _telefonoCtrl.text,
         tipoLicencia: tipoLicencia,
@@ -500,6 +1041,51 @@ class _ConstanciaManejoDetailScreenState
         _examMode = 'LINEA';
       });
       _showSnack('Acceso temporal generado.');
+    } catch (e) {
+      if (!mounted) return;
+      _showSnack(ConstanciasManejoService.cleanExceptionMessage(e));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _generateWrittenExam() async {
+    final constancia = _constancia;
+    if (constancia == null || _busy) return;
+
+    final nombre = _nombreCtrl.text.trim();
+    final tipoLicencia = _tipoLicencia;
+
+    if (nombre.isEmpty) {
+      _showSnack('Captura el nombre del solicitante.');
+      return;
+    }
+    if (_sexo == null) {
+      _showSnack('Selecciona el sexo.');
+      return;
+    }
+    if (tipoLicencia == null || tipoLicencia.trim().isEmpty) {
+      _showSnack('Selecciona el tipo de licencia.');
+      return;
+    }
+
+    setState(() => _busy = true);
+    try {
+      final updated = await ConstanciasManejoService.generarExamenEscrito(
+        id: constancia.id,
+        nombreSolicitante: nombre,
+        sexo: _sexo!,
+        curp: _curpCtrl.text,
+        telefono: _telefonoCtrl.text,
+        tipoLicencia: tipoLicencia,
+      );
+      if (!mounted) return;
+      _syncForm(updated);
+      setState(() {
+        _constancia = updated;
+        _examMode = 'IMPRESO';
+      });
+      _showSnack('QR de examen escrito generado.');
     } catch (e) {
       if (!mounted) return;
       _showSnack(ConstanciasManejoService.cleanExceptionMessage(e));
@@ -541,6 +1127,10 @@ class _ConstanciaManejoDetailScreenState
       _showSnack('Captura el nombre del solicitante.');
       return;
     }
+    if (_sexo == null) {
+      _showSnack('Selecciona el sexo.');
+      return;
+    }
     if (total <= 0 || aciertos < 0 || errores < 0) {
       _showSnack('Revisa el total, aciertos y errores.');
       return;
@@ -562,6 +1152,7 @@ class _ConstanciaManejoDetailScreenState
       final updated = await ConstanciasManejoService.capturarImpreso(
         id: constancia.id,
         nombreSolicitante: nombre,
+        sexo: _sexo!,
         curp: _curpCtrl.text,
         telefono: _telefonoCtrl.text,
         tipoLicencia: tipoLicencia,
@@ -640,9 +1231,38 @@ class _ConstanciaManejoDetailScreenState
     _showSnack('Liga copiada.');
   }
 
+  void _copyWrittenExamUrl(ConstanciaManejo constancia) {
+    final url = constancia.urlExamenEscrito?.trim() ?? '';
+    if (url.isEmpty) return;
+    Clipboard.setData(ClipboardData(text: url));
+    _showSnack('Liga del examen escrito copiada.');
+  }
+
+  Future<void> _openUrl(String? rawUrl) async {
+    final value = rawUrl?.trim() ?? '';
+    if (value.isEmpty) {
+      _showSnack('No hay liga disponible.');
+      return;
+    }
+
+    final uri = Uri.tryParse(value);
+    if (uri == null) {
+      _showSnack('La liga no es valida.');
+      return;
+    }
+
+    final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (!opened) _showSnack('No se pudo abrir la liga.');
+  }
+
   @override
   Widget build(BuildContext context) {
     final constancia = _constancia;
+    final hasLegacyExamFlow =
+        constancia != null &&
+        (constancia.tieneAccesoTemporal ||
+            constancia.tieneExamenEscrito ||
+            constancia.examen != null);
 
     return Scaffold(
       backgroundColor: const Color(0xFFF6F7FB),
@@ -679,26 +1299,44 @@ class _ConstanciaManejoDetailScreenState
                   nombreCtrl: _nombreCtrl,
                   curpCtrl: _curpCtrl,
                   telefonoCtrl: _telefonoCtrl,
+                  sexo: _sexo,
+                  sexos: _sexos,
                   tipoLicencia: _tipoLicencia,
                   tiposLicencia: _tiposLicencia,
+                  onSexoChanged: (value) {
+                    setState(() => _sexo = value);
+                    _draft?.notifyChanged();
+                  },
                   onTipoChanged: (value) {
                     setState(() => _tipoLicencia = value);
                     _draft?.notifyChanged();
                   },
                 ),
                 const SizedBox(height: 14),
-                _ExamModePanel(
-                  selectedMode: _examMode,
-                  enabled:
-                      !_busy &&
-                      _canEditModuloExamenes &&
-                      constancia.estaInactiva,
-                  onChanged: (mode) {
-                    setState(() => _examMode = mode);
-                    _draft?.notifyChanged();
-                  },
-                ),
-                if (_examMode == 'LINEA') ...[
+                if (!hasLegacyExamFlow)
+                  _Panel(
+                    icon: Icons.print,
+                    title: 'Folio impreso',
+                    child: Text(
+                      constancia.estaInactiva
+                          ? 'Este papel puede estar impreso y seguir inactivo. Genera el examen desde Nuevo examen; si aprueba, escanea el QR de ese examen y luego este folio para activarlo.'
+                          : 'La constancia ya no esta disponible para generar examen.',
+                      style: TextStyle(color: Colors.grey.shade700),
+                    ),
+                  )
+                else
+                  _ExamModePanel(
+                    selectedMode: _examMode,
+                    enabled:
+                        !_busy &&
+                        _canEditModuloExamenes &&
+                        constancia.estaInactiva,
+                    onChanged: (mode) {
+                      setState(() => _examMode = mode);
+                      _draft?.notifyChanged();
+                    },
+                  ),
+                if (hasLegacyExamFlow && _examMode == 'LINEA') ...[
                   const SizedBox(height: 14),
                   _ExamAccessPanel(
                     constancia: constancia,
@@ -709,7 +1347,7 @@ class _ConstanciaManejoDetailScreenState
                     onCopy: () => _copyExamUrl(constancia),
                   ),
                 ],
-                if (_examMode == 'IMPRESO') ...[
+                if (hasLegacyExamFlow && _examMode == 'IMPRESO') ...[
                   const SizedBox(height: 14),
                   _WrittenExamPanel(
                     constancia: constancia,
@@ -720,6 +1358,10 @@ class _ConstanciaManejoDetailScreenState
                     erroresCtrl: _erroresCtrl,
                     calificacionCtrl: _calificacionCtrl,
                     observacionesCtrl: _observacionesCtrl,
+                    onGenerate: _generateWrittenExam,
+                    onOpen: () =>
+                        unawaited(_openUrl(constancia.urlExamenEscrito)),
+                    onCopy: () => _copyWrittenExamUrl(constancia),
                     onSave: _saveWrittenExam,
                   ),
                 ],
@@ -801,6 +1443,11 @@ class _HeaderPanel extends StatelessWidget {
             value: constancia.nombreSolicitante ?? 'Pendiente',
           ),
           _InfoLine(
+            icon: Icons.wc,
+            label: 'Sexo',
+            value: constancia.sexo ?? 'Pendiente',
+          ),
+          _InfoLine(
             icon: Icons.badge,
             label: 'Licencia',
             value: constancia.tipoLicencia ?? 'Pendiente',
@@ -829,8 +1476,11 @@ class _ApplicantDataPanel extends StatelessWidget {
   final TextEditingController nombreCtrl;
   final TextEditingController curpCtrl;
   final TextEditingController telefonoCtrl;
+  final String? sexo;
+  final Map<String, String> sexos;
   final String? tipoLicencia;
   final Map<String, String> tiposLicencia;
+  final ValueChanged<String?> onSexoChanged;
   final ValueChanged<String?> onTipoChanged;
 
   const _ApplicantDataPanel({
@@ -840,8 +1490,11 @@ class _ApplicantDataPanel extends StatelessWidget {
     required this.nombreCtrl,
     required this.curpCtrl,
     required this.telefonoCtrl,
+    required this.sexo,
+    required this.sexos,
     required this.tipoLicencia,
     required this.tiposLicencia,
+    required this.onSexoChanged,
     required this.onTipoChanged,
   });
 
@@ -863,6 +1516,25 @@ class _ApplicantDataPanel extends StatelessWidget {
               prefixIcon: Icon(Icons.person),
               border: OutlineInputBorder(),
             ),
+          ),
+          const SizedBox(height: 10),
+          DropdownButtonFormField<String>(
+            value: sexo,
+            hint: const Text('Seleccione'),
+            decoration: const InputDecoration(
+              labelText: 'Sexo',
+              prefixIcon: Icon(Icons.wc),
+              border: OutlineInputBorder(),
+            ),
+            items: sexos.entries
+                .map(
+                  (entry) => DropdownMenuItem<String>(
+                    value: entry.key,
+                    child: Text(entry.value),
+                  ),
+                )
+                .toList(),
+            onChanged: enabled ? onSexoChanged : null,
           ),
           const SizedBox(height: 10),
           Row(
@@ -1111,6 +1783,9 @@ class _WrittenExamPanel extends StatelessWidget {
   final TextEditingController erroresCtrl;
   final TextEditingController calificacionCtrl;
   final TextEditingController observacionesCtrl;
+  final VoidCallback onGenerate;
+  final VoidCallback onOpen;
+  final VoidCallback onCopy;
   final VoidCallback onSave;
 
   const _WrittenExamPanel({
@@ -1122,22 +1797,130 @@ class _WrittenExamPanel extends StatelessWidget {
     required this.erroresCtrl,
     required this.calificacionCtrl,
     required this.observacionesCtrl,
+    required this.onGenerate,
+    required this.onOpen,
+    required this.onCopy,
     required this.onSave,
   });
 
   @override
   Widget build(BuildContext context) {
+    final hasWrittenExam = constancia.tieneExamenEscrito;
+    final canGenerate =
+        !busy && canEdit && constancia.puedeGenerarExamenEscrito;
+    final canCapture =
+        !busy && canEdit && constancia.puedeCapturarImpreso && hasWrittenExam;
+
     return _Panel(
       icon: Icons.edit_note,
       title: 'Examen escrito',
       child: Column(
         children: [
+          if (hasWrittenExam) ...[
+            Center(
+              child: FutureBuilder<Uint8List>(
+                future: ConstanciasManejoService.fetchWrittenExamQrImage(
+                  constancia,
+                ),
+                builder: (context, snap) {
+                  if (snap.connectionState != ConnectionState.done) {
+                    return const SizedBox(
+                      height: 210,
+                      child: Center(child: CircularProgressIndicator()),
+                    );
+                  }
+
+                  return ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: snap.hasData
+                        ? Image.memory(
+                            snap.data!,
+                            key: ValueKey(
+                              'written:${constancia.id}:${constancia.accesoExamenExpira}',
+                            ),
+                            width: 220,
+                            height: 220,
+                            fit: BoxFit.cover,
+                          )
+                        : Container(
+                            width: 220,
+                            height: 220,
+                            alignment: Alignment.center,
+                            color: Colors.grey.shade100,
+                            child: const Text(
+                              'No se pudo cargar el QR.',
+                              textAlign: TextAlign.center,
+                            ),
+                          ),
+                  );
+                },
+              ),
+            ),
+            const SizedBox(height: 10),
+            SelectableText(
+              constancia.urlExamenEscrito ?? '',
+              style: const TextStyle(fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: [
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: busy ? null : onOpen,
+                    icon: const Icon(Icons.open_in_new),
+                    label: const Text('Abrir / imprimir examen'),
+                  ),
+                ),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: busy ? null : onCopy,
+                    icon: const Icon(Icons.copy),
+                    label: const Text('Copiar liga'),
+                  ),
+                ),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: canGenerate ? onGenerate : null,
+                    icon: const Icon(Icons.refresh),
+                    label: Text(busy ? 'Generando...' : 'Regenerar QR'),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+          ] else ...[
+            Text(
+              constancia.examenAprobado
+                  ? 'El examen escrito ya quedo aprobado.'
+                  : 'Genera el QR del examen escrito. Ese QR va en la hoja; cuando regrese, se escanea para abrir esta ficha y capturar aciertos.',
+              style: TextStyle(color: Colors.grey.shade700),
+            ),
+            if (!constancia.examenAprobado) ...[
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: canGenerate ? onGenerate : null,
+                  icon: const Icon(Icons.qr_code_2),
+                  label: Text(
+                    busy ? 'Generando...' : 'Generar QR de examen escrito',
+                  ),
+                ),
+              ),
+              const SizedBox(height: 14),
+            ],
+          ],
           Row(
             children: [
               Expanded(
                 child: TextField(
                   controller: totalCtrl,
-                  enabled: !busy && canEdit && constancia.puedeCapturarImpreso,
+                  enabled: canCapture,
                   keyboardType: TextInputType.number,
                   decoration: const InputDecoration(
                     labelText: 'Total',
@@ -1149,7 +1932,7 @@ class _WrittenExamPanel extends StatelessWidget {
               Expanded(
                 child: TextField(
                   controller: aciertosCtrl,
-                  enabled: !busy && canEdit && constancia.puedeCapturarImpreso,
+                  enabled: canCapture,
                   keyboardType: TextInputType.number,
                   decoration: const InputDecoration(
                     labelText: 'Aciertos',
@@ -1161,7 +1944,7 @@ class _WrittenExamPanel extends StatelessWidget {
               Expanded(
                 child: TextField(
                   controller: erroresCtrl,
-                  enabled: !busy && canEdit && constancia.puedeCapturarImpreso,
+                  enabled: canCapture,
                   keyboardType: TextInputType.number,
                   decoration: const InputDecoration(
                     labelText: 'Errores',
@@ -1184,7 +1967,7 @@ class _WrittenExamPanel extends StatelessWidget {
           const SizedBox(height: 10),
           TextField(
             controller: observacionesCtrl,
-            enabled: !busy && canEdit && constancia.puedeCapturarImpreso,
+            enabled: canCapture,
             minLines: 2,
             maxLines: 4,
             decoration: const InputDecoration(
@@ -1197,11 +1980,9 @@ class _WrittenExamPanel extends StatelessWidget {
           SizedBox(
             width: double.infinity,
             child: ElevatedButton.icon(
-              onPressed: busy || !canEdit || !constancia.puedeCapturarImpreso
-                  ? null
-                  : onSave,
+              onPressed: canCapture ? onSave : null,
               icon: const Icon(Icons.save),
-              label: Text(busy ? 'Guardando...' : 'Guardar examen escrito'),
+              label: Text(busy ? 'Guardando...' : 'Validar examen escrito'),
             ),
           ),
         ],
@@ -1336,6 +2117,41 @@ class _InfoLine extends StatelessWidget {
                 color: Colors.white,
                 fontWeight: FontWeight.w800,
               ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _LightInfoLine extends StatelessWidget {
+  final String label;
+  final String value;
+
+  const _LightInfoLine({required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 128,
+            child: Text(
+              label,
+              style: TextStyle(
+                color: Colors.grey.shade700,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: const TextStyle(fontWeight: FontWeight.w900),
             ),
           ),
         ],

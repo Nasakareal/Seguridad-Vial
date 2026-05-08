@@ -35,6 +35,8 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
   bool _locating = false;
   bool _draftHydrated = false;
   bool _redirectingToHecho = false;
+  bool _canEditCaptureTimestamp = false;
+  bool _captureTimestampAccessLoaded = false;
   String? _error;
   String? _userLabel;
   String? _clientUuid;
@@ -97,6 +99,7 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
           });
     _loadCategorias();
     _loadUserLabel();
+    unawaited(_loadCaptureTimestampAccess());
   }
 
   @override
@@ -143,6 +146,18 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
       _userLabel = cleanedName.isNotEmpty
           ? cleanedName
           : (cleanedEmail.isNotEmpty ? cleanedEmail : 'Usuario actual');
+    });
+  }
+
+  Future<void> _loadCaptureTimestampAccess() async {
+    final canEdit = await AuthService.canEditCaptureTimestamp();
+    if (!mounted) return;
+    setState(() {
+      _canEditCaptureTimestamp = canEdit;
+      _captureTimestampAccessLoaded = true;
+      if (!canEdit) {
+        _setNow();
+      }
     });
   }
 
@@ -224,8 +239,10 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
       (fields['actividad_subcategoria_id'] ?? '').trim(),
     );
 
-    _fechaCtrl.text = (fields['fecha'] ?? '').trim();
-    _horaCtrl.text = (fields['hora'] ?? '').trim();
+    if (_canEditCaptureTimestamp || !_captureTimestampAccessLoaded) {
+      _fechaCtrl.text = (fields['fecha'] ?? '').trim();
+      _horaCtrl.text = (fields['hora'] ?? '').trim();
+    }
     _lugarCtrl.text = (fields['lugar'] ?? '').trim();
     _municipioCtrl.text = (fields['municipio'] ?? '').trim();
     _latCtrl.text = (fields['lat'] ?? '').trim();
@@ -285,8 +302,10 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
     _categoriaId = _intValue(draft['categoria_id']);
     _subcategoriaId = _intValue(draft['subcategoria_id']);
 
-    _fechaCtrl.text = _stringValue(draft['fecha']) ?? _fechaCtrl.text;
-    _horaCtrl.text = _stringValue(draft['hora']) ?? _horaCtrl.text;
+    if (_canEditCaptureTimestamp || !_captureTimestampAccessLoaded) {
+      _fechaCtrl.text = _stringValue(draft['fecha']) ?? _fechaCtrl.text;
+      _horaCtrl.text = _stringValue(draft['hora']) ?? _horaCtrl.text;
+    }
     _lugarCtrl.text = _stringValue(draft['lugar']) ?? '';
     _municipioCtrl.text = _stringValue(draft['municipio']) ?? '';
     _latCtrl.text = _stringValue(draft['lat']) ?? '';
@@ -968,11 +987,17 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
                           _fechaCtrl,
                           'Fecha',
                           hint: 'YYYY-MM-DD',
+                          readOnly: !_canEditCaptureTimestamp,
                         ),
                       ),
                       const SizedBox(width: 10),
                       Expanded(
-                        child: _textField(_horaCtrl, 'Hora', hint: 'HH:mm'),
+                        child: _textField(
+                          _horaCtrl,
+                          'Hora',
+                          hint: 'HH:mm',
+                          readOnly: !_canEditCaptureTimestamp,
+                        ),
                       ),
                     ],
                   ),
@@ -980,7 +1005,7 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
                   Align(
                     alignment: Alignment.centerLeft,
                     child: OutlinedButton.icon(
-                      onPressed: _saving
+                      onPressed: (_saving || !_canEditCaptureTimestamp)
                           ? null
                           : () {
                               setState(() => _setNow());
@@ -990,6 +1015,19 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
                       label: const Text('Usar fecha y hora actual'),
                     ),
                   ),
+                  if (!_canEditCaptureTimestamp) ...[
+                    const SizedBox(height: 8),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        'Fecha y hora se fijan con el reloj del servidor al guardar.',
+                        style: TextStyle(
+                          color: Colors.grey.shade700,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 12),
                   _textField(_lugarCtrl, 'Lugar'),
                   const SizedBox(height: 12),

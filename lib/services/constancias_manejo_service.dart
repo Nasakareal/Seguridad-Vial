@@ -65,6 +65,58 @@ class ConstanciasManejoService {
     return _cleanToken(value);
   }
 
+  static String parseWrittenExamToken(String raw) {
+    final value = raw.trim();
+    if (value.isEmpty) return '';
+
+    final uri = Uri.tryParse(value);
+    if (uri != null && uri.pathSegments.isNotEmpty) {
+      final segments = uri.pathSegments
+          .map((segment) => Uri.decodeComponent(segment).trim())
+          .where((segment) => segment.isNotEmpty)
+          .toList();
+      final index = segments.indexWhere(
+        (segment) => segment.toLowerCase() == 'examen-escrito',
+      );
+      if (index >= 0 && index + 1 < segments.length) {
+        return _cleanToken(segments[index + 1]);
+      }
+    }
+
+    if (value.toUpperCase().startsWith('SV-EXAMEN-MANEJO:')) {
+      return _cleanToken(value.split(':').last);
+    }
+
+    return '';
+  }
+
+  static String parseExamRequestToken(String raw) {
+    final value = raw.trim();
+    if (value.isEmpty) return '';
+
+    final uri = Uri.tryParse(value);
+    if (uri != null && uri.pathSegments.isNotEmpty) {
+      final segments = uri.pathSegments
+          .map((segment) => Uri.decodeComponent(segment).trim())
+          .where((segment) => segment.isNotEmpty)
+          .toList();
+      for (final marker in const ['examen', 'examen-escrito']) {
+        final index = segments.indexWhere(
+          (segment) => segment.toLowerCase() == marker,
+        );
+        if (index >= 0 && index + 1 < segments.length) {
+          return _cleanToken(segments[index + 1]);
+        }
+      }
+    }
+
+    if (value.toUpperCase().startsWith('SV-EXAMEN-MANEJO:')) {
+      return _cleanToken(value.split(':').last);
+    }
+
+    return '';
+  }
+
   static Future<ConstanciaManejo> buscarPorQr(String rawOrToken) async {
     final token = parseQrToken(rawOrToken);
     if (token.isEmpty) {
@@ -79,6 +131,42 @@ class ConstanciasManejoService {
         .timeout(const Duration(seconds: 15));
 
     return _decodeConstancia(resp);
+  }
+
+  static Future<ConstanciaManejo> buscarExamenEscritoPorQr(
+    String rawOrToken,
+  ) async {
+    final token = parseWrittenExamToken(rawOrToken);
+    if (token.isEmpty) {
+      throw Exception('El QR no contiene un examen escrito valido.');
+    }
+
+    final resp = await http
+        .get(
+          Uri.parse('$_base/examen-escrito/${Uri.encodeComponent(token)}'),
+          headers: await authHeaders(json: false),
+        )
+        .timeout(const Duration(seconds: 15));
+
+    return _decodeConstancia(resp);
+  }
+
+  static Future<ConstanciaExamenSolicitud> buscarExamenPorQr(
+    String rawOrToken,
+  ) async {
+    final token = parseExamRequestToken(rawOrToken);
+    if (token.isEmpty) {
+      throw Exception('El QR no contiene un examen valido.');
+    }
+
+    final resp = await http
+        .get(
+          Uri.parse('$_base/examenes/qr/${Uri.encodeComponent(token)}'),
+          headers: await authHeaders(json: false),
+        )
+        .timeout(const Duration(seconds: 15));
+
+    return _decodeExamenSolicitud(resp);
   }
 
   static Future<ConstanciaManejo> fetch(int id) async {
@@ -212,9 +300,38 @@ class ConstanciasManejoService {
     );
   }
 
+  static Future<ConstanciaExamenSolicitud> crearExamen({
+    required int moduloId,
+    required String nombreSolicitante,
+    required String sexo,
+    required String tipoLicencia,
+    required String modalidad,
+    String? curp,
+    String? telefono,
+  }) async {
+    final resp = await http
+        .post(
+          Uri.parse('$_base/examenes'),
+          headers: await authHeaders(),
+          body: jsonEncode(<String, dynamic>{
+            'modulo_id': moduloId,
+            'nombre_solicitante': nombreSolicitante.trim(),
+            'sexo': sexo.trim(),
+            'curp': curp?.trim(),
+            'telefono': telefono?.trim(),
+            'tipo_licencia': tipoLicencia.trim(),
+            'modalidad': modalidad.trim(),
+          }),
+        )
+        .timeout(const Duration(seconds: 20));
+
+    return _decodeExamenSolicitud(resp);
+  }
+
   static Future<ConstanciaManejo> generarAcceso({
     required int id,
     required String nombreSolicitante,
+    required String sexo,
     required String tipoLicencia,
     String? curp,
     String? telefono,
@@ -225,6 +342,32 @@ class ConstanciasManejoService {
           headers: await authHeaders(),
           body: jsonEncode(<String, dynamic>{
             'nombre_solicitante': nombreSolicitante.trim(),
+            'sexo': sexo.trim(),
+            'curp': curp?.trim(),
+            'telefono': telefono?.trim(),
+            'tipo_licencia': tipoLicencia.trim(),
+          }),
+        )
+        .timeout(const Duration(seconds: 15));
+
+    return _decodeConstancia(resp);
+  }
+
+  static Future<ConstanciaManejo> generarExamenEscrito({
+    required int id,
+    required String nombreSolicitante,
+    required String sexo,
+    required String tipoLicencia,
+    String? curp,
+    String? telefono,
+  }) async {
+    final resp = await http
+        .post(
+          Uri.parse('$_base/$id/generar-examen-escrito'),
+          headers: await authHeaders(),
+          body: jsonEncode(<String, dynamic>{
+            'nombre_solicitante': nombreSolicitante.trim(),
+            'sexo': sexo.trim(),
             'curp': curp?.trim(),
             'telefono': telefono?.trim(),
             'tipo_licencia': tipoLicencia.trim(),
@@ -244,6 +387,50 @@ class ConstanciasManejoService {
     final url = constancia.urlExamenQr?.trim() ?? '';
     if (url.isEmpty) {
       throw Exception('La constancia no tiene QR temporal disponible.');
+    }
+
+    final resp = await http
+        .get(Uri.parse(url), headers: await authHeaders(json: false))
+        .timeout(const Duration(seconds: 15));
+
+    if (resp.statusCode < 200 || resp.statusCode >= 300) {
+      throw Exception(_parseBackendError(resp.body, resp.statusCode));
+    }
+
+    return resp.bodyBytes;
+  }
+
+  static Future<Uint8List> fetchWrittenExamQrImage(
+    ConstanciaManejo constancia,
+  ) async {
+    final embedded = _decodeEmbeddedQr(constancia.qrExamenEscritoBase64);
+    if (embedded != null) return embedded;
+
+    final url = constancia.urlExamenEscritoQr?.trim() ?? '';
+    if (url.isEmpty) {
+      throw Exception('La constancia no tiene QR de examen escrito.');
+    }
+
+    final resp = await http
+        .get(Uri.parse(url), headers: await authHeaders(json: false))
+        .timeout(const Duration(seconds: 15));
+
+    if (resp.statusCode < 200 || resp.statusCode >= 300) {
+      throw Exception(_parseBackendError(resp.body, resp.statusCode));
+    }
+
+    return resp.bodyBytes;
+  }
+
+  static Future<Uint8List> fetchExamRequestQrImage(
+    ConstanciaExamenSolicitud solicitud,
+  ) async {
+    final embedded = _decodeEmbeddedQr(solicitud.qrExamenBase64);
+    if (embedded != null) return embedded;
+
+    final url = solicitud.urlExamenQr?.trim() ?? '';
+    if (url.isEmpty) {
+      throw Exception('El examen no tiene QR disponible.');
     }
 
     final resp = await http
@@ -286,6 +473,7 @@ class ConstanciasManejoService {
   static Future<ConstanciaManejo> capturarImpreso({
     required int id,
     required String nombreSolicitante,
+    required String sexo,
     required String tipoLicencia,
     required int totalPreguntas,
     required int aciertos,
@@ -301,6 +489,7 @@ class ConstanciasManejoService {
           headers: await authHeaders(),
           body: jsonEncode(<String, dynamic>{
             'nombre_solicitante': nombreSolicitante.trim(),
+            'sexo': sexo.trim(),
             'curp': curp?.trim(),
             'telefono': telefono?.trim(),
             'tipo_licencia': tipoLicencia.trim(),
@@ -309,6 +498,48 @@ class ConstanciasManejoService {
             'errores': errores,
             'calificacion': calificacion,
             'observaciones': observaciones?.trim(),
+          }),
+        )
+        .timeout(const Duration(seconds: 15));
+
+    return _decodeConstancia(resp);
+  }
+
+  static Future<ConstanciaExamenSolicitud> capturarExamenSolicitudImpresa({
+    required int id,
+    required int totalPreguntas,
+    required int aciertos,
+    required int errores,
+    String? observaciones,
+  }) async {
+    final resp = await http
+        .post(
+          Uri.parse('$_base/examenes/$id/capturar-impreso'),
+          headers: await authHeaders(),
+          body: jsonEncode(<String, dynamic>{
+            'total_preguntas': totalPreguntas,
+            'aciertos': aciertos,
+            'errores': errores,
+            'observaciones': observaciones?.trim(),
+          }),
+        )
+        .timeout(const Duration(seconds: 15));
+
+    return _decodeExamenSolicitud(resp);
+  }
+
+  static Future<ConstanciaManejo> activarConExamen({
+    required int examenId,
+    String? constanciaQr,
+    int? constanciaId,
+  }) async {
+    final resp = await http
+        .post(
+          Uri.parse('$_base/examenes/$examenId/activar-constancia'),
+          headers: await authHeaders(),
+          body: jsonEncode(<String, dynamic>{
+            'constancia_qr': constanciaQr?.trim(),
+            'constancia_id': constanciaId,
           }),
         )
         .timeout(const Duration(seconds: 15));
@@ -337,6 +568,27 @@ class ConstanciasManejoService {
       }
       if (raw.containsKey('id')) {
         return ConstanciaManejo.fromJson(raw);
+      }
+    }
+
+    throw Exception('Respuesta invalida del servidor.');
+  }
+
+  static ConstanciaExamenSolicitud _decodeExamenSolicitud(http.Response resp) {
+    if (resp.statusCode < 200 || resp.statusCode >= 300) {
+      throw Exception(_parseBackendError(resp.body, resp.statusCode));
+    }
+
+    final raw = jsonDecode(resp.body);
+    if (raw is Map<String, dynamic>) {
+      final data = raw['examen'] ?? raw['data'];
+      if (data is Map) {
+        return ConstanciaExamenSolicitud.fromJson(
+          Map<String, dynamic>.from(data),
+        );
+      }
+      if (raw.containsKey('folio_examen')) {
+        return ConstanciaExamenSolicitud.fromJson(raw);
       }
     }
 

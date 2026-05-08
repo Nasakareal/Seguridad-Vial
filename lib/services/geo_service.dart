@@ -1,5 +1,7 @@
 import 'package:geolocator/geolocator.dart';
 
+import 'delegacion_distance_service.dart';
+
 class GeoResult {
   final double? lat;
   final double? lng;
@@ -53,6 +55,12 @@ class GeoService {
 
       final acc = pos.accuracy;
       final calidad = acc.isFinite ? acc.toStringAsFixed(1) : null;
+      await DelegacionDistanceService.recordLocalMileagePoint(
+        lat: pos.latitude,
+        lng: pos.longitude,
+        accuracyMeters: acc,
+        capturedAt: pos.timestamp,
+      );
 
       return GeoResult(
         lat: pos.latitude,

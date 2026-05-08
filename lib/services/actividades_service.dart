@@ -622,7 +622,12 @@ class ActividadesService {
   }) async {
     final clientUuid = _ensureClientUuid(data.clientUuid);
     final fields = data.toFields();
-    await _addKilometrosRecorridos(fields, lat: data.lat, lng: data.lng);
+    await _addLocalKilometrosRecorridos(
+      fields,
+      lat: data.lat,
+      lng: data.lng,
+      notaGeo: data.notaGeo,
+    );
     fields['client_uuid'] = clientUuid;
     final landscapeFotos = await PhotoOrientationService.forceLandscapeAll(
       fotos,
@@ -690,7 +695,11 @@ class ActividadesService {
     List<int> eliminarFotos = const <int>[],
   }) async {
     final fields = data.toFields();
-    await _addKilometrosRecorridos(fields, lat: data.lat, lng: data.lng);
+    await _addDelegacionKilometrosRecorridos(
+      fields,
+      lat: data.lat,
+      lng: data.lng,
+    );
     fields['_method'] = 'PUT';
 
     for (var index = 0; index < eliminarFotos.length; index += 1) {
@@ -742,7 +751,35 @@ class ActividadesService {
     return OfflineSyncService.newClientUuid();
   }
 
-  static Future<void> _addKilometrosRecorridos(
+  static Future<void> _addLocalKilometrosRecorridos(
+    Map<String, String> fields, {
+    required String? lat,
+    required String? lng,
+    String? notaGeo,
+  }) async {
+    final km = await DelegacionDistanceService.localMileageForCaptureKmField(
+      lat: double.tryParse(lat?.trim() ?? ''),
+      lng: double.tryParse(lng?.trim() ?? ''),
+      accuracyMeters: _accuracyMetersFromGeoNote(notaGeo),
+    );
+    if (km == null) return;
+
+    fields[DelegacionDistanceService.kilometrosRecorridosField] = km;
+  }
+
+  static double? _accuracyMetersFromGeoNote(String? notaGeo) {
+    final text = (notaGeo ?? '').trim();
+    if (text.isEmpty) return null;
+
+    final accMatch = RegExp(
+      r'ACC:\s*([0-9]+(?:[\.,][0-9]+)?)',
+      caseSensitive: false,
+    ).firstMatch(text);
+    final raw = accMatch?.group(1) ?? text;
+    return double.tryParse(raw.replaceAll(',', '.'));
+  }
+
+  static Future<void> _addDelegacionKilometrosRecorridos(
     Map<String, String> fields, {
     required String? lat,
     required String? lng,

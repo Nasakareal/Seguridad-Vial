@@ -66,6 +66,7 @@ class _HechoFormState extends State<HechoForm> {
   bool _hideDelegacionesAdminFields = false;
   bool _canUseDictamenes = false;
   bool _canCaptureMpTurnado = false;
+  bool _canEditCaptureTimestamp = false;
 
   TimeOfDay? _hora;
   DateTime? _fecha;
@@ -159,6 +160,7 @@ class _HechoFormState extends State<HechoForm> {
     final canUseDictamenes =
         !isDelegaciones && await AuthService.isSiniestrosUser();
     final canCaptureMpTurnado = canUseDictamenes || isDelegaciones;
+    final canEditCaptureTimestamp = await AuthService.canEditCaptureTimestamp();
     if (!mounted) return;
 
     setState(() {
@@ -168,6 +170,7 @@ class _HechoFormState extends State<HechoForm> {
       _hideDelegacionesAdminFields = hideDelegacionesAdminFields;
       _canUseDictamenes = canUseDictamenes;
       _canCaptureMpTurnado = canCaptureMpTurnado;
+      _canEditCaptureTimestamp = canEditCaptureTimestamp;
       if (_usesRelaxedHechosRules) {
         widget.data.sector = null;
       }
@@ -176,10 +179,10 @@ class _HechoFormState extends State<HechoForm> {
         widget.data.hora = _hora;
       }
       if (_hideDelegacionesAdminFields) {
-        _hora ??= widget.data.hora ?? HechosFormService.currentTime();
-        _fecha ??= widget.data.fecha ?? DateTime.now();
-        widget.data.hora = _hora;
-        widget.data.fecha = _fecha;
+        _ensureReadOnlyCaptureTimestamp();
+      }
+      if (!_canEditCaptureTimestamp) {
+        _ensureReadOnlyCaptureTimestamp();
       }
       if (!_canUseDictamenes) {
         widget.data.dictamenId = null;
@@ -190,6 +193,13 @@ class _HechoFormState extends State<HechoForm> {
         _resetMpFields();
       }
     });
+  }
+
+  void _ensureReadOnlyCaptureTimestamp() {
+    _hora ??= widget.data.hora ?? HechosFormService.currentTime();
+    _fecha ??= widget.data.fecha ?? DateTime.now();
+    widget.data.hora = _hora;
+    widget.data.fecha = _fecha;
   }
 
   @override
@@ -636,11 +646,8 @@ class _HechoFormState extends State<HechoForm> {
       d.hora = _hora;
     }
 
-    if (_hideDelegacionesAdminFields) {
-      _hora ??= d.hora ?? HechosFormService.currentTime();
-      _fecha ??= d.fecha ?? DateTime.now();
-      d.hora = _hora;
-      d.fecha = _fecha;
+    if (_hideDelegacionesAdminFields || !_canEditCaptureTimestamp) {
+      _ensureReadOnlyCaptureTimestamp();
     }
 
     if (_hora == null) {
@@ -734,6 +741,10 @@ class _HechoFormState extends State<HechoForm> {
     d.propiedadesAfectadas = _propsCtrl.text;
     d.montoDanos = _montoCtrl.text;
 
+    if (!_canEditCaptureTimestamp) {
+      _ensureReadOnlyCaptureTimestamp();
+    }
+
     d.hora = _isPerito ? HechosFormService.currentTime() : _hora;
     d.fecha = _fecha;
   }
@@ -795,6 +806,8 @@ class _HechoFormState extends State<HechoForm> {
   Widget build(BuildContext context) {
     final d = widget.data;
     final showDelegacionesAdminFields = !_hideDelegacionesAdminFields;
+    final showCaptureTimestampFields =
+        showDelegacionesAdminFields || !_canEditCaptureTimestamp;
 
     if (_loadingRoleFlags) {
       return const Padding(
@@ -946,22 +959,29 @@ class _HechoFormState extends State<HechoForm> {
               validator: (v) => _requiredMaxValidator(v, 50, 'Unidad'),
             ),
 
-          if (showDelegacionesAdminFields) ...[
+          if (showCaptureTimestampFields) ...[
             const SizedBox(height: 12),
             Row(
               children: [
                 Expanded(
                   key: _horaFieldKey,
                   child: InkWell(
-                    onTap: (_submitting || _isPerito) ? null : _pickHora,
+                    onTap:
+                        (_submitting || _isPerito || !_canEditCaptureTimestamp)
+                        ? null
+                        : _pickHora,
                     child: InputDecorator(
                       decoration:
                           _dec(
-                            _isPerito ? 'Hora (automática)' : 'Hora *',
+                            (!_canEditCaptureTimestamp || _isPerito)
+                                ? 'Hora (servidor)'
+                                : 'Hora *',
                           ).copyWith(
-                            helperText: _isPerito
-                                ? 'Para perito se usa la hora actual del servidor.'
-                                : null,
+                            helperText: !_canEditCaptureTimestamp
+                                ? 'El servidor conserva o fija la hora al guardar.'
+                                : (_isPerito
+                                      ? 'Para perito se usa la hora actual del servidor.'
+                                      : null),
                           ),
                       child: Text(
                         _hora != null
@@ -975,9 +995,20 @@ class _HechoFormState extends State<HechoForm> {
                 Expanded(
                   key: _fechaFieldKey,
                   child: InkWell(
-                    onTap: _submitting ? null : _pickFecha,
+                    onTap: (_submitting || !_canEditCaptureTimestamp)
+                        ? null
+                        : _pickFecha,
                     child: InputDecorator(
-                      decoration: _dec('Fecha *'),
+                      decoration:
+                          _dec(
+                            _canEditCaptureTimestamp
+                                ? 'Fecha *'
+                                : 'Fecha (servidor)',
+                          ).copyWith(
+                            helperText: !_canEditCaptureTimestamp
+                                ? 'Solo Administrador y Superadmin pueden cambiarla.'
+                                : null,
+                          ),
                       child: Text(
                         _fecha != null
                             ? HechosFormService.ymd(_fecha!)

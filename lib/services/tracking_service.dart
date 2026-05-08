@@ -8,6 +8,7 @@ import 'package:geolocator/geolocator.dart';
 import '../core/platform_support.dart';
 import '../widgets/location_disclosure_dialog.dart';
 import 'auth_service.dart';
+import 'delegacion_distance_service.dart';
 import 'location_service.dart';
 import 'tracking_guard_constants.dart';
 import 'tracking_guard_notification_service.dart';
@@ -258,6 +259,12 @@ class TrackingService {
 
     _lastGood = pos;
     _lastGoodAt = DateTime.now();
+    await DelegacionDistanceService.recordLocalMileagePoint(
+      lat: pos.latitude,
+      lng: pos.longitude,
+      accuracyMeters: pos.accuracy,
+      capturedAt: pos.timestamp,
+    );
 
     final intervalProfile =
         await AuthService.getLocationTrackingIntervalProfile();

@@ -53,6 +53,8 @@ class AppAccountDrawer extends StatelessWidget {
         '';
 
     final isSuperadmin = await AuthService.isSuperadmin();
+    final canSeeDelegacionesExcelRevision =
+        isSuperadmin || await AuthService.isDelegacionesUser();
 
     return _AccountSummary(
       name: name,
@@ -60,6 +62,7 @@ class AppAccountDrawer extends StatelessWidget {
       role: role,
       unit: unit,
       isSuperadmin: isSuperadmin,
+      canSeeDelegacionesExcelRevision: canSeeDelegacionesExcelRevision,
     );
   }
 
@@ -150,6 +153,21 @@ class AppAccountDrawer extends StatelessWidget {
                         ),
                       ),
                     ],
+                    if (summary?.canSeeDelegacionesExcelRevision == true) ...[
+                      const SizedBox(height: 12),
+                      const DrawerSectionLabel(label: 'Delegaciones'),
+                      DrawerSurface(
+                        child: DrawerActionTile(
+                          icon: Icons.fact_check_outlined,
+                          title: 'Revisión Excel Delegaciones',
+                          subtitle: 'Conteos, alertas y regionales del corte',
+                          onTap: () => _goTo(
+                            context,
+                            AppRoutes.delegacionesExcelRevision,
+                          ),
+                        ),
+                      ),
+                    ],
                     const SizedBox(height: 12),
                     const DrawerSectionLabel(label: 'Sesión'),
                     DrawerSurface(
@@ -178,6 +196,7 @@ class _AccountSummary {
   final String role;
   final String unit;
   final bool isSuperadmin;
+  final bool canSeeDelegacionesExcelRevision;
 
   const _AccountSummary({
     required this.name,
@@ -185,6 +204,7 @@ class _AccountSummary {
     required this.role,
     required this.unit,
     required this.isSuperadmin,
+    required this.canSeeDelegacionesExcelRevision,
   });
 }
 

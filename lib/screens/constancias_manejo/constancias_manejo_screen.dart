@@ -6,6 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../app/routes.dart';
 import '../../models/constancia_manejo.dart';
 import '../../services/constancias_manejo_service.dart';
+import 'constancia_manejo_scan_screen.dart';
 
 class ConstanciasManejoScreen extends StatefulWidget {
   const ConstanciasManejoScreen({super.key});
@@ -96,18 +97,18 @@ class _ConstanciasManejoScreenState extends State<ConstanciasManejoScreen> {
   Future<void> _openUrl(String? rawUrl) async {
     final value = rawUrl?.trim() ?? '';
     if (value.isEmpty) {
-      _showSnack('No hay liga de impresion disponible.');
+      _showSnack('No hay liga disponible.');
       return;
     }
 
     final uri = Uri.tryParse(value);
     if (uri == null) {
-      _showSnack('La liga de impresion no es valida.');
+      _showSnack('La liga no es valida.');
       return;
     }
 
     final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
-    if (!opened) _showSnack('No se pudo abrir la liga de impresion.');
+    if (!opened) _showSnack('No se pudo abrir la liga.');
   }
 
   Future<void> _createBatch() async {
@@ -133,6 +134,22 @@ class _ConstanciasManejoScreenState extends State<ConstanciasManejoScreen> {
     );
   }
 
+  Future<void> _createExam() async {
+    final result = await showDialog<ConstanciaExamenSolicitud>(
+      context: context,
+      builder: (context) => const _CreateExamDialog(),
+    );
+    if (result == null || !mounted) return;
+
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) =>
+            ConstanciaExamenSolicitudDetailScreen(initialExamen: result),
+      ),
+    );
+  }
+
   void _showSnack(String message) {
     if (!mounted) return;
     ScaffoldMessenger.of(
@@ -147,6 +164,11 @@ class _ConstanciasManejoScreenState extends State<ConstanciasManejoScreen> {
       appBar: AppBar(
         title: const Text('Constancias de manejo'),
         actions: [
+          IconButton(
+            tooltip: 'Generar lote para imprimir',
+            icon: const Icon(Icons.print),
+            onPressed: _createBatch,
+          ),
           IconButton(
             tooltip: 'Escanear QR',
             icon: const Icon(Icons.qr_code_scanner),
@@ -163,9 +185,9 @@ class _ConstanciasManejoScreenState extends State<ConstanciasManejoScreen> {
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: _createBatch,
-        icon: const Icon(Icons.add),
-        label: const Text('Generar lote'),
+        onPressed: _createExam,
+        icon: const Icon(Icons.note_add),
+        label: const Text('Nuevo examen'),
       ),
       body: SafeArea(
         child: Column(
@@ -330,6 +352,279 @@ class _CreateBatchDialog extends StatefulWidget {
 
   @override
   State<_CreateBatchDialog> createState() => _CreateBatchDialogState();
+}
+
+class _CreateExamDialog extends StatefulWidget {
+  const _CreateExamDialog();
+
+  @override
+  State<_CreateExamDialog> createState() => _CreateExamDialogState();
+}
+
+class _CreateExamDialogState extends State<_CreateExamDialog> {
+  static const _tiposLicencia = <String, String>{
+    'SERVICIO_PUBLICO': 'Servicio publico',
+    'AUTOMOVILISTA': 'Automovilista',
+    'CHOFER': 'Chofer',
+    'MOTOCICLISTA': 'Motociclista',
+    'PERMISO': 'Permiso',
+  };
+  static const _sexos = <String, String>{'HOMBRE': 'Hombre', 'MUJER': 'Mujer'};
+
+  final _nombreCtrl = TextEditingController();
+  final _curpCtrl = TextEditingController();
+  final _telefonoCtrl = TextEditingController();
+  List<ConstanciaModulo> _modulos = const [];
+  int? _moduloId;
+  String? _sexo = 'HOMBRE';
+  String? _tipoLicencia = 'AUTOMOVILISTA';
+  String _modalidad = 'LINEA';
+  bool _loading = true;
+  bool _saving = false;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_loadModules());
+  }
+
+  @override
+  void dispose() {
+    _nombreCtrl.dispose();
+    _curpCtrl.dispose();
+    _telefonoCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadModules() async {
+    try {
+      final modulos = await ConstanciasManejoService.modulos();
+      if (!mounted) return;
+      setState(() {
+        _modulos = modulos;
+        _moduloId = modulos.isNotEmpty ? modulos.first.id : null;
+        _loading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _error = ConstanciasManejoService.cleanExceptionMessage(e);
+      });
+    }
+  }
+
+  Future<void> _save() async {
+    final moduloId = _moduloId;
+    final nombre = _nombreCtrl.text.trim();
+    final sexo = _sexo;
+    final tipoLicencia = _tipoLicencia;
+
+    if (moduloId == null) {
+      setState(() => _error = 'Selecciona un modulo.');
+      return;
+    }
+    if (nombre.isEmpty) {
+      setState(() => _error = 'Captura el nombre completo.');
+      return;
+    }
+    if (sexo == null) {
+      setState(() => _error = 'Selecciona el sexo.');
+      return;
+    }
+    if (tipoLicencia == null) {
+      setState(() => _error = 'Selecciona el tipo de licencia.');
+      return;
+    }
+
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
+
+    try {
+      final result = await ConstanciasManejoService.crearExamen(
+        moduloId: moduloId,
+        nombreSolicitante: nombre,
+        sexo: sexo,
+        curp: _curpCtrl.text,
+        telefono: _telefonoCtrl.text,
+        tipoLicencia: tipoLicencia,
+        modalidad: _modalidad,
+      );
+      if (!mounted) return;
+      Navigator.pop(context, result);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _saving = false;
+        _error = ConstanciasManejoService.cleanExceptionMessage(e);
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Nuevo examen'),
+      content: SizedBox(
+        width: 460,
+        child: _loading
+            ? const Padding(
+                padding: EdgeInsets.all(24),
+                child: Center(child: CircularProgressIndicator()),
+              )
+            : SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    DropdownButtonFormField<int>(
+                      value: _moduloId,
+                      decoration: const InputDecoration(
+                        labelText: 'Modulo evaluador',
+                        border: OutlineInputBorder(),
+                      ),
+                      items: _modulos
+                          .map(
+                            (modulo) => DropdownMenuItem<int>(
+                              value: modulo.id,
+                              child: Text(
+                                modulo.label,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          )
+                          .toList(),
+                      onChanged: _saving
+                          ? null
+                          : (value) => setState(() => _moduloId = value),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: _nombreCtrl,
+                      enabled: !_saving,
+                      textCapitalization: TextCapitalization.words,
+                      decoration: const InputDecoration(
+                        labelText: 'Nombre completo',
+                        prefixIcon: Icon(Icons.person),
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<String>(
+                      value: _sexo,
+                      decoration: const InputDecoration(
+                        labelText: 'Sexo',
+                        prefixIcon: Icon(Icons.wc),
+                        border: OutlineInputBorder(),
+                      ),
+                      items: _sexos.entries
+                          .map(
+                            (entry) => DropdownMenuItem<String>(
+                              value: entry.key,
+                              child: Text(entry.value),
+                            ),
+                          )
+                          .toList(),
+                      onChanged: _saving
+                          ? null
+                          : (value) => setState(() => _sexo = value),
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: _curpCtrl,
+                            enabled: !_saving,
+                            textCapitalization: TextCapitalization.characters,
+                            decoration: const InputDecoration(
+                              labelText: 'CURP',
+                              border: OutlineInputBorder(),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: TextField(
+                            controller: _telefonoCtrl,
+                            enabled: !_saving,
+                            keyboardType: TextInputType.phone,
+                            decoration: const InputDecoration(
+                              labelText: 'Telefono',
+                              border: OutlineInputBorder(),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<String>(
+                      value: _tipoLicencia,
+                      decoration: const InputDecoration(
+                        labelText: 'Tipo de licencia',
+                        prefixIcon: Icon(Icons.badge),
+                        border: OutlineInputBorder(),
+                      ),
+                      items: _tiposLicencia.entries
+                          .map(
+                            (entry) => DropdownMenuItem<String>(
+                              value: entry.key,
+                              child: Text(entry.value),
+                            ),
+                          )
+                          .toList(),
+                      onChanged: _saving
+                          ? null
+                          : (value) => setState(() => _tipoLicencia = value),
+                    ),
+                    const SizedBox(height: 12),
+                    SegmentedButton<String>(
+                      segments: const [
+                        ButtonSegment(
+                          value: 'LINEA',
+                          icon: Icon(Icons.qr_code_2),
+                          label: Text('En linea'),
+                        ),
+                        ButtonSegment(
+                          value: 'IMPRESO',
+                          icon: Icon(Icons.edit_note),
+                          label: Text('Escrito'),
+                        ),
+                      ],
+                      selected: {_modalidad},
+                      onSelectionChanged: _saving
+                          ? null
+                          : (value) => setState(() => _modalidad = value.first),
+                    ),
+                    if ((_error ?? '').isNotEmpty) ...[
+                      const SizedBox(height: 10),
+                      Text(
+                        _error!,
+                        style: const TextStyle(
+                          color: Color(0xFFB91C1C),
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: _saving ? null : () => Navigator.pop(context),
+          child: const Text('Cancelar'),
+        ),
+        ElevatedButton.icon(
+          onPressed: _saving ? null : _save,
+          icon: const Icon(Icons.qr_code_2),
+          label: Text(_saving ? 'Generando...' : 'Generar examen'),
+        ),
+      ],
+    );
+  }
 }
 
 class _CreateBatchDialogState extends State<_CreateBatchDialog> {

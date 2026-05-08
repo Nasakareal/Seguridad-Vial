@@ -5,6 +5,7 @@ import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:geolocator/geolocator.dart';
 
 import 'auth_service.dart';
+import 'delegacion_distance_service.dart';
 import 'location_service.dart';
 import 'location_flag_service.dart';
 import 'tracking_guard_constants.dart';
@@ -118,6 +119,13 @@ class TrackingTaskHandler extends TaskHandler {
 
       final age = DateTime.now().difference(pos.timestamp);
       if (age.inMinutes >= 2) return;
+
+      await DelegacionDistanceService.recordLocalMileagePoint(
+        lat: pos.latitude,
+        lng: pos.longitude,
+        accuracyMeters: pos.accuracy,
+        capturedAt: pos.timestamp,
+      );
 
       final intervalProfile =
           await AuthService.getLocationTrackingIntervalProfile();
