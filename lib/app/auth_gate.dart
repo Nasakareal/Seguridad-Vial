@@ -5,6 +5,7 @@ import '../services/home_resolver_service.dart';
 
 import '../screens/welcome_screen.dart';
 import '../screens/home_agente_upec_screen.dart';
+import '../screens/home_delegaciones_screen.dart';
 import '../screens/home_screen.dart';
 import '../screens/home_perito_screen.dart';
 
@@ -26,6 +27,12 @@ class AuthGate extends StatelessWidget {
         await HomeResolverService.isAgenteUpecHomeAvailable();
     if (agenteUpecHome) {
       return const HomeAgenteUpecScreen();
+    }
+
+    final delegacionesHome =
+        await HomeResolverService.isDelegacionesPoliciaHomeAvailable();
+    if (delegacionesHome) {
+      return const HomeDelegacionesScreen();
     }
 
     final peritoHome = await HomeResolverService.isPeritoHomeAvailable();

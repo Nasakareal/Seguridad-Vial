@@ -12,6 +12,7 @@ import '../../services/local_draft_service.dart';
 import '../../services/offline_sync_service.dart';
 import '../../services/vehiculo_form_service.dart';
 import '../../services/gruas_catalog_service.dart';
+import '../../widgets/antecedente_highlight_tile.dart';
 
 class VehiculoCreateScreen extends StatefulWidget {
   const VehiculoCreateScreen({super.key});
@@ -1130,8 +1131,8 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
                 ),
               ),
               const SizedBox(height: 6),
-              SwitchListTile(
-                title: const Text('Antecedente del vehículo'),
+              AntecedenteHighlightTile(
+                title: 'Antecedente del vehículo',
                 value: _antecedenteVehiculo,
                 onChanged: (v) {
                   setState(() => _antecedenteVehiculo = v);

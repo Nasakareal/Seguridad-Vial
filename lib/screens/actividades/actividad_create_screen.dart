@@ -41,6 +41,7 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
   String? _userLabel;
   String? _clientUuid;
   String _locationStatus = 'Aun no se ha capturado la ubicacion.';
+  Map<ActividadValidationTarget, String> _fieldErrors = {};
 
   List<ActividadCategoria> _categorias = [];
   List<ActividadSubcategoria> _subcategorias = [];
@@ -68,6 +69,19 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
   final _personasDetenidasCtrl = TextEditingController(text: '0');
   final _elementosCtrl = TextEditingController();
   final _patrullasCtrl = TextEditingController();
+
+  final _categoriaFieldKey = GlobalKey();
+  final _subcategoriaFieldKey = GlobalKey();
+  final _fechaFieldKey = GlobalKey();
+  final _horaFieldKey = GlobalKey();
+  final _lugarFieldKey = GlobalKey();
+  final _municipioFieldKey = GlobalKey();
+  final _ubicacionCardKey = GlobalKey();
+  final _personasAlcanzadasFieldKey = GlobalKey();
+  final _personasParticipantesFieldKey = GlobalKey();
+  final _personasDetenidasFieldKey = GlobalKey();
+  final _vehiculosCardKey = GlobalKey();
+  final _fotosCardKey = GlobalKey();
 
   final ImagePicker _picker = ImagePicker();
   late final LocalDraftAutosave _draft;
@@ -560,7 +574,10 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
   }
 
   Future<void> _pickFromGallery() async {
-    setState(() => _error = null);
+    setState(() {
+      _error = null;
+      _removeFieldError(ActividadValidationTarget.fotos);
+    });
 
     final picked = await _picker.pickMultiImage(
       imageQuality: 85,
@@ -586,12 +603,16 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
           _fotos.add(file);
         }
       }
+      _removeFieldError(ActividadValidationTarget.fotos);
     });
     _draft.notifyChanged();
   }
 
   Future<void> _pickFromCamera() async {
-    setState(() => _error = null);
+    setState(() {
+      _error = null;
+      _removeFieldError(ActividadValidationTarget.fotos);
+    });
 
     final x = await _picker.pickImage(
       source: ImageSource.camera,
@@ -612,6 +633,7 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
       if (!_fotos.any((f) => f.path == file.path)) {
         _fotos.add(file);
       }
+      _removeFieldError(ActividadValidationTarget.fotos);
     });
     _draft.notifyChanged();
   }
@@ -623,6 +645,7 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
       _locating = true;
       _locationStatus = 'Obteniendo ubicacion...';
       _error = null;
+      _removeFieldError(ActividadValidationTarget.ubicacion);
     });
 
     final geo = await GeoService.getCurrent();
@@ -647,8 +670,114 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
       _fuenteUbicacionCtrl.text = geo.fuenteUbicacion ?? 'GPS_APP';
       _notaGeoCtrl.text = geo.notaGeo ?? '';
       _locationStatus = 'Ubicacion capturada correctamente.';
+      _removeFieldError(ActividadValidationTarget.ubicacion);
     });
     _draft.notifyChanged();
+  }
+
+  String? _fieldError(ActividadValidationTarget target) {
+    return _fieldErrors[target];
+  }
+
+  String? _fieldErrorForTargets(Iterable<ActividadValidationTarget> targets) {
+    final messages = <String>[];
+    for (final target in targets) {
+      final message = _fieldErrors[target];
+      if (message != null && !messages.contains(message)) {
+        messages.add(message);
+      }
+    }
+    return messages.isEmpty ? null : messages.join('\n');
+  }
+
+  void _removeFieldError(ActividadValidationTarget target) {
+    if (!_fieldErrors.containsKey(target)) return;
+    _fieldErrors = Map<ActividadValidationTarget, String>.from(_fieldErrors)
+      ..remove(target);
+    if (_fieldErrors.isEmpty) _error = null;
+  }
+
+  void _clearFieldError(ActividadValidationTarget target) {
+    if (!_fieldErrors.containsKey(target)) return;
+    setState(() => _removeFieldError(target));
+  }
+
+  void _clearValidationErrors() {
+    _fieldErrors = {};
+    _error = null;
+  }
+
+  Map<ActividadValidationTarget, String> _groupValidationIssues(
+    List<ActividadValidationIssue> issues,
+  ) {
+    final grouped = <ActividadValidationTarget, List<String>>{};
+    for (final issue in issues) {
+      grouped.putIfAbsent(issue.target, () => <String>[]).add(issue.message);
+    }
+    return grouped.map(
+      (target, messages) => MapEntry(target, messages.join('\n')),
+    );
+  }
+
+  GlobalKey? _keyForValidationTarget(ActividadValidationTarget target) {
+    switch (target) {
+      case ActividadValidationTarget.categoria:
+        return _categoriaFieldKey;
+      case ActividadValidationTarget.subcategoria:
+        return _subcategoriaFieldKey;
+      case ActividadValidationTarget.fecha:
+        return _fechaFieldKey;
+      case ActividadValidationTarget.hora:
+        return _horaFieldKey;
+      case ActividadValidationTarget.lugar:
+        return _lugarFieldKey;
+      case ActividadValidationTarget.municipio:
+        return _municipioFieldKey;
+      case ActividadValidationTarget.ubicacion:
+      case ActividadValidationTarget.fuenteUbicacion:
+      case ActividadValidationTarget.notaGeo:
+      case ActividadValidationTarget.carretera:
+      case ActividadValidationTarget.tramo:
+      case ActividadValidationTarget.kilometro:
+        return _ubicacionCardKey;
+      case ActividadValidationTarget.personasAlcanzadas:
+        return _personasAlcanzadasFieldKey;
+      case ActividadValidationTarget.personasParticipantes:
+        return _personasParticipantesFieldKey;
+      case ActividadValidationTarget.personasDetenidas:
+        return _personasDetenidasFieldKey;
+      case ActividadValidationTarget.fotos:
+        return _fotosCardKey;
+      case ActividadValidationTarget.vehiculos:
+        return _vehiculosCardKey;
+    }
+  }
+
+  Future<void> _scrollToKey(GlobalKey key) async {
+    await Future<void>.delayed(const Duration(milliseconds: 60));
+    if (!mounted) return;
+    final targetContext = key.currentContext;
+    if (targetContext == null || !targetContext.mounted) return;
+    await Scrollable.ensureVisible(
+      targetContext,
+      duration: const Duration(milliseconds: 450),
+      curve: Curves.easeOutCubic,
+      alignment: 0.12,
+    );
+  }
+
+  Future<void> _showValidationIssues(
+    List<ActividadValidationIssue> issues,
+  ) async {
+    setState(() {
+      _fieldErrors = _groupValidationIssues(issues);
+      _error = ActividadesService.formatValidationIssues(issues);
+    });
+
+    final targetKey = _keyForValidationTarget(issues.first.target);
+    if (targetKey != null) {
+      await _scrollToKey(targetKey);
+    }
   }
 
   String? _trim(TextEditingController ctrl) {
@@ -701,7 +830,10 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
     final vehiculo = await showActividadVehiculoModal(context);
     if (vehiculo == null || !mounted) return;
 
-    setState(() => _vehiculos.add(vehiculo));
+    setState(() {
+      _vehiculos.add(vehiculo);
+      _removeFieldError(ActividadValidationTarget.vehiculos);
+    });
     _draft.notifyChanged();
   }
 
@@ -711,15 +843,17 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
   }
 
   Future<void> _submit() async {
-    setState(() => _error = null);
+    setState(_clearValidationErrors);
 
     final payload = _buildPayload();
-    final validation = await ActividadesService.validateBeforeSubmit(
-      data: payload,
-      fotos: List<File>.from(_fotos),
-    );
-    if (validation != null) {
-      setState(() => _error = validation);
+    final validationIssues =
+        await ActividadesService.validateBeforeSubmitIssues(
+          data: payload,
+          fotos: List<File>.from(_fotos),
+        );
+    if (!mounted) return;
+    if (validationIssues.isNotEmpty) {
+      await _showValidationIssues(validationIssues);
       return;
     }
 
@@ -748,22 +882,40 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
       Navigator.pop(context, true);
     } catch (e) {
       if (!mounted) return;
-      setState(
-        () => _error =
-            'No se pudo crear.\n${ActividadesService.cleanExceptionMessage(e)}',
-      );
+      setState(() {
+        _fieldErrors = {};
+        _error =
+            'No se pudo crear.\n${ActividadesService.cleanExceptionMessage(e)}';
+      });
     } finally {
       if (mounted) setState(() => _saving = false);
     }
   }
 
-  InputDecoration _dec(String label, {String? hint}) {
+  InputDecoration _dec(
+    String label, {
+    String? hint,
+    ActividadValidationTarget? validationTarget,
+  }) {
+    final errorText = validationTarget == null
+        ? null
+        : _fieldError(validationTarget);
     return InputDecoration(
       labelText: label,
       hintText: hint,
+      errorText: errorText,
+      errorMaxLines: 4,
       filled: true,
       fillColor: Colors.white,
       border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+      errorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: const BorderSide(color: Colors.red, width: 2),
+      ),
+      focusedErrorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: const BorderSide(color: Colors.red, width: 3),
+      ),
     );
   }
 
@@ -775,14 +927,20 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
     TextInputType? keyboardType,
     bool readOnly = false,
     List<TextInputFormatter>? inputFormatters,
+    ActividadValidationTarget? validationTarget,
+    Key? fieldKey,
   }) {
     return TextField(
+      key: fieldKey,
       controller: controller,
       maxLines: maxLines,
       keyboardType: keyboardType,
       readOnly: readOnly,
       inputFormatters: inputFormatters,
-      decoration: _dec(label, hint: hint),
+      onChanged: validationTarget == null
+          ? null
+          : (_) => _clearFieldError(validationTarget),
+      decoration: _dec(label, hint: hint, validationTarget: validationTarget),
     );
   }
 
@@ -834,7 +992,12 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
                 onTap: _saving
                     ? null
                     : () {
-                        setState(() => _fotos.removeAt(index));
+                        setState(() {
+                          _fotos.removeAt(index);
+                          if (_fotos.isNotEmpty) {
+                            _removeFieldError(ActividadValidationTarget.fotos);
+                          }
+                        });
                         _draft.notifyChanged();
                       },
                 child: Container(
@@ -903,6 +1066,7 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
                   ),
                   const SizedBox(height: 12),
                   DropdownButtonFormField<int>(
+                    key: _categoriaFieldKey,
                     value: _categoriaId,
                     items: [
                       const DropdownMenuItem<int>(
@@ -921,16 +1085,24 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
                         _categoriaId = v;
                         _subcategoriaId = null;
                         _subcategorias = [];
+                        _removeFieldError(ActividadValidationTarget.categoria);
+                        _removeFieldError(
+                          ActividadValidationTarget.subcategoria,
+                        );
                       });
                       _draft.notifyChanged();
                       if (v != null) {
                         await _loadSubcategorias(v);
                       }
                     },
-                    decoration: _dec('Categoria'),
+                    decoration: _dec(
+                      'Categoria',
+                      validationTarget: ActividadValidationTarget.categoria,
+                    ),
                   ),
                   const SizedBox(height: 12),
                   DropdownButtonFormField<int>(
+                    key: _subcategoriaFieldKey,
                     value: _subcategoriaId,
                     items: [
                       DropdownMenuItem<int>(
@@ -951,11 +1123,19 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
                     onChanged: _subcategorias.isEmpty
                         ? null
                         : (v) {
-                            setState(() => _subcategoriaId = v);
+                            setState(() {
+                              _subcategoriaId = v;
+                              _removeFieldError(
+                                ActividadValidationTarget.subcategoria,
+                              );
+                            });
                             _draft.notifyChanged();
                             _scheduleC5iHechoRedirectCheck();
                           },
-                    decoration: _dec('Subcategoria'),
+                    decoration: _dec(
+                      'Subcategoria',
+                      validationTarget: ActividadValidationTarget.subcategoria,
+                    ),
                   ),
                   if (_categoriaId != null && _subcategorias.isEmpty) ...[
                     const SizedBox(height: 8),
@@ -988,6 +1168,8 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
                           'Fecha',
                           hint: 'YYYY-MM-DD',
                           readOnly: !_canEditCaptureTimestamp,
+                          validationTarget: ActividadValidationTarget.fecha,
+                          fieldKey: _fechaFieldKey,
                         ),
                       ),
                       const SizedBox(width: 10),
@@ -997,6 +1179,8 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
                           'Hora',
                           hint: 'HH:mm',
                           readOnly: !_canEditCaptureTimestamp,
+                          validationTarget: ActividadValidationTarget.hora,
+                          fieldKey: _horaFieldKey,
                         ),
                       ),
                     ],
@@ -1008,7 +1192,15 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
                       onPressed: (_saving || !_canEditCaptureTimestamp)
                           ? null
                           : () {
-                              setState(() => _setNow());
+                              setState(() {
+                                _setNow();
+                                _removeFieldError(
+                                  ActividadValidationTarget.fecha,
+                                );
+                                _removeFieldError(
+                                  ActividadValidationTarget.hora,
+                                );
+                              });
                               _draft.notifyChanged();
                             },
                       icon: const Icon(Icons.access_time),
@@ -1029,14 +1221,29 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
                     ),
                   ],
                   const SizedBox(height: 12),
-                  _textField(_lugarCtrl, 'Lugar'),
+                  _textField(
+                    _lugarCtrl,
+                    'Lugar',
+                    validationTarget: ActividadValidationTarget.lugar,
+                    fieldKey: _lugarFieldKey,
+                  ),
                   const SizedBox(height: 12),
                   MunicipioAutocompleteField(
+                    key: _municipioFieldKey,
                     controller: _municipioCtrl,
-                    decoration: _dec('Municipio'),
+                    decoration: _dec(
+                      'Municipio',
+                      validationTarget: ActividadValidationTarget.municipio,
+                    ),
                     enabled: !_saving,
-                    onChanged: (_) => _draft.notifyChanged(),
-                    onSelected: (_) => _draft.notifyChanged(),
+                    onChanged: (_) {
+                      _clearFieldError(ActividadValidationTarget.municipio);
+                      _draft.notifyChanged();
+                    },
+                    onSelected: (_) {
+                      _clearFieldError(ActividadValidationTarget.municipio);
+                      _draft.notifyChanged();
+                    },
                   ),
                 ],
               ),
@@ -1046,6 +1253,15 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
 
             _card(
               title: 'Ubicacion',
+              cardKey: _ubicacionCardKey,
+              validationTargets: const <ActividadValidationTarget>[
+                ActividadValidationTarget.ubicacion,
+                ActividadValidationTarget.fuenteUbicacion,
+                ActividadValidationTarget.notaGeo,
+                ActividadValidationTarget.carretera,
+                ActividadValidationTarget.tramo,
+                ActividadValidationTarget.kilometro,
+              ],
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -1117,30 +1333,59 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
                   Row(
                     children: [
                       Expanded(
-                        child: ActividadCountField(
-                          controller: _personasAlcanzadasCtrl,
-                          label: 'Personas alcanzadas *',
-                          icon: Icons.diversity_3_rounded,
-                          color: const Color(0xFF0284C7),
-                          helperText: 'Minimo 1',
+                        child: KeyedSubtree(
+                          key: _personasAlcanzadasFieldKey,
+                          child: ActividadCountField(
+                            controller: _personasAlcanzadasCtrl,
+                            label: 'Personas alcanzadas *',
+                            icon: Icons.diversity_3_rounded,
+                            color: const Color(0xFF0284C7),
+                            helperText: 'Minimo 1',
+                            errorText: _fieldError(
+                              ActividadValidationTarget.personasAlcanzadas,
+                            ),
+                            onChanged: (_) => _clearFieldError(
+                              ActividadValidationTarget.personasAlcanzadas,
+                            ),
+                          ),
                         ),
                       ),
                       const SizedBox(width: 10),
                       Expanded(
-                        child: ActividadCountField(
-                          controller: _personasParticipantesCtrl,
-                          label: 'Personas participantes',
-                          icon: Icons.groups_2_rounded,
-                          color: const Color(0xFF7C3AED),
-                          helperText: 'Maximo 15 por actividad',
-                          badgeText: 'MAX 15',
-                          max: ActividadesService.maxParticipantsCount,
+                        child: KeyedSubtree(
+                          key: _personasParticipantesFieldKey,
+                          child: ActividadCountField(
+                            controller: _personasParticipantesCtrl,
+                            label: 'Personas participantes',
+                            icon: Icons.groups_2_rounded,
+                            color: const Color(0xFF7C3AED),
+                            helperText: 'Maximo 15 por actividad',
+                            badgeText: 'MAX 15',
+                            max: ActividadesService.maxParticipantsCount,
+                            errorText: _fieldError(
+                              ActividadValidationTarget.personasParticipantes,
+                            ),
+                            onChanged: (_) => _clearFieldError(
+                              ActividadValidationTarget.personasParticipantes,
+                            ),
+                          ),
                         ),
                       ),
                     ],
                   ),
                   const SizedBox(height: 12),
-                  ActividadDetenidosField(controller: _personasDetenidasCtrl),
+                  KeyedSubtree(
+                    key: _personasDetenidasFieldKey,
+                    child: ActividadDetenidosField(
+                      controller: _personasDetenidasCtrl,
+                      errorText: _fieldError(
+                        ActividadValidationTarget.personasDetenidas,
+                      ),
+                      onChanged: (_) => _clearFieldError(
+                        ActividadValidationTarget.personasDetenidas,
+                      ),
+                    ),
+                  ),
                   const SizedBox(height: 12),
                   _textField(
                     _elementosCtrl,
@@ -1161,6 +1406,8 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
 
             _card(
               title: 'Vehiculos relacionados',
+              cardKey: _vehiculosCardKey,
+              validationTarget: ActividadValidationTarget.vehiculos,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -1215,6 +1462,8 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
 
             _card(
               title: 'Fotos',
+              cardKey: _fotosCardKey,
+              validationTarget: ActividadValidationTarget.fotos,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -1269,12 +1518,29 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
     );
   }
 
-  Widget _card({required String title, required Widget child}) {
+  Widget _card({
+    required String title,
+    required Widget child,
+    Key? cardKey,
+    ActividadValidationTarget? validationTarget,
+    List<ActividadValidationTarget>? validationTargets,
+  }) {
+    final targets =
+        validationTargets ??
+        (validationTarget == null
+            ? const <ActividadValidationTarget>[]
+            : <ActividadValidationTarget>[validationTarget]);
+    final errorText = _fieldErrorForTargets(targets);
+    final hasError = errorText != null;
     return Container(
+      key: cardKey,
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: Colors.grey.shade200),
+        border: Border.all(
+          color: hasError ? Colors.red : Colors.grey.shade200,
+          width: hasError ? 2 : 1,
+        ),
         boxShadow: [
           BoxShadow(
             blurRadius: 14,
@@ -1291,6 +1557,25 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
             Text(title, style: const TextStyle(fontWeight: FontWeight.w900)),
             const SizedBox(height: 10),
             child,
+            if (hasError) ...[
+              const SizedBox(height: 10),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(Icons.error_outline, color: Colors.red, size: 18),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      errorText,
+                      style: const TextStyle(
+                        color: Colors.red,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ],
         ),
       ),

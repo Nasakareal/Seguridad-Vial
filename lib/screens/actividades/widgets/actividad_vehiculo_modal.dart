@@ -5,6 +5,7 @@ import '../../../core/vehiculos/vehiculo_taxonomia.dart';
 import '../../../models/actividad.dart';
 import '../../../services/gruas_catalog_service.dart';
 import '../../../services/vehiculo_form_service.dart';
+import '../../../widgets/antecedente_highlight_tile.dart';
 
 Future<ActividadVehiculo?> showActividadVehiculoModal(BuildContext context) {
   return showModalBottomSheet<ActividadVehiculo>(
@@ -528,9 +529,8 @@ class _ActividadVehiculoModalState extends State<_ActividadVehiculoModal> {
                 validator: (v) => _optionalLongText(v, 'Partes dañadas'),
               ),
               const SizedBox(height: 6),
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                title: const Text('Antecedente del vehículo'),
+              AntecedenteHighlightTile(
+                title: 'Antecedente del vehículo',
                 value: _antecedenteVehiculo,
                 onChanged: (value) =>
                     setState(() => _antecedenteVehiculo = value),

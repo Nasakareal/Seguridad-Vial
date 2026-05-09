@@ -31,6 +31,7 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
   bool _saving = false;
   bool _canEditCaptureTimestamp = false;
   String? _error;
+  Map<ActividadValidationTarget, String> _fieldErrors = {};
 
   Actividad? _actividad;
 
@@ -60,6 +61,22 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
   final _personasDetenidasCtrl = TextEditingController();
   final _elementosCtrl = TextEditingController();
   final _patrullasCtrl = TextEditingController();
+
+  final _categoriaFieldKey = GlobalKey();
+  final _subcategoriaFieldKey = GlobalKey();
+  final _fechaFieldKey = GlobalKey();
+  final _horaFieldKey = GlobalKey();
+  final _lugarFieldKey = GlobalKey();
+  final _municipioFieldKey = GlobalKey();
+  final _latFieldKey = GlobalKey();
+  final _lngFieldKey = GlobalKey();
+  final _fuenteUbicacionFieldKey = GlobalKey();
+  final _notaGeoFieldKey = GlobalKey();
+  final _personasAlcanzadasFieldKey = GlobalKey();
+  final _personasParticipantesFieldKey = GlobalKey();
+  final _personasDetenidasFieldKey = GlobalKey();
+  final _vehiculosCardKey = GlobalKey();
+  final _fotosCardKey = GlobalKey();
 
   bool _bootstrapped = false;
 
@@ -117,6 +134,7 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
     setState(() {
       _loading = true;
       _error = null;
+      _fieldErrors = {};
     });
 
     try {
@@ -199,7 +217,10 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
   }
 
   Future<void> _pickFromGallery() async {
-    setState(() => _error = null);
+    setState(() {
+      _error = null;
+      _removeFieldError(ActividadValidationTarget.fotos);
+    });
 
     final picker = ImagePicker();
     final picked = await picker.pickMultiImage(
@@ -225,11 +246,15 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
       for (final file in files) {
         _addNewPhoto(file);
       }
+      _removeFieldError(ActividadValidationTarget.fotos);
     });
   }
 
   Future<void> _pickFromCamera() async {
-    setState(() => _error = null);
+    setState(() {
+      _error = null;
+      _removeFieldError(ActividadValidationTarget.fotos);
+    });
 
     final picker = ImagePicker();
     final x = await picker.pickImage(
@@ -249,6 +274,7 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
 
     setState(() {
       _addNewPhoto(file);
+      _removeFieldError(ActividadValidationTarget.fotos);
     });
   }
 
@@ -256,6 +282,14 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
     if (!_fotosNuevas.any((current) => current.path == file.path)) {
       _fotosNuevas.add(file);
     }
+  }
+
+  int _activePhotoCount(Actividad a) {
+    final activeExisting = a.fotos
+        .where((foto) => !_fotoIdsEliminar.contains(foto.id))
+        .length;
+    final legacy = a.fotos.isEmpty && a.allPhotoPaths.isNotEmpty ? 1 : 0;
+    return activeExisting + legacy + _fotosNuevas.length;
   }
 
   String? _trim(TextEditingController ctrl) {
@@ -298,33 +332,131 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
     );
   }
 
+  String? _fieldError(ActividadValidationTarget target) {
+    return _fieldErrors[target];
+  }
+
+  void _removeFieldError(ActividadValidationTarget target) {
+    if (!_fieldErrors.containsKey(target)) return;
+    _fieldErrors = Map<ActividadValidationTarget, String>.from(_fieldErrors)
+      ..remove(target);
+    if (_fieldErrors.isEmpty) _error = null;
+  }
+
+  void _clearFieldError(ActividadValidationTarget target) {
+    if (!_fieldErrors.containsKey(target)) return;
+    setState(() => _removeFieldError(target));
+  }
+
+  void _clearValidationErrors() {
+    _fieldErrors = {};
+    _error = null;
+  }
+
+  Map<ActividadValidationTarget, String> _groupValidationIssues(
+    List<ActividadValidationIssue> issues,
+  ) {
+    final grouped = <ActividadValidationTarget, List<String>>{};
+    for (final issue in issues) {
+      grouped.putIfAbsent(issue.target, () => <String>[]).add(issue.message);
+    }
+    return grouped.map(
+      (target, messages) => MapEntry(target, messages.join('\n')),
+    );
+  }
+
+  GlobalKey? _keyForValidationTarget(ActividadValidationTarget target) {
+    switch (target) {
+      case ActividadValidationTarget.categoria:
+        return _categoriaFieldKey;
+      case ActividadValidationTarget.subcategoria:
+        return _subcategoriaFieldKey;
+      case ActividadValidationTarget.fecha:
+        return _fechaFieldKey;
+      case ActividadValidationTarget.hora:
+        return _horaFieldKey;
+      case ActividadValidationTarget.lugar:
+        return _lugarFieldKey;
+      case ActividadValidationTarget.municipio:
+        return _municipioFieldKey;
+      case ActividadValidationTarget.ubicacion:
+        return _latFieldKey;
+      case ActividadValidationTarget.fuenteUbicacion:
+        return _fuenteUbicacionFieldKey;
+      case ActividadValidationTarget.notaGeo:
+        return _notaGeoFieldKey;
+      case ActividadValidationTarget.carretera:
+      case ActividadValidationTarget.tramo:
+      case ActividadValidationTarget.kilometro:
+        return _lugarFieldKey;
+      case ActividadValidationTarget.personasAlcanzadas:
+        return _personasAlcanzadasFieldKey;
+      case ActividadValidationTarget.personasParticipantes:
+        return _personasParticipantesFieldKey;
+      case ActividadValidationTarget.personasDetenidas:
+        return _personasDetenidasFieldKey;
+      case ActividadValidationTarget.fotos:
+        return _fotosCardKey;
+      case ActividadValidationTarget.vehiculos:
+        return _vehiculosCardKey;
+    }
+  }
+
+  Future<void> _scrollToKey(GlobalKey key) async {
+    await Future<void>.delayed(const Duration(milliseconds: 60));
+    if (!mounted) return;
+    final targetContext = key.currentContext;
+    if (targetContext == null || !targetContext.mounted) return;
+    await Scrollable.ensureVisible(
+      targetContext,
+      duration: const Duration(milliseconds: 450),
+      curve: Curves.easeOutCubic,
+      alignment: 0.12,
+    );
+  }
+
+  Future<void> _showValidationIssues(
+    List<ActividadValidationIssue> issues,
+  ) async {
+    if (!mounted) return;
+    setState(() {
+      _fieldErrors = _groupValidationIssues(issues);
+      _error = ActividadesService.formatValidationIssues(issues);
+    });
+
+    final targetKey = _keyForValidationTarget(issues.first.target);
+    if (targetKey != null) {
+      await _scrollToKey(targetKey);
+    }
+  }
+
   Future<void> _submit() async {
-    setState(() => _error = null);
+    setState(_clearValidationErrors);
 
     final a = _actividad;
     if (a == null) return;
 
     final payload = _buildPayload();
-    final fotosActualesRestantes = a.fotos
-        .where((foto) => !_fotoIdsEliminar.contains(foto.id))
-        .length;
-    final tieneFotoLegacy = a.fotos.isEmpty && (a.fotoPath ?? '').isNotEmpty;
-    if (fotosActualesRestantes +
-            (tieneFotoLegacy ? 1 : 0) +
-            _fotosNuevas.length <
-        1) {
-      setState(() => _error = 'La actividad debe conservar al menos una foto.');
+    if (_activePhotoCount(a) < 1) {
+      await _showValidationIssues(const <ActividadValidationIssue>[
+        ActividadValidationIssue(
+          target: ActividadValidationTarget.fotos,
+          message: 'La actividad debe conservar al menos una foto.',
+        ),
+      ]);
       return;
     }
 
-    final validation = await ActividadesService.validateBeforeSubmit(
-      data: payload,
-      fotos: List<File>.from(_fotosNuevas),
-      requirePhotos: false,
-      requireCoords: false,
-    );
-    if (validation != null) {
-      setState(() => _error = validation);
+    final validationIssues =
+        await ActividadesService.validateBeforeSubmitIssues(
+          data: payload,
+          fotos: List<File>.from(_fotosNuevas),
+          requirePhotos: false,
+          requireCoords: false,
+        );
+    if (!mounted) return;
+    if (validationIssues.isNotEmpty) {
+      await _showValidationIssues(validationIssues);
       return;
     }
 
@@ -353,10 +485,11 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
       Navigator.pop(context, true);
     } catch (e) {
       if (!mounted) return;
-      setState(
-        () => _error =
-            'No se pudo actualizar.\n${ActividadesService.cleanExceptionMessage(e)}',
-      );
+      setState(() {
+        _fieldErrors = {};
+        _error =
+            'No se pudo actualizar.\n${ActividadesService.cleanExceptionMessage(e)}';
+      });
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -380,7 +513,10 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
         vehiculo: vehiculo,
       );
       if (!mounted) return;
-      setState(() => _actividad = updated);
+      setState(() {
+        _actividad = updated;
+        _removeFieldError(ActividadValidationTarget.vehiculos);
+      });
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Vehiculo agregado correctamente.')),
       );
@@ -440,13 +576,30 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
     }
   }
 
-  InputDecoration _dec(String label, {String? hint}) {
+  InputDecoration _dec(
+    String label, {
+    String? hint,
+    ActividadValidationTarget? validationTarget,
+  }) {
+    final errorText = validationTarget == null
+        ? null
+        : _fieldError(validationTarget);
     return InputDecoration(
       labelText: label,
       hintText: hint,
+      errorText: errorText,
+      errorMaxLines: 4,
       filled: true,
       fillColor: Colors.white,
       border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+      errorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: const BorderSide(color: Colors.red, width: 2),
+      ),
+      focusedErrorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: const BorderSide(color: Colors.red, width: 3),
+      ),
     );
   }
 
@@ -458,14 +611,20 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
     TextInputType? keyboardType,
     List<TextInputFormatter>? inputFormatters,
     bool readOnly = false,
+    ActividadValidationTarget? validationTarget,
+    Key? fieldKey,
   }) {
     return TextField(
+      key: fieldKey,
       controller: controller,
       maxLines: maxLines,
       keyboardType: keyboardType,
       inputFormatters: inputFormatters,
       readOnly: readOnly,
-      decoration: _dec(label, hint: hint),
+      onChanged: validationTarget == null
+          ? null
+          : (_) => _clearFieldError(validationTarget),
+      decoration: _dec(label, hint: hint, validationTarget: validationTarget),
     );
   }
 
@@ -602,6 +761,10 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
                       } else {
                         _fotoIdsEliminar.add(foto.id);
                       }
+                      final current = _actividad;
+                      if (current != null && _activePhotoCount(current) > 0) {
+                        _removeFieldError(ActividadValidationTarget.fotos);
+                      }
                     });
                   },
             child: Container(
@@ -656,7 +819,13 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
           child: InkWell(
             onTap: _saving
                 ? null
-                : () => setState(() => _fotosNuevas.removeAt(index)),
+                : () => setState(() {
+                    _fotosNuevas.removeAt(index);
+                    final current = _actividad;
+                    if (current != null && _activePhotoCount(current) > 0) {
+                      _removeFieldError(ActividadValidationTarget.fotos);
+                    }
+                  }),
             child: Container(
               padding: const EdgeInsets.all(6),
               decoration: BoxDecoration(
@@ -716,6 +885,7 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
                 child: Column(
                   children: [
                     DropdownButtonFormField<int>(
+                      key: _categoriaFieldKey,
                       value: _categoriaId,
                       items: [
                         const DropdownMenuItem<int>(
@@ -734,15 +904,25 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
                           _categoriaId = v;
                           _subcategoriaId = null;
                           _subcategorias = [];
+                          _removeFieldError(
+                            ActividadValidationTarget.categoria,
+                          );
+                          _removeFieldError(
+                            ActividadValidationTarget.subcategoria,
+                          );
                         });
                         if (v != null) {
                           await _loadSubcategorias(v);
                         }
                       },
-                      decoration: _dec('Categoria'),
+                      decoration: _dec(
+                        'Categoria',
+                        validationTarget: ActividadValidationTarget.categoria,
+                      ),
                     ),
                     const SizedBox(height: 12),
                     DropdownButtonFormField<int>(
+                      key: _subcategoriaFieldKey,
                       value: _subcategoriaId,
                       items: [
                         DropdownMenuItem<int>(
@@ -762,8 +942,17 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
                       ],
                       onChanged: _subcategorias.isEmpty
                           ? null
-                          : (v) => setState(() => _subcategoriaId = v),
-                      decoration: _dec('Subcategoria'),
+                          : (v) => setState(() {
+                              _subcategoriaId = v;
+                              _removeFieldError(
+                                ActividadValidationTarget.subcategoria,
+                              );
+                            }),
+                      decoration: _dec(
+                        'Subcategoria',
+                        validationTarget:
+                            ActividadValidationTarget.subcategoria,
+                      ),
                     ),
                     if (_categoriaId != null && _subcategorias.isEmpty) ...[
                       const SizedBox(height: 8),
@@ -796,6 +985,8 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
                             'Fecha',
                             hint: 'YYYY-MM-DD',
                             readOnly: !_canEditCaptureTimestamp,
+                            validationTarget: ActividadValidationTarget.fecha,
+                            fieldKey: _fechaFieldKey,
                           ),
                         ),
                         const SizedBox(width: 10),
@@ -805,6 +996,8 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
                             'Hora',
                             hint: 'HH:mm',
                             readOnly: !_canEditCaptureTimestamp,
+                            validationTarget: ActividadValidationTarget.hora,
+                            fieldKey: _horaFieldKey,
                           ),
                         ),
                       ],
@@ -823,12 +1016,25 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
                       ),
                     ],
                     const SizedBox(height: 12),
-                    _textField(_lugarCtrl, 'Lugar'),
+                    _textField(
+                      _lugarCtrl,
+                      'Lugar',
+                      validationTarget: ActividadValidationTarget.lugar,
+                      fieldKey: _lugarFieldKey,
+                    ),
                     const SizedBox(height: 12),
                     MunicipioAutocompleteField(
+                      key: _municipioFieldKey,
                       controller: _municipioCtrl,
-                      decoration: _dec('Municipio'),
+                      decoration: _dec(
+                        'Municipio',
+                        validationTarget: ActividadValidationTarget.municipio,
+                      ),
                       enabled: !_saving,
+                      onChanged: (_) =>
+                          _clearFieldError(ActividadValidationTarget.municipio),
+                      onSelected: (_) =>
+                          _clearFieldError(ActividadValidationTarget.municipio),
                     ),
                     const SizedBox(height: 12),
                     Row(
@@ -841,6 +1047,9 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
                               decimal: true,
                               signed: true,
                             ),
+                            validationTarget:
+                                ActividadValidationTarget.ubicacion,
+                            fieldKey: _latFieldKey,
                           ),
                         ),
                         const SizedBox(width: 10),
@@ -852,6 +1061,9 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
                               decimal: true,
                               signed: true,
                             ),
+                            validationTarget:
+                                ActividadValidationTarget.ubicacion,
+                            fieldKey: _lngFieldKey,
                           ),
                         ),
                       ],
@@ -859,9 +1071,20 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
                     const SizedBox(height: 12),
                     _textField(_coordenadasCtrl, 'Coordenadas texto'),
                     const SizedBox(height: 12),
-                    _textField(_fuenteUbicacionCtrl, 'Fuente de ubicacion'),
+                    _textField(
+                      _fuenteUbicacionCtrl,
+                      'Fuente de ubicacion',
+                      validationTarget:
+                          ActividadValidationTarget.fuenteUbicacion,
+                      fieldKey: _fuenteUbicacionFieldKey,
+                    ),
                     const SizedBox(height: 12),
-                    _textField(_notaGeoCtrl, 'Nota geo'),
+                    _textField(
+                      _notaGeoCtrl,
+                      'Nota geo',
+                      validationTarget: ActividadValidationTarget.notaGeo,
+                      fieldKey: _notaGeoFieldKey,
+                    ),
                   ],
                 ),
               ),
@@ -888,30 +1111,59 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
                     Row(
                       children: [
                         Expanded(
-                          child: ActividadCountField(
-                            controller: _personasAlcanzadasCtrl,
-                            label: 'Personas alcanzadas *',
-                            icon: Icons.diversity_3_rounded,
-                            color: const Color(0xFF0284C7),
-                            helperText: 'Minimo 1',
+                          child: KeyedSubtree(
+                            key: _personasAlcanzadasFieldKey,
+                            child: ActividadCountField(
+                              controller: _personasAlcanzadasCtrl,
+                              label: 'Personas alcanzadas *',
+                              icon: Icons.diversity_3_rounded,
+                              color: const Color(0xFF0284C7),
+                              helperText: 'Minimo 1',
+                              errorText: _fieldError(
+                                ActividadValidationTarget.personasAlcanzadas,
+                              ),
+                              onChanged: (_) => _clearFieldError(
+                                ActividadValidationTarget.personasAlcanzadas,
+                              ),
+                            ),
                           ),
                         ),
                         const SizedBox(width: 10),
                         Expanded(
-                          child: ActividadCountField(
-                            controller: _personasParticipantesCtrl,
-                            label: 'Personas participantes',
-                            icon: Icons.groups_2_rounded,
-                            color: const Color(0xFF7C3AED),
-                            helperText: 'Maximo 15 por actividad',
-                            badgeText: 'MAX 15',
-                            max: ActividadesService.maxParticipantsCount,
+                          child: KeyedSubtree(
+                            key: _personasParticipantesFieldKey,
+                            child: ActividadCountField(
+                              controller: _personasParticipantesCtrl,
+                              label: 'Personas participantes',
+                              icon: Icons.groups_2_rounded,
+                              color: const Color(0xFF7C3AED),
+                              helperText: 'Maximo 15 por actividad',
+                              badgeText: 'MAX 15',
+                              max: ActividadesService.maxParticipantsCount,
+                              errorText: _fieldError(
+                                ActividadValidationTarget.personasParticipantes,
+                              ),
+                              onChanged: (_) => _clearFieldError(
+                                ActividadValidationTarget.personasParticipantes,
+                              ),
+                            ),
                           ),
                         ),
                       ],
                     ),
                     const SizedBox(height: 12),
-                    ActividadDetenidosField(controller: _personasDetenidasCtrl),
+                    KeyedSubtree(
+                      key: _personasDetenidasFieldKey,
+                      child: ActividadDetenidosField(
+                        controller: _personasDetenidasCtrl,
+                        errorText: _fieldError(
+                          ActividadValidationTarget.personasDetenidas,
+                        ),
+                        onChanged: (_) => _clearFieldError(
+                          ActividadValidationTarget.personasDetenidas,
+                        ),
+                      ),
+                    ),
                     const SizedBox(height: 12),
                     _textField(
                       _elementosCtrl,
@@ -932,6 +1184,8 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
 
               _card(
                 title: 'Vehiculos relacionados',
+                cardKey: _vehiculosCardKey,
+                validationTarget: ActividadValidationTarget.vehiculos,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -986,11 +1240,13 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
 
               _card(
                 title: 'Fotos',
+                cardKey: _fotosCardKey,
+                validationTarget: ActividadValidationTarget.fotos,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      '${a.fotos.where((foto) => !_fotoIdsEliminar.contains(foto.id)).length + (a.fotos.isEmpty && a.allPhotoPaths.isNotEmpty ? 1 : 0) + _fotosNuevas.length} foto(s) activas',
+                      '${_activePhotoCount(a)} foto(s) activas',
                       style: TextStyle(color: Colors.grey.shade700),
                     ),
                     const SizedBox(height: 10),
@@ -1041,12 +1297,25 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
     );
   }
 
-  Widget _card({required String title, required Widget child}) {
+  Widget _card({
+    required String title,
+    required Widget child,
+    Key? cardKey,
+    ActividadValidationTarget? validationTarget,
+  }) {
+    final errorText = validationTarget == null
+        ? null
+        : _fieldError(validationTarget);
+    final hasError = errorText != null;
     return Container(
+      key: cardKey,
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: Colors.grey.shade200),
+        border: Border.all(
+          color: hasError ? Colors.red : Colors.grey.shade200,
+          width: hasError ? 2 : 1,
+        ),
         boxShadow: [
           BoxShadow(
             blurRadius: 14,
@@ -1063,6 +1332,25 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
             Text(title, style: const TextStyle(fontWeight: FontWeight.w900)),
             const SizedBox(height: 10),
             child,
+            if (hasError) ...[
+              const SizedBox(height: 10),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(Icons.error_outline, color: Colors.red, size: 18),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      errorText,
+                      style: const TextStyle(
+                        color: Colors.red,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ],
         ),
       ),

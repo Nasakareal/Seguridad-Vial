@@ -3,6 +3,7 @@ class AppRoutes {
   static const String home = '/home';
   static const String homePerito = '/home-perito';
   static const String homeAgenteUpec = '/home-agente-upec';
+  static const String homeDelegaciones = '/home-delegaciones';
   static const String profile = '/profile';
   static const String changePassword = '/profile/change-password';
   static const String users = '/settings/users';

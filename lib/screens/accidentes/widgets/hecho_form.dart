@@ -1195,15 +1195,41 @@ class _HechoFormState extends State<HechoForm> {
           ),
 
           const SizedBox(height: 12),
-          CheckboxListTile(
-            title: const Text('Checaron antecedentes?'),
-            value: d.checaronAntecedentes,
-            onChanged: _submitting
-                ? null
-                : (v) {
-                    setState(() => d.checaronAntecedentes = v ?? false);
-                    _markDraftChanged();
-                  },
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.amber.shade100,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: Colors.amber.shade800, width: 2),
+            ),
+            child: CheckboxListTile(
+              activeColor: Colors.amber.shade900,
+              checkColor: Colors.white,
+              secondary: Icon(
+                Icons.fact_check_rounded,
+                color: Colors.amber.shade900,
+              ),
+              title: Text(
+                '¿Se checaron antecedentes?',
+                style: TextStyle(
+                  color: Colors.amber.shade900,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              subtitle: Text(
+                'Confirma si ya se revisaron antecedentes.',
+                style: TextStyle(
+                  color: Colors.amber.shade900,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              value: d.checaronAntecedentes,
+              onChanged: _submitting
+                  ? null
+                  : (v) {
+                      setState(() => d.checaronAntecedentes = v ?? false);
+                      _markDraftChanged();
+                    },
+            ),
           ),
 
           const SizedBox(height: 12),

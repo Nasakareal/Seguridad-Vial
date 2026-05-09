@@ -11,6 +11,8 @@ class ActividadCountField extends StatelessWidget {
   final String? helperText;
   final String? badgeText;
   final int? max;
+  final String? errorText;
+  final ValueChanged<String>? onChanged;
 
   const ActividadCountField({
     super.key,
@@ -21,6 +23,8 @@ class ActividadCountField extends StatelessWidget {
     this.helperText,
     this.badgeText,
     this.max,
+    this.errorText,
+    this.onChanged,
   });
 
   @override
@@ -69,6 +73,7 @@ class ActividadCountField extends StatelessWidget {
         TextField(
           controller: controller,
           keyboardType: TextInputType.number,
+          onChanged: onChanged,
           inputFormatters: <TextInputFormatter>[
             NormalizedIntegerInputFormatter(max: max),
           ],
@@ -76,6 +81,8 @@ class ActividadCountField extends StatelessWidget {
             hintText: '0',
             helperText: helperText,
             helperMaxLines: 2,
+            errorText: errorText,
+            errorMaxLines: 3,
             filled: true,
             fillColor: color.withValues(alpha: .08),
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
@@ -89,6 +96,14 @@ class ActividadCountField extends StatelessWidget {
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(14),
               borderSide: BorderSide(color: color, width: 3),
+            ),
+            errorBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: const BorderSide(color: Colors.red, width: 2),
+            ),
+            focusedErrorBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: const BorderSide(color: Colors.red, width: 3),
             ),
           ),
         ),

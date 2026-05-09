@@ -4,6 +4,7 @@ import '../services/auth_service.dart';
 import '../services/home_resolver_service.dart';
 import '../services/offline_sync_service.dart';
 import 'home_agente_upec_screen.dart';
+import 'home_delegaciones_screen.dart';
 import 'home_screen.dart';
 import 'home_perito_screen.dart';
 import 'location_consent_screen.dart';
@@ -58,13 +59,17 @@ class _LoginScreenState extends State<LoginScreen> {
         final askLocation = await AuthService.shouldAskLocation();
         final agenteUpecHomeAvailable =
             await HomeResolverService.isAgenteUpecHomeAvailable();
+        final delegacionesHomeAvailable =
+            await HomeResolverService.isDelegacionesPoliciaHomeAvailable();
         final peritoHomeAvailable =
             await HomeResolverService.isPeritoHomeAvailable();
         final nextHome = agenteUpecHomeAvailable
             ? const HomeAgenteUpecScreen()
-            : (peritoHomeAvailable
-                  ? const HomePeritoScreen()
-                  : const HomeScreen());
+            : (delegacionesHomeAvailable
+                  ? const HomeDelegacionesScreen()
+                  : (peritoHomeAvailable
+                        ? const HomePeritoScreen()
+                        : const HomeScreen()));
 
         if (!mounted) return;
 

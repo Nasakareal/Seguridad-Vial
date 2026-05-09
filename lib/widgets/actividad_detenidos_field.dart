@@ -6,8 +6,15 @@ import 'normalized_integer_input_formatter.dart';
 
 class ActividadDetenidosField extends StatelessWidget {
   final TextEditingController controller;
+  final String? errorText;
+  final ValueChanged<String>? onChanged;
 
-  const ActividadDetenidosField({super.key, required this.controller});
+  const ActividadDetenidosField({
+    super.key,
+    required this.controller,
+    this.errorText,
+    this.onChanged,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -17,6 +24,7 @@ class ActividadDetenidosField extends StatelessWidget {
     return TextField(
       controller: controller,
       keyboardType: TextInputType.number,
+      onChanged: onChanged,
       inputFormatters: const <TextInputFormatter>[
         NormalizedIntegerInputFormatter(
           max: ActividadesService.maxDetainedCount,
@@ -25,6 +33,8 @@ class ActividadDetenidosField extends StatelessWidget {
       decoration: InputDecoration(
         labelText: 'Personas detenidas',
         helperText: 'Maximo 3 por actividad',
+        errorText: errorText,
+        errorMaxLines: 3,
         prefixIcon: Icon(Icons.warning_amber_rounded, color: warning),
         suffixIcon: Padding(
           padding: const EdgeInsets.only(right: 12),
@@ -46,6 +56,14 @@ class ActividadDetenidosField extends StatelessWidget {
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
           borderSide: BorderSide(color: warning, width: 3),
+        ),
+        errorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: const BorderSide(color: Colors.red, width: 2),
+        ),
+        focusedErrorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: const BorderSide(color: Colors.red, width: 3),
         ),
       ),
     );

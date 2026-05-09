@@ -6,6 +6,7 @@ import '../../../core/vehiculos/vehiculo_taxonomia.dart';
 import '../../../models/actividad.dart';
 import '../../../models/dispositivo_relacionados.dart';
 import '../../../services/vehiculo_form_service.dart';
+import '../../../widgets/antecedente_highlight_tile.dart';
 
 class DispositivoRelacionadoResult {
   final DispositivoVehiculoRelacionado? vehiculo;
@@ -567,9 +568,8 @@ class _DispositivoRelacionadoModalState
             decoration: _dec('Observaciones', icon: Icons.notes),
             textCapitalization: TextCapitalization.characters,
           ),
-          SwitchListTile(
-            contentPadding: EdgeInsets.zero,
-            title: const Text('Antecedente del vehículo'),
+          AntecedenteHighlightTile(
+            title: 'Antecedente del vehículo',
             value: _antecedenteVehiculo,
             onChanged: (value) => setState(() {
               _antecedenteVehiculo = value;
@@ -711,9 +711,8 @@ class _DispositivoRelacionadoModalState
             value: _personaCinturon,
             onChanged: (value) => setState(() => _personaCinturon = value),
           ),
-          SwitchListTile(
-            contentPadding: EdgeInsets.zero,
-            title: const Text('Antecedentes'),
+          AntecedenteHighlightTile(
+            title: 'Antecedentes',
             value: _personaAntecedentes,
             onChanged: (value) => setState(() => _personaAntecedentes = value),
           ),

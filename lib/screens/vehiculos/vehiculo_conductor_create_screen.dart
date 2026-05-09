@@ -7,6 +7,7 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 import '../services/auth_service.dart';
 import '../../services/local_draft_service.dart';
 import '../../services/vehiculo_form_service.dart';
+import '../../widgets/antecedente_highlight_tile.dart';
 
 class VehiculoConductorCreateScreen extends StatefulWidget {
   const VehiculoConductorCreateScreen({super.key});
@@ -709,8 +710,8 @@ class _VehiculoConductorCreateScreenState
                         _markDraftChanged();
                       },
                     ),
-                    SwitchListTile(
-                      title: const Text('Antecedente conductor'),
+                    AntecedenteHighlightTile(
+                      title: 'Antecedente conductor',
                       value: _antecedenteConductor,
                       onChanged: (v) {
                         setState(() => _antecedenteConductor = v);

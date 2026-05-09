@@ -121,6 +121,33 @@ class ActividadUpsertData {
   }
 }
 
+enum ActividadValidationTarget {
+  categoria,
+  subcategoria,
+  fecha,
+  hora,
+  lugar,
+  municipio,
+  carretera,
+  tramo,
+  kilometro,
+  ubicacion,
+  fuenteUbicacion,
+  notaGeo,
+  personasAlcanzadas,
+  personasParticipantes,
+  personasDetenidas,
+  fotos,
+  vehiculos,
+}
+
+class ActividadValidationIssue {
+  final ActividadValidationTarget target;
+  final String message;
+
+  const ActividadValidationIssue({required this.target, required this.message});
+}
+
 class ActividadNativeShareData {
   final String message;
   final List<String> media;
@@ -305,84 +332,171 @@ class ActividadesService {
     return raw.replaceFirst(RegExp(r'^Exception:\s*'), '').trim();
   }
 
+  static String formatValidationIssues(
+    Iterable<ActividadValidationIssue> issues,
+  ) {
+    final messages = <String>[];
+    for (final issue in issues) {
+      if (!messages.contains(issue.message)) messages.add(issue.message);
+    }
+    return 'Corrige esto antes de guardar:\n• ${messages.join('\n• ')}';
+  }
+
   static Future<String?> validateBeforeSubmit({
     required ActividadUpsertData data,
     required List<File> fotos,
     bool requirePhotos = true,
     bool requireCoords = true,
   }) async {
-    final errors = <String>[];
+    final issues = await validateBeforeSubmitIssues(
+      data: data,
+      fotos: fotos,
+      requirePhotos: requirePhotos,
+      requireCoords: requireCoords,
+    );
+    if (issues.isEmpty) return null;
+    return formatValidationIssues(issues);
+  }
 
-    void add(String message) {
-      if (!errors.contains(message)) errors.add(message);
+  static Future<List<ActividadValidationIssue>> validateBeforeSubmitIssues({
+    required ActividadUpsertData data,
+    required List<File> fotos,
+    bool requirePhotos = true,
+    bool requireCoords = true,
+  }) async {
+    final issues = <ActividadValidationIssue>[];
+
+    void add(ActividadValidationTarget target, String message) {
+      if (issues.any((issue) => issue.message == message)) return;
+      issues.add(ActividadValidationIssue(target: target, message: message));
     }
 
     if (data.actividadCategoriaId <= 0) {
-      add('Selecciona una categoría.');
+      add(ActividadValidationTarget.categoria, 'Selecciona una categoría.');
     }
     if (data.actividadSubcategoriaId == null ||
         data.actividadSubcategoriaId! <= 0) {
-      add('Selecciona una subcategoría.');
+      add(
+        ActividadValidationTarget.subcategoria,
+        'Selecciona una subcategoría.',
+      );
     }
 
     final fecha = (data.fecha ?? '').trim();
     if (fecha.isEmpty) {
-      add('Captura la fecha.');
+      add(ActividadValidationTarget.fecha, 'Captura la fecha.');
     } else if (DateTime.tryParse(fecha) == null) {
-      add('La fecha debe tener formato AAAA-MM-DD.');
+      add(
+        ActividadValidationTarget.fecha,
+        'La fecha debe tener formato AAAA-MM-DD.',
+      );
     }
 
     final hora = (data.hora ?? '').trim();
     if (hora.isNotEmpty &&
         !RegExp(r'^([01]\d|2[0-3]):[0-5]\d$').hasMatch(hora)) {
-      add('La hora debe tener formato HH:mm.');
+      add(ActividadValidationTarget.hora, 'La hora debe tener formato HH:mm.');
     }
 
-    _validateLength(errors, data.lugar, 255, 'Lugar');
-    _validateLength(errors, data.municipio, 255, 'Municipio');
-    _validateMunicipio(errors, data.municipio);
-    _validateLength(errors, data.carretera, 255, 'Carretera');
-    _validateLength(errors, data.tramo, 255, 'Tramo');
-    _validateLength(errors, data.kilometro, 50, 'Kilómetro');
-    _validateLength(errors, data.fuenteUbicacion, 50, 'Fuente de ubicación');
-    _validateLength(errors, data.notaGeo, 255, 'Nota de ubicación');
+    _validateLength(
+      issues,
+      ActividadValidationTarget.lugar,
+      data.lugar,
+      255,
+      'Lugar',
+    );
+    _validateLength(
+      issues,
+      ActividadValidationTarget.municipio,
+      data.municipio,
+      255,
+      'Municipio',
+    );
+    _validateMunicipio(issues, data.municipio);
+    _validateLength(
+      issues,
+      ActividadValidationTarget.carretera,
+      data.carretera,
+      255,
+      'Carretera',
+    );
+    _validateLength(
+      issues,
+      ActividadValidationTarget.tramo,
+      data.tramo,
+      255,
+      'Tramo',
+    );
+    _validateLength(
+      issues,
+      ActividadValidationTarget.kilometro,
+      data.kilometro,
+      50,
+      'Kilómetro',
+    );
+    _validateLength(
+      issues,
+      ActividadValidationTarget.fuenteUbicacion,
+      data.fuenteUbicacion,
+      50,
+      'Fuente de ubicación',
+    );
+    _validateLength(
+      issues,
+      ActividadValidationTarget.notaGeo,
+      data.notaGeo,
+      255,
+      'Nota de ubicación',
+    );
 
     final latText = (data.lat ?? '').trim();
     final lngText = (data.lng ?? '').trim();
     if (requireCoords && (latText.isEmpty || lngText.isEmpty)) {
-      add('Captura la ubicación con el botón "Usar mi ubicación".');
+      add(
+        ActividadValidationTarget.ubicacion,
+        'Captura la ubicación con el botón "Usar mi ubicación".',
+      );
     } else if (latText.isNotEmpty || lngText.isNotEmpty) {
       final lat = double.tryParse(latText);
       final lng = double.tryParse(lngText);
       if (lat == null || lat < -90 || lat > 90) {
-        add('La latitud de la ubicación no es válida.');
+        add(
+          ActividadValidationTarget.ubicacion,
+          'La latitud de la ubicación no es válida.',
+        );
       }
       if (lng == null || lng < -180 || lng > 180) {
-        add('La longitud de la ubicación no es válida.');
+        add(
+          ActividadValidationTarget.ubicacion,
+          'La longitud de la ubicación no es válida.',
+        );
       }
     }
 
     _validateNonNegativeInt(
-      errors,
+      issues,
+      ActividadValidationTarget.personasAlcanzadas,
       data.personasAlcanzadas,
       'Personas alcanzadas',
       min: 1,
     );
     _validateNonNegativeInt(
-      errors,
+      issues,
+      ActividadValidationTarget.personasParticipantes,
       data.personasParticipantes,
       'Personas participantes',
       max: maxParticipantsCount,
     );
     _validateNonNegativeInt(
-      errors,
+      issues,
+      ActividadValidationTarget.personasDetenidas,
       data.personasDetenidas,
       'Personas detenidas',
       max: maxDetainedCount,
     );
 
     if (requirePhotos && fotos.isEmpty) {
-      add('Selecciona al menos una foto.');
+      add(ActividadValidationTarget.fotos, 'Selecciona al menos una foto.');
     }
 
     final seenPaths = <String>{};
@@ -391,35 +505,49 @@ class ActividadesService {
       final label = 'Foto ${i + 1}';
       final path = file.path.trim();
       if (path.isEmpty) {
-        add('$label no tiene una ruta válida.');
+        add(
+          ActividadValidationTarget.fotos,
+          '$label no tiene una ruta válida.',
+        );
         continue;
       }
       if (!seenPaths.add(path)) {
-        add('$label está duplicada en la misma captura.');
+        add(
+          ActividadValidationTarget.fotos,
+          '$label está duplicada en la misma captura.',
+        );
       }
       if (!await file.exists()) {
-        add('$label ya no existe en el dispositivo.');
+        add(
+          ActividadValidationTarget.fotos,
+          '$label ya no existe en el dispositivo.',
+        );
         continue;
       }
 
       final ext = path.split('.').last.toLowerCase();
       const allowed = <String>{'jpg', 'jpeg', 'png', 'webp'};
       if (!allowed.contains(ext)) {
-        add('$label debe ser JPG, JPEG, PNG o WEBP.');
+        add(
+          ActividadValidationTarget.fotos,
+          '$label debe ser JPG, JPEG, PNG o WEBP.',
+        );
       }
 
       final size = await file.length();
       if (size > _maxImageBytes) {
-        add('$label es muy pesada (máximo 4 MB).');
+        add(
+          ActividadValidationTarget.fotos,
+          '$label es muy pesada (máximo 4 MB).',
+        );
       }
     }
 
     for (var i = 0; i < data.vehiculos.length; i += 1) {
-      _validateVehiculo(errors, data.vehiculos[i], i + 1);
+      _validateVehiculo(issues, data.vehiculos[i], i + 1);
     }
 
-    if (errors.isEmpty) return null;
-    return 'Corrige esto antes de guardar:\n• ${errors.join('\n• ')}';
+    return issues;
   }
 
   static List<Actividad> _decodeActividadesList(dynamic raw) {
@@ -795,30 +923,50 @@ class ActividadesService {
   }
 
   static void _validateLength(
-    List<String> errors,
+    List<ActividadValidationIssue> issues,
+    ActividadValidationTarget target,
     String? value,
     int max,
     String label,
   ) {
     final text = (value ?? '').trim();
     if (text.length > max) {
-      errors.add('$label no puede exceder $max caracteres.');
+      issues.add(
+        ActividadValidationIssue(
+          target: target,
+          message: '$label no puede exceder $max caracteres.',
+        ),
+      );
     }
   }
 
-  static void _validateMunicipio(List<String> errors, String? value) {
+  static void _validateMunicipio(
+    List<ActividadValidationIssue> issues,
+    String? value,
+  ) {
     final text = (value ?? '').trim();
     if (text.isEmpty) {
-      errors.add('Selecciona un municipio de Michoacan.');
+      issues.add(
+        const ActividadValidationIssue(
+          target: ActividadValidationTarget.municipio,
+          message: 'Selecciona un municipio de Michoacan.',
+        ),
+      );
       return;
     }
     if (!MunicipiosMichoacan.isKnown(text)) {
-      errors.add('Selecciona un municipio de Michoacan.');
+      issues.add(
+        const ActividadValidationIssue(
+          target: ActividadValidationTarget.municipio,
+          message: 'Selecciona un municipio de Michoacan.',
+        ),
+      );
     }
   }
 
   static void _validateNonNegativeInt(
-    List<String> errors,
+    List<ActividadValidationIssue> issues,
+    ActividadValidationTarget target,
     String? value,
     String label, {
     int min = 0,
@@ -827,48 +975,75 @@ class ActividadesService {
     final text = (value ?? '').trim();
     if (text.isEmpty) {
       if (min > 0) {
-        errors.add('$label debe ser al menos $min.');
+        issues.add(
+          ActividadValidationIssue(
+            target: target,
+            message: '$label debe ser al menos $min.',
+          ),
+        );
       }
       return;
     }
 
     final parsed = int.tryParse(text);
     if (parsed == null) {
-      errors.add('$label debe ser un número entero.');
+      issues.add(
+        ActividadValidationIssue(
+          target: target,
+          message: '$label debe ser un número entero.',
+        ),
+      );
       return;
     }
     if (parsed < min) {
-      errors.add(
-        min <= 0
-            ? '$label no puede ser negativo.'
-            : '$label debe ser al menos $min.',
+      issues.add(
+        ActividadValidationIssue(
+          target: target,
+          message: min <= 0
+              ? '$label no puede ser negativo.'
+              : '$label debe ser al menos $min.',
+        ),
       );
     }
     if (max != null && parsed > max) {
-      errors.add('$label no puede ser mayor a $max.');
+      issues.add(
+        ActividadValidationIssue(
+          target: target,
+          message: '$label no puede ser mayor a $max.',
+        ),
+      );
     }
   }
 
   static void _validateVehiculo(
-    List<String> errors,
+    List<ActividadValidationIssue> issues,
     ActividadVehiculo vehiculo,
     int index,
   ) {
     final prefix = 'Vehículo $index';
 
+    void add(String message) {
+      issues.add(
+        ActividadValidationIssue(
+          target: ActividadValidationTarget.vehiculos,
+          message: message,
+        ),
+      );
+    }
+
     void requiredText(String? value, String label, int max) {
       final text = (value ?? '').trim();
       if (text.isEmpty) {
-        errors.add('$prefix: captura $label.');
+        add('$prefix: captura $label.');
       } else if (text.length > max) {
-        errors.add('$prefix: $label no puede exceder $max caracteres.');
+        add('$prefix: $label no puede exceder $max caracteres.');
       }
     }
 
     void optionalText(String? value, String label, int max) {
       final text = (value ?? '').trim();
       if (text.length > max) {
-        errors.add('$prefix: $label no puede exceder $max caracteres.');
+        add('$prefix: $label no puede exceder $max caracteres.');
       }
     }
 
@@ -884,7 +1059,7 @@ class ActividadesService {
       vehiculo.tipoServicio,
     );
     if (tipoServicioError != null) {
-      errors.add('$prefix: $tipoServicioError');
+      add('$prefix: $tipoServicioError');
     }
     optionalText(
       vehiculo.tarjetaCirculacionNombre,
@@ -896,10 +1071,10 @@ class ActividadesService {
     optionalText(vehiculo.aseguradora, 'aseguradora', 100);
 
     if (vehiculo.capacidadPersonas < 0) {
-      errors.add('$prefix: capacidad de personas no puede ser negativa.');
+      add('$prefix: capacidad de personas no puede ser negativa.');
     }
     if (vehiculo.montoDanos != null && vehiculo.montoDanos! < 0) {
-      errors.add('$prefix: monto de daños no puede ser negativo.');
+      add('$prefix: monto de daños no puede ser negativo.');
     }
   }
 

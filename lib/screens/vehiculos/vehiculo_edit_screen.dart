@@ -10,6 +10,7 @@ import '../../core/vehiculos/estados_republica.dart';
 import '../../services/gruas_catalog_service.dart';
 import '../../services/offline_sync_service.dart';
 import '../../services/vehiculo_form_service.dart';
+import '../../widgets/antecedente_highlight_tile.dart';
 
 class VehiculoEditScreen extends StatefulWidget {
   const VehiculoEditScreen({super.key});
@@ -136,6 +137,17 @@ class _VehiculoEditScreenState extends State<VehiculoEditScreen> {
     final v = s.trim();
     if (v.isEmpty) return null;
     return double.tryParse(v);
+  }
+
+  bool _toBool(dynamic value) {
+    if (value is bool) return value;
+    if (value is num) return value != 0;
+    final text = (value ?? '').toString().trim().toLowerCase();
+    return text == '1' ||
+        text == 'true' ||
+        text == 'si' ||
+        text == 'sí' ||
+        text == 'yes';
   }
 
   String _limpiaPlacas(String s) => VehiculoFormService.normalizePlacas(s);
@@ -545,7 +557,7 @@ class _VehiculoEditScreenState extends State<VehiculoEditScreen> {
         '';
     _montoDanosCtrl.text = (data['monto_danos'] ?? '').toString();
     _partesDanadasCtrl.text = (data['partes_danadas'] ?? '').toString();
-    _antecedenteVehiculo = (data['antecedente_vehiculo'] == true);
+    _antecedenteVehiculo = _toBool(data['antecedente_vehiculo']);
 
     final tipoGeneralApi = (data['tipo_general'] ?? '').toString().trim();
     final carroceriaApiRaw = (data['tipo'] ?? '').toString().trim();
@@ -1201,8 +1213,8 @@ class _VehiculoEditScreenState extends State<VehiculoEditScreen> {
                           ),
                     ),
                     const SizedBox(height: 6),
-                    SwitchListTile(
-                      title: const Text('Antecedente del vehículo'),
+                    AntecedenteHighlightTile(
+                      title: 'Antecedente del vehículo',
                       value: _antecedenteVehiculo,
                       onChanged: (v) =>
                           setState(() => _antecedenteVehiculo = v),

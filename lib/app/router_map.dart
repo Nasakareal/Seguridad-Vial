@@ -4,6 +4,7 @@ import 'package:seguridad_vial_app/app/routes.dart';
 
 import '../screens/login_screen.dart';
 import '../screens/home_agente_upec_screen.dart';
+import '../screens/home_delegaciones_screen.dart';
 import '../screens/home_screen.dart';
 import '../screens/home_perito_screen.dart';
 import '../screens/account/change_password_screen.dart';
@@ -84,6 +85,7 @@ final Map<String, WidgetBuilder> appRoutesMap = {
   AppRoutes.home: (context) => const HomeScreen(),
   AppRoutes.homePerito: (context) => const HomePeritoScreen(),
   AppRoutes.homeAgenteUpec: (context) => const HomeAgenteUpecScreen(),
+  AppRoutes.homeDelegaciones: (context) => const HomeDelegacionesScreen(),
   AppRoutes.profile: (context) => const ProfileScreen(),
   AppRoutes.changePassword: (context) => const ChangePasswordScreen(),
   AppRoutes.users: (context) => const SettingsUsersScreen(),

@@ -97,6 +97,19 @@ class _VehiculoShowScreenState extends State<VehiculoShowScreen> {
     return s;
   }
 
+  bool _toBool(dynamic value) {
+    if (value is bool) return value;
+    if (value is num) return value != 0;
+    final text = (value ?? '').toString().trim().toLowerCase();
+    return text == '1' ||
+        text == 'true' ||
+        text == 'si' ||
+        text == 'sí' ||
+        text == 'yes';
+  }
+
+  String _boolText(dynamic value) => _toBool(value) ? 'Sí' : 'No';
+
   Future<void> _loadAll() async {
     setState(() {
       _loading = true;
@@ -242,21 +255,12 @@ class _VehiculoShowScreenState extends State<VehiculoShowScreen> {
             _kv('Estado licencia', textValue('estado_licencia')),
             _kv('No. licencia', textValue('numero_licencia')),
             _kv('Vigencia', textValue('vigencia_licencia')),
-            _kv('Permanente', (c['permanente'] == true) ? 'Sí' : 'No'),
-            _kv('Cinturón', (c['cinturon'] == true) ? 'Sí' : 'No'),
-            _kv('Antecedente', (c['antecedentes'] == true) ? 'Sí' : 'No'),
-            _kv(
-              'Cert. lesiones',
-              (c['certificado_lesiones'] == true) ? 'Sí' : 'No',
-            ),
-            _kv(
-              'Cert. alcoholemia',
-              (c['certificado_alcoholemia'] == true) ? 'Sí' : 'No',
-            ),
-            _kv(
-              'Aliento etílico',
-              (c['aliento_etilico'] == true) ? 'Sí' : 'No',
-            ),
+            _kv('Permanente', _boolText(c['permanente'])),
+            _kv('Cinturón', _boolText(c['cinturon'])),
+            _kv('Antecedente', _boolText(c['antecedentes'])),
+            _kv('Cert. lesiones', _boolText(c['certificado_lesiones'])),
+            _kv('Cert. alcoholemia', _boolText(c['certificado_alcoholemia'])),
+            _kv('Aliento etílico', _boolText(c['aliento_etilico'])),
           ],
         ),
       ),
@@ -316,7 +320,7 @@ class _VehiculoShowScreenState extends State<VehiculoShowScreen> {
                   _kv('Partes dañadas', _v('partes_danadas')),
                   _kv(
                     'Antecedente',
-                    (_vehiculo['antecedente_vehiculo'] == true) ? 'Sí' : 'No',
+                    _boolText(_vehiculo['antecedente_vehiculo']),
                   ),
                   _sectionTitle('Conductor(es)'),
                   if (_conductores.isEmpty)

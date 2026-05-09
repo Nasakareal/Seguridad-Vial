@@ -36,4 +36,16 @@ class HomeResolverService {
   static Future<bool> isAgenteUpecHomeAvailable() async {
     return _isAvailable('agente-upec-home/filtros');
   }
+
+  static Future<bool> isDelegacionesPoliciaHomeAvailable() async {
+    final unidadId = await AuthService.getUnidadId();
+    final isDelegaciones =
+        unidadId == AuthService.unidadDelegacionesId ||
+        await AuthService.isDelegacionesUser();
+    if (!isDelegaciones) {
+      return false;
+    }
+
+    return AuthService.isPolicia();
+  }
 }

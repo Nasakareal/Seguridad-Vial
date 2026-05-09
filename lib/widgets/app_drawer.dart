@@ -77,11 +77,17 @@ class AppDrawer extends StatelessWidget {
     if (route == AppRoutes.home) {
       final agenteUpecHomeAvailable =
           await HomeResolverService.isAgenteUpecHomeAvailable();
+      final delegacionesHomeAvailable =
+          await HomeResolverService.isDelegacionesPoliciaHomeAvailable();
       final peritoHomeAvailable =
           await HomeResolverService.isPeritoHomeAvailable();
       final homeRoute = agenteUpecHomeAvailable
           ? AppRoutes.homeAgenteUpec
-          : (peritoHomeAvailable ? AppRoutes.homePerito : AppRoutes.home);
+          : (delegacionesHomeAvailable
+                ? AppRoutes.homeDelegaciones
+                : (peritoHomeAvailable
+                      ? AppRoutes.homePerito
+                      : AppRoutes.home));
       navigator.pushNamedAndRemoveUntil(homeRoute, (_) => false);
       return;
     }
