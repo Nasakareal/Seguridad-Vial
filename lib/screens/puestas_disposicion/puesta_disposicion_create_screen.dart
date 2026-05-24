@@ -18,6 +18,8 @@ class PuestaDisposicionCreateScreen extends StatefulWidget {
 
 class _PuestaDisposicionCreateScreenState
     extends State<PuestaDisposicionCreateScreen> {
+  static const int _maxPdfBytes = 20 * 1024 * 1024;
+
   final _formKey = GlobalKey<FormState>();
   final _service = PuestasDisposicionService();
 
@@ -802,15 +804,24 @@ class _PuestaDisposicionCreateScreenState
         throw Exception('No se pudo leer el PDF seleccionado.');
       }
 
+      final file = File(path);
+      if (!await file.exists()) {
+        throw Exception('No se encontró el PDF seleccionado.');
+      }
+      if (await file.length() > _maxPdfBytes) {
+        throw Exception('El PDF es muy pesado (máximo 20 MB).');
+      }
+
+      if (!mounted) return;
       setState(() {
-        _pdf = File(path);
+        _pdf = file;
         _pdfName = picked.name;
       });
       _markDraftChanged();
-    } catch (_) {
+    } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No se pudo seleccionar el PDF.')),
+        SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
       );
     }
   }
@@ -835,8 +846,8 @@ class _PuestaDisposicionCreateScreenState
       if (!await file.exists()) {
         throw Exception('No se encontró el PDF seleccionado.');
       }
-      if (await file.length() > 10 * 1024 * 1024) {
-        throw Exception('El PDF es muy pesado (máximo 10 MB).');
+      if (await file.length() > _maxPdfBytes) {
+        throw Exception('El PDF es muy pesado (máximo 20 MB).');
       }
 
       if (!mounted) return;

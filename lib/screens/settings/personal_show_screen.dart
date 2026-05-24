@@ -2,30 +2,38 @@ import 'package:flutter/material.dart';
 
 import '../../app/routes.dart';
 import '../../services/auth_service.dart';
+import '../../services/settings_personal_service.dart';
 import '../../services/tracking_service.dart';
-import '../../services/users_service.dart';
 import '../../widgets/account_drawer.dart';
 import '../../widgets/permission_guard.dart';
 import '../login_screen.dart';
 
-class UserShowScreen extends StatefulWidget {
-  const UserShowScreen({super.key});
+class PersonalShowScreen extends StatefulWidget {
+  const PersonalShowScreen({super.key});
 
   @override
-  State<UserShowScreen> createState() => _UserShowScreenState();
+  State<PersonalShowScreen> createState() => _PersonalShowScreenState();
 }
 
-class _UserShowScreenState extends State<UserShowScreen> {
+class _PersonalShowScreenState extends State<PersonalShowScreen> {
   bool _loading = true;
   bool _busy = false;
   bool _canEdit = false;
   String? _error;
-  Map<String, dynamic>? _user;
+  Map<String, dynamic>? _personal;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_personal == null && _loading) {
+      _load();
+    }
+  }
 
   int? _idFromArgs() {
     final args = ModalRoute.of(context)?.settings.arguments;
     if (args is Map) {
-      final raw = args['user_id'] ?? args['id'];
+      final raw = args['personal_id'] ?? args['id'];
       if (raw is int) return raw;
       return int.tryParse(raw?.toString() ?? '');
     }
@@ -33,20 +41,12 @@ class _UserShowScreenState extends State<UserShowScreen> {
     return int.tryParse(args?.toString() ?? '');
   }
 
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    if (_user == null && _loading) {
-      _load();
-    }
-  }
-
   Future<void> _load() async {
     final id = _idFromArgs();
     if (id == null || id <= 0) {
       setState(() {
         _loading = false;
-        _error = 'Falta user_id.';
+        _error = 'Falta personal_id.';
       });
       return;
     }
@@ -58,12 +58,12 @@ class _UserShowScreenState extends State<UserShowScreen> {
 
     try {
       final isSuperadmin = await AuthService.isSuperadmin();
-      final canEdit = isSuperadmin || await AuthService.can('editar usuarios');
-      final user = await UsersService.show(id);
+      final canEdit = isSuperadmin || await AuthService.can('editar personal');
+      final personal = await SettingsPersonalService.show(id);
       if (!mounted) return;
       setState(() {
         _canEdit = canEdit;
-        _user = user;
+        _personal = personal;
         _loading = false;
       });
     } catch (e) {
@@ -71,7 +71,7 @@ class _UserShowScreenState extends State<UserShowScreen> {
       setState(() {
         _loading = false;
         _error =
-            'No se pudo cargar el usuario.\n${UsersService.cleanExceptionMessage(e)}';
+            'No se pudo cargar el personal.\n${SettingsPersonalService.cleanExceptionMessage(e)}';
       });
     }
   }
@@ -97,21 +97,22 @@ class _UserShowScreenState extends State<UserShowScreen> {
     );
   }
 
-  Future<void> _edit() async {
-    final user = _user;
-    final id = _int(user?['id']);
+  Future<void> _addIncidencia() async {
+    final personal = _personal;
+    final id = _int(personal?['id']);
     if (id <= 0) return;
 
     final changed = await Navigator.pushNamed(
       context,
-      AppRoutes.usersEdit,
-      arguments: {'user_id': id},
+      AppRoutes.settingsPersonalIncidenciaCreate,
+      arguments: {
+        'personal_id': id,
+        'personal_name': _text(personal?['nombre_completo'], 'Personal'),
+      },
     );
 
     if (changed == true && mounted) {
       await _load();
-      if (!mounted) return;
-      Navigator.pop(context, true);
     }
   }
 
@@ -136,36 +137,33 @@ class _UserShowScreenState extends State<UserShowScreen> {
     return fallback;
   }
 
-  String _extraUnidades(dynamic raw) {
-    if (raw is! List || raw.isEmpty) return 'Sin unidades extra';
-
-    final names = raw
+  List<Map<String, dynamic>> _list(dynamic raw) {
+    if (raw is! List) return const <Map<String, dynamic>>[];
+    return raw
         .whereType<Map>()
-        .map((item) => _nestedName(item, ''))
-        .where((name) => name.isNotEmpty)
+        .map((item) => Map<String, dynamic>.from(item))
         .toList();
-
-    return names.isEmpty ? 'Sin unidades extra' : names.join(', ');
   }
 
   @override
   Widget build(BuildContext context) {
-    final user = _user;
-    final name = _text(user?['name'], 'Usuario');
+    final personal = _personal;
+    final name = _text(personal?['nombre_completo'], 'Personal');
+    final incidencias = _list(personal?['incidencias']);
 
     return PermissionGuard(
-      permission: 'ver usuarios',
+      permission: 'ver personal',
       child: Scaffold(
         backgroundColor: const Color(0xFFF6F7FB),
         appBar: AppBar(
           elevation: 0,
           backgroundColor: Colors.blue,
-          title: const Text('Detalle de usuario'),
+          title: const Text('Detalle de personal'),
           actions: [
             IconButton(
-              tooltip: 'Editar',
-              onPressed: user == null || !_canEdit ? null : _edit,
-              icon: const Icon(Icons.edit),
+              tooltip: 'Agregar incidencia',
+              onPressed: personal == null || !_canEdit ? null : _addIncidencia,
+              icon: const Icon(Icons.add_alert_outlined),
             ),
             IconButton(
               tooltip: 'Actualizar',
@@ -195,7 +193,7 @@ class _UserShowScreenState extends State<UserShowScreen> {
                       style: TextStyle(color: Colors.red.shade700),
                     ),
                   )
-                else if (user == null)
+                else if (personal == null)
                   const Center(child: Text('Sin datos.'))
                 else ...[
                   Container(
@@ -233,7 +231,7 @@ class _UserShowScreenState extends State<UserShowScreen> {
                               ),
                               const SizedBox(height: 6),
                               Text(
-                                _text(user['email']),
+                                '${_text(personal['grado'], 'Sin grado')} · ${_text(personal['estatus'], 'Sin estatus')}',
                                 style: TextStyle(
                                   color: Colors.white.withValues(alpha: .8),
                                   fontWeight: FontWeight.w700,
@@ -250,12 +248,15 @@ class _UserShowScreenState extends State<UserShowScreen> {
                     title: 'Datos principales',
                     child: Column(
                       children: [
+                        _row('Empleado', _text(personal['numero_empleado'])),
                         _row('Nombre', name),
-                        _row('Correo', _text(user['email'])),
-                        _row('Telefono', _text(user['telefono'])),
-                        _row('Area', _text(user['area'])),
-                        _row('Estado', _text(user['estado'])),
-                        _row('Rol', UsersService.roleScopedLabel(user['role'])),
+                        _row('CURP', _text(personal['curp'])),
+                        _row('RFC', _text(personal['rfc'])),
+                        _row('CUIP', _text(personal['cuip'])),
+                        _row('CUP', _text(personal['cup'])),
+                        _row('Puesto', _text(personal['puesto'])),
+                        _row('Categoria', _text(personal['categoria'])),
+                        _row('Ingreso', _formatDate(personal['fecha_ingreso'])),
                       ],
                     ),
                   ),
@@ -266,22 +267,37 @@ class _UserShowScreenState extends State<UserShowScreen> {
                       children: [
                         _row(
                           'Unidad',
-                          _nestedName(user['unidad'], 'Sin unidad'),
+                          _nestedName(personal['unidad'], 'Sin unidad'),
                         ),
-                        _row('Turno', _nestedName(user['turno'])),
-                        _row('Patrulla', _nestedName(user['patrulla'])),
-                        _row('Delegacion', _nestedName(user['delegacion'])),
-                        _row('Destacamento', _nestedName(user['destacamento'])),
+                        _row('Turno', _nestedName(personal['turno'])),
+                        _row('Patrulla', _nestedName(personal['patrulla'])),
+                        _row('Adscripcion', _text(personal['adscripcion'])),
+                        _row('Area', _text(personal['area'])),
                         _row(
-                          'Unidades extra',
-                          _extraUnidades(user['unidades']),
+                          'Usuario',
+                          _nestedName(personal['user'], 'Sin usuario'),
                         ),
-                        _row(
-                          'Ubicacion',
-                          user['compartir_ubicacion'] == true
-                              ? 'Compartida'
-                              : 'No compartida',
-                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  _card(
+                    title: 'Incidencias',
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        if (_canEdit) ...[
+                          ElevatedButton.icon(
+                            onPressed: _addIncidencia,
+                            icon: const Icon(Icons.add),
+                            label: const Text('Agregar incidencia'),
+                          ),
+                          const SizedBox(height: 12),
+                        ],
+                        if (incidencias.isEmpty)
+                          const Text('No hay incidencias registradas.')
+                        else
+                          ...incidencias.map(_incidenciaTile),
                       ],
                     ),
                   ),
@@ -343,6 +359,89 @@ class _UserShowScreenState extends State<UserShowScreen> {
       ),
     );
   }
+
+  Widget _incidenciaTile(Map<String, dynamic> item) {
+    final tipo = _text(item['tipo_nombre'] ?? item['tipo'], 'Incidencia');
+    final inicio = _formatDate(item['fecha_inicio']);
+    final fin = _formatDate(item['fecha_fin']);
+    final folio = _text(item['folio'], '');
+    final motivo = _text(item['motivo'], '');
+    final activo = item['activo'] == true;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: activo
+            ? Colors.orange.withValues(alpha: .08)
+            : Colors.grey.withValues(alpha: .08),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: activo
+              ? Colors.orange.withValues(alpha: .22)
+              : Colors.grey.withValues(alpha: .22),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  tipo,
+                  style: const TextStyle(fontWeight: FontWeight.w900),
+                ),
+              ),
+              _Pill(text: activo ? 'Activa' : 'Inactiva'),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            fin == '-' ? 'Desde $inicio' : '$inicio - $fin',
+            style: TextStyle(
+              color: Colors.grey.shade800,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          if (folio.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Text('Folio: $folio'),
+          ],
+          if (motivo.isNotEmpty) ...[const SizedBox(height: 4), Text(motivo)],
+        ],
+      ),
+    );
+  }
+}
+
+class _Pill extends StatelessWidget {
+  final String text;
+
+  const _Pill({required this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: Text(
+        text,
+        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w900),
+      ),
+    );
+  }
+}
+
+String _formatDate(dynamic raw) {
+  final text = raw?.toString().trim() ?? '';
+  if (text.isEmpty) return '-';
+  if (text.length >= 10) return text.substring(0, 10);
+  return text;
 }
 
 String _initials(String raw) {
@@ -352,7 +451,7 @@ String _initials(String raw) {
       .where((part) => part.isNotEmpty)
       .toList();
 
-  if (parts.isEmpty) return 'U';
+  if (parts.isEmpty) return 'P';
   if (parts.length == 1) {
     final text = parts.first;
     return text.substring(0, text.length >= 2 ? 2 : 1).toUpperCase();

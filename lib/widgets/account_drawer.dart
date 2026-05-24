@@ -52,7 +52,23 @@ class AppAccountDrawer extends StatelessWidget {
         (await AuthService.getUserEmail()) ??
         '';
 
-    final isSuperadmin = await AuthService.isSuperadmin();
+    var isSuperadmin = await AuthService.isSuperadmin();
+    var canSeeSettings =
+        isSuperadmin ||
+        await AuthService.canAny(const <String>[
+          'ver usuarios',
+          'ver personal',
+        ]);
+    if (!canSeeSettings) {
+      await AuthService.refreshCurrentUserAccess();
+      isSuperadmin = await AuthService.isSuperadmin();
+      canSeeSettings =
+          isSuperadmin ||
+          await AuthService.canAny(const <String>[
+            'ver usuarios',
+            'ver personal',
+          ]);
+    }
     final canSeeDelegacionesExcelRevision =
         isSuperadmin || await AuthService.isDelegacionesUser();
 
@@ -62,6 +78,7 @@ class AppAccountDrawer extends StatelessWidget {
       role: role,
       unit: unit,
       isSuperadmin: isSuperadmin,
+      canSeeSettings: canSeeSettings,
       canSeeDelegacionesExcelRevision: canSeeDelegacionesExcelRevision,
     );
   }
@@ -141,15 +158,15 @@ class AppAccountDrawer extends StatelessWidget {
                         ],
                       ),
                     ),
-                    if (summary?.isSuperadmin == true) ...[
+                    if (summary?.canSeeSettings == true) ...[
                       const SizedBox(height: 12),
                       const DrawerSectionLabel(label: 'Configuración'),
                       DrawerSurface(
                         child: DrawerActionTile(
-                          icon: Icons.settings,
+                          icon: Icons.settings_outlined,
                           title: 'Configuraciones',
-                          subtitle: 'Usuarios del sistema',
-                          onTap: () => _goTo(context, AppRoutes.users),
+                          subtitle: 'Usuarios, personal y catalogos',
+                          onTap: () => _goTo(context, AppRoutes.settings),
                         ),
                       ),
                     ],
@@ -196,6 +213,7 @@ class _AccountSummary {
   final String role;
   final String unit;
   final bool isSuperadmin;
+  final bool canSeeSettings;
   final bool canSeeDelegacionesExcelRevision;
 
   const _AccountSummary({
@@ -204,6 +222,7 @@ class _AccountSummary {
     required this.role,
     required this.unit,
     required this.isSuperadmin,
+    required this.canSeeSettings,
     required this.canSeeDelegacionesExcelRevision,
   });
 }

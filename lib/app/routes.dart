@@ -6,10 +6,15 @@ class AppRoutes {
   static const String homeDelegaciones = '/home-delegaciones';
   static const String profile = '/profile';
   static const String changePassword = '/profile/change-password';
+  static const String settings = '/settings';
   static const String users = '/settings/users';
   static const String usersCreate = '/settings/users/create';
   static const String usersShow = '/settings/users/show';
   static const String usersEdit = '/settings/users/edit';
+  static const String settingsPersonal = '/settings/personal';
+  static const String settingsPersonalShow = '/settings/personal/show';
+  static const String settingsPersonalIncidenciaCreate =
+      '/settings/personal/incidencias/create';
 
   static const String accidentes = '/accidentes';
   static const String accidentesCreate = '/accidentes/create';

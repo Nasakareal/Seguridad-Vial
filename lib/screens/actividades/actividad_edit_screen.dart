@@ -7,6 +7,7 @@ import 'package:image_picker/image_picker.dart';
 import '../../core/municipios_michoacan.dart';
 import '../../models/actividad.dart';
 import '../../models/actividad_categoria.dart';
+import '../../models/actividad_fomento.dart';
 import '../../models/actividad_subcategoria.dart';
 import '../../services/actividades_service.dart';
 import '../../services/auth_service.dart';
@@ -18,6 +19,7 @@ import '../../widgets/municipio_autocomplete_field.dart';
 import '../../widgets/normalized_integer_input_formatter.dart';
 import '../../widgets/safe_network_image.dart';
 import 'widgets/actividad_vehiculo_modal.dart';
+import 'widgets/fomento_cultura_vial_panel.dart';
 
 class ActividadEditScreen extends StatefulWidget {
   const ActividadEditScreen({super.key});
@@ -30,6 +32,7 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
   bool _loading = true;
   bool _saving = false;
   bool _canEditCaptureTimestamp = false;
+  bool _isFomentoUser = false;
   String? _error;
   Map<ActividadValidationTarget, String> _fieldErrors = {};
 
@@ -40,6 +43,9 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
 
   int? _categoriaId;
   int? _subcategoriaId;
+  int? _fomentoProgramaId;
+  String? _fomentoNivelEducativo;
+  String? _fomentoSector;
   final List<File> _fotosNuevas = [];
   final Set<int> _fotoIdsEliminar = <int>{};
 
@@ -61,6 +67,15 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
   final _personasDetenidasCtrl = TextEditingController();
   final _elementosCtrl = TextEditingController();
   final _patrullasCtrl = TextEditingController();
+  final _fomentoNinasCtrl = TextEditingController(text: '0');
+  final _fomentoNinosCtrl = TextEditingController(text: '0');
+  final _fomentoAdolescentesMujeresCtrl = TextEditingController(text: '0');
+  final _fomentoAdolescentesHombresCtrl = TextEditingController(text: '0');
+  final _fomentoDocentesHombresCtrl = TextEditingController(text: '0');
+  final _fomentoDocentesMujeresCtrl = TextEditingController(text: '0');
+  final _fomentoHombresCtrl = TextEditingController(text: '0');
+  final _fomentoMujeresCtrl = TextEditingController(text: '0');
+  final _fomentoTotalCtrl = TextEditingController(text: '0');
 
   final _categoriaFieldKey = GlobalKey();
   final _subcategoriaFieldKey = GlobalKey();
@@ -75,6 +90,7 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
   final _personasAlcanzadasFieldKey = GlobalKey();
   final _personasParticipantesFieldKey = GlobalKey();
   final _personasDetenidasFieldKey = GlobalKey();
+  final _fomentoCardKey = GlobalKey();
   final _vehiculosCardKey = GlobalKey();
   final _fotosCardKey = GlobalKey();
 
@@ -118,6 +134,15 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
     _personasDetenidasCtrl.dispose();
     _elementosCtrl.dispose();
     _patrullasCtrl.dispose();
+    _fomentoNinasCtrl.dispose();
+    _fomentoNinosCtrl.dispose();
+    _fomentoAdolescentesMujeresCtrl.dispose();
+    _fomentoAdolescentesHombresCtrl.dispose();
+    _fomentoDocentesHombresCtrl.dispose();
+    _fomentoDocentesMujeresCtrl.dispose();
+    _fomentoHombresCtrl.dispose();
+    _fomentoMujeresCtrl.dispose();
+    _fomentoTotalCtrl.dispose();
     super.dispose();
   }
 
@@ -141,6 +166,7 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
       final cats = await ActividadesService.fetchCategorias();
       final a = await ActividadesService.fetchShow(id);
       final canEditTimestamp = await AuthService.canEditCaptureTimestamp();
+      final unidadId = await AuthService.getUnidadId();
 
       if (!mounted) return;
 
@@ -154,6 +180,7 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
         _categoriaId = a.actividadCategoriaId;
         _subcategoriaId = a.actividadSubcategoriaId;
         _canEditCaptureTimestamp = canEditTimestamp;
+        _isFomentoUser = unidadId == AuthService.unidadCulturaVialId;
         _loading = false;
       });
 
@@ -190,6 +217,29 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
     _personasDetenidasCtrl.text = a.personasDetenidas.toString();
     _elementosCtrl.text = a.elementosParticipantesTexto ?? '';
     _patrullasCtrl.text = a.patrullasParticipantesTexto ?? '';
+    _fillFomentoControllers(a.fomentoCulturaVialDetalle);
+    _syncFomentoTotal();
+  }
+
+  void _fillFomentoControllers(ActividadFomentoDetalle? fomento) {
+    _fomentoProgramaId = fomento?.programaId;
+    _fomentoNivelEducativo = fomento?.nivelEducativo;
+    _fomentoSector = fomento?.sector;
+    _fomentoNinasCtrl.text = (fomento?.ninas ?? 0).toString();
+    _fomentoNinosCtrl.text = (fomento?.ninos ?? 0).toString();
+    _fomentoAdolescentesMujeresCtrl.text = (fomento?.adolescentesMujeres ?? 0)
+        .toString();
+    _fomentoAdolescentesHombresCtrl.text = (fomento?.adolescentesHombres ?? 0)
+        .toString();
+    _fomentoDocentesHombresCtrl.text = (fomento?.docentesHombres ?? 0)
+        .toString();
+    _fomentoDocentesMujeresCtrl.text = (fomento?.docentesMujeres ?? 0)
+        .toString();
+    _fomentoHombresCtrl.text = (fomento?.hombres ?? 0).toString();
+    _fomentoMujeresCtrl.text = (fomento?.mujeres ?? 0).toString();
+    _fomentoTotalCtrl.text =
+        (fomento?.computedTotal ?? fomento?.totalPoblacionAtendida ?? 0)
+            .toString();
   }
 
   Future<void> _loadSubcategorias(int categoriaId) async {
@@ -206,7 +256,9 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
         if (_subcategoriaId == null && subs.length == 1) {
           _subcategoriaId = subs.first.id;
         }
+        _ensureFomentoProgramValid();
       });
+      _syncFomentoTotal();
     } catch (_) {
       if (!mounted) return;
       setState(() {
@@ -307,7 +359,105 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
     return value.isEmpty ? null : value;
   }
 
+  ActividadCategoria? _selectedCategoria() {
+    final id = _categoriaId;
+    if (id == null) return null;
+    for (final categoria in _categorias) {
+      if (categoria.id == id) return categoria;
+    }
+    return null;
+  }
+
+  ActividadSubcategoria? _selectedSubcategoria() {
+    final id = _subcategoriaId;
+    if (id == null) return null;
+    for (final subcategoria in _subcategorias) {
+      if (subcategoria.id == id) return subcategoria;
+    }
+    return null;
+  }
+
+  bool get _showFomentoPanel {
+    return _selectedCategoria()?.requiereFomentoCulturaVial ?? false;
+  }
+
+  bool get _useFomentoUserLayout {
+    return _isFomentoUser && _showFomentoPanel;
+  }
+
+  List<ActividadFomentoPrograma> get _fomentoProgramas {
+    return _selectedSubcategoria()?.programasFomento ??
+        const <ActividadFomentoPrograma>[];
+  }
+
+  Map<String, TextEditingController> get _fomentoCountControllers => {
+    'ninas': _fomentoNinasCtrl,
+    'ninos': _fomentoNinosCtrl,
+    'adolescentes_mujeres': _fomentoAdolescentesMujeresCtrl,
+    'adolescentes_hombres': _fomentoAdolescentesHombresCtrl,
+    'docentes_hombres': _fomentoDocentesHombresCtrl,
+    'docentes_mujeres': _fomentoDocentesMujeresCtrl,
+    'hombres': _fomentoHombresCtrl,
+    'mujeres': _fomentoMujeresCtrl,
+  };
+
+  void _ensureFomentoProgramValid() {
+    if (_fomentoProgramaId == null) return;
+    if (_fomentoProgramas.any(
+      (programa) => programa.id == _fomentoProgramaId,
+    )) {
+      return;
+    }
+    _fomentoProgramaId = null;
+  }
+
+  int _readFomentoCount(TextEditingController controller) {
+    final normalized = NormalizedIntegerInputFormatter.normalize(
+      controller.text,
+    );
+    return (int.tryParse(normalized) ?? 0)
+        .clamp(0, ActividadFomentoDetalle.maxCount)
+        .toInt();
+  }
+
+  int _fomentoTotal() {
+    return _fomentoCountControllers.values.fold<int>(
+      0,
+      (sum, controller) => sum + _readFomentoCount(controller),
+    );
+  }
+
+  void _syncFomentoTotal() {
+    final total = _fomentoTotal();
+    final totalText = total.toString();
+    if (_fomentoTotalCtrl.text != totalText) {
+      _fomentoTotalCtrl.text = totalText;
+    }
+    if (_showFomentoPanel && _personasAlcanzadasCtrl.text != totalText) {
+      _personasAlcanzadasCtrl.text = totalText;
+    }
+  }
+
+  ActividadFomentoDetalle _buildFomentoPayload() {
+    final total = _fomentoTotal();
+    return ActividadFomentoDetalle(
+      programaId: _fomentoProgramaId,
+      nivelEducativo: _fomentoNivelEducativo,
+      sector: _fomentoSector,
+      ninas: _readFomentoCount(_fomentoNinasCtrl),
+      ninos: _readFomentoCount(_fomentoNinosCtrl),
+      adolescentesMujeres: _readFomentoCount(_fomentoAdolescentesMujeresCtrl),
+      adolescentesHombres: _readFomentoCount(_fomentoAdolescentesHombresCtrl),
+      docentesHombres: _readFomentoCount(_fomentoDocentesHombresCtrl),
+      docentesMujeres: _readFomentoCount(_fomentoDocentesMujeresCtrl),
+      hombres: _readFomentoCount(_fomentoHombresCtrl),
+      mujeres: _readFomentoCount(_fomentoMujeresCtrl),
+      totalPoblacionAtendida: total,
+    );
+  }
+
   ActividadUpsertData _buildPayload() {
+    final fomento = _showFomentoPanel ? _buildFomentoPayload() : null;
     return ActividadUpsertData(
       actividadCategoriaId: _categoriaId ?? 0,
       actividadSubcategoriaId: _subcategoriaId,
@@ -320,15 +470,18 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
       coordenadasTexto: _trim(_coordenadasCtrl),
       fuenteUbicacion: _trim(_fuenteUbicacionCtrl),
       notaGeo: _trim(_notaGeoCtrl),
-      motivo: _trim(_motivoCtrl),
+      motivo: _useFomentoUserLayout ? null : _trim(_motivoCtrl),
       narrativa: _trim(_narrativaCtrl),
       accionesRealizadas: null,
-      observaciones: null,
-      personasAlcanzadas: _trimInteger(_personasAlcanzadasCtrl),
+      observaciones: _trim(_observacionesCtrl),
+      personasAlcanzadas: fomento == null
+          ? _trimInteger(_personasAlcanzadasCtrl)
+          : fomento.computedTotal.toString(),
       personasParticipantes: _trimInteger(_personasParticipantesCtrl),
       personasDetenidas: _trimInteger(_personasDetenidasCtrl),
       elementosParticipantesTexto: _trim(_elementosCtrl),
       patrullasParticipantesTexto: _trim(_patrullasCtrl),
+      fomento: fomento,
     );
   }
 
@@ -395,6 +548,8 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
         return _personasParticipantesFieldKey;
       case ActividadValidationTarget.personasDetenidas:
         return _personasDetenidasFieldKey;
+      case ActividadValidationTarget.fomento:
+        return _fomentoCardKey;
       case ActividadValidationTarget.fotos:
         return _fotosCardKey;
       case ActividadValidationTarget.vehiculos:
@@ -903,6 +1058,7 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
                         setState(() {
                           _categoriaId = v;
                           _subcategoriaId = null;
+                          _fomentoProgramaId = null;
                           _subcategorias = [];
                           _removeFieldError(
                             ActividadValidationTarget.categoria,
@@ -911,6 +1067,7 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
                             ActividadValidationTarget.subcategoria,
                           );
                         });
+                        _syncFomentoTotal();
                         if (v != null) {
                           await _loadSubcategorias(v);
                         }
@@ -944,9 +1101,11 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
                           ? null
                           : (v) => setState(() {
                               _subcategoriaId = v;
+                              _fomentoProgramaId = null;
                               _removeFieldError(
                                 ActividadValidationTarget.subcategoria,
                               );
+                              _syncFomentoTotal();
                             }),
                       decoration: _dec(
                         'Subcategoria',
@@ -1091,13 +1250,53 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
 
               const SizedBox(height: 12),
 
+              if (_showFomentoPanel) ...[
+                _card(
+                  title: 'Fomento a la Cultura Vial',
+                  cardKey: _fomentoCardKey,
+                  validationTarget: ActividadValidationTarget.fomento,
+                  child: FomentoCulturaVialPanel(
+                    programas: _fomentoProgramas,
+                    programaId: _fomentoProgramaId,
+                    onProgramaChanged: (value) {
+                      setState(() => _fomentoProgramaId = value);
+                    },
+                    nivelEducativo: _fomentoNivelEducativo,
+                    onNivelEducativoChanged: (value) {
+                      setState(() => _fomentoNivelEducativo = value);
+                    },
+                    sector: _fomentoSector,
+                    onSectorChanged: (value) {
+                      setState(() => _fomentoSector = value);
+                    },
+                    countControllers: _fomentoCountControllers,
+                    totalController: _fomentoTotalCtrl,
+                    onCountChanged: (_) {
+                      _syncFomentoTotal();
+                      _clearFieldError(ActividadValidationTarget.fomento);
+                    },
+                  ),
+                ),
+                const SizedBox(height: 12),
+              ],
+
               _card(
                 title: 'Contenido',
                 child: Column(
                   children: [
-                    _textField(_motivoCtrl, 'Asunto', maxLines: 2),
-                    const SizedBox(height: 12),
+                    if (!_useFomentoUserLayout) ...[
+                      _textField(_motivoCtrl, 'Asunto', maxLines: 2),
+                      const SizedBox(height: 12),
+                    ],
                     _textField(_narrativaCtrl, 'Narrativa', maxLines: 6),
+                    if (_useFomentoUserLayout) ...[
+                      const SizedBox(height: 12),
+                      _textField(
+                        _observacionesCtrl,
+                        'Observaciones',
+                        maxLines: 3,
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -1108,62 +1307,111 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
                 title: 'Totales y participantes',
                 child: Column(
                   children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: KeyedSubtree(
-                            key: _personasAlcanzadasFieldKey,
-                            child: ActividadCountField(
-                              controller: _personasAlcanzadasCtrl,
-                              label: 'Personas alcanzadas *',
-                              icon: Icons.diversity_3_rounded,
-                              color: const Color(0xFF0284C7),
-                              helperText: 'Minimo 1',
-                              errorText: _fieldError(
-                                ActividadValidationTarget.personasAlcanzadas,
-                              ),
-                              onChanged: (_) => _clearFieldError(
-                                ActividadValidationTarget.personasAlcanzadas,
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: KeyedSubtree(
-                            key: _personasParticipantesFieldKey,
-                            child: ActividadCountField(
-                              controller: _personasParticipantesCtrl,
-                              label: 'Personas participantes',
-                              icon: Icons.groups_2_rounded,
-                              color: const Color(0xFF7C3AED),
-                              helperText: 'Maximo 15 por actividad',
-                              badgeText: 'MAX 15',
-                              max: ActividadesService.maxParticipantsCount,
-                              errorText: _fieldError(
-                                ActividadValidationTarget.personasParticipantes,
-                              ),
-                              onChanged: (_) => _clearFieldError(
-                                ActividadValidationTarget.personasParticipantes,
+                    if (!_useFomentoUserLayout)
+                      Row(
+                        children: [
+                          Expanded(
+                            child: KeyedSubtree(
+                              key: _personasAlcanzadasFieldKey,
+                              child: ActividadCountField(
+                                controller: _personasAlcanzadasCtrl,
+                                label: 'Personas alcanzadas *',
+                                icon: Icons.diversity_3_rounded,
+                                color: const Color(0xFF0284C7),
+                                helperText: _showFomentoPanel
+                                    ? 'Se actualiza con el total de Fomento'
+                                    : 'Minimo 1',
+                                errorText: _fieldError(
+                                  ActividadValidationTarget.personasAlcanzadas,
+                                ),
+                                onChanged: (_) => _clearFieldError(
+                                  ActividadValidationTarget.personasAlcanzadas,
+                                ),
                               ),
                             ),
                           ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    KeyedSubtree(
-                      key: _personasDetenidasFieldKey,
-                      child: ActividadDetenidosField(
-                        controller: _personasDetenidasCtrl,
-                        errorText: _fieldError(
-                          ActividadValidationTarget.personasDetenidas,
-                        ),
-                        onChanged: (_) => _clearFieldError(
-                          ActividadValidationTarget.personasDetenidas,
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: KeyedSubtree(
+                              key: _personasParticipantesFieldKey,
+                              child: ActividadCountField(
+                                controller: _personasParticipantesCtrl,
+                                label: 'Personas participantes',
+                                icon: Icons.groups_2_rounded,
+                                color: const Color(0xFF7C3AED),
+                                helperText: 'Maximo 15 por actividad',
+                                badgeText: 'MAX 15',
+                                max: ActividadesService.maxParticipantsCount,
+                                errorText: _fieldError(
+                                  ActividadValidationTarget
+                                      .personasParticipantes,
+                                ),
+                                onChanged: (_) => _clearFieldError(
+                                  ActividadValidationTarget
+                                      .personasParticipantes,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      )
+                    else
+                      Row(
+                        children: [
+                          Expanded(
+                            child: KeyedSubtree(
+                              key: _personasParticipantesFieldKey,
+                              child: ActividadCountField(
+                                controller: _personasParticipantesCtrl,
+                                label: 'Personas participantes',
+                                icon: Icons.groups_2_rounded,
+                                color: const Color(0xFF7C3AED),
+                                helperText: 'Maximo 15 por actividad',
+                                badgeText: 'MAX 15',
+                                max: ActividadesService.maxParticipantsCount,
+                                errorText: _fieldError(
+                                  ActividadValidationTarget
+                                      .personasParticipantes,
+                                ),
+                                onChanged: (_) => _clearFieldError(
+                                  ActividadValidationTarget
+                                      .personasParticipantes,
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: KeyedSubtree(
+                              key: _personasDetenidasFieldKey,
+                              child: ActividadDetenidosField(
+                                controller: _personasDetenidasCtrl,
+                                errorText: _fieldError(
+                                  ActividadValidationTarget.personasDetenidas,
+                                ),
+                                onChanged: (_) => _clearFieldError(
+                                  ActividadValidationTarget.personasDetenidas,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    if (!_useFomentoUserLayout) ...[
+                      const SizedBox(height: 12),
+                      KeyedSubtree(
+                        key: _personasDetenidasFieldKey,
+                        child: ActividadDetenidosField(
+                          controller: _personasDetenidasCtrl,
+                          errorText: _fieldError(
+                            ActividadValidationTarget.personasDetenidas,
+                          ),
+                          onChanged: (_) => _clearFieldError(
+                            ActividadValidationTarget.personasDetenidas,
+                          ),
                         ),
                       ),
-                    ),
+                    ],
                     const SizedBox(height: 12),
                     _textField(
                       _elementosCtrl,
@@ -1182,61 +1430,62 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
 
               const SizedBox(height: 12),
 
-              _card(
-                title: 'Vehiculos relacionados',
-                cardKey: _vehiculosCardKey,
-                validationTarget: ActividadValidationTarget.vehiculos,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            'Total: ${a.vehiculos.length}',
-                            style: TextStyle(
-                              color: Colors.grey.shade700,
-                              fontWeight: FontWeight.w800,
+              if (!_useFomentoUserLayout) ...[
+                _card(
+                  title: 'Vehiculos relacionados',
+                  cardKey: _vehiculosCardKey,
+                  validationTarget: ActividadValidationTarget.vehiculos,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              'Total: ${a.vehiculos.length}',
+                              style: TextStyle(
+                                color: Colors.grey.shade700,
+                                fontWeight: FontWeight.w800,
+                              ),
                             ),
                           ),
-                        ),
-                        ElevatedButton.icon(
-                          onPressed: _saving ? null : _agregarVehiculo,
-                          icon: const Icon(Icons.add),
-                          label: const Text('Agregar vehiculo'),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 10),
-                    if (a.vehiculos.isEmpty)
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: Colors.blue.withValues(alpha: .06),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: Colors.blue.withValues(alpha: .16),
+                          ElevatedButton.icon(
+                            onPressed: _saving ? null : _agregarVehiculo,
+                            icon: const Icon(Icons.add),
+                            label: const Text('Agregar vehiculo'),
                           ),
-                        ),
-                        child: const Text(
-                          'No hay vehiculos vinculados a esta actividad.',
-                        ),
-                      )
-                    else
-                      ...a.vehiculos.map((vehiculo) {
-                        return ActividadVehiculoCard(
-                          vehiculo: vehiculo,
-                          onRemove: _saving || vehiculo.id == null
-                              ? null
-                              : () => _quitarVehiculo(vehiculo),
-                        );
-                      }),
-                  ],
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      if (a.vehiculos.isEmpty)
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Colors.blue.withValues(alpha: .06),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: Colors.blue.withValues(alpha: .16),
+                            ),
+                          ),
+                          child: const Text(
+                            'No hay vehiculos vinculados a esta actividad.',
+                          ),
+                        )
+                      else
+                        ...a.vehiculos.map((vehiculo) {
+                          return ActividadVehiculoCard(
+                            vehiculo: vehiculo,
+                            onRemove: _saving || vehiculo.id == null
+                                ? null
+                                : () => _quitarVehiculo(vehiculo),
+                          );
+                        }),
+                    ],
+                  ),
                 ),
-              ),
-
-              const SizedBox(height: 12),
+                const SizedBox(height: 12),
+              ],
 
               _card(
                 title: 'Fotos',

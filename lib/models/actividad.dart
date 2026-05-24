@@ -1,4 +1,5 @@
 import 'actividad_categoria.dart';
+import 'actividad_fomento.dart';
 import 'actividad_subcategoria.dart';
 
 class ActividadRef {
@@ -245,6 +246,7 @@ class Actividad {
   final ActividadRef? destacamento;
   final List<ActividadFoto> fotos;
   final List<ActividadVehiculo> vehiculos;
+  final ActividadFomentoDetalle? fomentoCulturaVialDetalle;
 
   const Actividad({
     required this.id,
@@ -288,6 +290,7 @@ class Actividad {
     required this.destacamento,
     required this.fotos,
     required this.vehiculos,
+    required this.fomentoCulturaVialDetalle,
   });
 
   factory Actividad.fromJson(Map<String, dynamic> json) {
@@ -296,6 +299,9 @@ class Actividad {
     final unidad = json['unidad'];
     final delegacion = json['delegacion'];
     final destacamento = json['destacamento'];
+    final fomento =
+        json['fomento_cultura_vial_detalle'] ??
+        json['fomentoCulturaVialDetalle'];
     final fotosRaw = json['fotos'];
     final vehiculosRaw = json['vehiculos'];
 
@@ -380,6 +386,9 @@ class Actividad {
                 )
                 .toList()
           : const <ActividadVehiculo>[],
+      fomentoCulturaVialDetalle: (fomento is Map)
+          ? ActividadFomentoDetalle.fromJson(Map<String, dynamic>.from(fomento))
+          : null,
     );
   }
 
@@ -460,6 +469,7 @@ class Actividad {
     'destacamento': destacamento?.toJson(),
     'fotos': fotos.map((e) => e.toJson()).toList(),
     'vehiculos': vehiculos.map((e) => e.toJson()).toList(),
+    'fomento_cultura_vial_detalle': fomentoCulturaVialDetalle?.toJson(),
   };
 }
 

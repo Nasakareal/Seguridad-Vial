@@ -35,12 +35,21 @@ class SeguridadVialApp extends StatelessWidget {
         child: AlertsListener(child: OfflineSyncListener(child: AuthGate())),
       ),
       routes: appRoutesMap,
-      onGenerateRoute: onGenerateRoute,
+      onGenerateRoute: _generateRoute,
       onUnknownRoute: (settings) => MaterialPageRoute(
         builder: (_) => UnknownRouteScreen(routeName: settings.name ?? ''),
       ),
     );
   }
+}
+
+Route<dynamic>? _generateRoute(RouteSettings settings) {
+  final staticBuilder = appRoutesMap[settings.name];
+  if (staticBuilder != null) {
+    return MaterialPageRoute(builder: staticBuilder, settings: settings);
+  }
+
+  return onGenerateRoute(settings);
 }
 
 class UnknownRouteScreen extends StatelessWidget {

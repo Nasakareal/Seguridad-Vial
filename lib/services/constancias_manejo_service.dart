@@ -547,9 +547,27 @@ class ConstanciasManejoService {
     return _decodeConstancia(resp);
   }
 
-  static Future<ConstanciaManejo> activar(int id) async {
+  static Future<ConstanciaManejo> activar({
+    required int id,
+    String? nombreSolicitante,
+    String? sexo,
+    String? curp,
+    String? telefono,
+    String? tipoLicencia,
+  }) async {
     final resp = await http
-        .post(Uri.parse('$_base/$id/activar'), headers: await authHeaders())
+        .post(
+          Uri.parse('$_base/$id/activar'),
+          headers: await authHeaders(),
+          body: jsonEncode(<String, dynamic>{
+            if (nombreSolicitante != null)
+              'nombre_solicitante': nombreSolicitante.trim(),
+            if (sexo != null) 'sexo': sexo.trim(),
+            if (curp != null) 'curp': curp.trim(),
+            if (telefono != null) 'telefono': telefono.trim(),
+            if (tipoLicencia != null) 'tipo_licencia': tipoLicencia.trim(),
+          }),
+        )
         .timeout(const Duration(seconds: 15));
 
     return _decodeConstancia(resp);

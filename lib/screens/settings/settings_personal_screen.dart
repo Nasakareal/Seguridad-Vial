@@ -2,29 +2,27 @@ import 'package:flutter/material.dart';
 
 import '../../app/routes.dart';
 import '../../services/auth_service.dart';
+import '../../services/settings_personal_service.dart';
 import '../../services/tracking_service.dart';
-import '../../services/users_service.dart';
 import '../../widgets/account_drawer.dart';
 import '../../widgets/permission_guard.dart';
 import '../login_screen.dart';
 
-class SettingsUsersScreen extends StatefulWidget {
-  const SettingsUsersScreen({super.key});
+class SettingsPersonalScreen extends StatefulWidget {
+  const SettingsPersonalScreen({super.key});
 
   @override
-  State<SettingsUsersScreen> createState() => _SettingsUsersScreenState();
+  State<SettingsPersonalScreen> createState() => _SettingsPersonalScreenState();
 }
 
-class _SettingsUsersScreenState extends State<SettingsUsersScreen> {
+class _SettingsPersonalScreenState extends State<SettingsPersonalScreen> {
   final _qCtrl = TextEditingController();
 
   bool _loading = true;
   bool _busy = false;
-  bool _canCreate = false;
-  bool _canEdit = false;
   String? _error;
   int? _unidadFilterId;
-  UsersMeta _meta = const UsersMeta.empty();
+  SettingsPersonalMeta _meta = const SettingsPersonalMeta.empty();
   List<Map<String, dynamic>> _items = <Map<String, dynamic>>[];
 
   @override
@@ -48,11 +46,8 @@ class _SettingsUsersScreenState extends State<SettingsUsersScreen> {
     });
 
     try {
-      final meta = await UsersService.meta();
-      final isSuperadmin = await AuthService.isSuperadmin();
-      final canCreate = isSuperadmin || await AuthService.can('crear usuarios');
-      final canEdit = isSuperadmin || await AuthService.can('editar usuarios');
-      final page = await UsersService.index(
+      final meta = await SettingsPersonalService.meta();
+      final page = await SettingsPersonalService.index(
         q: _qCtrl.text,
         unidadId: _unidadFilterId,
         perPage: 80,
@@ -60,8 +55,6 @@ class _SettingsUsersScreenState extends State<SettingsUsersScreen> {
       if (!mounted) return;
       setState(() {
         _meta = meta;
-        _canCreate = canCreate;
-        _canEdit = canEdit;
         _items = page.items;
         _loading = false;
       });
@@ -70,7 +63,7 @@ class _SettingsUsersScreenState extends State<SettingsUsersScreen> {
       setState(() {
         _loading = false;
         _error =
-            'No se pudieron cargar los usuarios.\n${UsersService.cleanExceptionMessage(e)}';
+            'No se pudo cargar el personal.\n${SettingsPersonalService.cleanExceptionMessage(e)}';
       });
     }
   }
@@ -96,39 +89,24 @@ class _SettingsUsersScreenState extends State<SettingsUsersScreen> {
     );
   }
 
-  Future<void> _goCreate() async {
-    final changed = await Navigator.pushNamed(context, AppRoutes.usersCreate);
-    if (changed == true && mounted) {
-      await _load();
-    }
-  }
-
   Future<void> _goShow(Map<String, dynamic> item) async {
     final id = _int(item['id']);
     if (id <= 0) return;
 
     final changed = await Navigator.pushNamed(
       context,
-      AppRoutes.usersShow,
-      arguments: {'user_id': id},
+      AppRoutes.settingsPersonalShow,
+      arguments: {'personal_id': id},
     );
     if (changed == true && mounted) {
       await _load();
     }
   }
 
-  Future<void> _goEdit(Map<String, dynamic> item) async {
-    final id = _int(item['id']);
-    if (id <= 0) return;
-
-    final changed = await Navigator.pushNamed(
-      context,
-      AppRoutes.usersEdit,
-      arguments: {'user_id': id},
-    );
-    if (changed == true && mounted) {
-      await _load();
-    }
+  int _int(dynamic value) {
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    return int.tryParse(value?.toString() ?? '') ?? 0;
   }
 
   String _text(dynamic value, [String fallback = '-']) {
@@ -146,22 +124,16 @@ class _SettingsUsersScreenState extends State<SettingsUsersScreen> {
     return fallback;
   }
 
-  int _int(dynamic value) {
-    if (value is int) return value;
-    if (value is num) return value.toInt();
-    return int.tryParse(value?.toString() ?? '') ?? 0;
-  }
-
   @override
   Widget build(BuildContext context) {
     return PermissionGuard(
-      permission: 'ver usuarios',
+      permission: 'ver personal',
       child: Scaffold(
         backgroundColor: const Color(0xFFF6F7FB),
         appBar: AppBar(
           elevation: 0,
           backgroundColor: Colors.blue,
-          title: const Text('Usuarios'),
+          title: const Text('Personal'),
           actions: [
             IconButton(
               tooltip: 'Actualizar',
@@ -172,18 +144,11 @@ class _SettingsUsersScreenState extends State<SettingsUsersScreen> {
           ],
         ),
         endDrawer: AppAccountDrawer(onLogout: () => _logout(context)),
-        floatingActionButton: _canCreate
-            ? FloatingActionButton.extended(
-                onPressed: _goCreate,
-                icon: const Icon(Icons.person_add_alt_1),
-                label: const Text('Nuevo'),
-              )
-            : null,
         body: SafeArea(
           child: RefreshIndicator(
             onRefresh: _load,
             child: ListView(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
               children: [
                 Container(
                   padding: const EdgeInsets.all(14),
@@ -197,7 +162,7 @@ class _SettingsUsersScreenState extends State<SettingsUsersScreen> {
                     textInputAction: TextInputAction.search,
                     onSubmitted: (_) => _load(),
                     decoration: InputDecoration(
-                      hintText: 'Buscar usuario',
+                      hintText: 'Buscar personal',
                       prefixIcon: const Icon(Icons.search),
                       suffixIcon: IconButton(
                         tooltip: 'Buscar',
@@ -223,22 +188,24 @@ class _SettingsUsersScreenState extends State<SettingsUsersScreen> {
                 else if (_error != null)
                   _MessageCard(
                     icon: Icons.error_outline,
-                    title: 'Sin conexion con usuarios',
+                    title: 'Sin conexion con personal',
                     message: _error!,
                     color: Colors.red,
                   )
                 else if (_items.isEmpty)
                   const _MessageCard(
-                    icon: Icons.people_outline,
-                    title: 'Sin usuarios',
-                    message: 'No hay usuarios para mostrar con este filtro.',
+                    icon: Icons.badge_outlined,
+                    title: 'Sin personal',
+                    message: 'No hay personal para mostrar con este filtro.',
                     color: Colors.blue,
                   )
                 else
                   ..._items.map((item) {
-                    final role = item['role'];
-                    final unidad = item['unidad'];
-                    final estado = _text(item['estado'], 'Sin estado');
+                    final name = _text(item['nombre_completo'], 'Personal');
+                    final unidad = _nestedName(item['unidad'], 'Sin unidad');
+                    final turno = _nestedName(item['turno'], 'Sin turno');
+                    final estatus = _text(item['estatus'], 'Sin estatus');
+                    final incidencias = _int(item['incidencias_count']);
 
                     return Card(
                       margin: const EdgeInsets.only(bottom: 12),
@@ -251,48 +218,28 @@ class _SettingsUsersScreenState extends State<SettingsUsersScreen> {
                           vertical: 8,
                         ),
                         leading: CircleAvatar(
-                          backgroundColor: Colors.blue.withValues(alpha: .12),
+                          backgroundColor: Colors.indigo.withValues(alpha: .12),
                           child: Text(
-                            _initials(_text(item['name'], 'U')),
+                            _initials(name),
                             style: const TextStyle(
-                              color: Colors.blue,
+                              color: Colors.indigo,
                               fontWeight: FontWeight.w900,
                             ),
                           ),
                         ),
                         title: Text(
-                          _text(item['name'], 'Usuario'),
+                          name,
                           style: const TextStyle(fontWeight: FontWeight.w900),
                         ),
                         subtitle: Padding(
                           padding: const EdgeInsets.only(top: 4),
                           child: Text(
-                            '${_text(item['email'])}\n${UsersService.roleScopedLabel(role)} · ${_nestedName(unidad, 'Sin unidad')} · $estado',
+                            '$unidad · $turno · $estatus\nIncidencias: $incidencias',
                           ),
                         ),
                         isThreeLine: true,
                         onTap: () => _goShow(item),
-                        trailing: PopupMenuButton<String>(
-                          onSelected: (value) {
-                            if (value == 'show') {
-                              _goShow(item);
-                            }
-                            if (value == 'edit') {
-                              _goEdit(item);
-                            }
-                          },
-                          itemBuilder: (_) => [
-                            const PopupMenuItem(
-                              value: 'show',
-                              child: Text('Ver'),
-                            ),
-                            if (_canEdit)
-                              const PopupMenuItem(
-                                value: 'edit',
-                                child: Text('Editar'),
-                              ),
-                          ],
-                        ),
+                        trailing: const Icon(Icons.chevron_right),
                       ),
                     );
                   }),
@@ -397,7 +344,7 @@ String _initials(String raw) {
       .where((part) => part.isNotEmpty)
       .toList();
 
-  if (parts.isEmpty) return 'U';
+  if (parts.isEmpty) return 'P';
   if (parts.length == 1) {
     final text = parts.first;
     return text.substring(0, text.length >= 2 ? 2 : 1).toUpperCase();

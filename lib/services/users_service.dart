@@ -126,6 +126,7 @@ class UsersService {
 
   static Future<UsersPage> index({
     String? q,
+    int? unidadId,
     int page = 1,
     int perPage = 50,
   }) async {
@@ -134,6 +135,7 @@ class UsersService {
         'page': '$page',
         'per_page': '$perPage',
         if ((q ?? '').trim().isNotEmpty) 'q': q!.trim(),
+        if (unidadId != null && unidadId > 0) 'unidad_id': '$unidadId',
       },
     );
 

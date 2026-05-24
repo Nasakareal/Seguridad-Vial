@@ -4,7 +4,7 @@ import '../../services/auth_service.dart';
 import '../../services/tracking_service.dart';
 import '../../services/users_service.dart';
 import '../../widgets/account_drawer.dart';
-import '../../widgets/superadmin_guard.dart';
+import '../../widgets/permission_guard.dart';
 import '../login_screen.dart';
 
 class UserCreateScreen extends StatelessWidget {
@@ -481,7 +481,8 @@ class _UserFormScreenState extends State<UserFormScreen> {
     final showDestacamento =
         _unidadId == AuthService.unidadProteccionCarreterasId;
 
-    return SuperadminGuard(
+    return PermissionGuard(
+      permission: widget.isEditing ? 'editar usuarios' : 'crear usuarios',
       child: Scaffold(
         backgroundColor: const Color(0xFFF6F7FB),
         appBar: AppBar(

@@ -995,6 +995,24 @@ class _ConstanciaManejoDetailScreenState
     }
   }
 
+  void _markApplicantDataChanged() {
+    _draft?.notifyChanged();
+    if (mounted) setState(() {});
+  }
+
+  bool get _hasRequiredActivationData {
+    final tipoLicencia = _tipoLicencia;
+    return _nombreCtrl.text.trim().isNotEmpty &&
+        _sexo != null &&
+        tipoLicencia != null &&
+        tipoLicencia.trim().isNotEmpty;
+  }
+
+  bool _canActivate(ConstanciaManejo constancia) {
+    if (constancia.puedeActivar) return true;
+    return constancia.puedeActivarDirectamente && _hasRequiredActivationData;
+  }
+
   Future<void> _refresh() async {
     final constancia = _constancia;
     if (constancia != null) {
@@ -1182,12 +1200,32 @@ class _ConstanciaManejoDetailScreenState
     final constancia = _constancia;
     if (constancia == null || _busy) return;
 
+    final nombre = _nombreCtrl.text.trim();
+    final tipoLicencia = _tipoLicencia;
+
+    if (nombre.isEmpty) {
+      _showSnack('Captura el nombre del solicitante.');
+      return;
+    }
+    if (_sexo == null) {
+      _showSnack('Selecciona el sexo.');
+      return;
+    }
+    if (tipoLicencia == null || tipoLicencia.trim().isEmpty) {
+      _showSnack('Selecciona el tipo de licencia.');
+      return;
+    }
+
     final ok = await showDialog<bool>(
       context: context,
       builder: (dialogContext) {
         return AlertDialog(
           title: const Text('Activar constancia'),
-          content: Text('Se activara la constancia ${constancia.folio}.'),
+          content: Text(
+            constancia.puedeActivarDirectamente
+                ? 'Se activara la constancia ${constancia.folio}. La vigencia empieza hoy y vencera en 10 dias.'
+                : 'Se activara la constancia ${constancia.folio}.',
+          ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(dialogContext, false),
@@ -1206,7 +1244,15 @@ class _ConstanciaManejoDetailScreenState
 
     setState(() => _busy = true);
     try {
-      final updated = await ConstanciasManejoService.activar(constancia.id);
+      final updated = await ConstanciasManejoService.activar(
+        id: constancia.id,
+        nombreSolicitante: nombre,
+        sexo: _sexo!,
+        curp: _curpCtrl.text,
+        telefono: _telefonoCtrl.text,
+        tipoLicencia: tipoLicencia,
+      );
+      await _draft?.discard();
       if (!mounted) return;
       setState(() => _constancia = updated);
       _showSnack('Constancia activada.');
@@ -1258,11 +1304,7 @@ class _ConstanciaManejoDetailScreenState
   @override
   Widget build(BuildContext context) {
     final constancia = _constancia;
-    final hasLegacyExamFlow =
-        constancia != null &&
-        (constancia.tieneAccesoTemporal ||
-            constancia.tieneExamenEscrito ||
-            constancia.examen != null);
+    final hasLegacyExamFlow = constancia?.tieneFlujoExamen ?? false;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF6F7FB),
@@ -1303,6 +1345,7 @@ class _ConstanciaManejoDetailScreenState
                   sexos: _sexos,
                   tipoLicencia: _tipoLicencia,
                   tiposLicencia: _tiposLicencia,
+                  onDataChanged: _markApplicantDataChanged,
                   onSexoChanged: (value) {
                     setState(() => _sexo = value);
                     _draft?.notifyChanged();
@@ -1319,8 +1362,8 @@ class _ConstanciaManejoDetailScreenState
                     title: 'Folio impreso',
                     child: Text(
                       constancia.estaInactiva
-                          ? 'Este papel puede estar impreso y seguir inactivo. Genera el examen desde Nuevo examen; si aprueba, escanea el QR de ese examen y luego este folio para activarlo.'
-                          : 'La constancia ya no esta disponible para generar examen.',
+                          ? 'Este folio de lote puede activarse sin examen cuando se entregue. La vigencia empieza al activarlo; los examenes en linea o escritos se manejan aparte desde Nuevo examen.'
+                          : 'La constancia ya no esta disponible para activacion.',
                       style: TextStyle(color: Colors.grey.shade700),
                     ),
                   )
@@ -1370,6 +1413,8 @@ class _ConstanciaManejoDetailScreenState
                   constancia: constancia,
                   busy: _busy,
                   canEdit: _canEditModuloExamenes,
+                  canActivate: _canActivate(constancia),
+                  hasApplicantData: _hasRequiredActivationData,
                   onActivate: _activate,
                 ),
               ],
@@ -1480,6 +1525,7 @@ class _ApplicantDataPanel extends StatelessWidget {
   final Map<String, String> sexos;
   final String? tipoLicencia;
   final Map<String, String> tiposLicencia;
+  final VoidCallback onDataChanged;
   final ValueChanged<String?> onSexoChanged;
   final ValueChanged<String?> onTipoChanged;
 
@@ -1494,6 +1540,7 @@ class _ApplicantDataPanel extends StatelessWidget {
     required this.sexos,
     required this.tipoLicencia,
     required this.tiposLicencia,
+    required this.onDataChanged,
     required this.onSexoChanged,
     required this.onTipoChanged,
   });
@@ -1510,6 +1557,7 @@ class _ApplicantDataPanel extends StatelessWidget {
           TextField(
             controller: nombreCtrl,
             enabled: enabled,
+            onChanged: enabled ? (_) => onDataChanged() : null,
             textCapitalization: TextCapitalization.words,
             decoration: const InputDecoration(
               labelText: 'Nombre del solicitante',
@@ -1543,6 +1591,7 @@ class _ApplicantDataPanel extends StatelessWidget {
                 child: TextField(
                   controller: curpCtrl,
                   enabled: enabled,
+                  onChanged: enabled ? (_) => onDataChanged() : null,
                   textCapitalization: TextCapitalization.characters,
                   decoration: const InputDecoration(
                     labelText: 'CURP',
@@ -1555,6 +1604,7 @@ class _ApplicantDataPanel extends StatelessWidget {
                 child: TextField(
                   controller: telefonoCtrl,
                   enabled: enabled,
+                  onChanged: enabled ? (_) => onDataChanged() : null,
                   keyboardType: TextInputType.phone,
                   decoration: const InputDecoration(
                     labelText: 'Telefono',
@@ -1995,18 +2045,21 @@ class _ActivationPanel extends StatelessWidget {
   final ConstanciaManejo constancia;
   final bool busy;
   final bool canEdit;
+  final bool canActivate;
+  final bool hasApplicantData;
   final VoidCallback onActivate;
 
   const _ActivationPanel({
     required this.constancia,
     required this.busy,
     required this.canEdit,
+    required this.canActivate,
+    required this.hasApplicantData,
     required this.onActivate,
   });
 
   @override
   Widget build(BuildContext context) {
-    final canActivate = constancia.puedeActivar;
     return _Panel(
       icon: Icons.verified,
       title: 'Activacion',
@@ -2015,8 +2068,11 @@ class _ActivationPanel extends StatelessWidget {
         children: [
           Text(
             canActivate
-                ? 'El examen esta aprobado. Ya puedes activar la constancia.'
-                : _activationBlockedText(constancia),
+                ? _activationReadyText(constancia)
+                : _activationBlockedText(
+                    constancia,
+                    hasApplicantData: hasApplicantData,
+                  ),
             style: TextStyle(color: Colors.grey.shade700),
           ),
           const SizedBox(height: 12),
@@ -2216,12 +2272,27 @@ class _ErrorPanel extends StatelessWidget {
   }
 }
 
-String _activationBlockedText(ConstanciaManejo constancia) {
+String _activationReadyText(ConstanciaManejo constancia) {
+  if (constancia.puedeActivarDirectamente) {
+    return 'Listo para activar este folio impreso sin examen. La vigencia empieza al activar.';
+  }
+  return 'El examen esta aprobado. Ya puedes activar la constancia.';
+}
+
+String _activationBlockedText(
+  ConstanciaManejo constancia, {
+  required bool hasApplicantData,
+}) {
   if (constancia.estaActiva) {
     return 'Esta constancia ya esta activa.';
   }
   if (!constancia.estaInactiva) {
     return 'La constancia no esta disponible para activacion.';
+  }
+  if (constancia.puedeActivarDirectamente) {
+    return hasApplicantData
+        ? 'Listo para activar este folio impreso sin examen.'
+        : 'Captura nombre, sexo y tipo de licencia para activar este folio impreso sin examen.';
   }
   if (!constancia.examenAprobado) {
     return 'Primero debe existir un examen aprobado.';

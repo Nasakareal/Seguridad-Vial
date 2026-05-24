@@ -444,6 +444,38 @@ class AuthService {
     return hasRoleName('administrativo');
   }
 
+  static Future<bool> canSeeFullDelegacionesFeed() async {
+    if (!await isDelegacionesUser()) {
+      return false;
+    }
+
+    final roleAllowsFullFeed =
+        await _hasExactRoleName('delegado') || await isAdministrativoRole();
+    if (!roleAllowsFullFeed) {
+      return false;
+    }
+
+    final payload = await getStoredUserPayload();
+    return _payloadHasChildDelegations(payload);
+  }
+
+  static Future<int?> getFeedDelegacionFilterId() async {
+    if (!await isDelegacionesUser()) {
+      return null;
+    }
+
+    final delegacionId = await getDelegacionId();
+    if (delegacionId == null || delegacionId <= 0) {
+      return null;
+    }
+
+    if (await canSeeFullDelegacionesFeed()) {
+      return null;
+    }
+
+    return delegacionId;
+  }
+
   static Future<bool> isDelegacionesHechosPrivilegedRole() async {
     if (await isSuperadmin()) return true;
 
@@ -1474,6 +1506,186 @@ class AuthService {
 
     return _dynamicContainsExactRole(payload['role'], roleName) ||
         _dynamicContainsExactRole(payload['roles'], roleName);
+  }
+
+  static Future<bool> _hasExactRoleName(String roleName) async {
+    final role = await getRole();
+    if (_roleTextEquals(role, roleName)) {
+      return true;
+    }
+
+    final payload = await getStoredUserPayload();
+    return _payloadHasExactRole(payload, roleName);
+  }
+
+  static bool _payloadHasChildDelegations(Map<String, dynamic>? payload) {
+    if (payload == null || payload.isEmpty) {
+      return false;
+    }
+
+    if (_mapHasChildDelegations(payload)) {
+      return true;
+    }
+
+    final delegacion = payload['delegacion'];
+    if (delegacion is Map && _mapHasChildDelegations(delegacion)) {
+      return true;
+    }
+
+    return false;
+  }
+
+  static bool _mapHasChildDelegations(Map raw) {
+    const flagKeys = <String>[
+      'tiene_delegaciones_hijas',
+      'tieneDelegacionesHijas',
+      'has_child_delegations',
+      'hasChildDelegations',
+      'has_child_delegaciones',
+      'es_delegacion_padre',
+      'esDelegacionPadre',
+      'is_parent_delegacion',
+      'isParentDelegacion',
+    ];
+
+    for (final key in flagKeys) {
+      if (_rawFlagIsTrue(raw[key])) {
+        return true;
+      }
+    }
+
+    const countKeys = <String>[
+      'delegaciones_hijas_count',
+      'delegacionesHijasCount',
+      'child_delegations_count',
+      'childDelegationsCount',
+      'children_count',
+      'childrenCount',
+      'hijas_count',
+      'hijasCount',
+      'descendientes_count',
+      'descendientesCount',
+    ];
+
+    for (final key in countKeys) {
+      final count = _readNullableInt(raw[key]);
+      if (count != null && count > 0) {
+        return true;
+      }
+    }
+
+    const listKeys = <String>[
+      'delegaciones_hijas',
+      'delegacionesHijas',
+      'delegacion_hijas',
+      'delegacionHijas',
+      'delegaciones_hija_ids',
+      'delegacionesHijaIds',
+      'delegaciones_hijas_ids',
+      'delegacionesHijasIds',
+      'child_delegations',
+      'childDelegations',
+      'children',
+      'hijas',
+      'delegaciones_descendientes',
+      'delegacionesDescendientes',
+      'delegaciones_subordinadas',
+      'delegacionesSubordinadas',
+    ];
+
+    for (final key in listKeys) {
+      if (_childDelegationCollectionIsNotEmpty(raw[key])) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  static bool _childDelegationCollectionIsNotEmpty(dynamic raw) {
+    if (raw == null) {
+      return false;
+    }
+
+    if (raw is Iterable) {
+      for (final item in raw) {
+        if (_childDelegationEntryLooksValid(item)) {
+          return true;
+        }
+      }
+      return false;
+    }
+
+    if (raw is Map) {
+      for (final key in const <String>[
+        'data',
+        'items',
+        'records',
+        'results',
+        'values',
+      ]) {
+        if (_childDelegationCollectionIsNotEmpty(raw[key])) {
+          return true;
+        }
+      }
+
+      for (final key in const <String>['count', 'total', 'length']) {
+        final count = _readNullableInt(raw[key]);
+        if (count != null && count > 0) {
+          return true;
+        }
+      }
+
+      return _childDelegationEntryLooksValid(raw);
+    }
+
+    final text = raw.toString().trim().toLowerCase();
+    if (text.isEmpty ||
+        text == '0' ||
+        text == 'false' ||
+        text == 'null' ||
+        text == '[]' ||
+        text == '{}') {
+      return false;
+    }
+
+    return true;
+  }
+
+  static bool _childDelegationEntryLooksValid(dynamic raw) {
+    if (raw == null) {
+      return false;
+    }
+
+    final id = _readNullableInt(raw);
+    if (id != null && id > 0) {
+      return true;
+    }
+
+    if (raw is Map) {
+      final nestedId = _readNullableInt(
+        raw['id'] ??
+            raw['value'] ??
+            raw['delegacion_id'] ??
+            raw['delegacionId'] ??
+            raw['delegacion_org_id'],
+      );
+      if (nestedId != null && nestedId > 0) {
+        return true;
+      }
+
+      for (final key in const <String>['nombre', 'name', 'label', 'clave']) {
+        final text = raw[key]?.toString().trim() ?? '';
+        if (text.isNotEmpty) {
+          return true;
+        }
+      }
+
+      return false;
+    }
+
+    final text = raw.toString().trim();
+    return text.isNotEmpty;
   }
 
   static bool _payloadHasAnyUnitId(

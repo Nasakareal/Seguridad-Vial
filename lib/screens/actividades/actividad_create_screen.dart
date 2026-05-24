@@ -9,6 +9,7 @@ import '../../app/routes.dart';
 import '../../core/municipios_michoacan.dart';
 import '../../models/actividad.dart';
 import '../../models/actividad_categoria.dart';
+import '../../models/actividad_fomento.dart';
 import '../../models/actividad_subcategoria.dart';
 import '../../services/actividades_service.dart';
 import '../../services/auth_service.dart';
@@ -22,6 +23,7 @@ import '../../widgets/landscape_photo_crop_screen.dart';
 import '../../widgets/municipio_autocomplete_field.dart';
 import '../../widgets/normalized_integer_input_formatter.dart';
 import 'widgets/actividad_vehiculo_modal.dart';
+import 'widgets/fomento_cultura_vial_panel.dart';
 
 class ActividadCreateScreen extends StatefulWidget {
   const ActividadCreateScreen({super.key});
@@ -37,6 +39,7 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
   bool _redirectingToHecho = false;
   bool _canEditCaptureTimestamp = false;
   bool _captureTimestampAccessLoaded = false;
+  bool _isFomentoUser = false;
   String? _error;
   String? _userLabel;
   String? _clientUuid;
@@ -48,6 +51,9 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
 
   int? _categoriaId;
   int? _subcategoriaId;
+  int? _fomentoProgramaId;
+  String? _fomentoNivelEducativo;
+  String? _fomentoSector;
   final List<File> _fotos = [];
   final List<ActividadVehiculo> _vehiculos = [];
 
@@ -69,6 +75,15 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
   final _personasDetenidasCtrl = TextEditingController(text: '0');
   final _elementosCtrl = TextEditingController();
   final _patrullasCtrl = TextEditingController();
+  final _fomentoNinasCtrl = TextEditingController(text: '0');
+  final _fomentoNinosCtrl = TextEditingController(text: '0');
+  final _fomentoAdolescentesMujeresCtrl = TextEditingController(text: '0');
+  final _fomentoAdolescentesHombresCtrl = TextEditingController(text: '0');
+  final _fomentoDocentesHombresCtrl = TextEditingController(text: '0');
+  final _fomentoDocentesMujeresCtrl = TextEditingController(text: '0');
+  final _fomentoHombresCtrl = TextEditingController(text: '0');
+  final _fomentoMujeresCtrl = TextEditingController(text: '0');
+  final _fomentoTotalCtrl = TextEditingController(text: '0');
 
   final _categoriaFieldKey = GlobalKey();
   final _subcategoriaFieldKey = GlobalKey();
@@ -80,6 +95,7 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
   final _personasAlcanzadasFieldKey = GlobalKey();
   final _personasParticipantesFieldKey = GlobalKey();
   final _personasDetenidasFieldKey = GlobalKey();
+  final _fomentoCardKey = GlobalKey();
   final _vehiculosCardKey = GlobalKey();
   final _fotosCardKey = GlobalKey();
 
@@ -108,8 +124,18 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
             'observaciones': _observacionesCtrl,
             'personas_alcanzadas': _personasAlcanzadasCtrl,
             'personas_participantes': _personasParticipantesCtrl,
+            'personas_detenidas': _personasDetenidasCtrl,
             'elementos': _elementosCtrl,
             'patrullas': _patrullasCtrl,
+            'fomento_ninas': _fomentoNinasCtrl,
+            'fomento_ninos': _fomentoNinosCtrl,
+            'fomento_adolescentes_mujeres': _fomentoAdolescentesMujeresCtrl,
+            'fomento_adolescentes_hombres': _fomentoAdolescentesHombresCtrl,
+            'fomento_docentes_hombres': _fomentoDocentesHombresCtrl,
+            'fomento_docentes_mujeres': _fomentoDocentesMujeresCtrl,
+            'fomento_hombres': _fomentoHombresCtrl,
+            'fomento_mujeres': _fomentoMujeresCtrl,
+            'fomento_total': _fomentoTotalCtrl,
           });
     _loadCategorias();
     _loadUserLabel();
@@ -147,12 +173,22 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
     _personasDetenidasCtrl.dispose();
     _elementosCtrl.dispose();
     _patrullasCtrl.dispose();
+    _fomentoNinasCtrl.dispose();
+    _fomentoNinosCtrl.dispose();
+    _fomentoAdolescentesMujeresCtrl.dispose();
+    _fomentoAdolescentesHombresCtrl.dispose();
+    _fomentoDocentesHombresCtrl.dispose();
+    _fomentoDocentesMujeresCtrl.dispose();
+    _fomentoHombresCtrl.dispose();
+    _fomentoMujeresCtrl.dispose();
+    _fomentoTotalCtrl.dispose();
     super.dispose();
   }
 
   Future<void> _loadUserLabel() async {
     final name = await AuthService.getUserName();
     final email = await AuthService.getUserEmail();
+    final unidadId = await AuthService.getUnidadId();
     if (!mounted) return;
     setState(() {
       final cleanedName = (name ?? '').trim();
@@ -160,7 +196,9 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
       _userLabel = cleanedName.isNotEmpty
           ? cleanedName
           : (cleanedEmail.isNotEmpty ? cleanedEmail : 'Usuario actual');
+      _isFomentoUser = unidadId == AuthService.unidadCulturaVialId;
     });
+    await _maybeSelectDefaultFomentoCategory();
   }
 
   Future<void> _loadCaptureTimestampAccess() async {
@@ -193,6 +231,8 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
           _categoriaId!,
           preferredSubcategoriaId: _subcategoriaId,
         );
+      } else {
+        await _maybeSelectDefaultFomentoCategory();
       }
     } catch (e) {
       if (!mounted) return;
@@ -225,7 +265,9 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
         } else if (preferredSubcategoriaId == null) {
           _subcategoriaId = null;
         }
+        _ensureFomentoProgramValid();
       });
+      _syncFomentoTotal();
       _scheduleC5iHechoRedirectCheck();
     } catch (e) {
       if (!mounted) return;
@@ -274,11 +316,14 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
     _personasParticipantesCtrl.text = NormalizedIntegerInputFormatter.normalize(
       (fields['personas_participantes'] ?? '0').trim(),
     );
-    _personasDetenidasCtrl.text = '0';
+    _personasDetenidasCtrl.text = NormalizedIntegerInputFormatter.normalize(
+      (fields['personas_detenidas'] ?? '0').trim(),
+    );
     _elementosCtrl.text = (fields['elementos_participantes_texto'] ?? '')
         .trim();
     _patrullasCtrl.text = (fields['patrullas_participantes_texto'] ?? '')
         .trim();
+    _applyFomentoFields(fields);
 
     _fotos
       ..clear()
@@ -292,6 +337,7 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
     } else if (_notaGeoCtrl.text.trim().isNotEmpty) {
       _locationStatus = _notaGeoCtrl.text.trim();
     }
+    _syncFomentoTotal();
     return true;
   }
 
@@ -337,9 +383,12 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
     _personasParticipantesCtrl.text = NormalizedIntegerInputFormatter.normalize(
       _stringValue(draft['personas_participantes']) ?? '0',
     );
-    _personasDetenidasCtrl.text = '0';
+    _personasDetenidasCtrl.text = NormalizedIntegerInputFormatter.normalize(
+      _stringValue(draft['personas_detenidas']) ?? '0',
+    );
     _elementosCtrl.text = _stringValue(draft['elementos']) ?? '';
     _patrullasCtrl.text = _stringValue(draft['patrullas']) ?? '';
+    _applyFomentoDraft(draft['fomento']);
 
     _fotos
       ..clear()
@@ -353,6 +402,7 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
     } else if (_notaGeoCtrl.text.trim().isNotEmpty) {
       _locationStatus = _notaGeoCtrl.text.trim();
     }
+    _syncFomentoTotal();
   }
 
   Map<String, dynamic> _draftValues() {
@@ -375,8 +425,10 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
       'observaciones': _observacionesCtrl.text,
       'personas_alcanzadas': _integerText(_personasAlcanzadasCtrl),
       'personas_participantes': _integerText(_personasParticipantesCtrl),
+      'personas_detenidas': _integerText(_personasDetenidasCtrl),
       'elementos': _elementosCtrl.text,
       'patrullas': _patrullasCtrl.text,
+      'fomento': _buildFomentoPayload().toJson(),
       'fotos': _fotos.map((file) => file.path).toList(),
       'vehiculos': _vehiculos.map((vehiculo) => vehiculo.toJson()).toList(),
     };
@@ -420,6 +472,39 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
         .whereType<Map>()
         .map((item) => Map<String, dynamic>.from(item))
         .toList();
+  }
+
+  void _applyFomentoFields(Map<String, String> fields) {
+    String? field(String key) =>
+        _firstNonEmpty(<String?>[fields['fomento[$key]'], fields[key]]);
+
+    _fomentoProgramaId = int.tryParse(field('programa_id') ?? '');
+    _fomentoNivelEducativo = field('nivel_educativo');
+    _fomentoSector = field('sector');
+
+    void setCount(String key, TextEditingController controller) {
+      controller.text = NormalizedIntegerInputFormatter.normalize(
+        field(key) ?? '0',
+      );
+      if (controller.text.trim().isEmpty) controller.text = '0';
+    }
+
+    setCount('ninas', _fomentoNinasCtrl);
+    setCount('ninos', _fomentoNinosCtrl);
+    setCount('adolescentes_mujeres', _fomentoAdolescentesMujeresCtrl);
+    setCount('adolescentes_hombres', _fomentoAdolescentesHombresCtrl);
+    setCount('docentes_hombres', _fomentoDocentesHombresCtrl);
+    setCount('docentes_mujeres', _fomentoDocentesMujeresCtrl);
+    setCount('hombres', _fomentoHombresCtrl);
+    setCount('mujeres', _fomentoMujeresCtrl);
+  }
+
+  void _applyFomentoDraft(dynamic raw) {
+    if (raw is! Map) return;
+    final data = raw.map(
+      (key, value) => MapEntry(key.toString(), value?.toString() ?? ''),
+    );
+    _applyFomentoFields(data);
   }
 
   List<File> _filesForDraft(List<Map<String, dynamic>> files) {
@@ -525,6 +610,116 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
     return null;
   }
 
+  bool get _showFomentoPanel {
+    return _selectedCategoria()?.requiereFomentoCulturaVial ?? false;
+  }
+
+  bool get _useFomentoUserLayout {
+    return _isFomentoUser && _showFomentoPanel;
+  }
+
+  List<ActividadFomentoPrograma> get _fomentoProgramas {
+    return _selectedSubcategoria()?.programasFomento ??
+        const <ActividadFomentoPrograma>[];
+  }
+
+  Map<String, TextEditingController> get _fomentoCountControllers => {
+    'ninas': _fomentoNinasCtrl,
+    'ninos': _fomentoNinosCtrl,
+    'adolescentes_mujeres': _fomentoAdolescentesMujeresCtrl,
+    'adolescentes_hombres': _fomentoAdolescentesHombresCtrl,
+    'docentes_hombres': _fomentoDocentesHombresCtrl,
+    'docentes_mujeres': _fomentoDocentesMujeresCtrl,
+    'hombres': _fomentoHombresCtrl,
+    'mujeres': _fomentoMujeresCtrl,
+  };
+
+  int? _defaultFomentoCategoriaId(List<ActividadCategoria> categorias) {
+    for (final categoria in categorias) {
+      final slug = (categoria.slug ?? '').trim().toLowerCase();
+      final nombre = categoria.nombre.trim().toUpperCase();
+      if (slug == 'capacitaciones' || nombre == 'CAPACITACIONES') {
+        return categoria.id;
+      }
+    }
+
+    for (final categoria in categorias) {
+      if (categoria.requiereFomentoCulturaVial) return categoria.id;
+    }
+    return null;
+  }
+
+  Future<void> _maybeSelectDefaultFomentoCategory() async {
+    if (!mounted ||
+        !_isFomentoUser ||
+        _categoriaId != null ||
+        _categorias.isEmpty) {
+      return;
+    }
+    final defaultId = _defaultFomentoCategoriaId(_categorias);
+    if (defaultId == null) return;
+
+    if (!mounted) return;
+    setState(() => _categoriaId = defaultId);
+    _draft.notifyChanged();
+    await _loadSubcategorias(defaultId);
+  }
+
+  void _ensureFomentoProgramValid() {
+    if (_fomentoProgramaId == null) return;
+    if (_fomentoProgramas.any(
+      (programa) => programa.id == _fomentoProgramaId,
+    )) {
+      return;
+    }
+    _fomentoProgramaId = null;
+  }
+
+  int _readFomentoCount(TextEditingController controller) {
+    final normalized = NormalizedIntegerInputFormatter.normalize(
+      controller.text,
+    );
+    return (int.tryParse(normalized) ?? 0)
+        .clamp(0, ActividadFomentoDetalle.maxCount)
+        .toInt();
+  }
+
+  int _fomentoTotal() {
+    return _fomentoCountControllers.values.fold<int>(
+      0,
+      (sum, controller) => sum + _readFomentoCount(controller),
+    );
+  }
+
+  void _syncFomentoTotal() {
+    final total = _fomentoTotal();
+    final totalText = total.toString();
+    if (_fomentoTotalCtrl.text != totalText) {
+      _fomentoTotalCtrl.text = totalText;
+    }
+    if (_showFomentoPanel && _personasAlcanzadasCtrl.text != totalText) {
+      _personasAlcanzadasCtrl.text = totalText;
+    }
+  }
+
+  ActividadFomentoDetalle _buildFomentoPayload() {
+    final total = _fomentoTotal();
+    return ActividadFomentoDetalle(
+      programaId: _fomentoProgramaId,
+      nivelEducativo: _fomentoNivelEducativo,
+      sector: _fomentoSector,
+      ninas: _readFomentoCount(_fomentoNinasCtrl),
+      ninos: _readFomentoCount(_fomentoNinosCtrl),
+      adolescentesMujeres: _readFomentoCount(_fomentoAdolescentesMujeresCtrl),
+      adolescentesHombres: _readFomentoCount(_fomentoAdolescentesHombresCtrl),
+      docentesHombres: _readFomentoCount(_fomentoDocentesHombresCtrl),
+      docentesMujeres: _readFomentoCount(_fomentoDocentesMujeresCtrl),
+      hombres: _readFomentoCount(_fomentoHombresCtrl),
+      mujeres: _readFomentoCount(_fomentoMujeresCtrl),
+      totalPoblacionAtendida: total,
+    );
+  }
+
   void _scheduleC5iHechoRedirectCheck() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
@@ -534,6 +729,10 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
 
   Future<void> _redirectToHechoIfC5iReport() async {
     if (_redirectingToHecho || !mounted) return;
+    if (_isFomentoUser) return;
+
+    final unidadId = await AuthService.getUnidadId();
+    if (!mounted || unidadId == AuthService.unidadCulturaVialId) return;
 
     final categoria = _selectedCategoria();
     final subcategoria = _selectedSubcategoria();
@@ -542,6 +741,7 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
     final shouldRedirect = ActividadesService.shouldRedirectC5iReportToHecho(
       categoriaNombre: categoria.nombre,
       subcategoriaNombre: subcategoria.nombre,
+      userCanCaptureHechos: unidadId != AuthService.unidadCulturaVialId,
     );
     if (!shouldRedirect) return;
 
@@ -746,6 +946,8 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
         return _personasParticipantesFieldKey;
       case ActividadValidationTarget.personasDetenidas:
         return _personasDetenidasFieldKey;
+      case ActividadValidationTarget.fomento:
+        return _fomentoCardKey;
       case ActividadValidationTarget.fotos:
         return _fotosCardKey;
       case ActividadValidationTarget.vehiculos:
@@ -800,6 +1002,7 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
   }
 
   ActividadUpsertData _buildPayload() {
+    final fomento = _showFomentoPanel ? _buildFomentoPayload() : null;
     return ActividadUpsertData(
       clientUuid: _clientUuid,
       actividadCategoriaId: _categoriaId ?? 0,
@@ -813,16 +1016,21 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
       coordenadasTexto: _trim(_coordenadasCtrl),
       fuenteUbicacion: _trim(_fuenteUbicacionCtrl),
       notaGeo: _trim(_notaGeoCtrl),
-      motivo: _trim(_motivoCtrl),
+      motivo: _useFomentoUserLayout ? null : _trim(_motivoCtrl),
       narrativa: _trim(_narrativaCtrl),
       accionesRealizadas: null,
-      observaciones: null,
-      personasAlcanzadas: _trimInteger(_personasAlcanzadasCtrl),
+      observaciones: _trim(_observacionesCtrl),
+      personasAlcanzadas: fomento == null
+          ? _trimInteger(_personasAlcanzadasCtrl)
+          : fomento.computedTotal.toString(),
       personasParticipantes: _trimInteger(_personasParticipantesCtrl),
       personasDetenidas: _trimInteger(_personasDetenidasCtrl),
       elementosParticipantesTexto: _trim(_elementosCtrl),
       patrullasParticipantesTexto: _trim(_patrullasCtrl),
-      vehiculos: List<ActividadVehiculo>.from(_vehiculos),
+      fomento: fomento,
+      vehiculos: _useFomentoUserLayout
+          ? const <ActividadVehiculo>[]
+          : List<ActividadVehiculo>.from(_vehiculos),
     );
   }
 
@@ -1084,12 +1292,14 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
                       setState(() {
                         _categoriaId = v;
                         _subcategoriaId = null;
+                        _fomentoProgramaId = null;
                         _subcategorias = [];
                         _removeFieldError(ActividadValidationTarget.categoria);
                         _removeFieldError(
                           ActividadValidationTarget.subcategoria,
                         );
                       });
+                      _syncFomentoTotal();
                       _draft.notifyChanged();
                       if (v != null) {
                         await _loadSubcategorias(v);
@@ -1125,10 +1335,12 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
                         : (v) {
                             setState(() {
                               _subcategoriaId = v;
+                              _fomentoProgramaId = null;
                               _removeFieldError(
                                 ActividadValidationTarget.subcategoria,
                               );
                             });
+                            _syncFomentoTotal();
                             _draft.notifyChanged();
                             _scheduleC5iHechoRedirectCheck();
                           },
@@ -1313,13 +1525,57 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
 
             const SizedBox(height: 12),
 
+            if (_showFomentoPanel) ...[
+              _card(
+                title: 'Fomento a la Cultura Vial',
+                cardKey: _fomentoCardKey,
+                validationTarget: ActividadValidationTarget.fomento,
+                child: FomentoCulturaVialPanel(
+                  programas: _fomentoProgramas,
+                  programaId: _fomentoProgramaId,
+                  onProgramaChanged: (value) {
+                    setState(() => _fomentoProgramaId = value);
+                    _draft.notifyChanged();
+                  },
+                  nivelEducativo: _fomentoNivelEducativo,
+                  onNivelEducativoChanged: (value) {
+                    setState(() => _fomentoNivelEducativo = value);
+                    _draft.notifyChanged();
+                  },
+                  sector: _fomentoSector,
+                  onSectorChanged: (value) {
+                    setState(() => _fomentoSector = value);
+                    _draft.notifyChanged();
+                  },
+                  countControllers: _fomentoCountControllers,
+                  totalController: _fomentoTotalCtrl,
+                  onCountChanged: (_) {
+                    _syncFomentoTotal();
+                    _clearFieldError(ActividadValidationTarget.fomento);
+                    _draft.notifyChanged();
+                  },
+                ),
+              ),
+              const SizedBox(height: 12),
+            ],
+
             _card(
               title: 'Contenido',
               child: Column(
                 children: [
-                  _textField(_motivoCtrl, 'Asunto', maxLines: 2),
-                  const SizedBox(height: 12),
+                  if (!_useFomentoUserLayout) ...[
+                    _textField(_motivoCtrl, 'Asunto', maxLines: 2),
+                    const SizedBox(height: 12),
+                  ],
                   _textField(_narrativaCtrl, 'Narrativa', maxLines: 6),
+                  if (_useFomentoUserLayout) ...[
+                    const SizedBox(height: 12),
+                    _textField(
+                      _observacionesCtrl,
+                      'Observaciones',
+                      maxLines: 3,
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -1330,62 +1586,107 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
               title: 'Personas y participantes',
               child: Column(
                 children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: KeyedSubtree(
-                          key: _personasAlcanzadasFieldKey,
-                          child: ActividadCountField(
-                            controller: _personasAlcanzadasCtrl,
-                            label: 'Personas alcanzadas *',
-                            icon: Icons.diversity_3_rounded,
-                            color: const Color(0xFF0284C7),
-                            helperText: 'Minimo 1',
-                            errorText: _fieldError(
-                              ActividadValidationTarget.personasAlcanzadas,
-                            ),
-                            onChanged: (_) => _clearFieldError(
-                              ActividadValidationTarget.personasAlcanzadas,
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: KeyedSubtree(
-                          key: _personasParticipantesFieldKey,
-                          child: ActividadCountField(
-                            controller: _personasParticipantesCtrl,
-                            label: 'Personas participantes',
-                            icon: Icons.groups_2_rounded,
-                            color: const Color(0xFF7C3AED),
-                            helperText: 'Maximo 15 por actividad',
-                            badgeText: 'MAX 15',
-                            max: ActividadesService.maxParticipantsCount,
-                            errorText: _fieldError(
-                              ActividadValidationTarget.personasParticipantes,
-                            ),
-                            onChanged: (_) => _clearFieldError(
-                              ActividadValidationTarget.personasParticipantes,
+                  if (!_useFomentoUserLayout)
+                    Row(
+                      children: [
+                        Expanded(
+                          child: KeyedSubtree(
+                            key: _personasAlcanzadasFieldKey,
+                            child: ActividadCountField(
+                              controller: _personasAlcanzadasCtrl,
+                              label: 'Personas alcanzadas *',
+                              icon: Icons.diversity_3_rounded,
+                              color: const Color(0xFF0284C7),
+                              helperText: _showFomentoPanel
+                                  ? 'Se actualiza con el total de Fomento'
+                                  : 'Minimo 1',
+                              errorText: _fieldError(
+                                ActividadValidationTarget.personasAlcanzadas,
+                              ),
+                              onChanged: (_) => _clearFieldError(
+                                ActividadValidationTarget.personasAlcanzadas,
+                              ),
                             ),
                           ),
                         ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  KeyedSubtree(
-                    key: _personasDetenidasFieldKey,
-                    child: ActividadDetenidosField(
-                      controller: _personasDetenidasCtrl,
-                      errorText: _fieldError(
-                        ActividadValidationTarget.personasDetenidas,
-                      ),
-                      onChanged: (_) => _clearFieldError(
-                        ActividadValidationTarget.personasDetenidas,
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: KeyedSubtree(
+                            key: _personasParticipantesFieldKey,
+                            child: ActividadCountField(
+                              controller: _personasParticipantesCtrl,
+                              label: 'Personas participantes',
+                              icon: Icons.groups_2_rounded,
+                              color: const Color(0xFF7C3AED),
+                              helperText: 'Maximo 15 por actividad',
+                              badgeText: 'MAX 15',
+                              max: ActividadesService.maxParticipantsCount,
+                              errorText: _fieldError(
+                                ActividadValidationTarget.personasParticipantes,
+                              ),
+                              onChanged: (_) => _clearFieldError(
+                                ActividadValidationTarget.personasParticipantes,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    )
+                  else
+                    Row(
+                      children: [
+                        Expanded(
+                          child: KeyedSubtree(
+                            key: _personasParticipantesFieldKey,
+                            child: ActividadCountField(
+                              controller: _personasParticipantesCtrl,
+                              label: 'Personas participantes',
+                              icon: Icons.groups_2_rounded,
+                              color: const Color(0xFF7C3AED),
+                              helperText: 'Maximo 15 por actividad',
+                              badgeText: 'MAX 15',
+                              max: ActividadesService.maxParticipantsCount,
+                              errorText: _fieldError(
+                                ActividadValidationTarget.personasParticipantes,
+                              ),
+                              onChanged: (_) => _clearFieldError(
+                                ActividadValidationTarget.personasParticipantes,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: KeyedSubtree(
+                            key: _personasDetenidasFieldKey,
+                            child: ActividadDetenidosField(
+                              controller: _personasDetenidasCtrl,
+                              errorText: _fieldError(
+                                ActividadValidationTarget.personasDetenidas,
+                              ),
+                              onChanged: (_) => _clearFieldError(
+                                ActividadValidationTarget.personasDetenidas,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  if (!_useFomentoUserLayout) ...[
+                    const SizedBox(height: 12),
+                    KeyedSubtree(
+                      key: _personasDetenidasFieldKey,
+                      child: ActividadDetenidosField(
+                        controller: _personasDetenidasCtrl,
+                        errorText: _fieldError(
+                          ActividadValidationTarget.personasDetenidas,
+                        ),
+                        onChanged: (_) => _clearFieldError(
+                          ActividadValidationTarget.personasDetenidas,
+                        ),
                       ),
                     ),
-                  ),
+                  ],
                   const SizedBox(height: 12),
                   _textField(
                     _elementosCtrl,
@@ -1404,61 +1705,62 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
 
             const SizedBox(height: 12),
 
-            _card(
-              title: 'Vehiculos relacionados',
-              cardKey: _vehiculosCardKey,
-              validationTarget: ActividadValidationTarget.vehiculos,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          'Total: ${_vehiculos.length}',
-                          style: TextStyle(
-                            color: Colors.grey.shade700,
-                            fontWeight: FontWeight.w800,
+            if (!_useFomentoUserLayout) ...[
+              _card(
+                title: 'Vehiculos relacionados',
+                cardKey: _vehiculosCardKey,
+                validationTarget: ActividadValidationTarget.vehiculos,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            'Total: ${_vehiculos.length}',
+                            style: TextStyle(
+                              color: Colors.grey.shade700,
+                              fontWeight: FontWeight.w800,
+                            ),
                           ),
                         ),
-                      ),
-                      ElevatedButton.icon(
-                        onPressed: _saving ? null : _agregarVehiculo,
-                        icon: const Icon(Icons.add),
-                        label: const Text('Agregar vehiculo'),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
-                  if (_vehiculos.isEmpty)
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: Colors.blue.withValues(alpha: .06),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: Colors.blue.withValues(alpha: .16),
+                        ElevatedButton.icon(
+                          onPressed: _saving ? null : _agregarVehiculo,
+                          icon: const Icon(Icons.add),
+                          label: const Text('Agregar vehiculo'),
                         ),
-                      ),
-                      child: const Text(
-                        'No hay vehiculos agregados para esta actividad.',
-                      ),
-                    )
-                  else
-                    ..._vehiculos.asMap().entries.map((entry) {
-                      return ActividadVehiculoCard(
-                        vehiculo: entry.value,
-                        onRemove: _saving
-                            ? null
-                            : () => _quitarVehiculo(entry.key),
-                      );
-                    }),
-                ],
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    if (_vehiculos.isEmpty)
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.blue.withValues(alpha: .06),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: Colors.blue.withValues(alpha: .16),
+                          ),
+                        ),
+                        child: const Text(
+                          'No hay vehiculos agregados para esta actividad.',
+                        ),
+                      )
+                    else
+                      ..._vehiculos.asMap().entries.map((entry) {
+                        return ActividadVehiculoCard(
+                          vehiculo: entry.value,
+                          onRemove: _saving
+                              ? null
+                              : () => _quitarVehiculo(entry.key),
+                        );
+                      }),
+                  ],
+                ),
               ),
-            ),
-
-            const SizedBox(height: 12),
+              const SizedBox(height: 12),
+            ],
 
             _card(
               title: 'Fotos',

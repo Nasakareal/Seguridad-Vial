@@ -2,6 +2,9 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:seguridad_vial_app/models/actividad.dart';
+import 'package:seguridad_vial_app/models/actividad_categoria.dart';
+import 'package:seguridad_vial_app/models/actividad_fomento.dart';
+import 'package:seguridad_vial_app/models/actividad_subcategoria.dart';
 import 'package:seguridad_vial_app/services/actividades_service.dart';
 import 'package:seguridad_vial_app/widgets/normalized_integer_input_formatter.dart';
 
@@ -245,5 +248,110 @@ void main() {
       ),
       isFalse,
     );
+    expect(
+      ActividadesService.shouldRedirectC5iReportToHecho(
+        categoriaNombre: 'Reportes C5i',
+        subcategoriaNombre: 'Hechos de tránsito',
+        userCanCaptureHechos: false,
+      ),
+      isFalse,
+    );
+  });
+
+  test('parses fomento metadata from activity catalogs', () {
+    final categoria = ActividadCategoria.fromJson(const <String, dynamic>{
+      'id': 10,
+      'nombre': 'CAPACITACIONES',
+      'slug': 'capacitaciones',
+      'requiere_fomento_cultura_vial': true,
+    });
+    final subcategoria = ActividadSubcategoria.fromJson(const <String, dynamic>{
+      'id': 20,
+      'nombre': 'TALLER',
+      'programas_fomento': <Map<String, dynamic>>[
+        <String, dynamic>{'id': 7, 'nombre': 'PEATON SEGURO'},
+      ],
+    });
+
+    expect(categoria.requiereFomentoCulturaVial, isTrue);
+    expect(categoria.slug, 'capacitaciones');
+    expect(subcategoria.programasFomento.single.id, 7);
+    expect(subcategoria.programasFomento.single.nombre, 'PEATON SEGURO');
+  });
+
+  test('sends fomento detail fields using backend names', () {
+    const data = ActividadUpsertData(
+      actividadCategoriaId: 10,
+      actividadSubcategoriaId: 20,
+      fecha: '2026-04-25',
+      municipio: 'MORELIA',
+      personasAlcanzadas: '9',
+      fomento: ActividadFomentoDetalle(
+        programaId: 7,
+        nivelEducativo: 'PRIMARIA',
+        sector: 'CICLISTAS',
+        ninas: 3,
+        ninos: 4,
+        mujeres: 2,
+      ),
+    );
+
+    final fields = data.toFields();
+
+    expect(fields['fomento[programa_id]'], '7');
+    expect(fields['fomento[nivel_educativo]'], 'PRIMARIA');
+    expect(fields['fomento[sector]'], 'CICLISTAS');
+    expect(fields['fomento[ninas]'], '3');
+    expect(fields['fomento[ninos]'], '4');
+    expect(fields['fomento[mujeres]'], '2');
+    expect(fields['fomento[total_poblacion_atendida]'], '9');
+  });
+
+  test('allows zero reached people when fomento total is zero', () async {
+    final issues = await ActividadesService.validateBeforeSubmitIssues(
+      data: const ActividadUpsertData(
+        actividadCategoriaId: 10,
+        actividadSubcategoriaId: 20,
+        fecha: '2026-04-25',
+        municipio: 'MORELIA',
+        personasAlcanzadas: '0',
+        personasParticipantes: '0',
+        personasDetenidas: '0',
+        fomento: ActividadFomentoDetalle(),
+      ),
+      fotos: const <File>[],
+      requirePhotos: false,
+      requireCoords: false,
+    );
+
+    expect(
+      issues.map((issue) => issue.message),
+      isNot(contains('Personas alcanzadas debe ser al menos 1.')),
+    );
+  });
+
+  test('prioritizes fomento subcategories with programs first', () {
+    final ordered = ActividadesService.prioritizeFomentoSubcategorias(
+      <ActividadSubcategoria>[
+        const ActividadSubcategoria(id: 1, nombre: 'ZETA'),
+        const ActividadSubcategoria(
+          id: 2,
+          nombre: 'BICICLETA',
+          programasFomento: <ActividadFomentoPrograma>[
+            ActividadFomentoPrograma(id: 10, nombre: 'RODADA SEGURA'),
+          ],
+        ),
+        const ActividadSubcategoria(
+          id: 3,
+          nombre: 'PEATON',
+          programasFomento: <ActividadFomentoPrograma>[
+            ActividadFomentoPrograma(id: 11, nombre: 'PEATON SEGURO'),
+          ],
+        ),
+        const ActividadSubcategoria(id: 4, nombre: 'ALFA'),
+      ],
+    );
+
+    expect(ordered.map((item) => item.id), <int>[2, 3, 4, 1]);
   });
 }

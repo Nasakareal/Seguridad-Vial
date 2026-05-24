@@ -59,6 +59,7 @@ class FeedItemCard extends StatelessWidget {
     final capturo = isActividad && item.userName.trim().isNotEmpty
         ? 'Capturó: ${item.userName.trim()}'
         : null;
+    final origen = item.origenLabel;
     final rawFoto = (item.fotoUrl ?? '').trim();
     final normalizedFoto = rawFoto.isEmpty
         ? ''
@@ -155,6 +156,19 @@ class FeedItemCard extends StatelessWidget {
                         style: TextStyle(
                           color: Colors.grey.shade600,
                           fontSize: 11.8,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                    if (origen != null) ...[
+                      const SizedBox(height: 3),
+                      Text(
+                        origen,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: Colors.grey.shade600,
+                          fontSize: 11.6,
                           fontWeight: FontWeight.w700,
                         ),
                       ),

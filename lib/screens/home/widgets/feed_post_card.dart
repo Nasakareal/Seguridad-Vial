@@ -29,6 +29,7 @@ class FeedPostCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final resumen = item.resumen.trim();
     final subtitle = resumen.isNotEmpty ? resumen : 'Publicación';
+    final origen = item.origenLabel;
 
     final userName = item.userName.trim();
     final user = userName.isNotEmpty ? userName : 'Usuario';
@@ -125,6 +126,19 @@ class FeedPostCard extends StatelessWidget {
                               fontWeight: FontWeight.w700,
                             ),
                           ),
+                          if (origen != null) ...[
+                            const SizedBox(height: 5),
+                            Text(
+                              origen,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: Colors.grey.shade600,
+                                fontSize: 12.2,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ],
                         ],
                       ),
                     ),

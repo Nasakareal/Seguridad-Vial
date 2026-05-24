@@ -73,6 +73,18 @@ class ConstanciaManejo {
       (urlExamenEscrito ?? '').trim().isNotEmpty &&
       (urlExamenEscritoQr ?? '').trim().isNotEmpty;
 
+  bool get tieneFlujoExamen =>
+      tieneAccesoTemporal || tieneExamenEscrito || examen != null;
+
+  bool get puedeActivarDirectamente {
+    final tipo = (tipoExamen ?? '').trim();
+    return estaInactiva &&
+        examen == null &&
+        !tieneAccesoTemporal &&
+        !tieneExamenEscrito &&
+        tipo.isEmpty;
+  }
+
   bool get estaActiva => estatus.trim().toUpperCase() == 'ACTIVA';
 
   bool get estaInactiva {

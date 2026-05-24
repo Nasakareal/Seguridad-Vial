@@ -149,6 +149,114 @@ void main() {
     },
   );
 
+  test('delegaciones policia feed is scoped to own delegacion', () async {
+    SharedPreferences.setMockInitialValues(<String, Object>{
+      'auth_role': 'Policia',
+      'auth_role_id': 10,
+      'auth_unidad_id': AuthService.unidadDelegacionesId,
+      'auth_delegacion_id': 7,
+      'auth_user_payload': jsonEncode(<String, Object>{
+        'id': 41,
+        'role': <String, Object>{'id': 10, 'name': 'Policia'},
+        'unidad_id': AuthService.unidadDelegacionesId,
+        'delegacion_id': 7,
+      }),
+    });
+
+    expect(await AuthService.canSeeFullDelegacionesFeed(), isFalse);
+    expect(await AuthService.getFeedDelegacionFilterId(), 7);
+  });
+
+  test(
+    'delegaciones delegado without child delegations keeps own scope',
+    () async {
+      SharedPreferences.setMockInitialValues(<String, Object>{
+        'auth_role': 'Delegado',
+        'auth_unidad_id': AuthService.unidadDelegacionesId,
+        'auth_delegacion_id': 8,
+        'auth_user_payload': jsonEncode(<String, Object>{
+          'id': 42,
+          'role': <String, Object>{'name': 'Delegado'},
+          'unidad_id': AuthService.unidadDelegacionesId,
+          'delegacion_id': 8,
+          'delegacion': <String, Object>{
+            'id': 8,
+            'delegaciones_hijas_count': 0,
+          },
+        }),
+      });
+
+      expect(await AuthService.canSeeFullDelegacionesFeed(), isFalse);
+      expect(await AuthService.getFeedDelegacionFilterId(), 8);
+    },
+  );
+
+  test('delegaciones delegado with child delegations sees full feed', () async {
+    SharedPreferences.setMockInitialValues(<String, Object>{
+      'auth_role': 'Delegado',
+      'auth_unidad_id': AuthService.unidadDelegacionesId,
+      'auth_delegacion_id': 9,
+      'auth_user_payload': jsonEncode(<String, Object>{
+        'id': 43,
+        'role': <String, Object>{'name': 'Delegado'},
+        'unidad_id': AuthService.unidadDelegacionesId,
+        'delegacion_id': 9,
+        'delegacion': <String, Object>{
+          'id': 9,
+          'delegaciones_hijas': <Map<String, Object>>[
+            <String, Object>{'id': 91, 'nombre': 'Hija 1'},
+          ],
+        },
+      }),
+    });
+
+    expect(await AuthService.canSeeFullDelegacionesFeed(), isTrue);
+    expect(await AuthService.getFeedDelegacionFilterId(), isNull);
+  });
+
+  test(
+    'delegaciones administrativo with child delegations sees full feed',
+    () async {
+      SharedPreferences.setMockInitialValues(<String, Object>{
+        'auth_role': 'Administrativo',
+        'auth_role_id': 5,
+        'auth_unidad_id': AuthService.unidadDelegacionesId,
+        'auth_delegacion_id': 10,
+        'auth_user_payload': jsonEncode(<String, Object>{
+          'id': 44,
+          'role': <String, Object>{'id': 5, 'name': 'Administrativo'},
+          'unidad_id': AuthService.unidadDelegacionesId,
+          'delegacion_id': 10,
+          'delegacion': <String, Object>{'id': 10, 'children_count': 2},
+        }),
+      });
+
+      expect(await AuthService.canSeeFullDelegacionesFeed(), isTrue);
+      expect(await AuthService.getFeedDelegacionFilterId(), isNull);
+    },
+  );
+
+  test(
+    'delegaciones subdelegado with child delegations keeps own scope',
+    () async {
+      SharedPreferences.setMockInitialValues(<String, Object>{
+        'auth_role': 'Subdelegado',
+        'auth_unidad_id': AuthService.unidadDelegacionesId,
+        'auth_delegacion_id': 11,
+        'auth_user_payload': jsonEncode(<String, Object>{
+          'id': 45,
+          'role': <String, Object>{'name': 'Subdelegado'},
+          'unidad_id': AuthService.unidadDelegacionesId,
+          'delegacion_id': 11,
+          'delegaciones_hijas_count': 3,
+        }),
+      });
+
+      expect(await AuthService.canSeeFullDelegacionesFeed(), isFalse);
+      expect(await AuthService.getFeedDelegacionFilterId(), 11);
+    },
+  );
+
   test(
     'superadmin sees constancias manejo without unit or permission',
     () async {

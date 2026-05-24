@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -7,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../core/municipios_michoacan.dart';
 import '../models/actividad.dart';
 import '../models/actividad_categoria.dart';
+import '../models/actividad_fomento.dart';
 import '../models/actividad_subcategoria.dart';
 import 'auth_service.dart';
 import 'delegacion_distance_service.dart';
@@ -40,6 +42,7 @@ class ActividadUpsertData {
   final String? elementosParticipantesTexto;
   final String? patrullasParticipantesTexto;
   final String? destacamentoId;
+  final ActividadFomentoDetalle? fomento;
   final List<ActividadVehiculo> vehiculos;
 
   const ActividadUpsertData({
@@ -68,6 +71,7 @@ class ActividadUpsertData {
     this.elementosParticipantesTexto,
     this.patrullasParticipantesTexto,
     this.destacamentoId,
+    this.fomento,
     this.vehiculos = const <ActividadVehiculo>[],
   });
 
@@ -107,6 +111,24 @@ class ActividadUpsertData {
     add('elementos_participantes_texto', elementosParticipantesTexto);
     add('patrullas_participantes_texto', patrullasParticipantesTexto);
 
+    final fomentoData = fomento;
+    if (fomentoData != null) {
+      if (fomentoData.programaId != null && fomentoData.programaId! > 0) {
+        fields['fomento[programa_id]'] = fomentoData.programaId.toString();
+      }
+      add('fomento[nivel_educativo]', fomentoData.nivelEducativo);
+      add('fomento[sector]', fomentoData.sector);
+      for (final field in ActividadFomentoDetalle.numericFields) {
+        fields['fomento[${field.key}]'] = fomentoData
+            .valueFor(field.key)
+            .clamp(0, ActividadFomentoDetalle.maxCount)
+            .toString();
+      }
+      fields['fomento[total_poblacion_atendida]'] = fomentoData.computedTotal
+          .clamp(0, ActividadFomentoDetalle.maxCount * 8)
+          .toString();
+    }
+
     for (var index = 0; index < vehiculos.length; index += 1) {
       final vehiculo = vehiculos[index].toApiJson();
       vehiculo.forEach((key, value) {
@@ -137,6 +159,7 @@ enum ActividadValidationTarget {
   personasAlcanzadas,
   personasParticipantes,
   personasDetenidas,
+  fomento,
   fotos,
   vehiculos,
 }
@@ -237,7 +260,10 @@ class ActividadesService {
   static bool shouldRedirectC5iReportToHecho({
     required String categoriaNombre,
     required String subcategoriaNombre,
+    bool userCanCaptureHechos = true,
   }) {
+    if (!userCanCaptureHechos) return false;
+
     final categoria = _normalizeCatalogLabel(categoriaNombre);
     final subcategoria = _normalizeCatalogLabel(subcategoriaNombre);
 
@@ -478,7 +504,7 @@ class ActividadesService {
       ActividadValidationTarget.personasAlcanzadas,
       data.personasAlcanzadas,
       'Personas alcanzadas',
-      min: 1,
+      min: data.fomento == null ? 1 : 0,
     );
     _validateNonNegativeInt(
       issues,
@@ -498,6 +524,8 @@ class ActividadesService {
     if (requirePhotos && fotos.isEmpty) {
       add(ActividadValidationTarget.fotos, 'Selecciona al menos una foto.');
     }
+
+    _validateFomento(issues, data.fomento);
 
     final seenPaths = <String>{};
     for (var i = 0; i < fotos.length; i += 1) {
@@ -654,10 +682,13 @@ class ActividadesService {
       final list = _extractListFromResponse(raw);
       await _saveCache(_categoriasCacheKey, list);
 
-      return list
+      final categorias = list
           .map((e) => ActividadCategoria.fromJson(e))
           .where((e) => e.id > 0)
           .toList();
+      unawaited(_warmSubcategoriasCache(categorias));
+
+      return categorias;
     } catch (e) {
       final cached = await _loadCache(_categoriasCacheKey);
       if (cached.isNotEmpty) {
@@ -688,19 +719,77 @@ class ActividadesService {
       final list = _extractListFromResponse(raw);
       await _saveCache(cacheKey, list);
 
-      return list
+      final subcategorias = list
           .map((e) => ActividadSubcategoria.fromJson(e))
           .where((e) => e.id > 0)
           .toList();
+      return await _prioritizeFomentoSubcategoriasForCurrentUser(subcategorias);
     } catch (e) {
       final cached = await _loadCache(cacheKey);
       if (cached.isNotEmpty) {
-        return cached
+        final subcategorias = cached
             .map((e) => ActividadSubcategoria.fromJson(e))
             .where((e) => e.id > 0)
             .toList();
+        return await _prioritizeFomentoSubcategoriasForCurrentUser(
+          subcategorias,
+        );
       }
       rethrow;
+    }
+  }
+
+  static List<ActividadSubcategoria> prioritizeFomentoSubcategorias(
+    List<ActividadSubcategoria> subcategorias,
+  ) {
+    final sorted = List<ActividadSubcategoria>.from(subcategorias);
+    sorted.sort((a, b) {
+      final prioridadA = a.programasFomento.isNotEmpty ? 0 : 1;
+      final prioridadB = b.programasFomento.isNotEmpty ? 0 : 1;
+
+      if (prioridadA != prioridadB) {
+        return prioridadA.compareTo(prioridadB);
+      }
+
+      return a.nombre.toUpperCase().compareTo(b.nombre.toUpperCase());
+    });
+    return sorted;
+  }
+
+  static Future<List<ActividadSubcategoria>>
+  _prioritizeFomentoSubcategoriasForCurrentUser(
+    List<ActividadSubcategoria> subcategorias,
+  ) async {
+    final unidadId = await AuthService.getUnidadId();
+    if (unidadId != AuthService.unidadCulturaVialId) return subcategorias;
+    return prioritizeFomentoSubcategorias(subcategorias);
+  }
+
+  static Future<void> _warmSubcategoriasCache(
+    List<ActividadCategoria> categorias,
+  ) async {
+    if (categorias.isEmpty) return;
+
+    Map<String, String> headers;
+    try {
+      headers = await _headersJson();
+    } catch (_) {
+      return;
+    }
+
+    for (final categoria in categorias) {
+      if (categoria.id <= 0) continue;
+      try {
+        final uri = Uri.parse('$_base/subcategorias/${categoria.id}');
+        final resp = await http.get(uri, headers: headers);
+        if (resp.statusCode < 200 || resp.statusCode >= 300) continue;
+
+        final raw = jsonDecode(resp.body);
+        final list = _extractListFromResponse(raw);
+        await _saveCache(_subcategoriasCacheKey(categoria.id), list);
+      } catch (_) {
+        // Best-effort cache warmup for offline captures.
+      }
     }
   }
 
@@ -1012,6 +1101,26 @@ class ActividadesService {
           message: '$label no puede ser mayor a $max.',
         ),
       );
+    }
+  }
+
+  static void _validateFomento(
+    List<ActividadValidationIssue> issues,
+    ActividadFomentoDetalle? fomento,
+  ) {
+    if (fomento == null) return;
+
+    for (final field in ActividadFomentoDetalle.numericFields) {
+      final value = fomento.valueFor(field.key);
+      if (value > ActividadFomentoDetalle.maxCount) {
+        issues.add(
+          ActividadValidationIssue(
+            target: ActividadValidationTarget.fomento,
+            message:
+                '${field.label} no puede ser mayor a ${ActividadFomentoDetalle.maxCount}.',
+          ),
+        );
+      }
     }
   }
 
