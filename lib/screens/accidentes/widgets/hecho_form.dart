@@ -252,7 +252,9 @@ class _HechoFormState extends State<HechoForm> {
 
   void _applyLocalDraft(Map<String, dynamic> draft) {
     final d = widget.data;
-    d.clientUuid = _blankToNull(draft['client_uuid']);
+    d.clientUuid = widget.mode == HechoFormMode.create
+        ? null
+        : _blankToNull(draft['client_uuid']);
     d.folioC5i = _str(draft['folio_c5i']);
     d.perito = _str(draft['perito']);
     d.autorizacionPractico = _str(draft['autorizacion_practico']);
@@ -333,7 +335,7 @@ class _HechoFormState extends State<HechoForm> {
     final d = widget.data;
     final shouldStoreMp = _isTurnadoValue(d.situacion);
     return <String, dynamic>{
-      'client_uuid': d.clientUuid,
+      'client_uuid': widget.mode == HechoFormMode.create ? null : d.clientUuid,
       'folio_c5i': _folioCtrl.text,
       'perito': _peritoCtrl.text,
       'autorizacion_practico': _authPracCtrl.text,

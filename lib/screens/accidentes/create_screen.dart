@@ -5,11 +5,14 @@ import 'package:flutter/material.dart';
 import '../../app/routes.dart';
 import '../../models/hecho_form_data.dart';
 import '../../services/auth_service.dart';
+import '../../services/local_draft_service.dart';
 import '../../services/offline_sync_service.dart';
 import '../../services/hechos_form_service.dart';
 import 'widgets/hecho_form.dart';
 
 enum _PendingHechoAction { continueCapture, close }
+
+const String _createHechoDraftId = 'hechos:create';
 
 class CreateHechoScreen extends StatefulWidget {
   const CreateHechoScreen({super.key});
@@ -19,11 +22,13 @@ class CreateHechoScreen extends StatefulWidget {
 }
 
 class _CreateHechoScreenState extends State<CreateHechoScreen> {
-  final HechoFormData _data = HechoFormData();
+  HechoFormData _data = HechoFormData();
   File? _initialFotoLugar;
   File? _initialFotoSituacion;
+  int _formResetNonce = 0;
   bool _draftHydrated = false;
   bool _usingOfflineDraft = false;
+  bool _draftSuspendedForReset = false;
   bool _checkingAccess = true;
   bool _canCreateHechos = false;
   bool _needsDelegacionesCaptureTotals = false;
@@ -144,6 +149,74 @@ class _CreateHechoScreenState extends State<CreateHechoScreen> {
     _data.notaGeo = _blankToNull(text('nota_geo'));
     _data.ubicacionFormateada = _blankToNull(text('coordenadas_texto'));
     _data.situacion = _blankToNull(text('situacion')) ?? 'REPORTE';
+  }
+
+  Future<void> _startCleanCapture() async {
+    if (_usingOfflineDraft) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Crear nuevo hecho'),
+        content: const Text(
+          'Se limpiará el formulario recuperado y el autoguardado local de este equipo. No borra hechos ya enviados ni pendientes de sincronizar.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton.icon(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            icon: const Icon(Icons.add_circle_outline),
+            label: const Text('Crear nuevo'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() {
+      _draftSuspendedForReset = true;
+      _data = HechoFormData();
+      _initialFotoLugar = null;
+      _initialFotoSituacion = null;
+      _captureTotalsReady = false;
+      _captureTotalsPromptScheduled = false;
+      _captureTotalsDialogOpen = false;
+      _formResetNonce += 1;
+    });
+
+    await WidgetsBinding.instance.endOfFrame;
+    await LocalDraftService.discard(_createHechoDraftId);
+    if (!mounted) return;
+
+    setState(() {
+      _draftSuspendedForReset = false;
+      _formResetNonce += 1;
+    });
+
+    if (_needsDelegacionesCaptureTotals) {
+      _scheduleCaptureTotalsPrompt();
+    }
+
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Formulario local limpio.')));
+  }
+
+  AppBar _buildAppBar({bool showNewAction = false}) {
+    return AppBar(
+      title: const Text('Crear Hecho'),
+      actions: [
+        if (showNewAction && !_usingOfflineDraft)
+          IconButton(
+            tooltip: 'Crear nuevo',
+            onPressed: _startCleanCapture,
+            icon: const Icon(Icons.add_circle_outline),
+          ),
+      ],
+    );
   }
 
   Map<String, String> _stringMapFrom(dynamic value) {
@@ -390,14 +463,14 @@ class _CreateHechoScreenState extends State<CreateHechoScreen> {
 
     if (_checkingAccess) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Crear Hecho')),
+        appBar: _buildAppBar(),
         body: const Center(child: CircularProgressIndicator()),
       );
     }
 
     if (!_canCreateHechos) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Crear Hecho')),
+        appBar: _buildAppBar(),
         body: const SafeArea(
           child: Center(
             child: Padding(
@@ -417,15 +490,18 @@ class _CreateHechoScreenState extends State<CreateHechoScreen> {
     }
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Crear Hecho')),
+      appBar: _buildAppBar(showNewAction: true),
       body: SingleChildScrollView(
         padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + bottomSafe + 18),
         child: HechoForm(
+          key: ValueKey(_formResetNonce),
           mode: HechoFormMode.create,
           data: _data,
           initialFotoLugar: _initialFotoLugar,
           initialFotoSituacion: _initialFotoSituacion,
-          draftId: _usingOfflineDraft ? null : 'hechos:create',
+          draftId: _usingOfflineDraft || _draftSuspendedForReset
+              ? null
+              : _createHechoDraftId,
           onSubmit:
               ({
                 required data,

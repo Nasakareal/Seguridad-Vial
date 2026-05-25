@@ -37,9 +37,11 @@ class _ActividadesScreenState extends State<ActividadesScreen>
 
   List<ActividadCategoria> _categorias = [];
   List<ActividadSubcategoria> _subcategorias = [];
+  List<ActividadRef> _unidades = [];
 
   int? _categoriaId;
   int? _subcategoriaId;
+  int? _unidadId;
 
   final TextEditingController _qCtrl = TextEditingController();
 
@@ -164,6 +166,15 @@ class _ActividadesScreenState extends State<ActividadesScreen>
       if (!mounted) return;
       setState(() => _categorias = const []);
     }
+
+    try {
+      final unidades = await ActividadesService.fetchUnidadesFiltro();
+      if (!mounted) return;
+      setState(() => _unidades = unidades);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _unidades = const []);
+    }
   }
 
   Future<void> _loadSubcategorias(int categoriaId) async {
@@ -203,6 +214,7 @@ class _ActividadesScreenState extends State<ActividadesScreen>
         perPage: 20,
         actividadCategoriaId: _categoriaId,
         actividadSubcategoriaId: _subcategoriaId,
+        unidadId: _unidadId,
         q: _qCtrl.text,
       );
 
@@ -286,6 +298,9 @@ class _ActividadesScreenState extends State<ActividadesScreen>
   }
 
   Widget _filtersBar() {
+    final unidadIds = _unidades.map((item) => item.id).toSet();
+    final safeUnidadId = unidadIds.contains(_unidadId) ? _unidadId : null;
+
     return Column(
       children: [
         Row(
@@ -362,11 +377,47 @@ class _ActividadesScreenState extends State<ActividadesScreen>
           ),
         ),
         const SizedBox(height: 10),
+        if (_unidades.length > 1) ...[
+          DropdownButtonFormField<int>(
+            value: safeUnidadId,
+            isExpanded: true,
+            items: [
+              const DropdownMenuItem<int>(
+                value: null,
+                child: Text('Unidad (todas)'),
+              ),
+              ..._unidades.map(
+                (u) => DropdownMenuItem<int>(
+                  value: u.id,
+                  child: Text(u.nombre, overflow: TextOverflow.ellipsis),
+                ),
+              ),
+            ],
+            onChanged: (v) async {
+              setState(() => _unidadId = v);
+              await _load();
+            },
+            decoration: InputDecoration(
+              filled: true,
+              fillColor: Colors.white,
+              prefixIcon: const Icon(Icons.apartment),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+              ),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 10,
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+        ],
         Row(
           children: [
             Expanded(
               child: DropdownButtonFormField<int>(
                 value: _categoriaId,
+                isExpanded: true,
                 items: [
                   const DropdownMenuItem<int>(
                     value: null,
@@ -375,7 +426,7 @@ class _ActividadesScreenState extends State<ActividadesScreen>
                   ..._categorias.map(
                     (c) => DropdownMenuItem<int>(
                       value: c.id,
-                      child: Text(c.nombre),
+                      child: Text(c.nombre, overflow: TextOverflow.ellipsis),
                     ),
                   ),
                 ],
@@ -409,6 +460,7 @@ class _ActividadesScreenState extends State<ActividadesScreen>
             Expanded(
               child: DropdownButtonFormField<int>(
                 value: _subcategoriaId,
+                isExpanded: true,
                 items: [
                   const DropdownMenuItem<int>(
                     value: null,
@@ -417,7 +469,7 @@ class _ActividadesScreenState extends State<ActividadesScreen>
                   ..._subcategorias.map(
                     (s) => DropdownMenuItem<int>(
                       value: s.id,
-                      child: Text(s.nombre),
+                      child: Text(s.nombre, overflow: TextOverflow.ellipsis),
                     ),
                   ),
                 ],

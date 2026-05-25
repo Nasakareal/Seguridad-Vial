@@ -4,12 +4,14 @@ import 'package:seguridad_vial_app/core/hechos/hechos_catalogos.dart';
 import 'package:seguridad_vial_app/models/hecho_form_data.dart';
 import 'package:seguridad_vial_app/screens/accidentes/widgets/hecho_form.dart';
 import 'package:seguridad_vial_app/services/auth_service.dart';
+import 'package:seguridad_vial_app/services/local_draft_service.dart';
 import 'package:seguridad_vial_app/services/offline_sync_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
   setUp(() {
     SharedPreferences.setMockInitialValues(<String, Object>{
+      'auth_session_owner_key': 'user:1',
       'auth_unidad_id': AuthService.unidadDelegacionesId,
       'auth_role': 'Policia',
     });
@@ -87,6 +89,50 @@ void main() {
     expect(data.situacion, 'PENDIENTE');
     expect(data.vehiculosMp, '0');
     expect(data.personasMp, '0');
+  });
+
+  testWidgets('create local draft restores fields without old client uuid', (
+    tester,
+  ) async {
+    await LocalDraftService.save('hechos:create', <String, dynamic>{
+      'client_uuid': 'old-offline-operation',
+      'folio_c5i': 'C5I-123',
+      'perito': 'Elemento borrador',
+      'unidad': 'Unidad 99',
+      'hora': '09:30',
+      'fecha': '2026-04-25',
+    });
+    final data = HechoFormData();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: HechoForm(
+              mode: HechoFormMode.create,
+              data: data,
+              draftId: 'hechos:create',
+              onSubmit:
+                  ({
+                    required data,
+                    required dictamenSelected,
+                    required fotoLugar,
+                    required fotoSituacion,
+                  }) async {
+                    return const OfflineActionResult.synced();
+                  },
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    expect(data.clientUuid, isNull);
+    expect(data.folioC5i, 'C5I-123');
+    expect(data.perito, 'Elemento borrador');
+    expect(data.unidad, 'Unidad 99');
   });
 
   testWidgets('delegaciones turnado does not show existing puesta selector', (

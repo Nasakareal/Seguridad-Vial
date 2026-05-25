@@ -615,6 +615,7 @@ class ActividadesService {
     int perPage = 20,
     int? actividadCategoriaId,
     int? actividadSubcategoriaId,
+    int? unidadId,
     String? q,
   }) async {
     final headers = await _headersJson();
@@ -630,6 +631,9 @@ class ActividadesService {
     if (actividadSubcategoriaId != null && actividadSubcategoriaId > 0) {
       qp['actividad_subcategoria_id'] = actividadSubcategoriaId.toString();
     }
+    if (unidadId != null && unidadId > 0) {
+      qp['unidad_id'] = unidadId.toString();
+    }
     if (q != null && q.trim().isNotEmpty) {
       qp['q'] = q.trim();
     }
@@ -643,6 +647,27 @@ class ActividadesService {
 
     final raw = jsonDecode(resp.body);
     return _decodeActividadesList(raw);
+  }
+
+  static Future<List<ActividadRef>> fetchUnidadesFiltro() async {
+    final headers = await _headersJson();
+    final uri = Uri.parse(
+      '${AuthService.baseUrl}/estadisticas-actividades/catalogos/unidades',
+    );
+    final resp = await http.get(uri, headers: headers);
+
+    if (resp.statusCode < 200 || resp.statusCode >= 300) {
+      throw Exception(_parseBackendError(resp.body, resp.statusCode));
+    }
+
+    final raw = jsonDecode(resp.body);
+    if (raw is! List) return const <ActividadRef>[];
+
+    return raw
+        .whereType<Map>()
+        .map((e) => ActividadRef.fromJson(Map<String, dynamic>.from(e)))
+        .where((item) => item.id > 0)
+        .toList();
   }
 
   static Future<Actividad> fetchShow(int id) async {

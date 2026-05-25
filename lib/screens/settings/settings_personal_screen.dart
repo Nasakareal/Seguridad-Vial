@@ -6,6 +6,7 @@ import '../../services/settings_personal_service.dart';
 import '../../services/tracking_service.dart';
 import '../../widgets/account_drawer.dart';
 import '../../widgets/permission_guard.dart';
+import '../../widgets/safe_network_image.dart';
 import '../login_screen.dart';
 
 class SettingsPersonalScreen extends StatefulWidget {
@@ -206,6 +207,7 @@ class _SettingsPersonalScreenState extends State<SettingsPersonalScreen> {
                     final turno = _nestedName(item['turno'], 'Sin turno');
                     final estatus = _text(item['estatus'], 'Sin estatus');
                     final incidencias = _int(item['incidencias_count']);
+                    final photoUrl = SettingsPersonalService.photoUrlFor(item);
 
                     return Card(
                       margin: const EdgeInsets.only(bottom: 12),
@@ -217,16 +219,7 @@ class _SettingsPersonalScreenState extends State<SettingsPersonalScreen> {
                           horizontal: 14,
                           vertical: 8,
                         ),
-                        leading: CircleAvatar(
-                          backgroundColor: Colors.indigo.withValues(alpha: .12),
-                          child: Text(
-                            _initials(name),
-                            style: const TextStyle(
-                              color: Colors.indigo,
-                              fontWeight: FontWeight.w900,
-                            ),
-                          ),
-                        ),
+                        leading: _avatar(name, photoUrl),
                         title: Text(
                           name,
                           style: const TextStyle(fontWeight: FontWeight.w900),
@@ -286,6 +279,34 @@ class _SettingsPersonalScreenState extends State<SettingsPersonalScreen> {
           setState(() => _unidadFilterId = value);
           await _load();
         },
+      ),
+    );
+  }
+
+  Widget _avatar(String name, String photoUrl) {
+    Widget fallback() {
+      return CircleAvatar(
+        backgroundColor: Colors.indigo.withValues(alpha: .12),
+        child: Text(
+          _initials(name),
+          style: const TextStyle(
+            color: Colors.indigo,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+      );
+    }
+
+    if (photoUrl.trim().isEmpty) return fallback();
+
+    return ClipOval(
+      child: SafeNetworkImage(
+        photoUrl,
+        width: 40,
+        height: 40,
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => fallback(),
+        loadingBuilder: (context, progress) => fallback(),
       ),
     );
   }

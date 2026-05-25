@@ -6,6 +6,7 @@ import '../../services/settings_personal_service.dart';
 import '../../services/tracking_service.dart';
 import '../../widgets/account_drawer.dart';
 import '../../widgets/permission_guard.dart';
+import '../../widgets/safe_network_image.dart';
 import '../login_screen.dart';
 
 class PersonalShowScreen extends StatefulWidget {
@@ -150,6 +151,7 @@ class _PersonalShowScreenState extends State<PersonalShowScreen> {
     final personal = _personal;
     final name = _text(personal?['nombre_completo'], 'Personal');
     final incidencias = _list(personal?['incidencias']);
+    final photoUrl = SettingsPersonalService.photoUrlFor(personal);
 
     return PermissionGuard(
       permission: 'ver personal',
@@ -204,18 +206,7 @@ class _PersonalShowScreenState extends State<PersonalShowScreen> {
                     ),
                     child: Row(
                       children: [
-                        CircleAvatar(
-                          radius: 30,
-                          backgroundColor: Colors.white.withValues(alpha: .14),
-                          child: Text(
-                            _initials(name),
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 20,
-                              fontWeight: FontWeight.w900,
-                            ),
-                          ),
-                        ),
+                        _headerAvatar(name, photoUrl),
                         const SizedBox(width: 14),
                         Expanded(
                           child: Column(
@@ -325,6 +316,36 @@ class _PersonalShowScreenState extends State<PersonalShowScreen> {
           const SizedBox(height: 12),
           child,
         ],
+      ),
+    );
+  }
+
+  Widget _headerAvatar(String name, String photoUrl) {
+    Widget fallback() {
+      return CircleAvatar(
+        radius: 30,
+        backgroundColor: Colors.white.withValues(alpha: .14),
+        child: Text(
+          _initials(name),
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 20,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+      );
+    }
+
+    if (photoUrl.trim().isEmpty) return fallback();
+
+    return ClipOval(
+      child: SafeNetworkImage(
+        photoUrl,
+        width: 60,
+        height: 60,
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => fallback(),
+        loadingBuilder: (context, progress) => fallback(),
       ),
     );
   }

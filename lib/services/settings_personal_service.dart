@@ -71,6 +71,103 @@ class SettingsPersonalService {
 
   static String get _base => '${AuthService.baseUrl}/settings/personal';
 
+  static String photoUrlFor(dynamic raw) {
+    final path = _photoPathFrom(raw);
+    return path == null ? '' : toPublicUrl(path);
+  }
+
+  static String toPublicUrl(String pathOrUrl) {
+    final raw = pathOrUrl.trim();
+    if (raw.isEmpty) return '';
+
+    final lower = raw.toLowerCase();
+    if (lower.startsWith('http://') || lower.startsWith('https://')) {
+      return raw;
+    }
+
+    final root = AuthService.baseUrl.replaceFirst(RegExp(r'/api/?$'), '');
+    final storageIndex = lower.indexOf('/storage/');
+    if (storageIndex >= 0) return '$root${raw.substring(storageIndex)}';
+    if (raw.startsWith('/storage/')) return '$root$raw';
+    if (raw.startsWith('storage/')) return '$root/$raw';
+
+    return '$root/storage/$raw';
+  }
+
+  static String? _photoPathFrom(dynamic raw) {
+    if (raw is List) {
+      for (final item in raw) {
+        final value = _photoPathFrom(item);
+        if (value != null) return value;
+      }
+      return null;
+    }
+
+    if (raw is! Map) return _nonEmptyText(raw);
+
+    final map = Map<String, dynamic>.from(raw);
+    for (final key in const <String>[
+      'foto_url',
+      'fotoUrl',
+      'foto_path',
+      'fotoPath',
+      'foto',
+      'fotografia_url',
+      'fotografiaUrl',
+      'fotografia_path',
+      'fotografiaPath',
+      'fotografia',
+      'foto_personal_url',
+      'fotoPersonalUrl',
+      'foto_personal',
+      'fotoPersonal',
+      'foto_perfil_url',
+      'fotoPerfilUrl',
+      'foto_perfil',
+      'fotoPerfil',
+      'photo_url',
+      'photoUrl',
+      'photo_path',
+      'photoPath',
+      'photo',
+      'image_url',
+      'imageUrl',
+      'imagen_url',
+      'imagenUrl',
+      'imagen',
+      'avatar_url',
+      'avatarUrl',
+      'avatar',
+      'profile_photo_url',
+      'profilePhotoUrl',
+      'profile_photo_path',
+      'profilePhotoPath',
+      'profile_photo',
+      'profilePhoto',
+      'url',
+      'path',
+      'ruta',
+    ]) {
+      final value = _photoPathFrom(map[key]);
+      if (value != null) return value;
+    }
+
+    for (final key in const <String>['user', 'usuario', 'profile', 'perfil']) {
+      final nested = map[key];
+      if (nested is Map || nested is List) {
+        final value = _photoPathFrom(nested);
+        if (value != null) return value;
+      }
+    }
+
+    return null;
+  }
+
+  static String? _nonEmptyText(dynamic value) {
+    final text = value?.toString().trim() ?? '';
+    return text.isEmpty ? null : text;
+  }
+
   static Future<Map<String, String>> _headers() async {
     final token = await AuthService.getToken();
     if (token == null || token.trim().isEmpty) {

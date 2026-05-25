@@ -12,6 +12,7 @@ import '../services/home_resolver_service.dart';
 import '../services/push_service.dart';
 import '../widgets/account_drawer.dart';
 import '../widgets/app_drawer.dart';
+import '../widgets/offline_sync_status_card.dart';
 import '../widgets/safe_osm_tile_layer.dart';
 import 'home/controllers/home_tracking_controller.dart';
 import 'login_screen.dart';
@@ -443,6 +444,12 @@ class _HomeDelegacionesScreenState extends State<HomeDelegacionesScreen>
                       setState(() => _signalsEnabled = !_signalsEnabled);
                     },
                   ),
+                ),
+                const Positioned(
+                  top: 84,
+                  left: 12,
+                  right: 12,
+                  child: OfflineSyncStatusCard(),
                 ),
                 Positioned(
                   left: 12,

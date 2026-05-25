@@ -10,8 +10,15 @@ class ActividadRef {
 
   factory ActividadRef.fromJson(Map<String, dynamic> json) {
     return ActividadRef(
-      id: _asInt(json['id']),
-      nombre: _asNullableString(json['nombre']) ?? '',
+      id: _asInt(
+        json['id'] ??
+            json['value'] ??
+            json['unidad_id'] ??
+            json['unidad_org_id'],
+      ),
+      nombre:
+          _asNullableString(json['nombre'] ?? json['name'] ?? json['label']) ??
+          '',
     );
   }
 

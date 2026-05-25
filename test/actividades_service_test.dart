@@ -259,6 +259,10 @@ void main() {
   });
 
   test('parses fomento metadata from activity catalogs', () {
+    final unidad = ActividadRef.fromJson(const <String, dynamic>{
+      'id': 2,
+      'name': 'Delegaciones',
+    });
     final categoria = ActividadCategoria.fromJson(const <String, dynamic>{
       'id': 10,
       'nombre': 'CAPACITACIONES',
@@ -273,6 +277,7 @@ void main() {
       ],
     });
 
+    expect(unidad.nombre, 'Delegaciones');
     expect(categoria.requiereFomentoCulturaVial, isTrue);
     expect(categoria.slug, 'capacitaciones');
     expect(subcategoria.programasFomento.single.id, 7);
