@@ -75,6 +75,8 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
   final _personasDetenidasCtrl = TextEditingController(text: '0');
   final _elementosCtrl = TextEditingController();
   final _patrullasCtrl = TextEditingController();
+  final _fomentoEscuelaCtrl = TextEditingController();
+  final _fomentoDomicilioCtrl = TextEditingController();
   final _fomentoNinasCtrl = TextEditingController(text: '0');
   final _fomentoNinosCtrl = TextEditingController(text: '0');
   final _fomentoAdolescentesMujeresCtrl = TextEditingController(text: '0');
@@ -127,6 +129,8 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
             'personas_detenidas': _personasDetenidasCtrl,
             'elementos': _elementosCtrl,
             'patrullas': _patrullasCtrl,
+            'fomento_escuela': _fomentoEscuelaCtrl,
+            'fomento_domicilio': _fomentoDomicilioCtrl,
             'fomento_ninas': _fomentoNinasCtrl,
             'fomento_ninos': _fomentoNinosCtrl,
             'fomento_adolescentes_mujeres': _fomentoAdolescentesMujeresCtrl,
@@ -173,6 +177,8 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
     _personasDetenidasCtrl.dispose();
     _elementosCtrl.dispose();
     _patrullasCtrl.dispose();
+    _fomentoEscuelaCtrl.dispose();
+    _fomentoDomicilioCtrl.dispose();
     _fomentoNinasCtrl.dispose();
     _fomentoNinosCtrl.dispose();
     _fomentoAdolescentesMujeresCtrl.dispose();
@@ -479,6 +485,9 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
         _firstNonEmpty(<String?>[fields['fomento[$key]'], fields[key]]);
 
     _fomentoProgramaId = int.tryParse(field('programa_id') ?? '');
+    _fomentoEscuelaCtrl.text =
+        field('escuela') ?? field('nombre_institucion') ?? '';
+    _fomentoDomicilioCtrl.text = field('domicilio') ?? '';
     _fomentoNivelEducativo = field('nivel_educativo');
     _fomentoSector = field('sector');
 
@@ -706,6 +715,8 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
     final total = _fomentoTotal();
     return ActividadFomentoDetalle(
       programaId: _fomentoProgramaId,
+      escuela: _trim(_fomentoEscuelaCtrl),
+      domicilio: _trim(_fomentoDomicilioCtrl),
       nivelEducativo: _fomentoNivelEducativo,
       sector: _fomentoSector,
       ninas: _readFomentoCount(_fomentoNinasCtrl),
@@ -869,7 +880,7 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
       _coordenadasCtrl.text = '$lat, $lng';
       _fuenteUbicacionCtrl.text = geo.fuenteUbicacion ?? 'GPS_APP';
       _notaGeoCtrl.text = geo.notaGeo ?? '';
-      _locationStatus = 'Ubicacion capturada correctamente.';
+      _locationStatus = geo.captureSummary;
       _removeFieldError(ActividadValidationTarget.ubicacion);
     });
     _draft.notifyChanged();
@@ -1537,6 +1548,9 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
                     setState(() => _fomentoProgramaId = value);
                     _draft.notifyChanged();
                   },
+                  escuelaController: _fomentoEscuelaCtrl,
+                  domicilioController: _fomentoDomicilioCtrl,
+                  onTextChanged: (_) => _draft.notifyChanged(),
                   nivelEducativo: _fomentoNivelEducativo,
                   onNivelEducativoChanged: (value) {
                     setState(() => _fomentoNivelEducativo = value);

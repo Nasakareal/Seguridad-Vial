@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../widgets/photo_viewer.dart';
 import '../../../widgets/safe_network_image.dart';
 
 class PhotoBlock extends StatelessWidget {
@@ -24,24 +25,11 @@ class PhotoBlock extends StatelessWidget {
             child: AspectRatio(
               aspectRatio: 16 / 9,
               child: InkWell(
-                onTap: () {
-                  showDialog(
-                    context: context,
-                    builder: (_) => Dialog(
-                      insetPadding: const EdgeInsets.all(16),
-                      child: InteractiveViewer(
-                        child: SafeNetworkImage(
-                          url,
-                          fit: BoxFit.contain,
-                          errorBuilder: (_, __, ___) => const Padding(
-                            padding: EdgeInsets.all(24),
-                            child: Text('No se pudo cargar la imagen.'),
-                          ),
-                        ),
-                      ),
-                    ),
-                  );
-                },
+                onTap: () => showPhotoViewer(
+                  context: context,
+                  title: label,
+                  photoUrl: url,
+                ),
                 child: SafeNetworkImage(
                   url,
                   fit: BoxFit.cover,

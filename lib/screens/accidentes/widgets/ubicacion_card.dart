@@ -51,10 +51,11 @@ class _UbicacionCardState extends State<UbicacionCard> {
 
       if (!mounted) return;
 
-      final detalle = (autoFillMessage ?? '').trim().isNotEmpty
-          ? autoFillMessage!.trim()
+      final autoFillDetail = (autoFillMessage ?? '').trim();
+      final detalle = autoFillDetail.isNotEmpty
+          ? '$autoFillDetail ${res.captureSummary}'
           : widget.data.hasCoords
-          ? 'Ubicación lista: ${widget.data.lat}, ${widget.data.lng}'
+          ? res.captureSummary
           : (res.notaGeo?.trim().isNotEmpty ?? false)
           ? res.notaGeo!
           : 'No se pudo obtener ubicación';

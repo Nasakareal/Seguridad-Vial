@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
 import '../../services/auth_service.dart';
+import '../../widgets/photo_viewer.dart';
 import '../../widgets/safe_network_image.dart';
 
 class VehiculoShowScreen extends StatefulWidget {
@@ -208,21 +209,28 @@ class _VehiculoShowScreenState extends State<VehiculoShowScreen> {
       borderRadius: BorderRadius.circular(12),
       child: AspectRatio(
         aspectRatio: 16 / 9,
-        child: SafeNetworkImage(
-          _fotoUrl!,
-          fit: BoxFit.cover,
-          errorBuilder: (_, __, ___) {
-            return Container(
-              color: Colors.black12,
-              child: const Center(child: Text('No se pudo cargar la foto')),
-            );
-          },
-          loadingBuilder: (context, progress) {
-            return Container(
-              color: Colors.black12,
-              child: const Center(child: CircularProgressIndicator()),
-            );
-          },
+        child: InkWell(
+          onTap: () => showPhotoViewer(
+            context: context,
+            title: 'Foto del vehiculo #$_vehiculoId',
+            photoUrl: _fotoUrl!,
+          ),
+          child: SafeNetworkImage(
+            _fotoUrl!,
+            fit: BoxFit.cover,
+            errorBuilder: (_, __, ___) {
+              return Container(
+                color: Colors.black12,
+                child: const Center(child: Text('No se pudo cargar la foto')),
+              );
+            },
+            loadingBuilder: (context, progress) {
+              return Container(
+                color: Colors.black12,
+                child: const Center(child: CircularProgressIndicator()),
+              );
+            },
+          ),
         ),
       ),
     );

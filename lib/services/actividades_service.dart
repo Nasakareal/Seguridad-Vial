@@ -118,6 +118,9 @@ class ActividadUpsertData {
       }
       add('fomento[nivel_educativo]', fomentoData.nivelEducativo);
       add('fomento[sector]', fomentoData.sector);
+      add('fomento[nombre_institucion]', fomentoData.escuela);
+      add('fomento[escuela]', fomentoData.escuela);
+      add('fomento[domicilio]', fomentoData.domicilio);
       for (final field in ActividadFomentoDetalle.numericFields) {
         fields['fomento[${field.key}]'] = fomentoData
             .valueFor(field.key)

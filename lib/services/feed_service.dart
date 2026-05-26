@@ -26,17 +26,35 @@ class FeedUnidad {
   });
 }
 
+class FeedDelegacion {
+  final int id;
+  final String nombre;
+  final String clave;
+  final String municipio;
+
+  const FeedDelegacion({
+    required this.id,
+    required this.nombre,
+    required this.clave,
+    required this.municipio,
+  });
+}
+
 class FeedResponse {
   final List<FeedItem> items;
   final bool puedeFiltrarUnidades;
   final List<int> unidadIdsAplicadas;
   final List<FeedUnidad> unidadesFiltrables;
+  final List<int> delegacionIdsAplicadas;
+  final List<FeedDelegacion> delegacionesFiltrables;
 
   const FeedResponse({
     required this.items,
     required this.puedeFiltrarUnidades,
     required this.unidadIdsAplicadas,
     required this.unidadesFiltrables,
+    required this.delegacionIdsAplicadas,
+    required this.delegacionesFiltrables,
   });
 }
 
@@ -48,6 +66,7 @@ class FeedService {
     required int limit,
     DateTime? date,
     int? unidadId,
+    int? delegacionId,
   }) async {
     final token = await AuthService.getToken();
     if (token == null || token.isEmpty) {
@@ -55,7 +74,13 @@ class FeedService {
     }
 
     final safeLimit = limit.clamp(1, 50);
-    final delegacionFilterId = await AuthService.getFeedDelegacionFilterId();
+    final ownDelegacionFilterId = await AuthService.getFeedDelegacionFilterId();
+    final explicitDelegacionFilterId = delegacionId != null && delegacionId > 0
+        ? delegacionId
+        : null;
+    final delegacionFilterId =
+        explicitDelegacionFilterId ?? ownDelegacionFilterId;
+    final useExactClientDelegacionFilter = explicitDelegacionFilterId == null;
     final delegacionFilterContext = await _feedDelegacionContext(
       delegacionFilterId,
     );
@@ -102,6 +127,8 @@ class FeedService {
         puedeFiltrarUnidades: false,
         unidadIdsAplicadas: <int>[],
         unidadesFiltrables: <FeedUnidad>[],
+        delegacionIdsAplicadas: <int>[],
+        delegacionesFiltrables: <FeedDelegacion>[],
       );
     }
 
@@ -115,7 +142,8 @@ class FeedService {
             FeedItem.fromJson(e),
             delegacionFilterContext,
           );
-          if (_isAllowedByDelegacionFilter(item, delegacionFilterId)) {
+          if (!useExactClientDelegacionFilter ||
+              _isAllowedByDelegacionFilter(item, delegacionFilterId)) {
             out.add(item);
           }
         }
@@ -135,6 +163,10 @@ class FeedService {
       decoded['unidades_filtrables'],
       fallbackIds: unidadIds,
     );
+    final delegacionIds = _parseIdList(decoded['delegacion_ids_aplicadas']);
+    final delegacionesFiltrables = _parseDelegacionesFiltrables(
+      decoded['delegaciones_filtrables'],
+    );
 
     final withDelegaciones = await _hydrateDelegacionesFromUsers(out);
     final items = await _hydrateCarreterasFotos(withDelegaciones, date: date);
@@ -144,6 +176,8 @@ class FeedService {
       puedeFiltrarUnidades: decoded['puede_filtrar_unidades'] == true,
       unidadIdsAplicadas: unidadIds.toSet().toList()..sort(),
       unidadesFiltrables: unidadesFiltrables,
+      delegacionIdsAplicadas: delegacionIds.toSet().toList()..sort(),
+      delegacionesFiltrables: delegacionesFiltrables,
     );
   }
 
@@ -449,6 +483,55 @@ class FeedService {
 
     unidades.sort((a, b) => a.id.compareTo(b.id));
     return unidades;
+  }
+
+  static List<int> _parseIdList(dynamic raw) {
+    final ids = <int>[];
+
+    if (raw is List) {
+      for (final value in raw) {
+        final id = int.tryParse('${value ?? ''}');
+        if (id != null && id > 0) ids.add(id);
+      }
+    }
+
+    return ids;
+  }
+
+  static List<FeedDelegacion> _parseDelegacionesFiltrables(dynamic raw) {
+    final delegaciones = <FeedDelegacion>[];
+
+    if (raw is List) {
+      for (final value in raw) {
+        if (value is! Map) continue;
+
+        final id = int.tryParse('${value['id'] ?? ''}');
+        if (id == null || id <= 0) continue;
+
+        final nombre =
+            _readText(
+              value['nombre_con_clave'] ??
+                  value['nombreConClave'] ??
+                  value['nombre'] ??
+                  value['name'],
+            ) ??
+            'Delegación $id';
+        final clave = _readText(value['clave']) ?? '';
+        final municipio = _readText(value['municipio']) ?? '';
+
+        delegaciones.add(
+          FeedDelegacion(
+            id: id,
+            nombre: nombre,
+            clave: clave,
+            municipio: municipio,
+          ),
+        );
+      }
+    }
+
+    delegaciones.sort((a, b) => a.nombre.compareTo(b.nombre));
+    return delegaciones;
   }
 
   static String _fallbackUnidadNombre(int id) {

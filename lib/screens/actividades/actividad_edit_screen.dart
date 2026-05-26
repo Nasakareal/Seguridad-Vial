@@ -67,6 +67,8 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
   final _personasDetenidasCtrl = TextEditingController();
   final _elementosCtrl = TextEditingController();
   final _patrullasCtrl = TextEditingController();
+  final _fomentoEscuelaCtrl = TextEditingController();
+  final _fomentoDomicilioCtrl = TextEditingController();
   final _fomentoNinasCtrl = TextEditingController(text: '0');
   final _fomentoNinosCtrl = TextEditingController(text: '0');
   final _fomentoAdolescentesMujeresCtrl = TextEditingController(text: '0');
@@ -134,6 +136,8 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
     _personasDetenidasCtrl.dispose();
     _elementosCtrl.dispose();
     _patrullasCtrl.dispose();
+    _fomentoEscuelaCtrl.dispose();
+    _fomentoDomicilioCtrl.dispose();
     _fomentoNinasCtrl.dispose();
     _fomentoNinosCtrl.dispose();
     _fomentoAdolescentesMujeresCtrl.dispose();
@@ -223,6 +227,8 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
 
   void _fillFomentoControllers(ActividadFomentoDetalle? fomento) {
     _fomentoProgramaId = fomento?.programaId;
+    _fomentoEscuelaCtrl.text = fomento?.escuela ?? '';
+    _fomentoDomicilioCtrl.text = fomento?.domicilio ?? '';
     _fomentoNivelEducativo = fomento?.nivelEducativo;
     _fomentoSector = fomento?.sector;
     _fomentoNinasCtrl.text = (fomento?.ninas ?? 0).toString();
@@ -442,6 +448,8 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
     final total = _fomentoTotal();
     return ActividadFomentoDetalle(
       programaId: _fomentoProgramaId,
+      escuela: _trim(_fomentoEscuelaCtrl),
+      domicilio: _trim(_fomentoDomicilioCtrl),
       nivelEducativo: _fomentoNivelEducativo,
       sector: _fomentoSector,
       ninas: _readFomentoCount(_fomentoNinasCtrl),
@@ -1260,6 +1268,11 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
                     programaId: _fomentoProgramaId,
                     onProgramaChanged: (value) {
                       setState(() => _fomentoProgramaId = value);
+                    },
+                    escuelaController: _fomentoEscuelaCtrl,
+                    domicilioController: _fomentoDomicilioCtrl,
+                    onTextChanged: (_) {
+                      _clearFieldError(ActividadValidationTarget.fomento);
                     },
                     nivelEducativo: _fomentoNivelEducativo,
                     onNivelEducativoChanged: (value) {

@@ -15,6 +15,7 @@ class AppRoutes {
   static const String settingsPersonalShow = '/settings/personal/show';
   static const String settingsPersonalIncidenciaCreate =
       '/settings/personal/incidencias/create';
+  static const String tutoriales = '/tutoriales';
 
   static const String accidentes = '/accidentes';
   static const String accidentesCreate = '/accidentes/create';

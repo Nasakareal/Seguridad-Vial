@@ -8,6 +8,9 @@ class FomentoCulturaVialPanel extends StatelessWidget {
   final List<ActividadFomentoPrograma> programas;
   final int? programaId;
   final ValueChanged<int?> onProgramaChanged;
+  final TextEditingController escuelaController;
+  final TextEditingController domicilioController;
+  final ValueChanged<String> onTextChanged;
   final String? nivelEducativo;
   final ValueChanged<String?> onNivelEducativoChanged;
   final String? sector;
@@ -21,6 +24,9 @@ class FomentoCulturaVialPanel extends StatelessWidget {
     required this.programas,
     required this.programaId,
     required this.onProgramaChanged,
+    required this.escuelaController,
+    required this.domicilioController,
+    required this.onTextChanged,
     required this.nivelEducativo,
     required this.onNivelEducativoChanged,
     required this.sector,
@@ -85,6 +91,43 @@ class FomentoCulturaVialPanel extends StatelessWidget {
                 ? null
                 : '${programas.length} opción(es) disponibles para la subcategoría seleccionada.',
           ),
+        ),
+        const SizedBox(height: 12),
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final compact = constraints.maxWidth < 620;
+            final escuelaField = TextField(
+              controller: escuelaController,
+              textCapitalization: TextCapitalization.words,
+              onChanged: onTextChanged,
+              decoration: _dec('Escuela / institución'),
+            );
+            final domicilioField = TextField(
+              controller: domicilioController,
+              textCapitalization: TextCapitalization.words,
+              onChanged: onTextChanged,
+              decoration: _dec('Domicilio'),
+            );
+
+            if (compact) {
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  escuelaField,
+                  const SizedBox(height: 12),
+                  domicilioField,
+                ],
+              );
+            }
+
+            return Row(
+              children: [
+                Expanded(child: escuelaField),
+                const SizedBox(width: 10),
+                Expanded(child: domicilioField),
+              ],
+            );
+          },
         ),
         const SizedBox(height: 12),
         Row(

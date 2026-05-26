@@ -424,6 +424,51 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                   );
                                 },
                               ),
+                              ValueListenableBuilder<int?>(
+                                valueListenable: _feedCtrl.selectedUnidadId,
+                                builder: (context, selectedUnidadId, _) {
+                                  if (selectedUnidadId !=
+                                      AuthService.unidadDelegacionesId) {
+                                    return const SizedBox.shrink();
+                                  }
+
+                                  return ValueListenableBuilder<
+                                    List<FeedDelegacion>
+                                  >(
+                                    valueListenable:
+                                        _feedCtrl.delegacionesDisponibles,
+                                    builder: (context, delegaciones, __) {
+                                      if (delegaciones.isEmpty) {
+                                        return const SizedBox.shrink();
+                                      }
+
+                                      return ValueListenableBuilder<int?>(
+                                        valueListenable:
+                                            _feedCtrl.selectedDelegacionId,
+                                        builder: (context, selectedId, ___) {
+                                          return Padding(
+                                            padding: const EdgeInsets.only(
+                                              top: 10,
+                                            ),
+                                            child: _FeedDelegacionFilter(
+                                              delegaciones: delegaciones,
+                                              selectedDelegacionId: selectedId,
+                                              onChanged: (delegacionId) async {
+                                                _feedCtrl.setDelegacionFilter(
+                                                  delegacionId,
+                                                );
+                                                await _feedCtrl.load(
+                                                  reset: true,
+                                                );
+                                              },
+                                            ),
+                                          );
+                                        },
+                                      );
+                                    },
+                                  );
+                                },
+                              ),
                               const SizedBox(height: 10),
                             ],
                           ),
@@ -526,6 +571,64 @@ class _FeedUnidadFilter extends StatelessWidget {
               DropdownMenuItem<int>(
                 value: unidad.id,
                 child: Text(unidad.nombre, overflow: TextOverflow.ellipsis),
+              ),
+          ],
+          onChanged: (value) => onChanged(value == 0 ? null : value),
+        ),
+      ),
+    );
+  }
+}
+
+class _FeedDelegacionFilter extends StatelessWidget {
+  final List<FeedDelegacion> delegaciones;
+  final int? selectedDelegacionId;
+  final ValueChanged<int?> onChanged;
+
+  const _FeedDelegacionFilter({
+    required this.delegaciones,
+    required this.selectedDelegacionId,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final unique = <int, FeedDelegacion>{};
+    for (final delegacion in delegaciones) {
+      unique[delegacion.id] = delegacion;
+    }
+    final items = unique.values.toList()
+      ..sort((a, b) => a.nombre.compareTo(b.nombre));
+    final ids = items.map((delegacion) => delegacion.id).toSet();
+    final selected = ids.contains(selectedDelegacionId)
+        ? selectedDelegacionId!
+        : 0;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<int>(
+          isExpanded: true,
+          value: selected,
+          icon: const Icon(Icons.keyboard_arrow_down),
+          items: [
+            const DropdownMenuItem<int>(
+              value: 0,
+              child: Text(
+                'Delegacion padre (todas)',
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            for (final delegacion in items)
+              DropdownMenuItem<int>(
+                value: delegacion.id,
+                child: Text(delegacion.nombre, overflow: TextOverflow.ellipsis),
               ),
           ],
           onChanged: (value) => onChanged(value == 0 ? null : value),

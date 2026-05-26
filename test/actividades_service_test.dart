@@ -293,6 +293,8 @@ void main() {
       personasAlcanzadas: '9',
       fomento: ActividadFomentoDetalle(
         programaId: 7,
+        escuela: 'Primaria Benito Juarez',
+        domicilio: 'Av. Principal 123',
         nivelEducativo: 'PRIMARIA',
         sector: 'CICLISTAS',
         ninas: 3,
@@ -304,6 +306,9 @@ void main() {
     final fields = data.toFields();
 
     expect(fields['fomento[programa_id]'], '7');
+    expect(fields['fomento[nombre_institucion]'], 'Primaria Benito Juarez');
+    expect(fields['fomento[escuela]'], 'Primaria Benito Juarez');
+    expect(fields['fomento[domicilio]'], 'Av. Principal 123');
     expect(fields['fomento[nivel_educativo]'], 'PRIMARIA');
     expect(fields['fomento[sector]'], 'CICLISTAS');
     expect(fields['fomento[ninas]'], '3');

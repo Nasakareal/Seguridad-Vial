@@ -18,5 +18,15 @@ void main() {
       }),
       'https://seguridadvial-mich.com/storage/avatars/elemento.jpg',
     );
+
+    expect(
+      SettingsPersonalService.photoUrlFor(const <String, dynamic>{
+        'foto_principal': <String, dynamic>{
+          'url':
+              'https://seguridadvial-mich.com/personal-fotos/4/archivo-temporal?signature=abc',
+        },
+      }),
+      'https://seguridadvial-mich.com/personal-fotos/4/archivo-temporal?signature=abc',
+    );
   });
 }

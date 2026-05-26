@@ -158,6 +158,16 @@ class AppAccountDrawer extends StatelessWidget {
                         ],
                       ),
                     ),
+                    const SizedBox(height: 12),
+                    const DrawerSectionLabel(label: 'Ayuda'),
+                    DrawerSurface(
+                      child: DrawerActionTile(
+                        icon: Icons.play_circle_outline,
+                        title: 'Tutoriales',
+                        subtitle: 'Videos de ayuda de la app movil',
+                        onTap: () => _goTo(context, AppRoutes.tutoriales),
+                      ),
+                    ),
                     if (summary?.canSeeSettings == true) ...[
                       const SizedBox(height: 12),
                       const DrawerSectionLabel(label: 'Configuración'),

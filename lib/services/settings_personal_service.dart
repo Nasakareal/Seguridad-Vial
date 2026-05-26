@@ -109,6 +109,8 @@ class SettingsPersonalService {
     for (final key in const <String>[
       'foto_url',
       'fotoUrl',
+      'foto_principal',
+      'fotoPrincipal',
       'foto_path',
       'fotoPath',
       'foto',

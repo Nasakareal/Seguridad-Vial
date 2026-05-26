@@ -6,6 +6,7 @@ import '../../services/settings_personal_service.dart';
 import '../../services/tracking_service.dart';
 import '../../widgets/account_drawer.dart';
 import '../../widgets/permission_guard.dart';
+import '../../widgets/photo_viewer.dart';
 import '../../widgets/safe_network_image.dart';
 import '../login_screen.dart';
 
@@ -336,16 +337,25 @@ class _PersonalShowScreenState extends State<PersonalShowScreen> {
       );
     }
 
-    if (photoUrl.trim().isEmpty) return fallback();
+    final url = photoUrl.trim();
+    if (url.isEmpty) return fallback();
 
-    return ClipOval(
-      child: SafeNetworkImage(
-        photoUrl,
-        width: 60,
-        height: 60,
-        fit: BoxFit.cover,
-        errorBuilder: (_, __, ___) => fallback(),
-        loadingBuilder: (context, progress) => fallback(),
+    return Tooltip(
+      message: 'Ver foto',
+      child: InkWell(
+        customBorder: const CircleBorder(),
+        onTap: () =>
+            showPhotoViewer(context: context, title: name, photoUrl: url),
+        child: ClipOval(
+          child: SafeNetworkImage(
+            url,
+            width: 60,
+            height: 60,
+            fit: BoxFit.cover,
+            errorBuilder: (_, __, ___) => fallback(),
+            loadingBuilder: (context, progress) => fallback(),
+          ),
+        ),
       ),
     );
   }

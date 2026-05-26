@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../models/actividad.dart';
 import '../../services/actividad_share_service.dart';
 import '../../services/actividades_service.dart';
+import '../../widgets/photo_viewer.dart';
 import '../../widgets/safe_network_image.dart';
 import 'widgets/actividad_vehiculo_modal.dart';
 
@@ -133,28 +134,35 @@ class _ActividadShowScreenState extends State<ActividadShowScreen>
             borderRadius: BorderRadius.circular(14),
             child: AspectRatio(
               aspectRatio: 16 / 9,
-              child: SafeNetworkImage(
-                url,
-                fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => Container(
-                  width: 260,
-                  color: Colors.grey.shade200,
-                  child: const Center(
-                    child: Text('No se pudo cargar la imagen.'),
-                  ),
+              child: InkWell(
+                onTap: () => showPhotoViewer(
+                  context: context,
+                  title: 'Foto de actividad ${index + 1}',
+                  photoUrl: url,
                 ),
-                loadingBuilder: (context, progress) {
-                  return Container(
+                child: SafeNetworkImage(
+                  url,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => Container(
                     width: 260,
                     color: Colors.grey.shade200,
-                    alignment: Alignment.center,
-                    child: const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
+                    child: const Center(
+                      child: Text('No se pudo cargar la imagen.'),
                     ),
-                  );
-                },
+                  ),
+                  loadingBuilder: (context, progress) {
+                    return Container(
+                      width: 260,
+                      color: Colors.grey.shade200,
+                      alignment: Alignment.center,
+                      child: const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                    );
+                  },
+                ),
               ),
             ),
           );
@@ -310,6 +318,45 @@ class _ActividadShowScreenState extends State<ActividadShowScreen>
                     ],
                   ),
                 ),
+                if (a.fomentoCulturaVialDetalle != null) ...[
+                  const SizedBox(height: 12),
+                  _card(
+                    title: 'Fomento a la Cultura Vial',
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _kv(
+                          'Programa',
+                          _displayText(
+                            a.fomentoCulturaVialDetalle!.programaNombre,
+                          ),
+                        ),
+                        _kv(
+                          'Escuela / institucion',
+                          _displayText(a.fomentoCulturaVialDetalle!.escuela),
+                        ),
+                        _kv(
+                          'Domicilio',
+                          _displayText(a.fomentoCulturaVialDetalle!.domicilio),
+                        ),
+                        _kv(
+                          'Nivel educativo',
+                          _displayText(
+                            a.fomentoCulturaVialDetalle!.nivelEducativo,
+                          ),
+                        ),
+                        _kv(
+                          'Sector',
+                          _displayText(a.fomentoCulturaVialDetalle!.sector),
+                        ),
+                        _kv(
+                          'Total poblacion atendida',
+                          a.fomentoCulturaVialDetalle!.computedTotal.toString(),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
                 const SizedBox(height: 12),
                 _card(
                   title: 'Vehiculos relacionados',

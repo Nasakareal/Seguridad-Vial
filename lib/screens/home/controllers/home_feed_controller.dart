@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import '../../../models/feed_item.dart';
+import '../../../services/auth_service.dart';
 import '../../../services/feed_service.dart';
 
 class HomeFeedController {
@@ -10,8 +11,11 @@ class HomeFeedController {
   final ValueNotifier<String?> error = ValueNotifier<String?>(null);
   final ValueNotifier<bool> puedeFiltrarUnidades = ValueNotifier<bool>(false);
   final ValueNotifier<int?> selectedUnidadId = ValueNotifier<int?>(null);
+  final ValueNotifier<int?> selectedDelegacionId = ValueNotifier<int?>(null);
   final ValueNotifier<List<FeedUnidad>> unidadesDisponibles =
       ValueNotifier<List<FeedUnidad>>(<FeedUnidad>[]);
+  final ValueNotifier<List<FeedDelegacion>> delegacionesDisponibles =
+      ValueNotifier<List<FeedDelegacion>>(<FeedDelegacion>[]);
 
   final ValueNotifier<DateTime> selectedDate = ValueNotifier<DateTime>(
     DateTime.now(),
@@ -32,6 +36,16 @@ class HomeFeedController {
   void setUnidadFilter(int? unidadId) {
     selectedUnidadId.value = (unidadId != null && unidadId > 0)
         ? unidadId
+        : null;
+
+    if (selectedUnidadId.value != AuthService.unidadDelegacionesId) {
+      selectedDelegacionId.value = null;
+    }
+  }
+
+  void setDelegacionFilter(int? delegacionId) {
+    selectedDelegacionId.value = (delegacionId != null && delegacionId > 0)
+        ? delegacionId
         : null;
   }
 
@@ -54,6 +68,9 @@ class HomeFeedController {
         limit: limit,
         date: onlyDate(selectedDate.value),
         unidadId: selectedUnidadId.value,
+        delegacionId: selectedUnidadId.value == AuthService.unidadDelegacionesId
+            ? selectedDelegacionId.value
+            : null,
       );
       _syncMetadata(response);
       final items = response.items;
@@ -104,6 +121,9 @@ class HomeFeedController {
         limit: nextLimit,
         date: onlyDate(selectedDate.value),
         unidadId: selectedUnidadId.value,
+        delegacionId: selectedUnidadId.value == AuthService.unidadDelegacionesId
+            ? selectedDelegacionId.value
+            : null,
       );
       _syncMetadata(response);
       final items = response.items;
@@ -137,18 +157,30 @@ class HomeFeedController {
     error.dispose();
     puedeFiltrarUnidades.dispose();
     selectedUnidadId.dispose();
+    selectedDelegacionId.dispose();
     unidadesDisponibles.dispose();
+    delegacionesDisponibles.dispose();
     selectedDate.dispose();
     feed.dispose();
   }
 
   void _syncMetadata(FeedResponse response) {
     puedeFiltrarUnidades.value = response.puedeFiltrarUnidades;
-    if (selectedUnidadId.value == null &&
-        response.unidadesFiltrables.isNotEmpty) {
+    if (response.unidadesFiltrables.isNotEmpty) {
       unidadesDisponibles.value = List<FeedUnidad>.from(
         response.unidadesFiltrables,
       );
+    }
+
+    delegacionesDisponibles.value = List<FeedDelegacion>.from(
+      response.delegacionesFiltrables,
+    );
+
+    if (selectedDelegacionId.value != null &&
+        !response.delegacionesFiltrables.any(
+          (delegacion) => delegacion.id == selectedDelegacionId.value,
+        )) {
+      selectedDelegacionId.value = null;
     }
   }
 

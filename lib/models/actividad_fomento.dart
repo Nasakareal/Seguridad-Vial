@@ -62,6 +62,8 @@ class ActividadFomentoDetalle {
 
   final int? programaId;
   final String? programaNombre;
+  final String? escuela;
+  final String? domicilio;
   final String? nivelEducativo;
   final String? sector;
   final int ninas;
@@ -77,6 +79,8 @@ class ActividadFomentoDetalle {
   const ActividadFomentoDetalle({
     this.programaId,
     this.programaNombre,
+    this.escuela,
+    this.domicilio,
     this.nivelEducativo,
     this.sector,
     this.ninas = 0,
@@ -98,6 +102,10 @@ class ActividadFomentoDetalle {
       programaNombre:
           _asNullableString(json['programa_nombre']) ??
           _asNestedNullableString(json['programa']),
+      escuela:
+          _asNullableString(json['escuela']) ??
+          _asNullableString(json['nombre_institucion']),
+      domicilio: _asNullableString(json['domicilio']),
       nivelEducativo: _asNullableString(json['nivel_educativo']),
       sector: _asNullableString(json['sector']),
       ninas: _asInt(json['ninas']),
@@ -147,6 +155,9 @@ class ActividadFomentoDetalle {
   Map<String, dynamic> toJson() => {
     'programa_id': programaId,
     'programa_nombre': programaNombre,
+    'escuela': escuela,
+    'nombre_institucion': escuela,
+    'domicilio': domicilio,
     'nivel_educativo': nivelEducativo,
     'sector': sector,
     'ninas': ninas,
