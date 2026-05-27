@@ -46,11 +46,13 @@ class _AccidentesScreenState extends State<AccidentesScreen>
   bool _busy = false;
   bool _canCreateHechos = false;
   bool _canChooseUnidadFiltro = false;
+  bool _showTodasUnidadFiltro = false;
   int _unidadFiltroId = 1;
   int? _delegacionFiltroId;
   String _estadoFiltro = _estadoTodos;
   HechoEditAccess _editAccess = HechoEditAccess.none;
 
+  static const int _unidadTodasId = 0;
   static const int _unidadSiniestrosId = 1;
   static const int _soloDelegacionesConHechosId = -1;
   static const String _estadoTodos = 'todos';
@@ -105,14 +107,21 @@ class _AccidentesScreenState extends State<AccidentesScreen>
   }
 
   Future<void> _bootstrapFiltrosHechos() async {
-    final canChooseUnidad = await AuthService.hasFullOperationalAccess();
     final unidadId = await AuthService.getUnidadId();
     final isDelegaciones = await AuthService.isDelegacionesUser();
+    final isSiniestrosSubdirector =
+        unidadId == _unidadSiniestrosId &&
+        await AuthService.hasRoleName('Subdirector');
+    final canChooseUnidad =
+        await AuthService.hasFullOperationalAccess() || isSiniestrosSubdirector;
 
     if (!mounted) return;
     setState(() {
       _canChooseUnidadFiltro = canChooseUnidad;
-      if (!canChooseUnidad) {
+      _showTodasUnidadFiltro = isSiniestrosSubdirector;
+      if (isSiniestrosSubdirector) {
+        _unidadFiltroId = _unidadTodasId;
+      } else if (!canChooseUnidad) {
         _unidadFiltroId = isDelegaciones
             ? AuthService.unidadDelegacionesId
             : (unidadId == AuthService.unidadDelegacionesId
@@ -314,6 +323,9 @@ class _AccidentesScreenState extends State<AccidentesScreen>
   }
 
   String _unidadFiltroLabel() {
+    if (_unidadFiltroId == _unidadTodasId) {
+      return 'Todas';
+    }
     if (_unidadFiltroId == AuthService.unidadDelegacionesId) {
       return 'Delegaciones';
     }
@@ -415,6 +427,11 @@ class _AccidentesScreenState extends State<AccidentesScreen>
 
   List<Map<String, dynamic>> _hechosFiltrados() {
     var list = _hechos.where((hecho) {
+      if (_unidadFiltroId == _unidadTodasId) {
+        return _unidadOrgId(hecho) == _unidadSiniestrosId ||
+            _esHechoDelegaciones(hecho);
+      }
+
       if (_unidadFiltroId == AuthService.unidadDelegacionesId) {
         return _esHechoDelegaciones(hecho);
       }
@@ -839,8 +856,14 @@ class _AccidentesScreenState extends State<AccidentesScreen>
           const SizedBox(height: 12),
           if (_canChooseUnidadFiltro)
             SegmentedButton<int>(
-              segments: const [
-                ButtonSegment<int>(
+              segments: [
+                if (_showTodasUnidadFiltro)
+                  const ButtonSegment<int>(
+                    value: _unidadTodasId,
+                    label: Text('Todas'),
+                    icon: Icon(Icons.all_inclusive),
+                  ),
+                const ButtonSegment<int>(
                   value: _unidadSiniestrosId,
                   label: Text('Siniestros'),
                   icon: Icon(Icons.car_crash),

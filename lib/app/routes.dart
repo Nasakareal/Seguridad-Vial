@@ -16,6 +16,8 @@ class AppRoutes {
   static const String settingsPersonalIncidenciaCreate =
       '/settings/personal/incidencias/create';
   static const String tutoriales = '/tutoriales';
+  static const String directorioRedApoyo = '/directorio-red-apoyo';
+  static const String directorioRedApoyoShow = '/directorio-red-apoyo/show';
 
   static const String accidentes = '/accidentes';
   static const String accidentesCreate = '/accidentes/create';

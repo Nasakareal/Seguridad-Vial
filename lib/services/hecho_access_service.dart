@@ -28,8 +28,10 @@ class HechoEditAccess {
   bool canEditHecho(Map<String, dynamic> hecho) {
     if (hechosModuleExcluded) return false;
 
+    final backendEdit = _backendEditOverride(hecho);
+    if (backendEdit != null) return backendEdit;
+
     if (canEditAnyHecho) return true;
-    if (_backendAllowsEdit(hecho)) return true;
 
     if (isDelegacionesUser && canEditDelegacionHechos) {
       final hechoDelegacionId = _delegacionIdFromHecho(hecho);
@@ -46,8 +48,8 @@ class HechoEditAccess {
     return false;
   }
 
-  bool _backendAllowsEdit(Map<String, dynamic> hecho) {
-    if (!hecho.containsKey('puede_editar')) return false;
+  bool? _backendEditOverride(Map<String, dynamic> hecho) {
+    if (!hecho.containsKey('puede_editar')) return null;
     return _boolFrom(hecho['puede_editar']);
   }
 

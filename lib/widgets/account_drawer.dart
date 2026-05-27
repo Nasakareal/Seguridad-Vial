@@ -161,11 +161,27 @@ class AppAccountDrawer extends StatelessWidget {
                     const SizedBox(height: 12),
                     const DrawerSectionLabel(label: 'Ayuda'),
                     DrawerSurface(
-                      child: DrawerActionTile(
-                        icon: Icons.play_circle_outline,
-                        title: 'Tutoriales',
-                        subtitle: 'Videos de ayuda de la app movil',
-                        onTap: () => _goTo(context, AppRoutes.tutoriales),
+                      child: Column(
+                        children: [
+                          DrawerActionTile(
+                            icon: Icons.play_circle_outline,
+                            title: 'Tutoriales',
+                            subtitle: 'Videos de ayuda de la app movil',
+                            onTap: () => _goTo(context, AppRoutes.tutoriales),
+                          ),
+                          Divider(
+                            height: 1,
+                            color: Colors.grey.shade200,
+                            indent: 66,
+                          ),
+                          DrawerActionTile(
+                            icon: Icons.support_agent_outlined,
+                            title: 'Red de apoyo',
+                            subtitle: 'Contactos regionales para pedir apoyo',
+                            onTap: () =>
+                                _goTo(context, AppRoutes.directorioRedApoyo),
+                          ),
+                        ],
                       ),
                     ),
                     if (summary?.canSeeSettings == true) ...[
