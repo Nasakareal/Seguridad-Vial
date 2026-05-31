@@ -396,7 +396,7 @@ class AuthService {
     return _payloadHasRole(payload, 'delegado');
   }
 
-  static Future<bool> isDelegadoLocationTrackingRole() async {
+  static Future<bool> isDelegadoRole() async {
     final role = await getRole();
     if (_roleTextEquals(role, 'delegado')) {
       return true;
@@ -404,6 +404,10 @@ class AuthService {
 
     final payload = await getStoredUserPayload();
     return _payloadHasExactRole(payload, 'delegado');
+  }
+
+  static Future<bool> isDelegadoLocationTrackingRole() async {
+    return isDelegadoRole();
   }
 
   static Future<bool> isAgenteVial() async {

@@ -512,6 +512,34 @@ class AppDrawer extends StatelessWidget {
                         ],
                       ),
 
+                    _DrawerGroup(
+                      icon: Icons.handyman,
+                      label: 'Herramientas',
+                      subtitle: 'Calculadoras de apoyo pericial',
+                      children: [
+                        _DrawerSubItem(
+                          icon: Icons.tire_repair,
+                          label: 'Huella de frenado',
+                          subtitle:
+                              'Calcular velocidad con base a la huella de frenado',
+                          onTap: () => _nav(
+                            context,
+                            AppRoutes.herramientasVelocidadFrenado,
+                          ),
+                        ),
+                        _DrawerSubItem(
+                          icon: Icons.car_repair,
+                          label: 'Deformación de láminas',
+                          subtitle:
+                              'Calcular EES/EBS con perfil de deformación',
+                          onTap: () => _nav(
+                            context,
+                            AppRoutes.herramientasVelocidadDeformacion,
+                          ),
+                        ),
+                      ],
+                    ),
+
                     if (_allowed(perms, permSustento, all: canSeeAllButtons))
                       _DrawerItem(
                         icon: Icons.gavel,
@@ -636,15 +664,6 @@ class _DrawerGroup extends StatelessWidget {
               vertical: 2,
             ),
             childrenPadding: const EdgeInsets.fromLTRB(10, 0, 10, 10),
-            leading: Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                color: const Color(0xFF2563EB).withValues(alpha: .12),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: const Icon(Icons.more_horiz, color: Colors.transparent),
-            ),
             title: Row(
               children: [
                 Container(

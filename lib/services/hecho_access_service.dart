@@ -29,9 +29,9 @@ class HechoEditAccess {
     if (hechosModuleExcluded) return false;
 
     final backendEdit = _backendEditOverride(hecho);
-    if (backendEdit != null) return backendEdit;
+    if (backendEdit == true) return true;
 
-    if (canEditAnyHecho) return true;
+    if (canEditAnyHecho && backendEdit != false) return true;
 
     if (isDelegacionesUser && canEditDelegacionHechos) {
       final hechoDelegacionId = _delegacionIdFromHecho(hecho);
@@ -268,6 +268,7 @@ class HechoAccessService {
     final isDelegacionesPrivileged =
         await AuthService.isDelegacionesHechosPrivilegedRole();
     final isAdministrativo = await AuthService.isAdministrativoRole();
+    final isDelegado = await AuthService.isDelegadoRole();
     final role = (await AuthService.getRole())?.trim().toLowerCase() ?? '';
 
     final canEditAny =
@@ -289,7 +290,7 @@ class HechoAccessService {
           canEditByPermission &&
           !excluded &&
           isDelegaciones &&
-          isAdministrativo,
+          (isAdministrativo || isDelegado),
       isDelegacionesUser: isDelegaciones,
       hechosModuleExcluded: excluded,
       canEditOwnHechos:

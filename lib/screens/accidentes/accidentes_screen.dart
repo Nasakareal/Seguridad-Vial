@@ -109,19 +109,13 @@ class _AccidentesScreenState extends State<AccidentesScreen>
   Future<void> _bootstrapFiltrosHechos() async {
     final unidadId = await AuthService.getUnidadId();
     final isDelegaciones = await AuthService.isDelegacionesUser();
-    final isSiniestrosSubdirector =
-        unidadId == _unidadSiniestrosId &&
-        await AuthService.hasRoleName('Subdirector');
-    final canChooseUnidad =
-        await AuthService.hasFullOperationalAccess() || isSiniestrosSubdirector;
+    final canChooseUnidad = await AuthService.hasFullOperationalAccess();
 
     if (!mounted) return;
     setState(() {
       _canChooseUnidadFiltro = canChooseUnidad;
-      _showTodasUnidadFiltro = isSiniestrosSubdirector;
-      if (isSiniestrosSubdirector) {
-        _unidadFiltroId = _unidadTodasId;
-      } else if (!canChooseUnidad) {
+      _showTodasUnidadFiltro = false;
+      if (!canChooseUnidad) {
         _unidadFiltroId = isDelegaciones
             ? AuthService.unidadDelegacionesId
             : (unidadId == AuthService.unidadDelegacionesId

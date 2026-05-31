@@ -6,6 +6,7 @@ import '../../core/hechos/hecho_capture_status.dart';
 import '../../services/accidentes_service.dart';
 import '../../services/app_version_service.dart';
 import '../../services/auth_service.dart';
+import '../../services/hecho_access_service.dart';
 import '../../services/hecho_share_service.dart';
 import '../../services/reportes_service.dart';
 import '../../services/tracking_service.dart';
@@ -38,6 +39,7 @@ class _SeguimientoHechosScreenState extends State<SeguimientoHechosScreen>
   final Set<int> _eliminando = <int>{};
 
   SeguimientoHechosResponse? _response;
+  HechoEditAccess _editAccess = HechoEditAccess.none;
   bool _loading = true;
   bool _trackingOn = false;
   bool _busy = false;
@@ -122,6 +124,7 @@ class _SeguimientoHechosScreenState extends State<SeguimientoHechosScreen>
     }
 
     try {
+      final editAccess = await HechoAccessService.loadEditAccess();
       final response = await AccidentesService.fetchSeguimientoHechos(
         periodo: _periodo,
         situacion: _situacion,
@@ -133,6 +136,7 @@ class _SeguimientoHechosScreenState extends State<SeguimientoHechosScreen>
       if (!mounted) return;
       setState(() {
         _response = response;
+        _editAccess = editAccess;
         _periodo = response.filters.periodo;
         _situacion = response.filters.situacion;
         _unidadFiltro = response.filters.puedeFiltrarUnidad
@@ -213,6 +217,9 @@ class _SeguimientoHechosScreenState extends State<SeguimientoHechosScreen>
       arguments: {'id': id},
     );
   }
+
+  bool _puedeEditarHecho(Map<String, dynamic> hecho) =>
+      _editAccess.canEditHecho(hecho);
 
   Future<void> _descargarReporte(int hechoId) async {
     if (_descargando.contains(hechoId)) return;
@@ -725,12 +732,10 @@ class _SeguimientoHechosScreenState extends State<SeguimientoHechosScreen>
             deleting:
                 _hechoId(hecho) != null &&
                 _eliminando.contains(_hechoId(hecho)),
-            canEdit: _asBool(hecho['puede_editar']),
+            canEdit: _puedeEditarHecho(hecho),
             canDelete: _asBool(hecho['puede_eliminar']),
             onShow: () => _abrirShow(hecho),
-            onEdit: _asBool(hecho['puede_editar'])
-                ? () => _abrirEdit(hecho)
-                : null,
+            onEdit: _puedeEditarHecho(hecho) ? () => _abrirEdit(hecho) : null,
             onDownload: _hechoId(hecho) == null
                 ? null
                 : () => _descargarReporte(_hechoId(hecho)!),

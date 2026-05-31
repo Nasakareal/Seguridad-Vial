@@ -42,6 +42,11 @@ class AppRoutes {
   static const String sustentoLegalDetalle = '/sustento-legal/detalle';
   static const String sustentoLegalBuscar = '/sustento-legal/buscar';
 
+  static const String herramientasVelocidadFrenado =
+      '/herramientas/velocidad-huella-frenado';
+  static const String herramientasVelocidadDeformacion =
+      '/herramientas/velocidad-deformacion-laminas';
+
   static const String controlUbicacion = '/control-ubicacion';
   static const String gruas = '/gruas';
 

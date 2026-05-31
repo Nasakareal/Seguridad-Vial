@@ -38,6 +38,8 @@ import '../screens/sustento_legal/sustento_legal_home_screen.dart';
 import '../screens/sustento_legal/sustento_legal_categoria_screen.dart';
 import '../screens/sustento_legal/sustento_legal_detalle_screen.dart';
 import '../screens/sustento_legal/sustento_legal_busqueda_screen.dart';
+import '../screens/herramientas/velocidad_huella_frenado_screen.dart';
+import '../screens/herramientas/velocidad_deformacion_laminas_screen.dart';
 
 import '../screens/mapa/mapa_patrullas_screen.dart';
 import '../screens/mapa/mapa_incidencias_screen.dart';
@@ -133,6 +135,10 @@ final Map<String, WidgetBuilder> appRoutesMap = {
       const SustentoLegalDetalleScreen(),
   AppRoutes.sustentoLegalBuscar: (context) =>
       const SustentoLegalBusquedaScreen(),
+  AppRoutes.herramientasVelocidadFrenado: (context) =>
+      const VelocidadHuellaFrenadoScreen(),
+  AppRoutes.herramientasVelocidadDeformacion: (context) =>
+      const VelocidadDeformacionLaminasScreen(),
 
   AppRoutes.controlUbicacion: (context) => const ControlUbicacionScreen(),
   AppRoutes.gruas: (context) => const GruasScreen(),
