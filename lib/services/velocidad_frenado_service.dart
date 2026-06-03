@@ -2,26 +2,42 @@ import 'dart:math' as math;
 
 enum PendienteFrenado { nivel, ascendente, descendente }
 
+enum EstadoLlantasFrenado {
+  noDeterminado,
+  buenas,
+  desgasteMedio,
+  desgastadas,
+  lisas,
+}
+
 class VelocidadFrenadoInput {
   final double distanciaMetros;
   final double coeficienteFriccion;
   final double pendientePorcentaje;
   final PendienteFrenado pendiente;
+  final EstadoLlantasFrenado estadoLlantas;
 
   const VelocidadFrenadoInput({
     required this.distanciaMetros,
     required this.coeficienteFriccion,
     this.pendientePorcentaje = 0,
     this.pendiente = PendienteFrenado.nivel,
+    this.estadoLlantas = EstadoLlantasFrenado.noDeterminado,
   });
 }
 
 class VelocidadFrenadoResult {
+  final double coeficienteFriccionBase;
+  final double coeficienteFriccionAjustado;
+  final double factorLlantas;
   final double factorArrastre;
   final double velocidadMetrosSegundo;
   final double velocidadKilometrosHora;
 
   const VelocidadFrenadoResult({
+    required this.coeficienteFriccionBase,
+    required this.coeficienteFriccionAjustado,
+    required this.factorLlantas,
     required this.factorArrastre,
     required this.velocidadMetrosSegundo,
     required this.velocidadKilometrosHora,
@@ -69,8 +85,12 @@ class VelocidadFrenadoService {
       );
     }
 
+    final factorLlantas = calcularFactorLlantas(input.estadoLlantas);
+    final coeficienteFriccionAjustado =
+        input.coeficienteFriccion * factorLlantas;
+
     final factorArrastre = calcularFactorArrastre(
-      coeficienteFriccion: input.coeficienteFriccion,
+      coeficienteFriccion: coeficienteFriccionAjustado,
       pendientePorcentaje: input.pendientePorcentaje,
       pendiente: input.pendiente,
     );
@@ -87,6 +107,9 @@ class VelocidadFrenadoService {
     );
 
     return VelocidadFrenadoResult(
+      coeficienteFriccionBase: input.coeficienteFriccion,
+      coeficienteFriccionAjustado: coeficienteFriccionAjustado,
+      factorLlantas: factorLlantas,
       factorArrastre: factorArrastre,
       velocidadMetrosSegundo: velocidadMs,
       velocidadKilometrosHora: velocidadMs * 3.6,
@@ -104,6 +127,16 @@ class VelocidadFrenadoService {
       PendienteFrenado.nivel => coeficienteFriccion,
       PendienteFrenado.ascendente => coeficienteFriccion + grado,
       PendienteFrenado.descendente => coeficienteFriccion - grado,
+    };
+  }
+
+  static double calcularFactorLlantas(EstadoLlantasFrenado estado) {
+    return switch (estado) {
+      EstadoLlantasFrenado.noDeterminado => 1,
+      EstadoLlantasFrenado.buenas => 1,
+      EstadoLlantasFrenado.desgasteMedio => 0.9,
+      EstadoLlantasFrenado.desgastadas => 0.8,
+      EstadoLlantasFrenado.lisas => 0.65,
     };
   }
 }

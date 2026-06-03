@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
 import '../services/home_resolver_service.dart';
 import '../services/offline_sync_service.dart';
+import 'home_agente_vial_screen.dart';
 import 'home_agente_upec_screen.dart';
 import 'home_delegaciones_screen.dart';
 import 'home_screen.dart';
@@ -57,19 +58,23 @@ class _LoginScreenState extends State<LoginScreen> {
         await OfflineSyncService.flushPending();
 
         final askLocation = await AuthService.shouldAskLocation();
+        final agenteVialHomeAvailable =
+            await HomeResolverService.isAgenteVialHomeAvailable();
         final agenteUpecHomeAvailable =
             await HomeResolverService.isAgenteUpecHomeAvailable();
         final delegacionesHomeAvailable =
             await HomeResolverService.isDelegacionesPoliciaHomeAvailable();
         final peritoHomeAvailable =
             await HomeResolverService.isPeritoHomeAvailable();
-        final nextHome = agenteUpecHomeAvailable
-            ? const HomeAgenteUpecScreen()
-            : (delegacionesHomeAvailable
-                  ? const HomeDelegacionesScreen()
-                  : (peritoHomeAvailable
-                        ? const HomePeritoScreen()
-                        : const HomeScreen()));
+        final nextHome = agenteVialHomeAvailable
+            ? const HomeAgenteVialScreen()
+            : (agenteUpecHomeAvailable
+                  ? const HomeAgenteUpecScreen()
+                  : (delegacionesHomeAvailable
+                        ? const HomeDelegacionesScreen()
+                        : (peritoHomeAvailable
+                              ? const HomePeritoScreen()
+                              : const HomeScreen())));
 
         if (!mounted) return;
 

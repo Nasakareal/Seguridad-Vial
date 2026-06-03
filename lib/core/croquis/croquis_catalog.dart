@@ -82,7 +82,24 @@ class CroquisCatalog {
     CroquisCatalogCategory(
       key: 'general',
       label: 'General',
-      items: <CroquisCatalogItem>[cardinalPoints],
+      items: <CroquisCatalogItem>[
+        cardinalPoints,
+        iconItem(
+          key: 'poste_doble',
+          label: 'Poste doble',
+          path: const <String>['Poste_doble.png'],
+        ),
+        iconItem(
+          key: 'poste_solo',
+          label: 'Poste solo',
+          path: const <String>['Poste_solo.png'],
+        ),
+        iconItem(
+          key: 'street_light',
+          label: 'Luminaria',
+          path: const <String>['street-light.png'],
+        ),
+      ],
     ),
     CroquisCatalogCategory(
       key: 'semaforos_senalamientos',

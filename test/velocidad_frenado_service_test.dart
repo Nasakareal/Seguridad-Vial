@@ -11,8 +11,27 @@ void main() {
     );
 
     expect(resultado.factorArrastre, closeTo(0.7, 0.0001));
+    expect(resultado.factorLlantas, closeTo(1, 0.0001));
+    expect(resultado.coeficienteFriccionBase, closeTo(0.7, 0.0001));
+    expect(resultado.coeficienteFriccionAjustado, closeTo(0.7, 0.0001));
     expect(resultado.velocidadKilometrosHora, closeTo(59.7, 0.2));
     expect(resultado.velocidadMetrosSegundo, closeTo(16.6, 0.1));
+  });
+
+  test('ajusta la friccion por estado de llantas', () {
+    final resultado = VelocidadFrenadoService.calcular(
+      const VelocidadFrenadoInput(
+        distanciaMetros: 20,
+        coeficienteFriccion: 0.7,
+        estadoLlantas: EstadoLlantasFrenado.desgastadas,
+      ),
+    );
+
+    expect(resultado.factorLlantas, closeTo(0.8, 0.0001));
+    expect(resultado.coeficienteFriccionBase, closeTo(0.7, 0.0001));
+    expect(resultado.coeficienteFriccionAjustado, closeTo(0.56, 0.0001));
+    expect(resultado.factorArrastre, closeTo(0.56, 0.0001));
+    expect(resultado.velocidadKilometrosHora, closeTo(53.4, 0.2));
   });
 
   test('suma pendiente ascendente al factor de arrastre', () {

@@ -742,8 +742,8 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
     if (_redirectingToHecho || !mounted) return;
     if (_isFomentoUser) return;
 
-    final unidadId = await AuthService.getUnidadId();
-    if (!mounted || unidadId == AuthService.unidadCulturaVialId) return;
+    final userCanCaptureHechos = await AuthService.canCreateHechos();
+    if (!mounted || !userCanCaptureHechos) return;
 
     final categoria = _selectedCategoria();
     final subcategoria = _selectedSubcategoria();
@@ -752,7 +752,7 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
     final shouldRedirect = ActividadesService.shouldRedirectC5iReportToHecho(
       categoriaNombre: categoria.nombre,
       subcategoriaNombre: subcategoria.nombre,
-      userCanCaptureHechos: unidadId != AuthService.unidadCulturaVialId,
+      userCanCaptureHechos: userCanCaptureHechos,
     );
     if (!shouldRedirect) return;
 

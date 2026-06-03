@@ -29,6 +29,8 @@ class AuthService {
   static const int unidadCulturaVialId = 6;
   static const String locationTrackingIntervalDefault = 'default';
   static const String locationTrackingIntervalExtended = 'extended';
+  static const String locationTrackingIntervalVialidadesUrbanas =
+      'vialidades_urbanas';
   static const String locationTrackingIntervalHourly = 'hourly';
 
   static String get baseUrl => _baseUrl;
@@ -626,11 +628,16 @@ class AuthService {
       return locationTrackingIntervalHourly;
     }
 
+    final isVialidadesUrbanas =
+        unidadId == unidadVialidadesUrbanasId ||
+        _payloadMatchesVialidadesUrbanasStrict(payload);
+    if (isVialidadesUrbanas && await isAgenteVial()) {
+      return locationTrackingIntervalVialidadesUrbanas;
+    }
+
     final isExtendedUnit =
         unidadId == unidadProteccionCarreterasId ||
-        unidadId == unidadVialidadesUrbanasId ||
-        _payloadMatchesCarreterasStrict(payload) ||
-        _payloadMatchesVialidadesUrbanasStrict(payload);
+        _payloadMatchesCarreterasStrict(payload);
 
     return isExtendedUnit
         ? locationTrackingIntervalExtended

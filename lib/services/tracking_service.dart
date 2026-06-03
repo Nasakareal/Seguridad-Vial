@@ -268,26 +268,62 @@ class TrackingService {
 
     final intervalProfile =
         await AuthService.getLocationTrackingIntervalProfile();
-    if (!_shouldSendIosNow(intervalProfile)) return;
+    final wantedInterval = _iosIntervalForSpeed(
+      pos.speed,
+      profile: intervalProfile,
+    );
+    if (!_shouldSendIosNow(intervalProfile, wantedInterval: wantedInterval)) {
+      return;
+    }
 
     final sent = await ls.sendOnce(
       positionOverride: pos,
       requireAlways: requireAlways,
     );
-    if (sent && intervalProfile == AuthService.locationTrackingIntervalHourly) {
+    if (sent && _shouldTrackIosSentAt(intervalProfile)) {
       _iosLastSentAt = DateTime.now();
     }
   }
 
-  static bool _shouldSendIosNow(String intervalProfile) {
-    if (intervalProfile != AuthService.locationTrackingIntervalHourly) {
+  static Duration _iosIntervalForSpeed(
+    double speedMps, {
+    required String profile,
+  }) {
+    if (profile == AuthService.locationTrackingIntervalHourly) {
+      return TrackingTaskHandler.kHourlyInterval;
+    }
+
+    if (profile == AuthService.locationTrackingIntervalVialidadesUrbanas) {
+      if (!speedMps.isFinite || speedMps < 0) {
+        return TrackingTaskHandler.kVialidadesStillInterval;
+      }
+      if (speedMps <= 0.5) {
+        return TrackingTaskHandler.kVialidadesStillInterval;
+      }
+      return TrackingTaskHandler.kVialidadesMoveInterval;
+    }
+
+    return Duration.zero;
+  }
+
+  static bool _shouldTrackIosSentAt(String intervalProfile) {
+    return intervalProfile == AuthService.locationTrackingIntervalHourly ||
+        intervalProfile ==
+            AuthService.locationTrackingIntervalVialidadesUrbanas;
+  }
+
+  static bool _shouldSendIosNow(
+    String intervalProfile, {
+    required Duration wantedInterval,
+  }) {
+    if (!_shouldTrackIosSentAt(intervalProfile)) {
       return true;
     }
 
     final lastSentAt = _iosLastSentAt;
     if (lastSentAt == null) return true;
 
-    return DateTime.now().difference(lastSentAt) >= const Duration(hours: 1);
+    return DateTime.now().difference(lastSentAt) >= wantedInterval;
   }
 
   static Future<bool> _sendOnceIfGood(

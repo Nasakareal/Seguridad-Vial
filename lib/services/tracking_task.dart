@@ -31,11 +31,19 @@ class TrackingTaskHandler extends TaskHandler {
   static const Duration kExtendedMinInterval = Duration(minutes: 7);
   static const Duration kExtendedStillInterval = Duration(minutes: 10);
   static const Duration kExtendedSlowInterval = Duration(minutes: 9);
+  static const Duration kVialidadesMoveInterval = Duration(minutes: 3);
+  static const Duration kVialidadesStillInterval = Duration(minutes: 10);
   static const Duration kHourlyInterval = Duration(hours: 1);
 
   Duration _intervalForSpeed(double speedMps, {required String profile}) {
     if (profile == AuthService.locationTrackingIntervalHourly) {
       return kHourlyInterval;
+    }
+
+    if (profile == AuthService.locationTrackingIntervalVialidadesUrbanas) {
+      if (!speedMps.isFinite || speedMps < 0) return kVialidadesStillInterval;
+      if (speedMps <= 0.5) return kVialidadesStillInterval;
+      return kVialidadesMoveInterval;
     }
 
     final extended = profile == AuthService.locationTrackingIntervalExtended;
@@ -59,6 +67,10 @@ class TrackingTaskHandler extends TaskHandler {
 
     if (profile == AuthService.locationTrackingIntervalExtended) {
       return kExtendedMinInterval;
+    }
+
+    if (profile == AuthService.locationTrackingIntervalVialidadesUrbanas) {
+      return kVialidadesMoveInterval;
     }
 
     return kMinInterval;

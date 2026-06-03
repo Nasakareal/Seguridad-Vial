@@ -4,6 +4,7 @@ import '../services/auth_service.dart';
 import '../services/home_resolver_service.dart';
 
 import '../screens/welcome_screen.dart';
+import '../screens/home_agente_vial_screen.dart';
 import '../screens/home_agente_upec_screen.dart';
 import '../screens/home_delegaciones_screen.dart';
 import '../screens/home_screen.dart';
@@ -21,6 +22,12 @@ class AuthGate extends StatelessWidget {
     final token = await AuthService.getToken();
     if (token == null || token.trim().isEmpty) {
       return const WelcomeScreen();
+    }
+
+    final agenteVialHome =
+        await HomeResolverService.isAgenteVialHomeAvailable();
+    if (agenteVialHome) {
+      return const HomeAgenteVialScreen();
     }
 
     final agenteUpecHome =

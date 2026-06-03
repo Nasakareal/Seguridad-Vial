@@ -27,11 +27,15 @@ class _VelocidadHuellaFrenadoScreenState
   String _surfaceId = _surfaceOptions.first.id;
   _AbsCondition _absCondition = _AbsCondition.noSeSabe;
   PendienteFrenado _pendiente = PendienteFrenado.nivel;
+  EstadoLlantasFrenado _estadoLlantas = EstadoLlantasFrenado.noDeterminado;
   VelocidadFrenadoResult? _resultado;
   String? _error;
 
   _SurfaceOption get _selectedSurface =>
       _surfaceOptions.firstWhere((item) => item.id == _surfaceId);
+
+  _TireOption get _selectedTireOption =>
+      _tireOptions.firstWhere((item) => item.value == _estadoLlantas);
 
   @override
   void dispose() {
@@ -91,6 +95,7 @@ class _VelocidadHuellaFrenadoScreenState
           coeficienteFriccion: friccion,
           pendientePorcentaje: pendiente,
           pendiente: _pendiente,
+          estadoLlantas: _estadoLlantas,
         ),
       );
 
@@ -111,6 +116,7 @@ class _VelocidadHuellaFrenadoScreenState
       _surfaceId = _surfaceOptions.first.id;
       _absCondition = _AbsCondition.noSeSabe;
       _pendiente = PendienteFrenado.nivel;
+      _estadoLlantas = EstadoLlantasFrenado.noDeterminado;
       _distanciaController.clear();
       _friccionController.clear();
       _pendienteController.text = '0';
@@ -122,6 +128,7 @@ class _VelocidadHuellaFrenadoScreenState
   @override
   Widget build(BuildContext context) {
     final selectedSurface = _selectedSurface;
+    final selectedTireOption = _selectedTireOption;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF6F7FB),
@@ -208,6 +215,32 @@ class _VelocidadHuellaFrenadoScreenState
                           : 'Selecciona una superficie.',
                     ),
                     onChanged: (_) => _clearResult(),
+                  ),
+                  const SizedBox(height: 14),
+                  DropdownButtonFormField<EstadoLlantasFrenado>(
+                    value: _estadoLlantas,
+                    isExpanded: true,
+                    decoration: InputDecoration(
+                      labelText: 'Estado de las llantas',
+                      prefixIcon: const Icon(Icons.tire_repair),
+                      helperText: selectedTireOption.helper,
+                    ),
+                    items: _tireOptions
+                        .map(
+                          (item) => DropdownMenuItem<EstadoLlantasFrenado>(
+                            value: item.value,
+                            child: Text(item.label),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (value) {
+                      if (value == null) return;
+                      setState(() {
+                        _estadoLlantas = value;
+                        _resultado = null;
+                        _error = null;
+                      });
+                    },
                   ),
                   const SizedBox(height: 14),
                   DropdownButtonFormField<_AbsCondition>(
@@ -324,6 +357,7 @@ class _VelocidadHuellaFrenadoScreenState
                 _ResultCard(
                   resultado: _resultado!,
                   absCondition: _absCondition,
+                  estadoLlantas: _estadoLlantas,
                 ),
               ],
               const SizedBox(height: 14),
@@ -457,8 +491,13 @@ class _InputCard extends StatelessWidget {
 class _ResultCard extends StatelessWidget {
   final VelocidadFrenadoResult resultado;
   final _AbsCondition absCondition;
+  final EstadoLlantasFrenado estadoLlantas;
 
-  const _ResultCard({required this.resultado, required this.absCondition});
+  const _ResultCard({
+    required this.resultado,
+    required this.absCondition,
+    required this.estadoLlantas,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -508,14 +547,71 @@ class _ResultCard extends StatelessWidget {
                   label:
                       'Factor ${resultado.factorArrastre.toStringAsFixed(3)}',
                 ),
+                _ResultChip(
+                  label:
+                      'Llantas x${resultado.factorLlantas.toStringAsFixed(2)}',
+                ),
+                _ResultChip(
+                  label:
+                      'Friccion ${resultado.coeficienteFriccionAjustado.toStringAsFixed(3)}',
+                ),
               ],
             ),
             const SizedBox(height: 14),
+            _TireResultNotice(condition: estadoLlantas),
+            const SizedBox(height: 10),
             _AbsResultNotice(condition: absCondition),
           ],
         ),
       ),
     );
+  }
+}
+
+class _TireResultNotice extends StatelessWidget {
+  final EstadoLlantasFrenado condition;
+
+  const _TireResultNotice({required this.condition});
+
+  @override
+  Widget build(BuildContext context) {
+    return switch (condition) {
+      EstadoLlantasFrenado.noDeterminado => const _MessageCard(
+        color: Colors.amber,
+        icon: Icons.info_outline,
+        title: 'Llantas no determinadas',
+        body:
+            'No se ajusto la friccion por llantas. Si el dictamen o inspeccion confirma desgaste, vuelve a calcular con ese estado.',
+      ),
+      EstadoLlantasFrenado.buenas => const _MessageCard(
+        color: Colors.green,
+        icon: Icons.check_circle_outline,
+        title: 'Llantas en buen estado',
+        body:
+            'Se mantiene la friccion base de la superficie porque el estado observado no agrega reduccion.',
+      ),
+      EstadoLlantasFrenado.desgasteMedio => const _MessageCard(
+        color: Colors.orange,
+        icon: Icons.warning_amber,
+        title: 'Llantas con desgaste medio',
+        body:
+            'La app reduce la friccion base en 10% para reflejar menor agarre observado.',
+      ),
+      EstadoLlantasFrenado.desgastadas => const _MessageCard(
+        color: Colors.orange,
+        icon: Icons.warning_amber,
+        title: 'Llantas desgastadas',
+        body:
+            'La app reduce la friccion base en 20% para reflejar perdida de agarre relevante.',
+      ),
+      EstadoLlantasFrenado.lisas => const _MessageCard(
+        color: Colors.red,
+        icon: Icons.dangerous_outlined,
+        title: 'Llantas lisas o en mal estado',
+        body:
+            'La app reduce la friccion base en 35%. Trata este resultado como estimacion sensible y confirma con inspeccion pericial.',
+      ),
+    };
   }
 }
 
@@ -588,11 +684,11 @@ class _FormulaCard extends StatelessWidget {
       title: 'Criterio de cálculo',
       body:
           'Fórmula usada: v = sqrt(2 * g * d * f). En km/h equivale a '
-          'sqrt(254 * distancia * factor). El operativo solo elige la '
-          'superficie; la app asigna el factor sugerido. La pendiente '
-          'ascendente suma al factor y la descendente resta. El resultado es '
-          'orientativo y debe integrarse con medición de campo, condiciones '
-          'reales de superficie y dictamen pericial.',
+          'sqrt(254 * distancia * factor). La app toma la friccion base de '
+          'la superficie, la ajusta por estado de llantas y despues aplica '
+          'la pendiente: ascendente suma al factor y descendente resta. El '
+          'resultado es orientativo y debe integrarse con medicion de campo, '
+          'condiciones reales de superficie y dictamen pericial.',
     );
   }
 }
@@ -670,6 +766,18 @@ class _SurfaceOption {
   });
 }
 
+class _TireOption {
+  final EstadoLlantasFrenado value;
+  final String label;
+  final String helper;
+
+  const _TireOption({
+    required this.value,
+    required this.label,
+    required this.helper,
+  });
+}
+
 const _surfaceOptions = <_SurfaceOption>[
   _SurfaceOption(
     id: 'seleccionar',
@@ -693,6 +801,34 @@ const _surfaceOptions = <_SurfaceOption>[
     label: 'Valor personalizado',
     coefficient: null,
     isCustom: true,
+  ),
+];
+
+const _tireOptions = <_TireOption>[
+  _TireOption(
+    value: EstadoLlantasFrenado.noDeterminado,
+    label: 'No determinado',
+    helper: 'Sin inspeccion de llantas; no ajusta la friccion base.',
+  ),
+  _TireOption(
+    value: EstadoLlantasFrenado.buenas,
+    label: 'Buenas / dibujo normal',
+    helper: 'Con dibujo y estado normal; mantiene la friccion base.',
+  ),
+  _TireOption(
+    value: EstadoLlantasFrenado.desgasteMedio,
+    label: 'Desgaste medio',
+    helper: 'Reduce la friccion base en 10%.',
+  ),
+  _TireOption(
+    value: EstadoLlantasFrenado.desgastadas,
+    label: 'Desgastadas',
+    helper: 'Reduce la friccion base en 20%.',
+  ),
+  _TireOption(
+    value: EstadoLlantasFrenado.lisas,
+    label: 'Lisas o en mal estado',
+    helper: 'Reduce la friccion base en 35%.',
   ),
 ];
 
