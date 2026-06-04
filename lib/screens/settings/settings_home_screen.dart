@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../app/routes.dart';
+import '../../services/administrative_access_service.dart';
 import '../../services/auth_service.dart';
 import '../../services/tracking_service.dart';
 import '../../widgets/account_drawer.dart';
@@ -28,14 +29,15 @@ class _SettingsHomeScreenState extends State<SettingsHomeScreen> {
       await AuthService.refreshCurrentUserAccess();
     } catch (_) {}
 
-    final isSuperadmin = await AuthService.isSuperadmin();
-    final canSeeUsers = isSuperadmin || await AuthService.can('ver usuarios');
-    final canSeePersonal =
-        isSuperadmin || await AuthService.can('ver personal');
+    final access = await AdministrativeAccessService.loadAccess();
 
     return _SettingsAccess(
-      canSeeUsers: canSeeUsers,
-      canSeePersonal: canSeePersonal,
+      canSeeUsers: access.canSeeUsers,
+      canSeePersonal: access.canSeePersonal,
+      canSeeSiniestrosStats: access.canSeeSiniestrosStats,
+      canSeeActividadesStats: access.canSeeActividadesStats,
+      canSeeDelegacionesStats: access.canSeeDelegacionesStats,
+      canSeeVialidadesStats: access.canSeeVialidadesStats,
     );
   }
 
@@ -98,6 +100,34 @@ class _SettingsHomeScreenState extends State<SettingsHomeScreen> {
                   title: 'Personal',
                   subtitle: 'Expedientes e incidencias del personal',
                   onTap: () => _goTo(AppRoutes.settingsPersonal),
+                ),
+              if (access.canSeeSiniestrosStats)
+                _SettingsTile(
+                  icon: Icons.car_crash_outlined,
+                  title: 'Estadísticas de siniestros',
+                  subtitle: 'Indicadores globales, series y hechos filtrados',
+                  onTap: () => _goTo(AppRoutes.estadisticasGlobales),
+                ),
+              if (access.canSeeActividadesStats)
+                _SettingsTile(
+                  icon: Icons.photo_library_outlined,
+                  title: 'Estadísticas de actividades',
+                  subtitle: 'Indicadores, capturas y filtros operativos',
+                  onTap: () => _goTo(AppRoutes.estadisticasActividades),
+                ),
+              if (access.canSeeDelegacionesStats)
+                _SettingsTile(
+                  icon: Icons.fact_check_outlined,
+                  title: 'Estadísticas de delegaciones',
+                  subtitle: 'Conteos, alertas y regionales del corte',
+                  onTap: () => _goTo(AppRoutes.delegacionesExcelRevision),
+                ),
+              if (access.canSeeVialidadesStats)
+                _SettingsTile(
+                  icon: Icons.traffic_outlined,
+                  title: 'Estadísticas de vialidades',
+                  subtitle: 'Resumen diario de Vialidades Urbanas',
+                  onTap: () => _goTo(AppRoutes.estadisticasVialidades),
                 ),
             ];
 
@@ -162,10 +192,18 @@ class _SettingsHomeScreenState extends State<SettingsHomeScreen> {
 class _SettingsAccess {
   final bool canSeeUsers;
   final bool canSeePersonal;
+  final bool canSeeSiniestrosStats;
+  final bool canSeeActividadesStats;
+  final bool canSeeDelegacionesStats;
+  final bool canSeeVialidadesStats;
 
   const _SettingsAccess({
     required this.canSeeUsers,
     required this.canSeePersonal,
+    required this.canSeeSiniestrosStats,
+    required this.canSeeActividadesStats,
+    required this.canSeeDelegacionesStats,
+    required this.canSeeVialidadesStats,
   });
 }
 

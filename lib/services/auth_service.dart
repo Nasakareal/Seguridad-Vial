@@ -645,7 +645,7 @@ class AuthService {
         unidadId == unidadVialidadesUrbanasId ||
         _payloadMatchesVialidadesUrbanasStrict(payload);
     if (isVialidadesUrbanas && await isAgenteVial()) {
-      return locationTrackingIntervalVialidadesUrbanas;
+      return locationTrackingIntervalHourly;
     }
 
     final isExtendedUnit =

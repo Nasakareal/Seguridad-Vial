@@ -118,32 +118,35 @@ void main() {
     );
   });
 
-  test('agente vial uses vialidades home and tracking profile', () async {
-    SharedPreferences.setMockInitialValues(<String, Object>{
-      'auth_role': 'Agente Vial',
-      'auth_role_id': 12,
-      'auth_unidad_id': AuthService.unidadVialidadesUrbanasId,
-      'auth_user_payload': jsonEncode(<String, Object>{
-        'id': 35,
-        'role': <String, Object>{'id': 12, 'name': 'Agente Vial'},
-        'unidad_id': AuthService.unidadVialidadesUrbanasId,
-        'unidad': <String, Object>{
-          'id': AuthService.unidadVialidadesUrbanasId,
-          'nombre': 'PROTECCIÓN EN VIALIDADES URBANAS',
-          'slug': 'vialidades-urbanas',
-        },
-      }),
-    });
+  test(
+    'agente vial uses vialidades home and hourly tracking profile',
+    () async {
+      SharedPreferences.setMockInitialValues(<String, Object>{
+        'auth_role': 'Agente Vial',
+        'auth_role_id': 12,
+        'auth_unidad_id': AuthService.unidadVialidadesUrbanasId,
+        'auth_user_payload': jsonEncode(<String, Object>{
+          'id': 35,
+          'role': <String, Object>{'id': 12, 'name': 'Agente Vial'},
+          'unidad_id': AuthService.unidadVialidadesUrbanasId,
+          'unidad': <String, Object>{
+            'id': AuthService.unidadVialidadesUrbanasId,
+            'nombre': 'PROTECCIÓN EN VIALIDADES URBANAS',
+            'slug': 'vialidades-urbanas',
+          },
+        }),
+      });
 
-    expect(await AuthService.isAgenteVial(), isTrue);
-    expect(await HomeResolverService.isAgenteVialHomeAvailable(), isTrue);
-    expect(await AuthService.canCreateHechos(), isFalse);
-    expect(await AuthService.canShareLocationTracking(), isTrue);
-    expect(
-      await AuthService.getLocationTrackingIntervalProfile(),
-      AuthService.locationTrackingIntervalVialidadesUrbanas,
-    );
-  });
+      expect(await AuthService.isAgenteVial(), isTrue);
+      expect(await HomeResolverService.isAgenteVialHomeAvailable(), isTrue);
+      expect(await AuthService.canCreateHechos(), isFalse);
+      expect(await AuthService.canShareLocationTracking(), isTrue);
+      expect(
+        await AuthService.getLocationTrackingIntervalProfile(),
+        AuthService.locationTrackingIntervalHourly,
+      );
+    },
+  );
 
   test(
     'agente vial can add details to vialidades devices without create permission',
@@ -209,6 +212,10 @@ void main() {
         isTrue,
       );
       expect(await AuthService.canShareLocationTracking(), isFalse);
+      expect(
+        await AuthService.getLocationTrackingIntervalProfile(),
+        AuthService.locationTrackingIntervalDefault,
+      );
     },
   );
 

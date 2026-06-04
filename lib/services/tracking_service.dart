@@ -289,18 +289,9 @@ class TrackingService {
     double speedMps, {
     required String profile,
   }) {
-    if (profile == AuthService.locationTrackingIntervalHourly) {
+    if (profile == AuthService.locationTrackingIntervalHourly ||
+        profile == AuthService.locationTrackingIntervalVialidadesUrbanas) {
       return TrackingTaskHandler.kHourlyInterval;
-    }
-
-    if (profile == AuthService.locationTrackingIntervalVialidadesUrbanas) {
-      if (!speedMps.isFinite || speedMps < 0) {
-        return TrackingTaskHandler.kVialidadesStillInterval;
-      }
-      if (speedMps <= 0.5) {
-        return TrackingTaskHandler.kVialidadesStillInterval;
-      }
-      return TrackingTaskHandler.kVialidadesMoveInterval;
     }
 
     return Duration.zero;

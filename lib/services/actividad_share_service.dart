@@ -5,6 +5,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../models/actividad.dart';
 import 'actividades_service.dart';
 import 'auth_service.dart';
 
@@ -13,9 +14,17 @@ class ActividadShareService {
   static bool _awaitingReturnFromWhatsappText = false;
   static bool _sendingImagesNow = false;
 
-  static Future<void> compartirEnWhatsapp({required int actividadId}) async {
-    final payload = await ActividadesService.fetchShareData(
+  static Future<void> compartirEnWhatsapp({
+    required int actividadId,
+    Actividad? actividad,
+  }) async {
+    var payload = await ActividadesService.fetchShareData(
       actividadId: actividadId,
+    );
+    payload = await _conHoraFallback(
+      payload,
+      actividadId: actividadId,
+      actividad: actividad,
     );
     await _compartirPayload(payload);
   }
@@ -49,7 +58,9 @@ class ActividadShareService {
     }
   }
 
-  static Future<void> _compartirPayload(ActividadNativeShareData payload) async {
+  static Future<void> _compartirPayload(
+    ActividadNativeShareData payload,
+  ) async {
     final texto = payload.message.trim();
     final fotos = payload.media
         .map((e) => ActividadesService.toPublicUrl(e))
@@ -72,6 +83,24 @@ class ActividadShareService {
     }
 
     throw Exception('No hay informacion disponible para compartir.');
+  }
+
+  static Future<ActividadNativeShareData> _conHoraFallback(
+    ActividadNativeShareData payload, {
+    required int actividadId,
+    Actividad? actividad,
+  }) async {
+    final withLocalHora = payload.withHoraFallback(actividad?.hora);
+    if (withLocalHora.hasClockTimeInMessage) {
+      return withLocalHora;
+    }
+
+    try {
+      final full = await ActividadesService.fetchShow(actividadId);
+      return withLocalHora.withHoraFallback(full.hora);
+    } catch (_) {
+      return withLocalHora;
+    }
   }
 
   static Future<void> _abrirTextoEnWhatsapp(String texto) async {

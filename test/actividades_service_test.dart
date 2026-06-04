@@ -306,6 +306,27 @@ void main() {
     expect(subcategoria.programasFomento.single.nombre, 'PEATON SEGURO');
   });
 
+  test('activity share payload adds hour fallback after date', () {
+    final payload = ActividadNativeShareData.fromJson(const <String, dynamic>{
+      'texto': 'ACTIVIDAD\nFecha: 2026-04-25\nMunicipio: MORELIA',
+      'fotos': <String>['foto.jpg'],
+    }).withHoraFallback('09:30:00');
+
+    expect(
+      payload.message,
+      'ACTIVIDAD\nFecha: 2026-04-25\nHora: 09:30\nMunicipio: MORELIA',
+    );
+    expect(payload.media, <String>['foto.jpg']);
+  });
+
+  test('activity share payload does not duplicate existing hour', () {
+    final payload = ActividadNativeShareData.fromJson(const <String, dynamic>{
+      'texto': 'ACTIVIDAD\nFecha: 2026-04-25\nHora: 09:30',
+    }).withHoraFallback('09:30:00');
+
+    expect(payload.message.split('Hora:').length - 1, 1);
+  });
+
   test('sends fomento detail fields using backend names', () {
     const data = ActividadUpsertData(
       actividadCategoriaId: 10,

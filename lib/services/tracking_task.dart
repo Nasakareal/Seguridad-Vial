@@ -31,19 +31,12 @@ class TrackingTaskHandler extends TaskHandler {
   static const Duration kExtendedMinInterval = Duration(minutes: 7);
   static const Duration kExtendedStillInterval = Duration(minutes: 10);
   static const Duration kExtendedSlowInterval = Duration(minutes: 9);
-  static const Duration kVialidadesMoveInterval = Duration(minutes: 3);
-  static const Duration kVialidadesStillInterval = Duration(minutes: 10);
   static const Duration kHourlyInterval = Duration(hours: 1);
 
   Duration _intervalForSpeed(double speedMps, {required String profile}) {
-    if (profile == AuthService.locationTrackingIntervalHourly) {
+    if (profile == AuthService.locationTrackingIntervalHourly ||
+        profile == AuthService.locationTrackingIntervalVialidadesUrbanas) {
       return kHourlyInterval;
-    }
-
-    if (profile == AuthService.locationTrackingIntervalVialidadesUrbanas) {
-      if (!speedMps.isFinite || speedMps < 0) return kVialidadesStillInterval;
-      if (speedMps <= 0.5) return kVialidadesStillInterval;
-      return kVialidadesMoveInterval;
     }
 
     final extended = profile == AuthService.locationTrackingIntervalExtended;
@@ -70,7 +63,7 @@ class TrackingTaskHandler extends TaskHandler {
     }
 
     if (profile == AuthService.locationTrackingIntervalVialidadesUrbanas) {
-      return kVialidadesMoveInterval;
+      return kHourlyInterval;
     }
 
     return kMinInterval;
@@ -150,7 +143,7 @@ class TrackingTaskHandler extends TaskHandler {
 
       final sent = await LocationService(
         apiBase: apiBase,
-      ).sendOnce(positionOverride: pos);
+      ).sendOnce(positionOverride: pos, checkRemoteFlag: false);
 
       if (sent) {
         _lastSentAt = DateTime.now();

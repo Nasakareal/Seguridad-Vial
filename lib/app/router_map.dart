@@ -158,6 +158,8 @@ final Map<String, WidgetBuilder> appRoutesMap = {
       const EstadisticasGlobalesHechosScreen(),
   AppRoutes.estadisticasActividades: (context) =>
       const EstadisticasActividadesHomeScreen(),
+  AppRoutes.estadisticasVialidades: (context) =>
+      const VialidadesUrbanasScreen(statisticsMode: true),
 
   AppRoutes.dictamenes: (context) => const DictamenesScreen(),
   AppRoutes.dictamenesCreate: (context) => const DictamenCreateScreen(),

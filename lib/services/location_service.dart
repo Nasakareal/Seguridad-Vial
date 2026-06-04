@@ -4,6 +4,7 @@ import 'package:geolocator/geolocator.dart';
 
 import 'auth_service.dart';
 import 'delegacion_distance_service.dart';
+import 'location_flag_service.dart';
 import 'offline_sync_service.dart';
 
 class LocationService {
@@ -14,10 +15,19 @@ class LocationService {
   Future<bool> sendOnce({
     Position? positionOverride,
     bool requireAlways = false,
+    bool checkRemoteFlag = true,
   }) async {
     final canShareLocation = await AuthService.canShareLocationTracking();
     if (!canShareLocation) {
       return false;
+    }
+
+    if (checkRemoteFlag) {
+      final enabledByTurnAndCommander =
+          await LocationFlagService.isEnabledForMe();
+      if (!enabledByTurnAndCommander) {
+        return false;
+      }
     }
 
     final ok = await _ensurePermissions(requireAlways: requireAlways);

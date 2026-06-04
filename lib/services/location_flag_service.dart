@@ -13,6 +13,48 @@ class LocationFlagService {
         ('$v'.trim().toLowerCase() == 'true');
   }
 
+  static bool? _readBool(dynamic value) {
+    if (value == null) return null;
+    return _toBool(value);
+  }
+
+  static bool? _readTrackingAllowed(Map<dynamic, dynamic> source) {
+    final direct = _readBool(source['location_tracking_allowed']);
+    if (direct != null) return direct;
+
+    final tracking = source['location_tracking'];
+    if (tracking is Map) {
+      final nested = _readBool(tracking['allowed']);
+      if (nested != null) return nested;
+    }
+
+    for (final key in const <String>['user', 'user_meta', 'data']) {
+      final nested = source[key];
+      if (nested is Map) {
+        final value = _readTrackingAllowed(nested);
+        if (value != null) return value;
+      }
+    }
+
+    return null;
+  }
+
+  static dynamic _readCompartirUbicacion(Map<dynamic, dynamic> source) {
+    if (source['compartir_ubicacion'] != null) {
+      return source['compartir_ubicacion'];
+    }
+
+    for (final key in const <String>['user', 'user_meta', 'data']) {
+      final nested = source[key];
+      if (nested is Map) {
+        final value = _readCompartirUbicacion(nested);
+        if (value != null) return value;
+      }
+    }
+
+    return null;
+  }
+
   static Future<bool> isEnabledForMe() async {
     final token = await AuthService.getToken();
     if (token == null || token.isEmpty) return false;
@@ -26,22 +68,16 @@ class LocationFlagService {
 
     final j = jsonDecode(res.body);
 
-    dynamic v;
+    if (j is Map) {
+      final trackingAllowed = _readTrackingAllowed(j);
+      if (trackingAllowed == false) return false;
 
-    if (j is Map && j['compartir_ubicacion'] != null) {
-      v = j['compartir_ubicacion'];
+      final compartir = _readCompartirUbicacion(j);
+      if (compartir != null) {
+        return _toBool(compartir) && (trackingAllowed ?? true);
+      }
     }
 
-    if (v == null && j is Map && j['user'] is Map) {
-      final u = j['user'] as Map;
-      if (u['compartir_ubicacion'] != null) v = u['compartir_ubicacion'];
-    }
-
-    if (v == null && j is Map && j['data'] is Map) {
-      final d = j['data'] as Map;
-      if (d['compartir_ubicacion'] != null) v = d['compartir_ubicacion'];
-    }
-
-    return _toBool(v);
+    return false;
   }
 }

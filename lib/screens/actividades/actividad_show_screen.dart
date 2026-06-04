@@ -91,7 +91,10 @@ class _ActividadShowScreenState extends State<ActividadShowScreen>
 
     setState(() => _sharing = true);
     try {
-      await ActividadShareService.compartirEnWhatsapp(actividadId: a.id);
+      await ActividadShareService.compartirEnWhatsapp(
+        actividadId: a.id,
+        actividad: a,
+      );
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(

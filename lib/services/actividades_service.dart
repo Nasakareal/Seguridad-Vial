@@ -203,7 +203,111 @@ class ActividadNativeShareData {
     addMedia(source['fotos']);
     addMedia(source['media']);
 
-    return ActividadNativeShareData(message: texto, media: media);
+    return ActividadNativeShareData(
+      message: texto,
+      media: media,
+    ).withHoraFallback(_readShareHora(source, raw));
+  }
+
+  bool get hasClockTimeInMessage => _hasClockTime(message);
+
+  ActividadNativeShareData withHoraFallback(String? rawHora) {
+    final nextMessage = _appendHoraIfMissing(message, rawHora);
+    if (nextMessage == message) return this;
+
+    return ActividadNativeShareData(message: nextMessage, media: media);
+  }
+
+  static String? _readShareHora(
+    Map<String, dynamic> source,
+    Map<String, dynamic> raw,
+  ) {
+    String? readFromMap(Map<dynamic, dynamic>? map) {
+      if (map == null) return null;
+
+      for (final key in const <String>[
+        'hora',
+        'time',
+        'hora_actividad',
+        'actividad_hora',
+      ]) {
+        final value = (map[key] ?? '').toString().trim();
+        if (value.isNotEmpty) return value;
+      }
+
+      for (final key in const <String>['actividad', 'activity']) {
+        final nested = map[key];
+        if (nested is Map) {
+          final value = readFromMap(nested);
+          if (value != null && value.trim().isNotEmpty) return value;
+        }
+      }
+
+      return null;
+    }
+
+    return readFromMap(source) ?? readFromMap(raw);
+  }
+
+  static String _appendHoraIfMissing(String message, String? rawHora) {
+    final text = message.trim();
+    final hora = _formatShareHora(rawHora);
+    if (hora.isEmpty) return text;
+    if (_messageContainsHora(text, hora)) return text;
+
+    if (text.isEmpty) return 'Hora: $hora';
+
+    final lines = text.split(RegExp(r'\r?\n'));
+    final fechaIndex = lines.indexWhere(
+      (line) => line.toLowerCase().contains('fecha'),
+    );
+
+    if (fechaIndex >= 0) {
+      lines.insert(fechaIndex + 1, 'Hora: $hora');
+      return lines.join('\n').trim();
+    }
+
+    return '$text\nHora: $hora';
+  }
+
+  static String _formatShareHora(String? rawHora) {
+    final text = (rawHora ?? '').trim();
+    if (text.isEmpty) return '';
+
+    final match = RegExp(r'(\d{1,2}):([0-5]\d)').firstMatch(text);
+    if (match != null) {
+      final hour = int.tryParse(match.group(1) ?? '');
+      final minute = match.group(2);
+      if (hour != null && hour >= 0 && hour <= 23 && minute != null) {
+        return '${hour.toString().padLeft(2, '0')}:$minute';
+      }
+    }
+
+    return text.length <= 8 ? text : '';
+  }
+
+  static bool _messageContainsHora(String message, String hora) {
+    if (message.isEmpty) return false;
+    if (message.contains(hora)) return true;
+
+    final match = RegExp(r'^0?(\d{1,2}):([0-5]\d)$').firstMatch(hora);
+    if (match != null) {
+      final hour = int.tryParse(match.group(1) ?? '');
+      final minute = match.group(2);
+      if (hour != null && minute != null) {
+        return message.contains('$hour:$minute');
+      }
+    }
+
+    return false;
+  }
+
+  static bool _hasClockTime(String message) {
+    final match = RegExp(r'(\d{1,2}):([0-5]\d)').firstMatch(message);
+    if (match == null) return false;
+
+    final hour = int.tryParse(match.group(1) ?? '');
+    return hour != null && hour >= 0 && hour <= 23;
   }
 }
 

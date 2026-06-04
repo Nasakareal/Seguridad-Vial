@@ -654,6 +654,7 @@ class _ActividadesScreenState extends State<ActividadesScreen>
                               try {
                                 await ActividadShareService.compartirEnWhatsapp(
                                   actividadId: a.id,
+                                  actividad: a,
                                 );
                               } catch (e) {
                                 if (!context.mounted) return;

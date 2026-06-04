@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../app/routes.dart';
+import '../services/administrative_access_service.dart';
 import '../services/auth_service.dart';
 import 'drawer_ui.dart';
 
@@ -52,34 +53,17 @@ class AppAccountDrawer extends StatelessWidget {
         (await AuthService.getUserEmail()) ??
         '';
 
-    var isSuperadmin = await AuthService.isSuperadmin();
-    var canSeeSettings =
-        isSuperadmin ||
-        await AuthService.canAny(const <String>[
-          'ver usuarios',
-          'ver personal',
-        ]);
-    if (!canSeeSettings) {
-      await AuthService.refreshCurrentUserAccess();
-      isSuperadmin = await AuthService.isSuperadmin();
-      canSeeSettings =
-          isSuperadmin ||
-          await AuthService.canAny(const <String>[
-            'ver usuarios',
-            'ver personal',
-          ]);
+    var access = await AdministrativeAccessService.loadAccess();
+    if (!access.canSeeConfigurationMenu) {
+      access = await AdministrativeAccessService.loadAccess(refresh: true);
     }
-    final canSeeDelegacionesExcelRevision =
-        isSuperadmin || await AuthService.isDelegacionesUser();
 
     return _AccountSummary(
       name: name,
       email: email,
       role: role,
       unit: unit,
-      isSuperadmin: isSuperadmin,
-      canSeeSettings: canSeeSettings,
-      canSeeDelegacionesExcelRevision: canSeeDelegacionesExcelRevision,
+      access: access,
     );
   }
 
@@ -184,30 +168,60 @@ class AppAccountDrawer extends StatelessWidget {
                         ],
                       ),
                     ),
-                    if (summary?.canSeeSettings == true) ...[
+                    if (summary?.access.canSeeConfigurationMenu == true) ...[
                       const SizedBox(height: 12),
                       const DrawerSectionLabel(label: 'Configuración'),
                       DrawerSurface(
-                        child: DrawerActionTile(
-                          icon: Icons.settings_outlined,
-                          title: 'Configuraciones',
-                          subtitle: 'Usuarios, personal y catalogos',
-                          onTap: () => _goTo(context, AppRoutes.settings),
-                        ),
-                      ),
-                    ],
-                    if (summary?.canSeeDelegacionesExcelRevision == true) ...[
-                      const SizedBox(height: 12),
-                      const DrawerSectionLabel(label: 'Delegaciones'),
-                      DrawerSurface(
-                        child: DrawerActionTile(
-                          icon: Icons.fact_check_outlined,
-                          title: 'Revisión Excel Delegaciones',
-                          subtitle: 'Conteos, alertas y regionales del corte',
-                          onTap: () => _goTo(
-                            context,
-                            AppRoutes.delegacionesExcelRevision,
-                          ),
+                        child: Column(
+                          children: _withDividers([
+                            DrawerActionTile(
+                              icon: Icons.settings_outlined,
+                              title: 'Configuraciones',
+                              subtitle: 'Usuarios, personal y estadísticas',
+                              onTap: () => _goTo(context, AppRoutes.settings),
+                            ),
+                            if (summary?.access.canSeeSiniestrosStats == true)
+                              DrawerActionTile(
+                                icon: Icons.car_crash_outlined,
+                                title: 'Estadísticas de siniestros',
+                                subtitle: 'Indicadores globales y hechos',
+                                onTap: () => _goTo(
+                                  context,
+                                  AppRoutes.estadisticasGlobales,
+                                ),
+                              ),
+                            if (summary?.access.canSeeActividadesStats == true)
+                              DrawerActionTile(
+                                icon: Icons.photo_library_outlined,
+                                title: 'Estadísticas de actividades',
+                                subtitle: 'Indicadores y capturas filtradas',
+                                onTap: () => _goTo(
+                                  context,
+                                  AppRoutes.estadisticasActividades,
+                                ),
+                              ),
+                            if (summary?.access.canSeeDelegacionesStats == true)
+                              DrawerActionTile(
+                                icon: Icons.fact_check_outlined,
+                                title: 'Estadísticas de delegaciones',
+                                subtitle: 'Conteos, alertas y regionales',
+                                onTap: () => _goTo(
+                                  context,
+                                  AppRoutes.delegacionesExcelRevision,
+                                ),
+                              ),
+                            if (summary?.access.canSeeVialidadesStats == true)
+                              DrawerActionTile(
+                                icon: Icons.traffic_outlined,
+                                title: 'Estadísticas de vialidades',
+                                subtitle:
+                                    'Resumen diario de Vialidades Urbanas',
+                                onTap: () => _goTo(
+                                  context,
+                                  AppRoutes.estadisticasVialidades,
+                                ),
+                              ),
+                          ]),
                         ),
                       ),
                     ],
@@ -238,18 +252,14 @@ class _AccountSummary {
   final String email;
   final String role;
   final String unit;
-  final bool isSuperadmin;
-  final bool canSeeSettings;
-  final bool canSeeDelegacionesExcelRevision;
+  final AdministrativeAccess access;
 
   const _AccountSummary({
     required this.name,
     required this.email,
     required this.role,
     required this.unit,
-    required this.isSuperadmin,
-    required this.canSeeSettings,
-    required this.canSeeDelegacionesExcelRevision,
+    required this.access,
   });
 }
 
@@ -300,4 +310,20 @@ String? _readNestedString(dynamic raw, List<String> keys) {
   }
 
   return null;
+}
+
+List<Widget> _withDividers(List<Widget> children) {
+  if (children.isEmpty) {
+    return const <Widget>[];
+  }
+
+  final items = <Widget>[];
+  for (var i = 0; i < children.length; i++) {
+    if (i > 0) {
+      items.add(Divider(height: 1, color: Colors.grey.shade200, indent: 66));
+    }
+    items.add(children[i]);
+  }
+
+  return items;
 }
