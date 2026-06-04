@@ -133,6 +133,7 @@ class AppDrawer extends StatelessWidget {
     var hasFullOperationalAccess = await AuthService.hasFullOperationalAccess();
     var canReviewCarreteras = await _canReviewCarreteras();
     var canUseConstanciasManejo = await AuthService.canUseConstanciasManejo();
+    var canViewMapaPatrullas = await AuthService.canViewMapaPatrullas();
 
     if (permissions.isEmpty) {
       await AuthService.refreshCurrentUserAccess();
@@ -144,6 +145,7 @@ class AppDrawer extends StatelessWidget {
       hasFullOperationalAccess = await AuthService.hasFullOperationalAccess();
       canReviewCarreteras = await _canReviewCarreteras();
       canUseConstanciasManejo = await AuthService.canUseConstanciasManejo();
+      canViewMapaPatrullas = await AuthService.canViewMapaPatrullas();
     }
 
     return _DrawerAccess(
@@ -155,6 +157,7 @@ class AppDrawer extends StatelessWidget {
       hasFullOperationalAccess: hasFullOperationalAccess,
       canReviewCarreteras: canReviewCarreteras,
       canUseConstanciasManejo: canUseConstanciasManejo,
+      canViewMapaPatrullas: canViewMapaPatrullas,
     );
   }
 
@@ -236,6 +239,13 @@ class AppDrawer extends StatelessWidget {
                 final canSeeEstadisticasActividades = _allowed(
                   perms,
                   permEstadisticasActividades,
+                  all: canSeeAllButtons,
+                );
+                final canSeeMapaPatrullas =
+                    snap.data?.canViewMapaPatrullas ?? false;
+                final canSeeMapaIncidencias = _allowed(
+                  perms,
+                  permMapa,
                   all: canSeeAllButtons,
                 );
 
@@ -487,32 +497,30 @@ class AppDrawer extends StatelessWidget {
                     const SizedBox(height: 12),
                     const DrawerSectionLabel(label: 'Consulta'),
 
-                    if (_allowed(perms, permMapa, all: canSeeAllButtons))
+                    if (canSeeMapaPatrullas || canSeeMapaIncidencias)
                       _DrawerGroup(
                         icon: Icons.map,
                         label: 'Mapa',
                         subtitle: 'Ubicación de patrullas e incidencias',
                         children: [
-                          _DrawerSubItem(
-                            icon: Icons.local_police,
-                            label: 'Mapa patrullas',
-                            subtitle: 'Ubicar personal y patrullas',
-                            onTap: () => _nav(
-                              context,
-                              AppRoutes.mapa,
-                              requiredPerm: permMapa,
+                          if (canSeeMapaPatrullas)
+                            _DrawerSubItem(
+                              icon: Icons.local_police,
+                              label: 'Mapa patrullas',
+                              subtitle: 'Ubicar personal y patrullas',
+                              onTap: () => _nav(context, AppRoutes.mapa),
                             ),
-                          ),
-                          _DrawerSubItem(
-                            icon: Icons.warning_amber,
-                            label: 'Mapa incidencias',
-                            subtitle: 'Visualizar incidencias activas',
-                            onTap: () => _nav(
-                              context,
-                              AppRoutes.mapaIncidencias,
-                              requiredPerm: permMapa,
+                          if (canSeeMapaIncidencias)
+                            _DrawerSubItem(
+                              icon: Icons.warning_amber,
+                              label: 'Mapa incidencias',
+                              subtitle: 'Visualizar incidencias activas',
+                              onTap: () => _nav(
+                                context,
+                                AppRoutes.mapaIncidencias,
+                                requiredPerm: permMapa,
+                              ),
                             ),
-                          ),
                         ],
                       ),
 
@@ -575,6 +583,7 @@ class _DrawerAccess {
   final bool hasFullOperationalAccess;
   final bool canReviewCarreteras;
   final bool canUseConstanciasManejo;
+  final bool canViewMapaPatrullas;
 
   const _DrawerAccess({
     required this.perms,
@@ -585,6 +594,7 @@ class _DrawerAccess {
     required this.hasFullOperationalAccess,
     required this.canReviewCarreteras,
     required this.canUseConstanciasManejo,
+    required this.canViewMapaPatrullas,
   });
 }
 

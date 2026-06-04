@@ -7,6 +7,8 @@ import 'package:flutter/material.dart';
 
 import '../../services/puestas_disposicion_service.dart';
 import '../../services/local_draft_service.dart';
+import '../../services/vehiculo_form_service.dart';
+import '../../widgets/tarjeta_circulacion_scanner_screen.dart';
 
 class PuestaDisposicionCreateScreen extends StatefulWidget {
   const PuestaDisposicionCreateScreen({super.key});
@@ -862,6 +864,75 @@ class _PuestaDisposicionCreateScreenState
     }
   }
 
+  Future<void> _scanTarjetaCirculacion(_VehiculoFields item) async {
+    final raw = await Navigator.push<String>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => const TarjetaCirculacionScannerScreen(),
+      ),
+    );
+    final text = raw?.trim() ?? '';
+    if (text.isEmpty || !mounted) return;
+
+    final parsed = VehiculoFormService.parseTarjetaCirculacionQr(text);
+    final applied = _applyTarjetaCirculacionData(item, parsed);
+
+    if (!mounted) return;
+    if (applied > 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Se llenaron $applied campos desde el QR.')),
+      );
+      return;
+    }
+
+    showDialog<void>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('QR leído'),
+        content: const Text(
+          'No pude identificar campos del vehículo en este QR. Puedes capturar manualmente o compartirnos un ejemplo del texto crudo para ajustar el lector.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cerrar'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  int _applyTarjetaCirculacionData(
+    _VehiculoFields item,
+    VehiculoQrData parsed,
+  ) {
+    var applied = 0;
+
+    bool setText(TextEditingController controller, String? value) {
+      final cleaned = (value ?? '').trim();
+      if (cleaned.isEmpty || controller.text.trim() == cleaned) return false;
+      controller.text = cleaned;
+      return true;
+    }
+
+    final placas = VehiculoFormService.normalizePlacas(parsed.placas ?? '');
+    final serie = VehiculoFormService.normalizeSerie(parsed.serie ?? '');
+    final tipo = (parsed.tipoCarroceria ?? parsed.tipoGeneral ?? '').trim();
+
+    setState(() {
+      if (setText(item.tipo, tipo)) applied += 1;
+      if (setText(item.marca, parsed.marca)) applied += 1;
+      if (setText(item.submarca, parsed.linea)) applied += 1;
+      if (setText(item.modelo, parsed.modelo)) applied += 1;
+      if (setText(item.color, parsed.color)) applied += 1;
+      if (setText(item.placas, placas)) applied += 1;
+      if (setText(item.serie, serie)) applied += 1;
+    });
+
+    if (applied > 0) _markDraftChanged();
+    return applied;
+  }
+
   Future<void> _save() async {
     final isValid = _formKey.currentState?.validate() ?? false;
     if (!isValid) {
@@ -1458,6 +1529,15 @@ class _PuestaDisposicionCreateScreenState
         _markDraftChanged();
       },
       children: [
+        Align(
+          alignment: Alignment.centerLeft,
+          child: OutlinedButton.icon(
+            onPressed: _saving ? null : () => _scanTarjetaCirculacion(item),
+            icon: const Icon(Icons.qr_code_scanner),
+            label: const Text('Escanear tarjeta de circulación'),
+          ),
+        ),
+        const SizedBox(height: 10),
         _field(
           item.tipo,
           'Tipo',

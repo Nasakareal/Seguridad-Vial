@@ -1018,8 +1018,8 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
       clientUuid: _clientUuid,
       actividadCategoriaId: _categoriaId ?? 0,
       actividadSubcategoriaId: _subcategoriaId,
-      fecha: _trim(_fechaCtrl),
-      hora: _trim(_horaCtrl),
+      fecha: _canEditCaptureTimestamp ? _trim(_fechaCtrl) : null,
+      hora: _canEditCaptureTimestamp ? _trim(_horaCtrl) : null,
       lugar: _trim(_lugarCtrl),
       municipio: _trimMunicipio(_municipioCtrl),
       lat: _trim(_latCtrl),
@@ -1069,6 +1069,7 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
         await ActividadesService.validateBeforeSubmitIssues(
           data: payload,
           fotos: List<File>.from(_fotos),
+          requireTimestamp: _canEditCaptureTimestamp,
         );
     if (!mounted) return;
     if (validationIssues.isNotEmpty) {
@@ -1383,62 +1384,66 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
               title: 'Fecha, hora y lugar',
               child: Column(
                 children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _textField(
-                          _fechaCtrl,
-                          'Fecha',
-                          hint: 'YYYY-MM-DD',
-                          readOnly: !_canEditCaptureTimestamp,
-                          validationTarget: ActividadValidationTarget.fecha,
-                          fieldKey: _fechaFieldKey,
+                  if (_canEditCaptureTimestamp) ...[
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _textField(
+                            _fechaCtrl,
+                            'Fecha',
+                            hint: 'YYYY-MM-DD',
+                            validationTarget: ActividadValidationTarget.fecha,
+                            fieldKey: _fechaFieldKey,
+                          ),
                         ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: _textField(
-                          _horaCtrl,
-                          'Hora',
-                          hint: 'HH:mm',
-                          readOnly: !_canEditCaptureTimestamp,
-                          validationTarget: ActividadValidationTarget.hora,
-                          fieldKey: _horaFieldKey,
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: _textField(
+                            _horaCtrl,
+                            'Hora',
+                            hint: 'HH:mm',
+                            validationTarget: ActividadValidationTarget.hora,
+                            fieldKey: _horaFieldKey,
+                          ),
                         ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: OutlinedButton.icon(
-                      onPressed: (_saving || !_canEditCaptureTimestamp)
-                          ? null
-                          : () {
-                              setState(() {
-                                _setNow();
-                                _removeFieldError(
-                                  ActividadValidationTarget.fecha,
-                                );
-                                _removeFieldError(
-                                  ActividadValidationTarget.hora,
-                                );
-                              });
-                              _draft.notifyChanged();
-                            },
-                      icon: const Icon(Icons.access_time),
-                      label: const Text('Usar fecha y hora actual'),
+                      ],
                     ),
-                  ),
-                  if (!_canEditCaptureTimestamp) ...[
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 10),
                     Align(
                       alignment: Alignment.centerLeft,
+                      child: OutlinedButton.icon(
+                        onPressed: _saving
+                            ? null
+                            : () {
+                                setState(() {
+                                  _setNow();
+                                  _removeFieldError(
+                                    ActividadValidationTarget.fecha,
+                                  );
+                                  _removeFieldError(
+                                    ActividadValidationTarget.hora,
+                                  );
+                                });
+                                _draft.notifyChanged();
+                              },
+                        icon: const Icon(Icons.access_time),
+                        label: const Text('Usar fecha y hora actual'),
+                      ),
+                    ),
+                  ] else ...[
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF8FAFC),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: Colors.grey.shade200),
+                      ),
                       child: Text(
                         'Fecha y hora se fijan con el reloj del servidor al guardar.',
                         style: TextStyle(
                           color: Colors.grey.shade700,
-                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
                         ),
                       ),
                     ),

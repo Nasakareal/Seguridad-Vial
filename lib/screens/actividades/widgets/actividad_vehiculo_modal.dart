@@ -6,6 +6,7 @@ import '../../../models/actividad.dart';
 import '../../../services/gruas_catalog_service.dart';
 import '../../../services/vehiculo_form_service.dart';
 import '../../../widgets/antecedente_highlight_tile.dart';
+import '../../../widgets/tarjeta_circulacion_scanner_screen.dart';
 
 Future<ActividadVehiculo?> showActividadVehiculoModal(BuildContext context) {
   return showModalBottomSheet<ActividadVehiculo>(
@@ -127,6 +128,125 @@ class _ActividadVehiculoModalState extends State<_ActividadVehiculoModal> {
         _cargandoGruas = false;
       });
     }
+  }
+
+  Future<void> _scanTarjetaCirculacion() async {
+    final raw = await Navigator.push<String>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => const TarjetaCirculacionScannerScreen(),
+      ),
+    );
+    final text = raw?.trim() ?? '';
+    if (text.isEmpty || !mounted) return;
+
+    final parsed = VehiculoFormService.parseTarjetaCirculacionQr(text);
+    final applied = _applyTarjetaCirculacionData(parsed);
+
+    if (!mounted) return;
+    if (applied > 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Se llenaron $applied campos desde el QR.')),
+      );
+      return;
+    }
+
+    showDialog<void>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('QR leído'),
+        content: const Text(
+          'No pude identificar campos del vehículo en este QR. Puedes capturar manualmente o compartirnos un ejemplo del texto crudo para ajustar el lector.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cerrar'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  int _applyTarjetaCirculacionData(VehiculoQrData parsed) {
+    var applied = 0;
+
+    bool setText(TextEditingController controller, String? value) {
+      final cleaned = (value ?? '').trim();
+      if (cleaned.isEmpty || controller.text.trim() == cleaned) return false;
+      controller.text = cleaned;
+      return true;
+    }
+
+    setState(() {
+      if (setText(_marcaCtrl, parsed.marca)) applied += 1;
+      if (setText(_lineaCtrl, parsed.linea)) applied += 1;
+      if (setText(_modeloCtrl, parsed.modelo)) applied += 1;
+      if (setText(_colorCtrl, parsed.color)) applied += 1;
+      if (setText(
+        _placasCtrl,
+        VehiculoFormService.normalizePlacas(parsed.placas ?? ''),
+      )) {
+        applied += 1;
+      }
+      if (setText(
+        _serieCtrl,
+        VehiculoFormService.normalizeSerie(parsed.serie ?? ''),
+      )) {
+        applied += 1;
+      }
+      if (setText(_tarjetaCtrl, parsed.tarjetaCirculacionNombre)) {
+        applied += 1;
+      }
+
+      final tipoServicio = VehiculoFormService.normalizeTipoServicioPlaca(
+        parsed.tipoServicio,
+      );
+      if ((tipoServicio ?? '').trim().isNotEmpty &&
+          _tipoServicio != tipoServicio) {
+        _tipoServicio = tipoServicio;
+        applied += 1;
+      }
+
+      final estado = parsed.estadoPlacas;
+      if ((estado ?? '').trim().isNotEmpty && _estadoPlacas != estado) {
+        _estadoPlacas = estado;
+        applied += 1;
+      }
+
+      final tipoGeneral = parsed.tipoGeneral;
+      if (_isTipoGeneralDisponible(tipoGeneral) &&
+          _tipoGeneral != tipoGeneral) {
+        _tipoGeneral = tipoGeneral;
+        _carroceria = null;
+        applied += 1;
+      }
+
+      final carroceria = parsed.tipoCarroceria;
+      if (_isCarroceriaDisponible(_tipoGeneral, carroceria) &&
+          _carroceria != carroceria) {
+        _carroceria = carroceria;
+        applied += 1;
+      }
+    });
+
+    return applied;
+  }
+
+  bool _isTipoGeneralDisponible(String? value) {
+    final current = (value ?? '').trim();
+    if (current.isEmpty) return false;
+    return VehiculoTaxonomia.tiposGenerales.any(
+      (item) => item['value'] == current,
+    );
+  }
+
+  bool _isCarroceriaDisponible(String? tipoGeneral, String? carroceria) {
+    final current = (carroceria ?? '').trim();
+    if (current.isEmpty) return false;
+    return VehiculoTaxonomia.carroceriasDeTipoGeneral(
+      tipoGeneral,
+    ).contains(current);
   }
 
   void _submit() {
@@ -295,6 +415,15 @@ class _ActividadVehiculoModalState extends State<_ActividadVehiculoModal> {
                 ],
               ),
               const SizedBox(height: 14),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: OutlinedButton.icon(
+                  onPressed: _scanTarjetaCirculacion,
+                  icon: const Icon(Icons.qr_code_scanner),
+                  label: const Text('Escanear tarjeta de circulación'),
+                ),
+              ),
+              const SizedBox(height: 10),
               TextFormField(
                 controller: _marcaCtrl,
                 decoration: _dec('Marca *', icon: Icons.local_offer),

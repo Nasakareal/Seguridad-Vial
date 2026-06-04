@@ -376,12 +376,14 @@ class ActividadesService {
     required List<File> fotos,
     bool requirePhotos = true,
     bool requireCoords = true,
+    bool requireTimestamp = true,
   }) async {
     final issues = await validateBeforeSubmitIssues(
       data: data,
       fotos: fotos,
       requirePhotos: requirePhotos,
       requireCoords: requireCoords,
+      requireTimestamp: requireTimestamp,
     );
     if (issues.isEmpty) return null;
     return formatValidationIssues(issues);
@@ -392,6 +394,7 @@ class ActividadesService {
     required List<File> fotos,
     bool requirePhotos = true,
     bool requireCoords = true,
+    bool requireTimestamp = true,
   }) async {
     final issues = <ActividadValidationIssue>[];
 
@@ -412,9 +415,9 @@ class ActividadesService {
     }
 
     final fecha = (data.fecha ?? '').trim();
-    if (fecha.isEmpty) {
+    if (requireTimestamp && fecha.isEmpty) {
       add(ActividadValidationTarget.fecha, 'Captura la fecha.');
-    } else if (DateTime.tryParse(fecha) == null) {
+    } else if (fecha.isNotEmpty && DateTime.tryParse(fecha) == null) {
       add(
         ActividadValidationTarget.fecha,
         'La fecha debe tener formato AAAA-MM-DD.',

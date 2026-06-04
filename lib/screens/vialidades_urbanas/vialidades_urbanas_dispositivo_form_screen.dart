@@ -76,13 +76,9 @@ class _VialidadesUrbanasDispositivoFormScreenState
       final isVialidadesUser = await AuthService.isVialidadesUrbanasUser(
         refresh: true,
       );
-      final permission = widget.isEditing
-          ? 'editar operativos vialidades'
-          : 'crear operativos vialidades';
-      final hasFullOperationalAccess =
-          await AuthService.hasFullOperationalAccess();
-      final canAccess =
-          hasFullOperationalAccess || await AuthService.can(permission);
+      final canAccess = widget.isEditing
+          ? await AuthService.canEditOwnVialidadesUrbanasDetalles()
+          : await AuthService.canCreateVialidadesUrbanasDetalles();
 
       if (!isVialidadesUser || !canAccess) {
         throw Exception('No tienes acceso a esta captura operativa.');
@@ -92,6 +88,20 @@ class _VialidadesUrbanasDispositivoFormScreenState
           await VialidadesUrbanasDetallesService.fetchDispositivo(
             dispositivoId: widget.dispositivoId,
           );
+      if (widget.isEditing) {
+        final canEditAll =
+            await AuthService.canEditAllVialidadesUrbanasDetalles();
+        final canEditOwn =
+            await AuthService.canEditOwnVialidadesUrbanasDetalles();
+        final currentUserId = await AuthService.getUserId();
+        final canEditDispositivo =
+            canEditAll ||
+            (canEditOwn && dispositivo.belongsToUser(currentUserId));
+
+        if (!canEditDispositivo) {
+          throw Exception('Solo puedes editar capturas registradas por ti.');
+        }
+      }
 
       if (!mounted) return;
 
@@ -100,7 +110,7 @@ class _VialidadesUrbanasDispositivoFormScreenState
 
       if (widget.isEditing) {
         if (dispositivo.detalles.isEmpty) {
-          _detalles.add(_DetalleDraft.blank());
+          _detalles.add(_blankDetalle());
         } else {
           for (final detalle in dispositivo.detalles) {
             _detalles.add(_DetalleDraft.fromModel(detalle));
@@ -110,7 +120,7 @@ class _VialidadesUrbanasDispositivoFormScreenState
         final portada = dispositivo.fotos.where((foto) => foto.portada);
         _fotoPortadaId = portada.isNotEmpty ? portada.first.id : null;
       } else {
-        _detalles.add(_DetalleDraft.blank());
+        _detalles.add(_blankDetalle());
       }
 
       setState(() {
@@ -178,7 +188,6 @@ class _VialidadesUrbanasDispositivoFormScreenState
     for (var i = 0; i < _detalles.length; i++) {
       final detalle = _detalles[i];
       controllers.addAll({
-        'detalles.$i.tipo': detalle.tipoCtrl,
         'detalles.$i.titulo': detalle.tituloCtrl,
         'detalles.$i.contenido': detalle.contenidoCtrl,
         'detalles.$i.ubicacion': detalle.ubicacionCtrl,
@@ -227,13 +236,9 @@ class _VialidadesUrbanasDispositivoFormScreenState
 
   Map<String, dynamic> _detalleToJson(_DetalleDraft detalle) {
     return <String, dynamic>{
-      'tipo': detalle.tipoCtrl.text,
       'titulo': detalle.tituloCtrl.text,
       'contenido': detalle.contenidoCtrl.text,
       'ubicacion': detalle.ubicacionCtrl.text,
-      'hora': detalle.hora == null
-          ? null
-          : '${detalle.hora!.hour.toString().padLeft(2, '0')}:${detalle.hora!.minute.toString().padLeft(2, '0')}',
     };
   }
 
@@ -242,11 +247,8 @@ class _VialidadesUrbanasDispositivoFormScreenState
     return value.whereType<Map>().map((item) {
       final data = Map<String, dynamic>.from(item);
       return _DetalleDraft(
-        tipoCtrl: TextEditingController(
-          text: (data['tipo'] ?? 'texto').toString(),
-        ),
         tituloCtrl: TextEditingController(
-          text: (data['titulo'] ?? '').toString(),
+          text: _defaultDetalleTitulo(data['titulo']),
         ),
         contenidoCtrl: TextEditingController(
           text: (data['contenido'] ?? '').toString(),
@@ -254,18 +256,8 @@ class _VialidadesUrbanasDispositivoFormScreenState
         ubicacionCtrl: TextEditingController(
           text: (data['ubicacion'] ?? '').toString(),
         ),
-        hora: _parseTime(data['hora']),
       );
     }).toList();
-  }
-
-  TimeOfDay? _parseTime(dynamic value) {
-    final parts = (value ?? '').toString().split(':');
-    if (parts.length < 2) return null;
-    final hour = int.tryParse(parts[0]);
-    final minute = int.tryParse(parts[1]);
-    if (hour == null || minute == null) return null;
-    return TimeOfDay(hour: hour, minute: minute);
   }
 
   List<File> _filesFromPaths(dynamic value) {
@@ -290,6 +282,20 @@ class _VialidadesUrbanasDispositivoFormScreenState
     _draft.notifyChanged();
   }
 
+  String _defaultDetalleTitulo([dynamic current]) {
+    final currentTitle = (current ?? '').toString().trim();
+    if (currentTitle.isNotEmpty) return currentTitle;
+
+    final asunto = _dispositivo?.asunto.trim() ?? '';
+    if (asunto.isNotEmpty) return asunto;
+
+    return _dispositivo?.catalogoNombre.trim() ?? '';
+  }
+
+  _DetalleDraft _blankDetalle() {
+    return _DetalleDraft.blank(titulo: _defaultDetalleTitulo());
+  }
+
   Future<void> _pickPhoto(ImageSource source) async {
     final picked = await _picker.pickImage(
       source: source,
@@ -309,14 +315,14 @@ class _VialidadesUrbanasDispositivoFormScreenState
   }
 
   void _addDetalle() {
-    setState(() => _detalles.add(_DetalleDraft.blank()));
+    setState(() => _detalles.add(_blankDetalle()));
     _attachDraftControllers();
     _markDraftChanged();
   }
 
   void _removeDetalle(int index) {
     if (_detalles.length == 1) {
-      _detalles[index].clear();
+      _detalles[index].clear(titulo: _defaultDetalleTitulo());
       setState(() {});
       _markDraftChanged();
       return;
@@ -325,24 +331,6 @@ class _VialidadesUrbanasDispositivoFormScreenState
     final draft = _detalles.removeAt(index);
     draft.dispose();
     setState(() {});
-    _markDraftChanged();
-  }
-
-  Future<void> _pickDetalleHora(_DetalleDraft detalle) async {
-    final initial = detalle.hora ?? const TimeOfDay(hour: 8, minute: 0);
-    final picked = await showTimePicker(
-      context: context,
-      initialTime: initial,
-      builder: (context, child) {
-        return MediaQuery(
-          data: MediaQuery.of(context).copyWith(alwaysUse24HourFormat: true),
-          child: child!,
-        );
-      },
-    );
-
-    if (picked == null) return;
-    setState(() => detalle.hora = picked);
     _markDraftChanged();
   }
 
@@ -378,7 +366,9 @@ class _VialidadesUrbanasDispositivoFormScreenState
 
     final payload = VialidadesUrbanasDetallesFormPayload(
       dispositivoId: widget.dispositivoId,
-      detalles: _detalles.map((detalle) => detalle.toInput()).toList(),
+      detalles: _detalles
+          .map((detalle) => detalle.toInput(titulo: _defaultDetalleTitulo()))
+          .toList(),
       fotosNuevas: List<File>.from(_fotosNuevas),
       eliminarFotoIds: _eliminarFotoIds.toList(),
       fotoPortadaId: _fotoPortadaId,
@@ -537,34 +527,13 @@ class _VialidadesUrbanasDispositivoFormScreenState
                                       ],
                                     ),
                                     const SizedBox(height: 8),
-                                    TextFormField(
-                                      controller: detalle.tipoCtrl,
-                                      decoration: _dec('Tipo'),
+                                    _ReadOnlyRow(
+                                      label: 'Titulo',
+                                      value: _defaultDetalleTitulo(),
                                     ),
-                                    const SizedBox(height: 12),
-                                    TextFormField(
-                                      controller: detalle.tituloCtrl,
-                                      decoration: _dec('Titulo'),
-                                    ),
-                                    const SizedBox(height: 12),
                                     TextFormField(
                                       controller: detalle.ubicacionCtrl,
                                       decoration: _dec('Ubicacion'),
-                                    ),
-                                    const SizedBox(height: 12),
-                                    InkWell(
-                                      onTap: () => _pickDetalleHora(detalle),
-                                      borderRadius: BorderRadius.circular(14),
-                                      child: InputDecorator(
-                                        decoration: _dec('Hora'),
-                                        child: Text(
-                                          detalle.hora == null
-                                              ? 'Seleccionar'
-                                              : _shortHour(
-                                                  '${detalle.hora!.hour.toString().padLeft(2, '0')}:${detalle.hora!.minute.toString().padLeft(2, '0')}',
-                                                ),
-                                        ),
-                                      ),
                                     ),
                                     const SizedBox(height: 12),
                                     TextFormField(
@@ -853,73 +822,49 @@ class _ReadOnlyRow extends StatelessWidget {
 }
 
 class _DetalleDraft {
-  final TextEditingController tipoCtrl;
   final TextEditingController tituloCtrl;
   final TextEditingController contenidoCtrl;
   final TextEditingController ubicacionCtrl;
-  TimeOfDay? hora;
 
   _DetalleDraft({
-    required this.tipoCtrl,
     required this.tituloCtrl,
     required this.contenidoCtrl,
     required this.ubicacionCtrl,
-    required this.hora,
   });
 
-  factory _DetalleDraft.blank() {
+  factory _DetalleDraft.blank({required String titulo}) {
     return _DetalleDraft(
-      tipoCtrl: TextEditingController(text: 'texto'),
-      tituloCtrl: TextEditingController(),
+      tituloCtrl: TextEditingController(text: titulo),
       contenidoCtrl: TextEditingController(),
       ubicacionCtrl: TextEditingController(),
-      hora: null,
     );
   }
 
   factory _DetalleDraft.fromModel(VialidadesUrbanasDispositivoDetalle detalle) {
-    TimeOfDay? parsedTime;
-    final raw = detalle.hora.trim();
-    final parts = raw.split(':');
-    if (parts.length >= 2) {
-      final hour = int.tryParse(parts[0]);
-      final minute = int.tryParse(parts[1]);
-      if (hour != null && minute != null) {
-        parsedTime = TimeOfDay(hour: hour, minute: minute);
-      }
-    }
-
     return _DetalleDraft(
-      tipoCtrl: TextEditingController(
-        text: detalle.tipo.isEmpty ? 'texto' : detalle.tipo,
-      ),
       tituloCtrl: TextEditingController(text: detalle.titulo),
       contenidoCtrl: TextEditingController(text: detalle.contenido),
       ubicacionCtrl: TextEditingController(text: detalle.ubicacion),
-      hora: parsedTime,
     );
   }
 
-  void clear() {
-    tipoCtrl.text = 'texto';
-    tituloCtrl.clear();
+  void clear({required String titulo}) {
+    tituloCtrl.text = titulo;
     contenidoCtrl.clear();
     ubicacionCtrl.clear();
-    hora = null;
   }
 
-  VialidadesUrbanasDetalleInput toInput() {
+  VialidadesUrbanasDetalleInput toInput({required String titulo}) {
     return VialidadesUrbanasDetalleInput(
-      tipo: tipoCtrl.text,
-      titulo: tituloCtrl.text,
+      tipo: 'texto',
+      titulo: titulo,
       contenido: contenidoCtrl.text,
       ubicacion: ubicacionCtrl.text,
-      hora: hora,
+      hora: null,
     );
   }
 
   void dispose() {
-    tipoCtrl.dispose();
     tituloCtrl.dispose();
     contenidoCtrl.dispose();
     ubicacionCtrl.dispose();

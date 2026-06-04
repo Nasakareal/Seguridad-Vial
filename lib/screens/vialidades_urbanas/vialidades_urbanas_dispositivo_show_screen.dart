@@ -33,6 +33,8 @@ class _VialidadesUrbanasDispositivoShowScreenState
   bool _canCreate = false;
   bool _canEdit = false;
   bool _canDelete = false;
+  bool _canEditOwn = false;
+  int? _currentUserId;
 
   String? _error;
   VialidadesUrbanasDispositivo? _dispositivo;
@@ -89,12 +91,15 @@ class _VialidadesUrbanasDispositivoShowScreenState
 
       final hasFullOperationalAccess =
           await AuthService.hasFullOperationalAccess();
-      final canCreate =
-          hasFullOperationalAccess ||
-          await AuthService.can('crear operativos vialidades');
+      final canCreate = await AuthService.canCreateVialidadesUrbanasDetalles();
+      final canEditAll =
+          await AuthService.canEditAllVialidadesUrbanasDetalles();
+      final canEditOwn =
+          await AuthService.canEditOwnVialidadesUrbanasDetalles();
+      final currentUserId = await AuthService.getUserId();
       final canEdit =
-          hasFullOperationalAccess ||
-          await AuthService.can('editar operativos vialidades');
+          canEditAll ||
+          (canEditOwn && dispositivo.belongsToUser(currentUserId));
       final canDelete =
           hasFullOperationalAccess ||
           await AuthService.can('eliminar operativos vialidades');
@@ -105,6 +110,8 @@ class _VialidadesUrbanasDispositivoShowScreenState
         _canCreate = canCreate;
         _canEdit = canEdit;
         _canDelete = canDelete;
+        _canEditOwn = canEditOwn;
+        _currentUserId = currentUserId;
         _loading = false;
       });
     } catch (e) {
@@ -114,6 +121,11 @@ class _VialidadesUrbanasDispositivoShowScreenState
         _error = '$e';
       });
     }
+  }
+
+  bool _canDeleteDetalle(VialidadesUrbanasDispositivoDetalle detalle) {
+    if (_canDelete) return true;
+    return _canEditOwn && detalle.belongsToUser(_currentUserId);
   }
 
   Future<void> _logout(BuildContext context) async {
@@ -370,7 +382,7 @@ class _VialidadesUrbanasDispositivoShowScreenState
                               padding: const EdgeInsets.only(bottom: 10),
                               child: _DetalleCard(
                                 detalle: detalle,
-                                canDelete: _canDelete,
+                                canDelete: _canDeleteDetalle(detalle),
                                 onDelete: () => _deleteDetalle(detalle),
                               ),
                             );

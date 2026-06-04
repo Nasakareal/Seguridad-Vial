@@ -425,6 +425,19 @@ class AuthService {
     return _payloadHasRole(payload, 'agente vial');
   }
 
+  static Future<bool> isResponsableTurno() async {
+    final roleId = await getRoleId();
+    if (roleId == 13) return true;
+
+    final role = await getRole();
+    if (_roleTextMatches(role, 'responsable de turno')) {
+      return true;
+    }
+
+    final payload = await getStoredUserPayload();
+    return _payloadHasRole(payload, 'responsable de turno');
+  }
+
   static Future<bool> hasRoleName(String roleName) async {
     final role = await getRole();
     if (_roleTextMatches(role, roleName)) {
@@ -652,6 +665,62 @@ class AuthService {
     return await canShareLocationTracking();
   }
 
+  static Future<bool> canViewMapaPatrullas({bool refresh = false}) async {
+    if (refresh) {
+      await refreshCurrentUserAccess();
+    }
+
+    if (await hasFullOperationalAccess()) {
+      return true;
+    }
+
+    if (await can('ver mapa')) {
+      return true;
+    }
+
+    return await shouldScopeMapaPatrullasToVialidades();
+  }
+
+  static Future<bool> canManageMapaPatrullas({bool refresh = false}) async {
+    if (refresh) {
+      await refreshCurrentUserAccess();
+    }
+
+    if (await shouldScopeMapaPatrullasToVialidades()) {
+      return false;
+    }
+
+    if (await hasFullOperationalAccess()) {
+      return true;
+    }
+
+    return can('ver mapa');
+  }
+
+  static Future<bool> shouldScopeMapaPatrullasToVialidades({
+    bool refresh = false,
+  }) async {
+    if (refresh) {
+      await refreshCurrentUserAccess();
+    }
+
+    if (await hasFullOperationalAccess()) {
+      return false;
+    }
+
+    final unidadId = await getUnidadId();
+    final payload = await getCurrentUserPayload(refresh: false);
+    final isVialidadesUrbanas =
+        unidadId == unidadVialidadesUrbanasId ||
+        _payloadMatchesVialidadesUrbanasStrict(payload);
+    if (!isVialidadesUrbanas) {
+      return false;
+    }
+
+    return await isResponsableTurno() ||
+        _payloadHasRole(payload, 'responsable de turno');
+  }
+
   static Future<List<String>> getPermissions() async {
     final prefs = await SharedPreferences.getInstance();
     final stored = prefs.getStringList(_permsKey) ?? <String>[];
@@ -691,6 +760,108 @@ class AuthService {
 
     final payload = await getCurrentUserPayload(refresh: false);
     return _payloadMatchesVialidadesUrbanas(payload);
+  }
+
+  static Future<bool> canCreateVialidadesUrbanasDetalles({
+    bool refresh = false,
+  }) async {
+    if (refresh) {
+      await refreshCurrentUserAccess();
+    }
+
+    if (await hasFullOperationalAccess()) {
+      return true;
+    }
+
+    if (await can('crear operativos vialidades')) {
+      return true;
+    }
+
+    final unidadId = await getUnidadId();
+    final payload = await getCurrentUserPayload(refresh: false);
+    final isVialidadesUrbanas =
+        unidadId == unidadVialidadesUrbanasId ||
+        _payloadMatchesVialidadesUrbanasStrict(payload);
+    if (!isVialidadesUrbanas) {
+      return false;
+    }
+
+    return await isAgenteVial() || _payloadHasRole(payload, 'agente vial');
+  }
+
+  static Future<bool> canEditAllVialidadesUrbanasDetalles({
+    bool refresh = false,
+  }) async {
+    if (refresh) {
+      await refreshCurrentUserAccess();
+    }
+
+    if (await hasFullOperationalAccess()) {
+      return true;
+    }
+
+    if (await can('editar operativos vialidades')) {
+      return true;
+    }
+
+    final unidadId = await getUnidadId();
+    final payload = await getCurrentUserPayload(refresh: false);
+    final isVialidadesUrbanas =
+        unidadId == unidadVialidadesUrbanasId ||
+        _payloadMatchesVialidadesUrbanasStrict(payload);
+    if (!isVialidadesUrbanas) {
+      return false;
+    }
+
+    return await isResponsableTurno() ||
+        _payloadHasRole(payload, 'responsable de turno');
+  }
+
+  static Future<bool> canEditOwnVialidadesUrbanasDetalles({
+    bool refresh = false,
+  }) async {
+    if (refresh) {
+      await refreshCurrentUserAccess();
+    }
+
+    if (await canEditAllVialidadesUrbanasDetalles()) {
+      return true;
+    }
+
+    final unidadId = await getUnidadId();
+    final payload = await getCurrentUserPayload(refresh: false);
+    final isVialidadesUrbanas =
+        unidadId == unidadVialidadesUrbanasId ||
+        _payloadMatchesVialidadesUrbanasStrict(payload);
+    if (!isVialidadesUrbanas) {
+      return false;
+    }
+
+    return await isAgenteVial() || _payloadHasRole(payload, 'agente vial');
+  }
+
+  static Future<bool> canEditOwnedVialidadesUrbanasDetalles({
+    required int? creadorId,
+    bool refresh = false,
+  }) async {
+    if (refresh) {
+      await refreshCurrentUserAccess();
+    }
+
+    if (await canEditAllVialidadesUrbanasDetalles()) {
+      return true;
+    }
+
+    if (!await canEditOwnVialidadesUrbanasDetalles()) {
+      return false;
+    }
+
+    final currentUserId = await getUserId();
+    return creadorId != null &&
+        creadorId > 0 &&
+        currentUserId != null &&
+        currentUserId > 0 &&
+        creadorId == currentUserId;
   }
 
   static Future<bool> isCarreterasUser({bool refresh = false}) async {

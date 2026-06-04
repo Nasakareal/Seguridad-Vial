@@ -58,6 +58,28 @@ void main() {
     expect(error, isNull);
   });
 
+  test(
+    'allows activity captures without timestamp when server clock is used',
+    () async {
+      final error = await ActividadesService.validateBeforeSubmit(
+        data: const ActividadUpsertData(
+          actividadCategoriaId: 1,
+          actividadSubcategoriaId: 2,
+          municipio: 'MORELIA',
+          personasAlcanzadas: '1',
+          personasParticipantes: '0',
+          personasDetenidas: '0',
+        ),
+        fotos: const <File>[],
+        requirePhotos: false,
+        requireCoords: false,
+        requireTimestamp: false,
+      );
+
+      expect(error, isNull);
+    },
+  );
+
   test('rejects activity captures with unknown municipalities', () async {
     final error = await ActividadesService.validateBeforeSubmit(
       data: const ActividadUpsertData(

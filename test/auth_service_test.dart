@@ -145,6 +145,90 @@ void main() {
     );
   });
 
+  test(
+    'agente vial can add details to vialidades devices without create permission',
+    () async {
+      SharedPreferences.setMockInitialValues(<String, Object>{
+        'auth_role': 'Agente Vial',
+        'auth_role_id': 12,
+        'auth_user_id': 36,
+        'auth_unidad_id': AuthService.unidadVialidadesUrbanasId,
+        'auth_user_payload': jsonEncode(<String, Object>{
+          'id': 36,
+          'role': <String, Object>{'id': 12, 'name': 'Agente Vial'},
+          'unidad_id': AuthService.unidadVialidadesUrbanasId,
+          'unidad': <String, Object>{
+            'id': AuthService.unidadVialidadesUrbanasId,
+            'nombre': 'PROTECCIÓN EN VIALIDADES URBANAS',
+          },
+        }),
+        'auth_perms': <String>['ver operativos vialidades'],
+      });
+
+      expect(await AuthService.can('crear operativos vialidades'), isFalse);
+      expect(await AuthService.canCreateVialidadesUrbanasDetalles(), isTrue);
+      expect(await AuthService.canEditAllVialidadesUrbanasDetalles(), isFalse);
+      expect(await AuthService.canEditOwnVialidadesUrbanasDetalles(), isTrue);
+      expect(
+        await AuthService.canEditOwnedVialidadesUrbanasDetalles(creadorId: 36),
+        isTrue,
+      );
+      expect(
+        await AuthService.canEditOwnedVialidadesUrbanasDetalles(creadorId: 99),
+        isFalse,
+      );
+    },
+  );
+
+  test(
+    'responsable de turno vialidades can view patrullas map as scoped read only',
+    () async {
+      SharedPreferences.setMockInitialValues(<String, Object>{
+        'auth_role': 'Responsable de Turno',
+        'auth_role_id': 13,
+        'auth_unidad_id': AuthService.unidadVialidadesUrbanasId,
+        'auth_user_payload': jsonEncode(<String, Object>{
+          'id': 37,
+          'role': <String, Object>{'id': 13, 'name': 'Responsable de Turno'},
+          'unidad_id': AuthService.unidadVialidadesUrbanasId,
+          'unidad': <String, Object>{
+            'id': AuthService.unidadVialidadesUrbanasId,
+            'nombre': 'PROTECCIÓN EN VIALIDADES URBANAS',
+          },
+        }),
+        'auth_perms': <String>['ver operativos vialidades'],
+      });
+
+      expect(await AuthService.isResponsableTurno(), isTrue);
+      expect(await AuthService.canViewMapaPatrullas(), isTrue);
+      expect(await AuthService.shouldScopeMapaPatrullasToVialidades(), isTrue);
+      expect(await AuthService.canManageMapaPatrullas(), isFalse);
+      expect(await AuthService.canEditAllVialidadesUrbanasDetalles(), isTrue);
+      expect(
+        await AuthService.canEditOwnedVialidadesUrbanasDetalles(creadorId: 99),
+        isTrue,
+      );
+      expect(await AuthService.canShareLocationTracking(), isFalse);
+    },
+  );
+
+  test('ver mapa permission keeps patrullas map management access', () async {
+    SharedPreferences.setMockInitialValues(<String, Object>{
+      'auth_role': 'Operador',
+      'auth_unidad_id': 1,
+      'auth_user_payload': jsonEncode(<String, Object>{
+        'id': 38,
+        'role': <String, Object>{'name': 'Operador'},
+        'unidad_id': 1,
+      }),
+      'auth_perms': <String>['ver mapa'],
+    });
+
+    expect(await AuthService.canViewMapaPatrullas(), isTrue);
+    expect(await AuthService.shouldScopeMapaPatrullasToVialidades(), isFalse);
+    expect(await AuthService.canManageMapaPatrullas(), isTrue);
+  });
+
   test('desktop builds do not force the location consent gate', () async {
     SharedPreferences.setMockInitialValues(<String, Object>{
       'auth_role': 'Delegado',

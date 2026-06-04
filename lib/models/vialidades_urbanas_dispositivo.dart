@@ -23,6 +23,8 @@ class VialidadesUrbanasCatalogo {
 class VialidadesUrbanasDispositivoDetalle {
   final int id;
   final int orden;
+  final int? creadorId;
+  final String creadorNombre;
   final String tipo;
   final String titulo;
   final String contenido;
@@ -32,6 +34,8 @@ class VialidadesUrbanasDispositivoDetalle {
   const VialidadesUrbanasDispositivoDetalle({
     required this.id,
     required this.orden,
+    required this.creadorId,
+    required this.creadorNombre,
     required this.tipo,
     required this.titulo,
     required this.contenido,
@@ -44,10 +48,30 @@ class VialidadesUrbanasDispositivoDetalle {
   ) {
     int asInt(dynamic value) => int.tryParse('${value ?? ''}') ?? 0;
     String asText(dynamic value) => (value ?? '').toString().trim();
+    Map<String, dynamic>? asMap(dynamic value) {
+      if (value is Map<String, dynamic>) return value;
+      if (value is Map) return Map<String, dynamic>.from(value);
+      return null;
+    }
 
+    final creador = asMap(
+      json['creador'] ??
+          json['usuario'] ??
+          json['user'] ??
+          json['created_by_user'],
+    );
     return VialidadesUrbanasDispositivoDetalle(
       id: asInt(json['id']),
       orden: asInt(json['orden']),
+      creadorId: _readNullableInt(
+        json['creador_id'] ??
+            json['created_by'] ??
+            json['created_by_id'] ??
+            json['user_id'] ??
+            json['usuario_id'] ??
+            creador?['id'],
+      ),
+      creadorNombre: asText(creador?['name'] ?? creador?['nombre']),
       tipo: asText(json['tipo']).isEmpty ? 'texto' : asText(json['tipo']),
       titulo: asText(json['titulo']),
       contenido: asText(json['contenido']),
@@ -55,10 +79,16 @@ class VialidadesUrbanasDispositivoDetalle {
       hora: asText(json['hora']),
     );
   }
+
+  bool belongsToUser(int? userId) {
+    return userId != null && userId > 0 && creadorId == userId;
+  }
 }
 
 class VialidadesUrbanasDispositivoFoto {
   final int id;
+  final int? creadorId;
+  final String creadorNombre;
   final String ruta;
   final String nombreOriginal;
   final int orden;
@@ -67,6 +97,8 @@ class VialidadesUrbanasDispositivoFoto {
 
   const VialidadesUrbanasDispositivoFoto({
     required this.id,
+    required this.creadorId,
+    required this.creadorNombre,
     required this.ruta,
     required this.nombreOriginal,
     required this.orden,
@@ -77,9 +109,29 @@ class VialidadesUrbanasDispositivoFoto {
   factory VialidadesUrbanasDispositivoFoto.fromJson(Map<String, dynamic> json) {
     int asInt(dynamic value) => int.tryParse('${value ?? ''}') ?? 0;
     String asText(dynamic value) => (value ?? '').toString().trim();
+    Map<String, dynamic>? asMap(dynamic value) {
+      if (value is Map<String, dynamic>) return value;
+      if (value is Map) return Map<String, dynamic>.from(value);
+      return null;
+    }
 
+    final creador = asMap(
+      json['creador'] ??
+          json['usuario'] ??
+          json['user'] ??
+          json['created_by_user'],
+    );
     return VialidadesUrbanasDispositivoFoto(
       id: asInt(json['id']),
+      creadorId: _readNullableInt(
+        json['creador_id'] ??
+            json['created_by'] ??
+            json['created_by_id'] ??
+            json['user_id'] ??
+            json['usuario_id'] ??
+            creador?['id'],
+      ),
+      creadorNombre: asText(creador?['name'] ?? creador?['nombre']),
       ruta: asText(json['ruta']),
       nombreOriginal: asText(json['nombre_original']),
       orden: asInt(json['orden']),
@@ -88,6 +140,10 @@ class VialidadesUrbanasDispositivoFoto {
           json['included_in_share'] == true ||
           '${json['included_in_share']}' == '1',
     );
+  }
+
+  bool belongsToUser(int? userId) {
+    return userId != null && userId > 0 && creadorId == userId;
   }
 }
 
@@ -118,6 +174,7 @@ class VialidadesUrbanasDispositivo {
   final int fotosCount;
   final int detallesCount;
   final String portadaRuta;
+  final int? creadorId;
   final String creadorNombre;
   final String revisorNombre;
   final List<VialidadesUrbanasDispositivoDetalle> detalles;
@@ -150,6 +207,7 @@ class VialidadesUrbanasDispositivo {
     required this.fotosCount,
     required this.detallesCount,
     required this.portadaRuta,
+    required this.creadorId,
     required this.creadorNombre,
     required this.revisorNombre,
     required this.detalles,
@@ -233,6 +291,14 @@ class VialidadesUrbanasDispositivo {
       fotosCount: fotos.length,
       detallesCount: detalles.length,
       portadaRuta: portada,
+      creadorId: _readNullableInt(
+        json['creador_id'] ??
+            json['created_by'] ??
+            json['created_by_id'] ??
+            json['user_id'] ??
+            json['usuario_id'] ??
+            creador?['id'],
+      ),
       creadorNombre: asText(creador?['name']),
       revisorNombre: asText(revisor?['name']),
       detalles: detalles,
@@ -241,6 +307,27 @@ class VialidadesUrbanasDispositivo {
   }
 
   int get totalUnidades => motopatrullas + unidadesMotorizadas + patrullas;
+
+  bool belongsToUser(int? userId) {
+    if (userId == null || userId <= 0) return false;
+
+    final detailOwners = detalles
+        .map((detalle) => detalle.creadorId)
+        .whereType<int>()
+        .where((id) => id > 0)
+        .toSet();
+    final photoOwners = fotos
+        .map((foto) => foto.creadorId)
+        .whereType<int>()
+        .where((id) => id > 0)
+        .toSet();
+    final owners = <int>{...detailOwners, ...photoOwners};
+    if (owners.isNotEmpty) {
+      return owners.every((id) => id == userId);
+    }
+
+    return creadorId == userId;
+  }
 
   String get resumen {
     final candidates = <String>[
@@ -279,6 +366,11 @@ class VialidadesUrbanasDispositivo {
     if (otrosApoyos > 0) values.add('$otrosApoyos OTROS');
     return values;
   }
+}
+
+int? _readNullableInt(dynamic value) {
+  final parsed = int.tryParse('${value ?? ''}');
+  return parsed != null && parsed > 0 ? parsed : null;
 }
 
 class VialidadesUrbanasTotales {

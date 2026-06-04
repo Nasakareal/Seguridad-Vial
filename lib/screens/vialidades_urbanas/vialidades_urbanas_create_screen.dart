@@ -28,6 +28,8 @@ class _VialidadesUrbanasCreateScreenState
   bool _loading = true;
   bool _saving = false;
   bool _hasAccess = false;
+  bool _canEditCaptureTimestamp = false;
+  bool _captureTimestampAccessLoaded = false;
   String? _error;
 
   List<VialidadesUrbanasCatalogo> _catalogos =
@@ -132,6 +134,7 @@ class _VialidadesUrbanasCreateScreenState
       final canCreate =
           hasFullOperationalAccess ||
           await AuthService.can('crear operativos vialidades');
+      final canEditTimestamp = await AuthService.canEditCaptureTimestamp();
 
       if (!isVialidadesUser || !canCreate) {
         throw Exception(
@@ -146,6 +149,8 @@ class _VialidadesUrbanasCreateScreenState
       if (!mounted) return;
       setState(() {
         _hasAccess = true;
+        _canEditCaptureTimestamp = canEditTimestamp;
+        _captureTimestampAccessLoaded = true;
         _catalogos = catalogos;
         _catalogoId = catalogos.isNotEmpty ? catalogos.first.id : null;
         _loading = false;
@@ -155,6 +160,8 @@ class _VialidadesUrbanasCreateScreenState
       if (!mounted) return;
       setState(() {
         _hasAccess = false;
+        _canEditCaptureTimestamp = false;
+        _captureTimestampAccessLoaded = true;
         _loading = false;
         _error = '$e';
       });
@@ -212,8 +219,10 @@ class _VialidadesUrbanasCreateScreenState
 
   void _applyLocalDraft(Map<String, dynamic> draft) {
     _catalogoId = _intValue(draft['catalogo_id']) ?? _catalogoId;
-    _fecha = DateTime.tryParse((draft['fecha'] ?? '').toString()) ?? _fecha;
-    _hora = _parseTime(draft['hora']) ?? _hora;
+    if (_canEditCaptureTimestamp || !_captureTimestampAccessLoaded) {
+      _fecha = DateTime.tryParse((draft['fecha'] ?? '').toString()) ?? _fecha;
+      _hora = _parseTime(draft['hora']) ?? _hora;
+    }
     _asuntoCtrl.text = (draft['asunto'] ?? '').toString();
     _municipioCtrl.text = (draft['municipio'] ?? '').toString();
     _lugarCtrl.text = (draft['lugar'] ?? '').toString();
@@ -310,6 +319,8 @@ class _VialidadesUrbanasCreateScreenState
   }
 
   Future<void> _pickFecha() async {
+    if (!_canEditCaptureTimestamp) return;
+
     final now = DateTime.now();
     final picked = await showDatePicker(
       context: context,
@@ -324,6 +335,8 @@ class _VialidadesUrbanasCreateScreenState
   }
 
   Future<void> _pickHora() async {
+    if (!_canEditCaptureTimestamp) return;
+
     final picked = await showTimePicker(
       context: context,
       initialTime: _hora,
@@ -364,8 +377,8 @@ class _VialidadesUrbanasCreateScreenState
 
     final payload = VialidadesUrbanasFormPayload(
       catalogoId: _catalogoId ?? 0,
-      fecha: _fecha,
-      hora: _hora,
+      fecha: _canEditCaptureTimestamp ? _fecha : null,
+      hora: _canEditCaptureTimestamp ? _hora : null,
       asunto: _asuntoCtrl.text,
       municipio: _readMunicipio(),
       lugar: _lugarCtrl.text,
@@ -482,32 +495,52 @@ class _VialidadesUrbanasCreateScreenState
                             },
                           ),
                           const SizedBox(height: 12),
-                          Row(
-                            children: [
-                              Expanded(
-                                child: InkWell(
-                                  onTap: _pickFecha,
-                                  borderRadius: BorderRadius.circular(14),
-                                  child: InputDecorator(
-                                    decoration: _dec('Fecha'),
-                                    child: Text(_fmtYmd(_fecha)),
+                          if (_canEditCaptureTimestamp) ...[
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: InkWell(
+                                    onTap: _pickFecha,
+                                    borderRadius: BorderRadius.circular(14),
+                                    child: InputDecorator(
+                                      decoration: _dec('Fecha'),
+                                      child: Text(_fmtYmd(_fecha)),
+                                    ),
                                   ),
                                 ),
-                              ),
-                              const SizedBox(width: 10),
-                              Expanded(
-                                child: InkWell(
-                                  onTap: _pickHora,
-                                  borderRadius: BorderRadius.circular(14),
-                                  child: InputDecorator(
-                                    decoration: _dec('Hora'),
-                                    child: Text(_fmtHm(_hora)),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: InkWell(
+                                    onTap: _pickHora,
+                                    borderRadius: BorderRadius.circular(14),
+                                    child: InputDecorator(
+                                      decoration: _dec('Hora'),
+                                      child: Text(_fmtHm(_hora)),
+                                    ),
                                   ),
                                 ),
+                              ],
+                            ),
+                            const SizedBox(height: 12),
+                          ] else ...[
+                            Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFF8FAFC),
+                                borderRadius: BorderRadius.circular(14),
+                                border: Border.all(color: Colors.grey.shade200),
                               ),
-                            ],
-                          ),
-                          const SizedBox(height: 12),
+                              child: Text(
+                                'Fecha y hora se asignan con el reloj del servidor al guardar.',
+                                style: TextStyle(
+                                  color: Colors.grey.shade700,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                          ],
                           TextFormField(
                             controller: _asuntoCtrl,
                             decoration: _dec('Asunto'),

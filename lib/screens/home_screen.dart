@@ -256,7 +256,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             _permsCtrl.allowed(HomePermissionsController.permHechos);
         final canMapa =
             !loadingPerms &&
-            _permsCtrl.allowed(HomePermissionsController.permMapa);
+            (_permsCtrl.allowed(HomePermissionsController.permMapa) ||
+                _permsCtrl.canViewMapaPatrullas.value);
         return ValueListenableBuilder<bool>(
           valueListenable: _trackingCtrl.trackingOn,
           builder: (context, trackingOn, __) {

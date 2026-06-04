@@ -10,8 +10,8 @@ import 'photo_orientation_service.dart';
 
 class VialidadesUrbanasFormPayload {
   final int catalogoId;
-  final DateTime fecha;
-  final TimeOfDay hora;
+  final DateTime? fecha;
+  final TimeOfDay? hora;
   final String asunto;
   final String municipio;
   final String lugar;
@@ -136,8 +136,6 @@ class VialidadesUrbanasFormService {
       'client_uuid': clientUuid,
       'unidad_org_id': AuthService.unidadVialidadesUrbanasId,
       'vialidad_dispositivo_catalogo_id': payload.catalogoId,
-      'fecha': _fmtYmd(payload.fecha),
-      'hora': _fmtHm(payload.hora),
       'asunto': payload.asunto.trim(),
       'elementos': payload.elementos,
       'crp': payload.crp,
@@ -154,6 +152,16 @@ class VialidadesUrbanasFormService {
       if (trimmed.isNotEmpty) {
         body[key] = trimmed;
       }
+    }
+
+    final fecha = payload.fecha;
+    if (fecha != null) {
+      body['fecha'] = _fmtYmd(fecha);
+    }
+
+    final hora = payload.hora;
+    if (hora != null) {
+      body['hora'] = _fmtHm(hora);
     }
 
     addText(

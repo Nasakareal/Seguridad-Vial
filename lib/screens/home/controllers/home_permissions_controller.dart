@@ -15,6 +15,7 @@ class HomePermissionsController {
   );
   final ValueNotifier<bool> loading = ValueNotifier<bool>(true);
   final ValueNotifier<bool> fullOperationalAccess = ValueNotifier<bool>(false);
+  final ValueNotifier<bool> canViewMapaPatrullas = ValueNotifier<bool>(false);
 
   bool _fetching = false;
   Timer? _timer;
@@ -41,6 +42,7 @@ class HomePermissionsController {
       perms.value = list.map((e) => e.trim().toLowerCase()).toSet();
       fullOperationalAccess.value =
           await AuthService.hasFullOperationalAccess();
+      canViewMapaPatrullas.value = await AuthService.canViewMapaPatrullas();
       loading.value = false;
     } catch (_) {
       loading.value = false;
@@ -66,5 +68,6 @@ class HomePermissionsController {
     perms.dispose();
     loading.dispose();
     fullOperationalAccess.dispose();
+    canViewMapaPatrullas.dispose();
   }
 }

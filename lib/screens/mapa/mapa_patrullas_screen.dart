@@ -27,6 +27,8 @@ class _MapaPatrullasScreenState extends State<MapaPatrullasScreen>
 
   bool _loading = true;
   bool _saving = false;
+  bool _canManageLocation = false;
+  bool _scopeVialidadesOnly = false;
   String? _error;
 
   DateTime? _lastFetchAt;
@@ -103,21 +105,42 @@ class _MapaPatrullasScreenState extends State<MapaPatrullasScreen>
     });
 
     try {
-      final mapData = await _MapaService.getPatrullas();
-      final personalData = await _MapaService.getMiPersonal();
+      final canView = await AuthService.canViewMapaPatrullas(refresh: true);
+      if (!canView) {
+        throw Exception('No tienes permiso para acceder al mapa de patrullas.');
+      }
+
+      final scopeVialidades =
+          await AuthService.shouldScopeMapaPatrullasToVialidades();
+      final canManage = await AuthService.canManageMapaPatrullas();
+      final unidadFilter = scopeVialidades
+          ? AuthService.unidadVialidadesUrbanasId
+          : null;
+      final mapData = await _MapaService.getPatrullas(unidadId: unidadFilter);
+      final personalData = await _MapaService.getMiPersonal(
+        unidadId: unidadFilter,
+      );
+      final scopedPersonal = scopeVialidades
+          ? _filterVialidadesPersonal(personalData)
+          : personalData;
+      final scopedMap = scopeVialidades
+          ? _filterPatrullasForPersonal(mapData, scopedPersonal)
+          : mapData;
 
       if (!mounted) return;
 
       setState(() {
-        _patrullas = mapData;
-        _personal = _mergePersonalWithMap(personalData, mapData);
+        _canManageLocation = canManage;
+        _scopeVialidadesOnly = scopeVialidades;
+        _patrullas = scopedMap;
+        _personal = _mergePersonalWithMap(scopedPersonal, scopedMap);
         _loading = false;
         _error = null;
         _lastFetchAt = DateTime.now();
       });
 
-      if (mapData.isNotEmpty) {
-        final first = mapData.first;
+      if (scopedMap.isNotEmpty) {
+        final first = scopedMap.first;
         try {
           _mapController.move(LatLng(first.lat, first.lng), _zoomDefault);
         } catch (_) {}
@@ -133,12 +156,18 @@ class _MapaPatrullasScreenState extends State<MapaPatrullasScreen>
 
   Future<void> _fetchMapOnly() async {
     try {
-      final mapData = await _MapaService.getPatrullas();
+      final unidadFilter = _scopeVialidadesOnly
+          ? AuthService.unidadVialidadesUrbanasId
+          : null;
+      final mapData = await _MapaService.getPatrullas(unidadId: unidadFilter);
+      final scopedMap = _scopeVialidadesOnly
+          ? _filterPatrullasForPersonal(mapData, _personal)
+          : mapData;
       if (!mounted) return;
 
       setState(() {
-        _patrullas = mapData;
-        _personal = _mergePersonalWithMap(_personal, mapData);
+        _patrullas = scopedMap;
+        _personal = _mergePersonalWithMap(_personal, scopedMap);
         _error = null;
         _lastFetchAt = DateTime.now();
       });
@@ -150,6 +179,23 @@ class _MapaPatrullasScreenState extends State<MapaPatrullasScreen>
 
   Future<void> _refreshAll() async => _bootstrap();
   Future<void> _onPullToRefresh() async => _refreshAll();
+
+  List<_PersonalItem> _filterVialidadesPersonal(List<_PersonalItem> personal) {
+    final hasUnitInfo = personal.any((item) => item.hasUnitInfo);
+    if (!hasUnitInfo) return personal;
+    return personal.where((item) => item.isVialidadesUrbanas).toList();
+  }
+
+  List<_PatrullaLoc> _filterPatrullasForPersonal(
+    List<_PatrullaLoc> patrullas,
+    List<_PersonalItem> personal,
+  ) {
+    final allowedUsers = personal.map((item) => item.userId).toSet();
+    if (allowedUsers.isEmpty) return const [];
+    return patrullas
+        .where((item) => allowedUsers.contains(item.userId))
+        .toList();
+  }
 
   List<_PersonalItem> _mergePersonalWithMap(
     List<_PersonalItem> personal,
@@ -176,7 +222,7 @@ class _MapaPatrullasScreenState extends State<MapaPatrullasScreen>
     required int userId,
     required bool enabled,
   }) async {
-    if (_saving) return;
+    if (_saving || !_canManageLocation) return;
 
     if (mounted) setState(() => _saving = true);
 
@@ -221,7 +267,7 @@ class _MapaPatrullasScreenState extends State<MapaPatrullasScreen>
   }
 
   Future<void> _setUbicacionTodos({required bool enabled}) async {
-    if (_saving) return;
+    if (_saving || !_canManageLocation) return;
 
     if (mounted) setState(() => _saving = true);
 
@@ -533,35 +579,45 @@ class _MapaPatrullasScreenState extends State<MapaPatrullasScreen>
                 ],
               ),
               const SizedBox(height: 10),
-              Row(
-                children: [
-                  Expanded(
-                    child: FilledButton.icon(
-                      onPressed: _saving
-                          ? null
-                          : () => _setUbicacionTodos(enabled: true),
-                      icon: const Icon(Icons.location_on),
-                      label: const Text('Activar todos'),
+              if (_canManageLocation)
+                Row(
+                  children: [
+                    Expanded(
+                      child: FilledButton.icon(
+                        onPressed: _saving
+                            ? null
+                            : () => _setUbicacionTodos(enabled: true),
+                        icon: const Icon(Icons.location_on),
+                        label: const Text('Activar todos'),
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: FilledButton.tonalIcon(
-                      onPressed: _saving
-                          ? null
-                          : () => _setUbicacionTodos(enabled: false),
-                      icon: const Icon(Icons.location_off),
-                      label: const Text('Desactivar todos'),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: FilledButton.tonalIcon(
+                        onPressed: _saving
+                            ? null
+                            : () => _setUbicacionTodos(enabled: false),
+                        icon: const Icon(Icons.location_off),
+                        label: const Text('Desactivar todos'),
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 10),
-                  IconButton(
+                    const SizedBox(width: 10),
+                    IconButton(
+                      tooltip: 'Refrescar',
+                      onPressed: _saving ? null : _refreshAll,
+                      icon: const Icon(Icons.refresh),
+                    ),
+                  ],
+                )
+              else
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: IconButton(
                     tooltip: 'Refrescar',
                     onPressed: _saving ? null : _refreshAll,
                     icon: const Icon(Icons.refresh),
                   ),
-                ],
-              ),
+                ),
             ],
           ),
         ),
@@ -641,7 +697,7 @@ class _MapaPatrullasScreenState extends State<MapaPatrullasScreen>
             item: p,
             onTap: () async => _centerAndGoTop(p),
             onMore: () => _showPatrullaSheet(p),
-            onToggle: _saving
+            onToggle: !_canManageLocation || _saving
                 ? null
                 : (v) => _setUbicacionUsuario(userId: p.userId, enabled: v),
           ),
@@ -758,31 +814,33 @@ class _MapaPatrullasScreenState extends State<MapaPatrullasScreen>
                   ),
                 ],
               ),
-              const SizedBox(height: 10),
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton.tonalIcon(
-                  onPressed: _saving
-                      ? null
-                      : () async {
-                          Navigator.pop(context);
-                          await _setUbicacionUsuario(
-                            userId: p.userId,
-                            enabled: !p.compartirUbicacion,
-                          );
-                        },
-                  icon: Icon(
-                    p.compartirUbicacion
-                        ? Icons.location_off
-                        : Icons.location_on,
-                  ),
-                  label: Text(
-                    p.compartirUbicacion
-                        ? 'Desactivar ubicación'
-                        : 'Activar ubicación',
+              if (_canManageLocation) ...[
+                const SizedBox(height: 10),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.tonalIcon(
+                    onPressed: _saving
+                        ? null
+                        : () async {
+                            Navigator.pop(context);
+                            await _setUbicacionUsuario(
+                              userId: p.userId,
+                              enabled: !p.compartirUbicacion,
+                            );
+                          },
+                    icon: Icon(
+                      p.compartirUbicacion
+                          ? Icons.location_off
+                          : Icons.location_on,
+                    ),
+                    label: Text(
+                      p.compartirUbicacion
+                          ? 'Desactivar ubicación'
+                          : 'Activar ubicación',
+                    ),
                   ),
                 ),
-              ),
+              ],
             ],
           ),
         );
@@ -803,8 +861,19 @@ class _MapaService {
     };
   }
 
-  static Future<List<_PatrullaLoc>> getPatrullas() async {
-    final uri = Uri.parse('$baseUrl/mapa/patrullas');
+  static Uri _uri(String path, {int? unidadId}) {
+    final uri = Uri.parse('$baseUrl$path');
+    if (unidadId == null || unidadId <= 0) return uri;
+    return uri.replace(
+      queryParameters: <String, String>{
+        ...uri.queryParameters,
+        'unidad_id': '$unidadId',
+      },
+    );
+  }
+
+  static Future<List<_PatrullaLoc>> getPatrullas({int? unidadId}) async {
+    final uri = _uri('/mapa/patrullas', unidadId: unidadId);
     final res = await http.get(uri, headers: await _headers());
 
     if (res.statusCode != 200) {
@@ -822,8 +891,8 @@ class _MapaService {
         .cast<_PatrullaLoc>();
   }
 
-  static Future<List<_PersonalItem>> getMiPersonal() async {
-    final uri = Uri.parse('$baseUrl/mi-personal');
+  static Future<List<_PersonalItem>> getMiPersonal({int? unidadId}) async {
+    final uri = _uri('/mi-personal', unidadId: unidadId);
     final res = await http.get(uri, headers: await _headers());
 
     if (res.statusCode != 200) {
@@ -920,6 +989,8 @@ class _PersonalItem {
   final String name;
   final String email;
   final int? patrullaId;
+  final int? unidadId;
+  final String? unidadNombre;
   final bool compartirUbicacion;
 
   final String? lastCapturedAtStr;
@@ -934,6 +1005,8 @@ class _PersonalItem {
     required this.name,
     required this.email,
     required this.patrullaId,
+    required this.unidadId,
+    required this.unidadNombre,
     required this.compartirUbicacion,
     required this.lastCapturedAtStr,
     required this.lastLat,
@@ -957,12 +1030,25 @@ class _PersonalItem {
     final patrullaId = patrulla == null
         ? null
         : (patrulla is int ? patrulla : int.tryParse('$patrulla'));
+    final unidadRaw =
+        j['unidad'] ?? j['unidad_principal'] ?? j['unidadPrincipal'];
+    final unidadId =
+        _readNullableInt(j['unidad_id']) ??
+        _readNullableInt(j['unidad_org_id']) ??
+        _readNestedId(unidadRaw);
+    final unidadNombre =
+        _readString(j['unidad_nombre']) ??
+        _readString(j['unidadName']) ??
+        _readString(j['unidad_label']) ??
+        _readNestedName(unidadRaw);
 
     return _PersonalItem(
       userId: id,
       name: (j['name'] ?? '') as String,
       email: (j['email'] ?? '') as String,
       patrullaId: patrullaId,
+      unidadId: unidadId,
+      unidadNombre: unidadNombre,
       compartirUbicacion: enabled,
       lastCapturedAtStr: null,
       lastLat: null,
@@ -970,6 +1056,15 @@ class _PersonalItem {
       isStale: true,
       patrullaNumero: null,
     );
+  }
+
+  bool get hasUnitInfo {
+    return unidadId != null || (unidadNombre?.trim().isNotEmpty ?? false);
+  }
+
+  bool get isVialidadesUrbanas {
+    return unidadId == AuthService.unidadVialidadesUrbanasId ||
+        _textMatchesVialidadesUrbanas(unidadNombre);
   }
 
   _PersonalItem copyWith({
@@ -985,6 +1080,8 @@ class _PersonalItem {
       name: name,
       email: email,
       patrullaId: patrullaId,
+      unidadId: unidadId,
+      unidadNombre: unidadNombre,
       compartirUbicacion: compartirUbicacion ?? this.compartirUbicacion,
       lastCapturedAtStr: lastCapturedAtStr ?? this.lastCapturedAtStr,
       lastLat: lastLat ?? this.lastLat,
@@ -993,6 +1090,58 @@ class _PersonalItem {
       patrullaNumero: patrullaNumero ?? this.patrullaNumero,
     );
   }
+}
+
+int? _readNullableInt(dynamic value) {
+  final parsed = int.tryParse('${value ?? ''}');
+  return parsed != null && parsed > 0 ? parsed : null;
+}
+
+int? _readNestedId(dynamic raw) {
+  if (raw is Map) {
+    return _readNullableInt(
+      raw['id'] ?? raw['value'] ?? raw['unidad_id'] ?? raw['unidad_org_id'],
+    );
+  }
+  return _readNullableInt(raw);
+}
+
+String? _readString(dynamic value) {
+  final text = value?.toString().trim() ?? '';
+  return text.isEmpty ? null : text;
+}
+
+String? _readNestedName(dynamic raw) {
+  if (raw is String) return _readString(raw);
+  if (raw is Map) {
+    return _readString(
+      raw['name'] ??
+          raw['nombre'] ??
+          raw['label'] ??
+          raw['descripcion'] ??
+          raw['title'] ??
+          raw['slug'],
+    );
+  }
+  return null;
+}
+
+bool _textMatchesVialidadesUrbanas(String? raw) {
+  final normalized = _normalizeUnitText(raw ?? '');
+  return normalized.contains('VIALIDADES URBANAS') ||
+      normalized.contains('PROTECCION A VIALIDADES URBANAS') ||
+      normalized.contains('PROTECCION EN VIALIDADES URBANAS');
+}
+
+String _normalizeUnitText(String raw) {
+  return raw
+      .toUpperCase()
+      .replaceAll('Á', 'A')
+      .replaceAll('É', 'E')
+      .replaceAll('Í', 'I')
+      .replaceAll('Ó', 'O')
+      .replaceAll('Ú', 'U')
+      .replaceAll('Ñ', 'N');
 }
 
 class _TopStatusBar extends StatelessWidget {
@@ -1169,7 +1318,7 @@ class _PatrullaTile extends StatelessWidget {
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Switch(value: enabled, onChanged: onToggle),
+            if (onToggle != null) Switch(value: enabled, onChanged: onToggle),
             IconButton(
               tooltip: 'Detalles',
               onPressed: onMore,

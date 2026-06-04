@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:mobile_scanner/mobile_scanner.dart';
 
 import '../../app/routes.dart';
 import '../../core/vehiculos/vehiculo_taxonomia.dart';
@@ -13,6 +12,7 @@ import '../../services/offline_sync_service.dart';
 import '../../services/vehiculo_form_service.dart';
 import '../../services/gruas_catalog_service.dart';
 import '../../widgets/antecedente_highlight_tile.dart';
+import '../../widgets/tarjeta_circulacion_scanner_screen.dart';
 
 class VehiculoCreateScreen extends StatefulWidget {
   const VehiculoCreateScreen({super.key});
@@ -407,7 +407,7 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
     final raw = await Navigator.push<String>(
       context,
       MaterialPageRoute(
-        builder: (_) => const _TarjetaCirculacionScannerScreen(),
+        builder: (_) => const TarjetaCirculacionScannerScreen(),
       ),
     );
     final text = raw?.trim() ?? '';
@@ -1159,116 +1159,6 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
             ],
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _TarjetaCirculacionScannerScreen extends StatefulWidget {
-  const _TarjetaCirculacionScannerScreen();
-
-  @override
-  State<_TarjetaCirculacionScannerScreen> createState() =>
-      _TarjetaCirculacionScannerScreenState();
-}
-
-class _TarjetaCirculacionScannerScreenState
-    extends State<_TarjetaCirculacionScannerScreen> {
-  final MobileScannerController _controller = MobileScannerController(
-    formats: const <BarcodeFormat>[BarcodeFormat.qrCode],
-    detectionSpeed: DetectionSpeed.noDuplicates,
-    autoZoom: true,
-  );
-
-  bool _handled = false;
-
-  void _handleDetect(BarcodeCapture capture) {
-    if (_handled) return;
-
-    for (final barcode in capture.barcodes) {
-      final raw = barcode.rawValue?.trim() ?? '';
-      if (raw.isEmpty) continue;
-
-      _handled = true;
-      unawaited(_controller.stop());
-      if (!mounted) return;
-      Navigator.pop(context, raw);
-      return;
-    }
-  }
-
-  @override
-  void dispose() {
-    unawaited(_controller.dispose());
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.black,
-      appBar: AppBar(
-        title: const Text('Escanear tarjeta'),
-        backgroundColor: Colors.black,
-        foregroundColor: Colors.white,
-        actions: [
-          IconButton(
-            tooltip: 'Linterna',
-            icon: const Icon(Icons.flashlight_on),
-            onPressed: () => _controller.toggleTorch(),
-          ),
-          IconButton(
-            tooltip: 'Cambiar cámara',
-            icon: const Icon(Icons.cameraswitch),
-            onPressed: () => _controller.switchCamera(),
-          ),
-        ],
-      ),
-      body: Stack(
-        children: [
-          MobileScanner(
-            controller: _controller,
-            onDetect: _handleDetect,
-            errorBuilder: (context, error) {
-              return Center(
-                child: Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: Text(
-                    'No se pudo iniciar la cámara.\n\n$error',
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(color: Colors.white),
-                  ),
-                ),
-              );
-            },
-          ),
-          Center(
-            child: Container(
-              width: 260,
-              height: 260,
-              decoration: BoxDecoration(
-                border: Border.all(color: Colors.white, width: 3),
-                borderRadius: BorderRadius.circular(8),
-              ),
-            ),
-          ),
-          Align(
-            alignment: Alignment.bottomCenter,
-            child: Container(
-              width: double.infinity,
-              color: Colors.black.withValues(alpha: 0.72),
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
-              child: const Text(
-                'Apunta al QR de la tarjeta de circulación. Se llenarán los campos que se puedan reconocer.',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ),
-          ),
-        ],
       ),
     );
   }
