@@ -67,7 +67,11 @@ class AppAccountDrawer extends StatelessWidget {
     );
   }
 
-  Future<void> _goTo(BuildContext context, String route) async {
+  Future<void> _goTo(
+    BuildContext context,
+    String route, {
+    Object? arguments,
+  }) async {
     final navigator = Navigator.of(context);
     final current = ModalRoute.of(context)?.settings.name;
 
@@ -82,7 +86,7 @@ class AppAccountDrawer extends StatelessWidget {
       return;
     }
 
-    navigator.pushNamed(route);
+    navigator.pushNamed(route, arguments: arguments);
   }
 
   Future<void> _handleLogout(BuildContext context) async {
@@ -177,48 +181,51 @@ class AppAccountDrawer extends StatelessWidget {
                             DrawerActionTile(
                               icon: Icons.settings_outlined,
                               title: 'Configuraciones',
-                              subtitle: 'Usuarios, personal y estadísticas',
+                              subtitle: 'Usuarios, personal y archivos',
                               onTap: () => _goTo(context, AppRoutes.settings),
                             ),
-                            if (summary?.access.canSeeSiniestrosStats == true)
+                            if (summary?.access.canSeeSiniestrosFiles == true)
                               DrawerActionTile(
                                 icon: Icons.car_crash_outlined,
-                                title: 'Estadísticas de siniestros',
-                                subtitle: 'Indicadores globales y hechos',
+                                title: 'Archivos Siniestros',
+                                subtitle: 'Partes, bitácoras y Excel',
                                 onTap: () => _goTo(
                                   context,
-                                  AppRoutes.estadisticasGlobales,
+                                  AppRoutes.settingsStatisticsFiles,
+                                  arguments: 'siniestros',
                                 ),
                               ),
-                            if (summary?.access.canSeeActividadesStats == true)
-                              DrawerActionTile(
-                                icon: Icons.photo_library_outlined,
-                                title: 'Estadísticas de actividades',
-                                subtitle: 'Indicadores y capturas filtradas',
-                                onTap: () => _goTo(
-                                  context,
-                                  AppRoutes.estadisticasActividades,
-                                ),
-                              ),
-                            if (summary?.access.canSeeDelegacionesStats == true)
+                            if (summary?.access.canSeeDelegacionesFiles == true)
                               DrawerActionTile(
                                 icon: Icons.fact_check_outlined,
-                                title: 'Estadísticas de delegaciones',
-                                subtitle: 'Conteos, alertas y regionales',
+                                title: 'Archivos Delegaciones',
+                                subtitle: 'Excel diario y mensual',
                                 onTap: () => _goTo(
                                   context,
-                                  AppRoutes.delegacionesExcelRevision,
+                                  AppRoutes.settingsStatisticsFiles,
+                                  arguments: 'delegaciones',
                                 ),
                               ),
-                            if (summary?.access.canSeeVialidadesStats == true)
+                            if (summary?.access.canSeeVialidadesFiles == true)
                               DrawerActionTile(
                                 icon: Icons.traffic_outlined,
-                                title: 'Estadísticas de vialidades',
-                                subtitle:
-                                    'Resumen diario de Vialidades Urbanas',
+                                title: 'Archivos Vialidades',
+                                subtitle: 'Excel diario de Vialidades Urbanas',
                                 onTap: () => _goTo(
                                   context,
-                                  AppRoutes.estadisticasVialidades,
+                                  AppRoutes.settingsStatisticsFiles,
+                                  arguments: 'vialidades',
+                                ),
+                              ),
+                            if (summary?.access.canSeeFomentoFiles == true)
+                              DrawerActionTile(
+                                icon: Icons.school_outlined,
+                                title: 'Archivos Fomento',
+                                subtitle: 'Excel diario de Fomento',
+                                onTap: () => _goTo(
+                                  context,
+                                  AppRoutes.settingsStatisticsFiles,
+                                  arguments: 'fomento',
                                 ),
                               ),
                           ]),

@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
 import '../app/routes.dart';
-import '../services/administrative_access_service.dart';
 import '../services/auth_service.dart';
 import '../services/home_resolver_service.dart';
 import 'drawer_ui.dart';
@@ -12,10 +11,6 @@ class AppDrawer extends StatelessWidget {
   const AppDrawer({super.key, required this.trackingOn});
 
   static const String permBusqueda = 'ver busqueda';
-  static const String permEstadisticas = 'ver estadisticas';
-  static const String permEstadisticasGlobales = 'ver estadisticas globales';
-  static const String permEstadisticasActividades =
-      'ver estadisticas actividades';
   static const String permDictamenes = 'ver dictamenes';
   static const String permPuestasDisposicion = 'ver puestas a disposicion';
   static const String permHechos = 'ver hechos';
@@ -135,7 +130,6 @@ class AppDrawer extends StatelessWidget {
     var canReviewCarreteras = await _canReviewCarreteras();
     var canUseConstanciasManejo = await AuthService.canUseConstanciasManejo();
     var canViewMapaPatrullas = await AuthService.canViewMapaPatrullas();
-    var administrativeAccess = await AdministrativeAccessService.loadAccess();
 
     if (permissions.isEmpty) {
       await AuthService.refreshCurrentUserAccess();
@@ -148,7 +142,6 @@ class AppDrawer extends StatelessWidget {
       canReviewCarreteras = await _canReviewCarreteras();
       canUseConstanciasManejo = await AuthService.canUseConstanciasManejo();
       canViewMapaPatrullas = await AuthService.canViewMapaPatrullas();
-      administrativeAccess = await AdministrativeAccessService.loadAccess();
     }
 
     return _DrawerAccess(
@@ -161,7 +154,6 @@ class AppDrawer extends StatelessWidget {
       canReviewCarreteras: canReviewCarreteras,
       canUseConstanciasManejo: canUseConstanciasManejo,
       canViewMapaPatrullas: canViewMapaPatrullas,
-      administrativeAccess: administrativeAccess,
     );
   }
 
@@ -233,15 +225,6 @@ class AppDrawer extends StatelessWidget {
                     (_allowed(perms, permDictamenes) && unidadId == 1);
                 final canSeeConstanciasManejo =
                     snap.data?.canUseConstanciasManejo ?? false;
-                final administrativeAccess = snap.data?.administrativeAccess;
-                final canSeeEstadisticasSiniestros =
-                    administrativeAccess?.canSeeSiniestrosStats ?? false;
-                final canSeeEstadisticasActividades =
-                    administrativeAccess?.canSeeActividadesStats ?? false;
-                final canSeeEstadisticasDelegaciones =
-                    administrativeAccess?.canSeeDelegacionesStats ?? false;
-                final canSeeEstadisticasVialidades =
-                    administrativeAccess?.canSeeVialidadesStats ?? false;
                 final canSeeMapaPatrullas =
                     snap.data?.canViewMapaPatrullas ?? false;
                 final canSeeMapaIncidencias = _allowed(
@@ -271,60 +254,6 @@ class AppDrawer extends StatelessWidget {
                           AppRoutes.hechosBuscar,
                           requiredPerm: permBusqueda,
                         ),
-                      ),
-
-                    if (canSeeEstadisticasSiniestros ||
-                        canSeeEstadisticasActividades ||
-                        canSeeEstadisticasDelegaciones ||
-                        canSeeEstadisticasVialidades)
-                      _DrawerGroup(
-                        icon: Icons.insights,
-                        label: 'Estadísticas',
-                        subtitle: 'Indicadores disponibles para tu unidad',
-                        children: [
-                          if (canSeeEstadisticasSiniestros)
-                            _DrawerSubItem(
-                              icon: Icons.car_crash,
-                              label: 'Siniestros',
-                              subtitle: 'Indicadores y hechos filtrados',
-                              onTap: () => _nav(
-                                context,
-                                AppRoutes.estadisticasGlobales,
-                                requiredPerm: permEstadisticasGlobales,
-                              ),
-                            ),
-                          if (canSeeEstadisticasActividades)
-                            _DrawerSubItem(
-                              icon: Icons.photo_library,
-                              label: 'Actividades',
-                              subtitle: 'Indicadores y capturas filtradas',
-                              onTap: () => _nav(
-                                context,
-                                AppRoutes.estadisticasActividades,
-                                requiredPerm: permEstadisticasActividades,
-                              ),
-                            ),
-                          if (canSeeEstadisticasDelegaciones)
-                            _DrawerSubItem(
-                              icon: Icons.fact_check_outlined,
-                              label: 'Delegaciones',
-                              subtitle: 'Conteos, alertas y regionales',
-                              onTap: () => _nav(
-                                context,
-                                AppRoutes.delegacionesExcelRevision,
-                              ),
-                            ),
-                          if (canSeeEstadisticasVialidades)
-                            _DrawerSubItem(
-                              icon: Icons.traffic_outlined,
-                              label: 'Vialidades',
-                              subtitle: 'Resumen diario de Vialidades Urbanas',
-                              onTap: () => _nav(
-                                context,
-                                AppRoutes.estadisticasVialidades,
-                              ),
-                            ),
-                        ],
                       ),
 
                     const SizedBox(height: 12),
@@ -607,7 +536,6 @@ class _DrawerAccess {
   final bool canReviewCarreteras;
   final bool canUseConstanciasManejo;
   final bool canViewMapaPatrullas;
-  final AdministrativeAccess administrativeAccess;
 
   const _DrawerAccess({
     required this.perms,
@@ -619,7 +547,6 @@ class _DrawerAccess {
     required this.canReviewCarreteras,
     required this.canUseConstanciasManejo,
     required this.canViewMapaPatrullas,
-    required this.administrativeAccess,
   });
 }
 

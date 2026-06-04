@@ -3,28 +3,28 @@ import 'auth_service.dart';
 class AdministrativeAccess {
   final bool canSeeUsers;
   final bool canSeePersonal;
-  final bool canSeeSiniestrosStats;
-  final bool canSeeActividadesStats;
-  final bool canSeeDelegacionesStats;
-  final bool canSeeVialidadesStats;
+  final bool canSeeSiniestrosFiles;
+  final bool canSeeDelegacionesFiles;
+  final bool canSeeVialidadesFiles;
+  final bool canSeeFomentoFiles;
 
   const AdministrativeAccess({
     required this.canSeeUsers,
     required this.canSeePersonal,
-    required this.canSeeSiniestrosStats,
-    required this.canSeeActividadesStats,
-    required this.canSeeDelegacionesStats,
-    required this.canSeeVialidadesStats,
+    required this.canSeeSiniestrosFiles,
+    required this.canSeeDelegacionesFiles,
+    required this.canSeeVialidadesFiles,
+    required this.canSeeFomentoFiles,
   });
 
-  bool get canSeeAnyStatistics =>
-      canSeeSiniestrosStats ||
-      canSeeActividadesStats ||
-      canSeeDelegacionesStats ||
-      canSeeVialidadesStats;
+  bool get canSeeAnyStatisticsFiles =>
+      canSeeSiniestrosFiles ||
+      canSeeDelegacionesFiles ||
+      canSeeVialidadesFiles ||
+      canSeeFomentoFiles;
 
   bool get canSeeConfigurationMenu =>
-      canSeeUsers || canSeePersonal || canSeeAnyStatistics;
+      canSeeUsers || canSeePersonal || canSeeAnyStatisticsFiles;
 }
 
 class AdministrativeAccessService {
@@ -56,40 +56,39 @@ class AdministrativeAccessService {
         unidadId == AuthService.unidadVialidadesUrbanasId ||
         await AuthService.isVialidadesUrbanasUser();
     final isFomento = unidadId == AuthService.unidadCulturaVialId;
+    final isSeguridadVial = unidadId == AuthService.unidadSeguridadVialId;
 
     final canSeeUsers =
         hasAdminRole && (isSuperadmin || hasPermission('ver usuarios'));
     final canSeePersonal =
         hasAdminRole && (isSuperadmin || hasPermission('ver personal'));
 
-    final canSeeSiniestrosStats =
-        isSuperadmin ||
-        hasFullOperationalAccess ||
-        (hasPermission('ver estadisticas globales') && isSiniestros);
-
-    final canSeeActividadesStats =
-        isSuperadmin ||
-        hasFullOperationalAccess ||
-        (hasPermission('ver estadisticas actividades') &&
-            (isSiniestros || isFomento));
-
-    final canSeeDelegacionesStats =
-        isSuperadmin ||
-        hasFullOperationalAccess ||
-        (hasPermission('ver estadisticas') && isDelegaciones);
-
-    final canSeeVialidadesStats =
-        isSuperadmin ||
-        hasFullOperationalAccess ||
-        (hasPermission('ver operativos vialidades') && isVialidades);
+    final canSeeSiniestrosFiles =
+        hasAdminRole &&
+        (isSuperadmin || hasFullOperationalAccess || isSiniestros);
+    final canSeeDelegacionesFiles =
+        hasAdminRole &&
+        (isSuperadmin || hasFullOperationalAccess || isDelegaciones);
+    final canSeeVialidadesFiles =
+        hasAdminRole &&
+        (isSuperadmin ||
+            hasFullOperationalAccess ||
+            isSeguridadVial ||
+            isVialidades);
+    final canSeeFomentoFiles =
+        hasAdminRole &&
+        (isSuperadmin ||
+            hasFullOperationalAccess ||
+            isSeguridadVial ||
+            isFomento);
 
     return AdministrativeAccess(
       canSeeUsers: canSeeUsers,
       canSeePersonal: canSeePersonal,
-      canSeeSiniestrosStats: canSeeSiniestrosStats,
-      canSeeActividadesStats: canSeeActividadesStats,
-      canSeeDelegacionesStats: canSeeDelegacionesStats,
-      canSeeVialidadesStats: canSeeVialidadesStats,
+      canSeeSiniestrosFiles: canSeeSiniestrosFiles,
+      canSeeDelegacionesFiles: canSeeDelegacionesFiles,
+      canSeeVialidadesFiles: canSeeVialidadesFiles,
+      canSeeFomentoFiles: canSeeFomentoFiles,
     );
   }
 

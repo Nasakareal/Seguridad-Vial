@@ -13,9 +13,7 @@ import '../../widgets/header_card.dart';
 import '../login_screen.dart';
 
 class VialidadesUrbanasScreen extends StatefulWidget {
-  final bool statisticsMode;
-
-  const VialidadesUrbanasScreen({super.key, this.statisticsMode = false});
+  const VialidadesUrbanasScreen({super.key});
 
   @override
   State<VialidadesUrbanasScreen> createState() =>
@@ -506,11 +504,7 @@ class _VialidadesUrbanasScreenState extends State<VialidadesUrbanasScreen>
       appBar: AppBar(
         elevation: 0,
         backgroundColor: Colors.blue,
-        title: Text(
-          widget.statisticsMode
-              ? 'Estadísticas Vialidades'
-              : 'Vialidades Urbanas',
-        ),
+        title: const Text('Vialidades Urbanas'),
         actions: const [AccountMenuAction()],
       ),
       drawer: AppDrawer(trackingOn: _trackingOn),
@@ -578,7 +572,7 @@ class _VialidadesUrbanasScreenState extends State<VialidadesUrbanasScreen>
           ),
         ),
       ),
-      floatingActionButton: _canCreate && !widget.statisticsMode
+      floatingActionButton: _canCreate
           ? FloatingActionButton.extended(
               onPressed: _goCreate,
               tooltip: 'Agregar dispositivo',

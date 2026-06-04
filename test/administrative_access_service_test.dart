@@ -70,40 +70,63 @@ void main() {
     expect(access.canSeeConfigurationMenu, isTrue);
   });
 
-  test(
-    'vialidades user only sees vialidades stats despite inherited stat perms',
-    () async {
-      SharedPreferences.setMockInitialValues(<String, Object>{
-        'auth_role': 'Administrativo',
-        'auth_role_id': 5,
-        'auth_unidad_id': AuthService.unidadVialidadesUrbanasId,
-        'auth_user_payload': jsonEncode(<String, Object>{
-          'role': <String, Object>{'id': 5, 'name': 'Administrativo'},
-          'unidad_id': AuthService.unidadVialidadesUrbanasId,
-          'unidad': <String, Object>{
-            'id': AuthService.unidadVialidadesUrbanasId,
-            'nombre': 'PROTECCIÓN EN VIALIDADES URBANAS',
-          },
-        }),
-        'auth_perms': <String>[
-          'ver estadisticas',
-          'ver estadisticas globales',
-          'ver estadisticas actividades',
-          'ver operativos vialidades',
-        ],
-      });
+  test('vialidades administrative user only sees vialidades files', () async {
+    SharedPreferences.setMockInitialValues(<String, Object>{
+      'auth_role': 'Administrativo',
+      'auth_role_id': 5,
+      'auth_unidad_id': AuthService.unidadVialidadesUrbanasId,
+      'auth_user_payload': jsonEncode(<String, Object>{
+        'role': <String, Object>{'id': 5, 'name': 'Administrativo'},
+        'unidad_id': AuthService.unidadVialidadesUrbanasId,
+        'unidad': <String, Object>{
+          'id': AuthService.unidadVialidadesUrbanasId,
+          'nombre': 'PROTECCIÓN EN VIALIDADES URBANAS',
+        },
+      }),
+      'auth_perms': <String>[
+        'ver estadisticas',
+        'ver estadisticas globales',
+        'ver estadisticas actividades',
+        'ver operativos vialidades',
+      ],
+    });
 
-      final access = await AdministrativeAccessService.loadAccess();
+    final access = await AdministrativeAccessService.loadAccess();
 
-      expect(access.canSeeSiniestrosStats, isFalse);
-      expect(access.canSeeActividadesStats, isFalse);
-      expect(access.canSeeDelegacionesStats, isFalse);
-      expect(access.canSeeVialidadesStats, isTrue);
-      expect(access.canSeeConfigurationMenu, isTrue);
-    },
-  );
+    expect(access.canSeeSiniestrosFiles, isFalse);
+    expect(access.canSeeDelegacionesFiles, isFalse);
+    expect(access.canSeeVialidadesFiles, isTrue);
+    expect(access.canSeeFomentoFiles, isFalse);
+    expect(access.canSeeConfigurationMenu, isTrue);
+  });
 
-  test('siniestros user sees siniestros and activities stats only', () async {
+  test('vialidades operative user cannot see statistics files', () async {
+    SharedPreferences.setMockInitialValues(<String, Object>{
+      'auth_role': 'Agente Vial',
+      'auth_role_id': 12,
+      'auth_unidad_id': AuthService.unidadVialidadesUrbanasId,
+      'auth_user_payload': jsonEncode(<String, Object>{
+        'role': <String, Object>{'id': 12, 'name': 'Agente Vial'},
+        'unidad_id': AuthService.unidadVialidadesUrbanasId,
+      }),
+      'auth_perms': <String>[
+        'ver estadisticas',
+        'ver estadisticas globales',
+        'ver estadisticas actividades',
+        'ver operativos vialidades',
+      ],
+    });
+
+    final access = await AdministrativeAccessService.loadAccess();
+
+    expect(access.canSeeSiniestrosFiles, isFalse);
+    expect(access.canSeeDelegacionesFiles, isFalse);
+    expect(access.canSeeVialidadesFiles, isFalse);
+    expect(access.canSeeFomentoFiles, isFalse);
+    expect(access.canSeeConfigurationMenu, isFalse);
+  });
+
+  test('siniestros administrative user sees siniestros files only', () async {
     SharedPreferences.setMockInitialValues(<String, Object>{
       'auth_role': 'Administrativo',
       'auth_role_id': 5,
@@ -120,10 +143,10 @@ void main() {
 
     final access = await AdministrativeAccessService.loadAccess();
 
-    expect(access.canSeeSiniestrosStats, isTrue);
-    expect(access.canSeeActividadesStats, isTrue);
-    expect(access.canSeeDelegacionesStats, isFalse);
-    expect(access.canSeeVialidadesStats, isFalse);
+    expect(access.canSeeSiniestrosFiles, isTrue);
+    expect(access.canSeeDelegacionesFiles, isFalse);
+    expect(access.canSeeVialidadesFiles, isFalse);
+    expect(access.canSeeFomentoFiles, isFalse);
   });
 
   test('reads administrative role from stored payload', () async {

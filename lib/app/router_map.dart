@@ -14,6 +14,7 @@ import '../screens/settings/personal_incidencia_form_screen.dart';
 import '../screens/settings/personal_show_screen.dart';
 import '../screens/settings/settings_home_screen.dart';
 import '../screens/settings/settings_personal_screen.dart';
+import '../screens/settings/settings_statistics_files_screen.dart';
 import '../screens/settings/user_form_screen.dart';
 import '../screens/settings/user_show_screen.dart';
 import '../screens/settings/users_screen.dart';
@@ -108,6 +109,12 @@ final Map<String, WidgetBuilder> appRoutesMap = {
   AppRoutes.settingsPersonalShow: (context) => const PersonalShowScreen(),
   AppRoutes.settingsPersonalIncidenciaCreate: (context) =>
       const PersonalIncidenciaCreateScreen(),
+  AppRoutes.settingsStatisticsFiles: (context) {
+    final args = ModalRoute.of(context)?.settings.arguments;
+    return SettingsStatisticsFilesScreen(
+      initialModuleId: args is String ? args : null,
+    );
+  },
   AppRoutes.tutoriales: (context) => const TutorialesScreen(),
   AppRoutes.directorioRedApoyo: (context) => const DirectorioRedApoyoScreen(),
   AppRoutes.directorioRedApoyoShow: (context) =>
@@ -158,8 +165,6 @@ final Map<String, WidgetBuilder> appRoutesMap = {
       const EstadisticasGlobalesHechosScreen(),
   AppRoutes.estadisticasActividades: (context) =>
       const EstadisticasActividadesHomeScreen(),
-  AppRoutes.estadisticasVialidades: (context) =>
-      const VialidadesUrbanasScreen(statisticsMode: true),
 
   AppRoutes.dictamenes: (context) => const DictamenesScreen(),
   AppRoutes.dictamenesCreate: (context) => const DictamenCreateScreen(),

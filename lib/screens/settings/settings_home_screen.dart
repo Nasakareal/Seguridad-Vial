@@ -6,6 +6,7 @@ import '../../services/auth_service.dart';
 import '../../services/tracking_service.dart';
 import '../../widgets/account_drawer.dart';
 import '../login_screen.dart';
+import 'settings_statistics_files_screen.dart';
 
 class SettingsHomeScreen extends StatefulWidget {
   const SettingsHomeScreen({super.key});
@@ -34,10 +35,10 @@ class _SettingsHomeScreenState extends State<SettingsHomeScreen> {
     return _SettingsAccess(
       canSeeUsers: access.canSeeUsers,
       canSeePersonal: access.canSeePersonal,
-      canSeeSiniestrosStats: access.canSeeSiniestrosStats,
-      canSeeActividadesStats: access.canSeeActividadesStats,
-      canSeeDelegacionesStats: access.canSeeDelegacionesStats,
-      canSeeVialidadesStats: access.canSeeVialidadesStats,
+      canSeeSiniestrosFiles: access.canSeeSiniestrosFiles,
+      canSeeDelegacionesFiles: access.canSeeDelegacionesFiles,
+      canSeeVialidadesFiles: access.canSeeVialidadesFiles,
+      canSeeFomentoFiles: access.canSeeFomentoFiles,
     );
   }
 
@@ -64,6 +65,16 @@ class _SettingsHomeScreenState extends State<SettingsHomeScreen> {
 
   void _goTo(String route) {
     Navigator.pushNamed(context, route);
+  }
+
+  void _goToFiles(String moduleId) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) =>
+            SettingsStatisticsFilesScreen(initialModuleId: moduleId),
+      ),
+    );
   }
 
   @override
@@ -101,33 +112,33 @@ class _SettingsHomeScreenState extends State<SettingsHomeScreen> {
                   subtitle: 'Expedientes e incidencias del personal',
                   onTap: () => _goTo(AppRoutes.settingsPersonal),
                 ),
-              if (access.canSeeSiniestrosStats)
+              if (access.canSeeSiniestrosFiles)
                 _SettingsTile(
                   icon: Icons.car_crash_outlined,
-                  title: 'Estadísticas de siniestros',
-                  subtitle: 'Indicadores globales, series y hechos filtrados',
-                  onTap: () => _goTo(AppRoutes.estadisticasGlobales),
+                  title: 'Estadísticas Siniestros',
+                  subtitle: 'Parte de novedades, bitácora, mini parte y Excel',
+                  onTap: () => _goToFiles('siniestros'),
                 ),
-              if (access.canSeeActividadesStats)
-                _SettingsTile(
-                  icon: Icons.photo_library_outlined,
-                  title: 'Estadísticas de actividades',
-                  subtitle: 'Indicadores, capturas y filtros operativos',
-                  onTap: () => _goTo(AppRoutes.estadisticasActividades),
-                ),
-              if (access.canSeeDelegacionesStats)
+              if (access.canSeeDelegacionesFiles)
                 _SettingsTile(
                   icon: Icons.fact_check_outlined,
-                  title: 'Estadísticas de delegaciones',
-                  subtitle: 'Conteos, alertas y regionales del corte',
-                  onTap: () => _goTo(AppRoutes.delegacionesExcelRevision),
+                  title: 'Estadísticas Delegaciones',
+                  subtitle: 'Excel diario, Excel mensual y archivos de corte',
+                  onTap: () => _goToFiles('delegaciones'),
                 ),
-              if (access.canSeeVialidadesStats)
+              if (access.canSeeVialidadesFiles)
                 _SettingsTile(
                   icon: Icons.traffic_outlined,
-                  title: 'Estadísticas de vialidades',
-                  subtitle: 'Resumen diario de Vialidades Urbanas',
-                  onTap: () => _goTo(AppRoutes.estadisticasVialidades),
+                  title: 'Estadísticas Vialidades Urbanas',
+                  subtitle: 'Excel diario de Vialidades Urbanas',
+                  onTap: () => _goToFiles('vialidades'),
+                ),
+              if (access.canSeeFomentoFiles)
+                _SettingsTile(
+                  icon: Icons.school_outlined,
+                  title: 'Estadísticas Fomento',
+                  subtitle: 'Excel diario de Fomento a la Cultura Vial',
+                  onTap: () => _goToFiles('fomento'),
                 ),
             ];
 
@@ -192,18 +203,18 @@ class _SettingsHomeScreenState extends State<SettingsHomeScreen> {
 class _SettingsAccess {
   final bool canSeeUsers;
   final bool canSeePersonal;
-  final bool canSeeSiniestrosStats;
-  final bool canSeeActividadesStats;
-  final bool canSeeDelegacionesStats;
-  final bool canSeeVialidadesStats;
+  final bool canSeeSiniestrosFiles;
+  final bool canSeeDelegacionesFiles;
+  final bool canSeeVialidadesFiles;
+  final bool canSeeFomentoFiles;
 
   const _SettingsAccess({
     required this.canSeeUsers,
     required this.canSeePersonal,
-    required this.canSeeSiniestrosStats,
-    required this.canSeeActividadesStats,
-    required this.canSeeDelegacionesStats,
-    required this.canSeeVialidadesStats,
+    required this.canSeeSiniestrosFiles,
+    required this.canSeeDelegacionesFiles,
+    required this.canSeeVialidadesFiles,
+    required this.canSeeFomentoFiles,
   });
 }
 

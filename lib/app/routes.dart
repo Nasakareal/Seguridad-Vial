@@ -16,6 +16,7 @@ class AppRoutes {
   static const String settingsPersonalShow = '/settings/personal/show';
   static const String settingsPersonalIncidenciaCreate =
       '/settings/personal/incidencias/create';
+  static const String settingsStatisticsFiles = '/settings/statistics-files';
   static const String tutoriales = '/tutoriales';
   static const String directorioRedApoyo = '/directorio-red-apoyo';
   static const String directorioRedApoyoShow = '/directorio-red-apoyo/show';
@@ -62,7 +63,6 @@ class AppRoutes {
   static const String estadisticasGlobalesHechos =
       '/estadisticas-globales/hechos';
   static const String estadisticasActividades = '/estadisticas-actividades';
-  static const String estadisticasVialidades = '/estadisticas-vialidades';
 
   static const String dictamenes = '/dictamenes';
   static const String dictamenesCreate = '/dictamenes/create';
