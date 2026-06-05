@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../core/municipios_michoacan.dart';
@@ -11,6 +12,7 @@ import '../../services/vialidades_urbanas_form_service.dart';
 import '../../services/vialidades_urbanas_service.dart';
 import '../../widgets/landscape_photo_crop_screen.dart';
 import '../../widgets/municipio_autocomplete_field.dart';
+import '../../widgets/normalized_integer_input_formatter.dart';
 
 class VialidadesUrbanasCreateScreen extends StatefulWidget {
   const VialidadesUrbanasCreateScreen({super.key});
@@ -58,6 +60,15 @@ class _VialidadesUrbanasCreateScreenState
   final _patrullasCtrl = TextEditingController(text: '0');
   final _gruasCtrl = TextEditingController(text: '0');
   final _otrosApoyosCtrl = TextEditingController(text: '0');
+
+  final _elementosFocus = FocusNode();
+  final _crpFocus = FocusNode();
+  final _motopatrullasFocus = FocusNode();
+  final _fenixFocus = FocusNode();
+  final _unidadesMotorizadasFocus = FocusNode();
+  final _patrullasFocus = FocusNode();
+  final _gruasFocus = FocusNode();
+  final _otrosApoyosFocus = FocusNode();
 
   List<File> _fotos = <File>[];
   late final LocalDraftAutosave _draft;
@@ -116,6 +127,14 @@ class _VialidadesUrbanasCreateScreenState
     _patrullasCtrl.dispose();
     _gruasCtrl.dispose();
     _otrosApoyosCtrl.dispose();
+    _elementosFocus.dispose();
+    _crpFocus.dispose();
+    _motopatrullasFocus.dispose();
+    _fenixFocus.dispose();
+    _unidadesMotorizadasFocus.dispose();
+    _patrullasFocus.dispose();
+    _gruasFocus.dispose();
+    _otrosApoyosFocus.dispose();
     super.dispose();
   }
 
@@ -433,10 +452,41 @@ class _VialidadesUrbanasCreateScreenState
     }
   }
 
-  Widget _buildForceField(String label, TextEditingController controller) {
+  Widget _buildForceField(
+    String label,
+    TextEditingController controller, {
+    required FocusNode focusNode,
+    FocusNode? nextFocusNode,
+  }) {
     return TextFormField(
       controller: controller,
-      keyboardType: TextInputType.number,
+      focusNode: focusNode,
+      keyboardType: const TextInputType.numberWithOptions(
+        signed: false,
+        decimal: false,
+      ),
+      textInputAction: nextFocusNode == null
+          ? TextInputAction.done
+          : TextInputAction.next,
+      inputFormatters: const <TextInputFormatter>[
+        NormalizedIntegerInputFormatter(),
+      ],
+      onTap: () {
+        if (controller.text == '0') {
+          controller.selection = TextSelection(
+            baseOffset: 0,
+            extentOffset: controller.text.length,
+          );
+        }
+      },
+      onFieldSubmitted: (_) {
+        final next = nextFocusNode;
+        if (next == null) {
+          focusNode.unfocus();
+        } else {
+          next.requestFocus();
+        }
+      },
       decoration: _dec(label),
     );
   }
@@ -636,11 +686,18 @@ class _VialidadesUrbanasCreateScreenState
                                 child: _buildForceField(
                                   'Elementos',
                                   _elementosCtrl,
+                                  focusNode: _elementosFocus,
+                                  nextFocusNode: _crpFocus,
                                 ),
                               ),
                               const SizedBox(width: 10),
                               Expanded(
-                                child: _buildForceField('CRP', _crpCtrl),
+                                child: _buildForceField(
+                                  'CRP',
+                                  _crpCtrl,
+                                  focusNode: _crpFocus,
+                                  nextFocusNode: _motopatrullasFocus,
+                                ),
                               ),
                             ],
                           ),
@@ -651,11 +708,18 @@ class _VialidadesUrbanasCreateScreenState
                                 child: _buildForceField(
                                   'Motopatrullas',
                                   _motopatrullasCtrl,
+                                  focusNode: _motopatrullasFocus,
+                                  nextFocusNode: _fenixFocus,
                                 ),
                               ),
                               const SizedBox(width: 10),
                               Expanded(
-                                child: _buildForceField('Fenix', _fenixCtrl),
+                                child: _buildForceField(
+                                  'Fenix',
+                                  _fenixCtrl,
+                                  focusNode: _fenixFocus,
+                                  nextFocusNode: _unidadesMotorizadasFocus,
+                                ),
                               ),
                             ],
                           ),
@@ -666,6 +730,8 @@ class _VialidadesUrbanasCreateScreenState
                                 child: _buildForceField(
                                   'Unid. motorizadas',
                                   _unidadesMotorizadasCtrl,
+                                  focusNode: _unidadesMotorizadasFocus,
+                                  nextFocusNode: _patrullasFocus,
                                 ),
                               ),
                               const SizedBox(width: 10),
@@ -673,6 +739,8 @@ class _VialidadesUrbanasCreateScreenState
                                 child: _buildForceField(
                                   'Patrullas',
                                   _patrullasCtrl,
+                                  focusNode: _patrullasFocus,
+                                  nextFocusNode: _gruasFocus,
                                 ),
                               ),
                             ],
@@ -681,13 +749,19 @@ class _VialidadesUrbanasCreateScreenState
                           Row(
                             children: [
                               Expanded(
-                                child: _buildForceField('Gruas', _gruasCtrl),
+                                child: _buildForceField(
+                                  'Gruas',
+                                  _gruasCtrl,
+                                  focusNode: _gruasFocus,
+                                  nextFocusNode: _otrosApoyosFocus,
+                                ),
                               ),
                               const SizedBox(width: 10),
                               Expanded(
                                 child: _buildForceField(
                                   'Otros apoyos',
                                   _otrosApoyosCtrl,
+                                  focusNode: _otrosApoyosFocus,
                                 ),
                               ),
                             ],

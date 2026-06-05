@@ -119,7 +119,7 @@ class AppAccountDrawer extends StatelessWidget {
               ),
               Expanded(
                 child: ListView(
-                  padding: const EdgeInsets.fromLTRB(14, 0, 14, 24),
+                  padding: drawerScrollablePadding(context),
                   children: [
                     const DrawerSectionLabel(label: 'Cuenta'),
                     DrawerSurface(

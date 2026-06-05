@@ -209,6 +209,7 @@ class _MapaPatrullasScreenState extends State<MapaPatrullasScreen>
     return personal.map((u) {
       final loc = mapByUser[u.userId];
       return u.copyWith(
+        compartirUbicacion: loc?.compartirUbicacion,
         lastCapturedAtStr: loc?.capturedAtStr,
         lastLat: loc?.lat,
         lastLng: loc?.lng,
@@ -477,13 +478,14 @@ class _MapaPatrullasScreenState extends State<MapaPatrullasScreen>
     final markers = <Marker>[];
 
     final mapVisible = _personal.where((p) {
-      if (!p.compartirUbicacion) return false;
       if (p.lastLat == null || p.lastLng == null) return false;
-      return p.isStale == false;
+      return true;
     }).toList();
 
     for (final p in mapVisible) {
-      const color = Colors.blue;
+      final color = !p.compartirUbicacion
+          ? Colors.red
+          : (p.isStale ? Colors.grey : Colors.blue);
 
       markers.add(
         Marker(
@@ -949,6 +951,7 @@ class _PatrullaLoc {
   final double lng;
   final String? capturedAtStr;
   final String? patrullaNumero;
+  final bool compartirUbicacion;
 
   _PatrullaLoc({
     required this.userId,
@@ -957,9 +960,12 @@ class _PatrullaLoc {
     required this.lng,
     required this.capturedAtStr,
     required this.patrullaNumero,
+    required this.compartirUbicacion,
   });
 
   factory _PatrullaLoc.fromJson(Map<String, dynamic> j) {
+    final compartir = j['compartir_ubicacion'];
+
     return _PatrullaLoc(
       userId: (j['user_id'] ?? 0) is int
           ? (j['user_id'] ?? 0) as int
@@ -973,6 +979,9 @@ class _PatrullaLoc {
           : double.tryParse('${j['lng']}') ?? 0.0,
       capturedAtStr: j['captured_at'] as String?,
       patrullaNumero: j['patrulla_numero']?.toString(),
+      compartirUbicacion: compartir == null
+          ? true
+          : _readBool(compartir, fallback: true),
     );
   }
 
@@ -1042,6 +1051,10 @@ class _PersonalItem {
         _readString(j['unidad_label']) ??
         _readNestedName(unidadRaw);
 
+    final lastCapturedAt = _readString(
+      j['captured_at'] ?? j['last_captured_at'],
+    );
+
     return _PersonalItem(
       userId: id,
       name: (j['name'] ?? '') as String,
@@ -1050,11 +1063,11 @@ class _PersonalItem {
       unidadId: unidadId,
       unidadNombre: unidadNombre,
       compartirUbicacion: enabled,
-      lastCapturedAtStr: null,
-      lastLat: null,
-      lastLng: null,
-      isStale: true,
-      patrullaNumero: null,
+      lastCapturedAtStr: lastCapturedAt,
+      lastLat: _readNullableDouble(j['lat'] ?? j['last_lat']),
+      lastLng: _readNullableDouble(j['lng'] ?? j['last_lng']),
+      isStale: _isStaleCapturedAt(lastCapturedAt),
+      patrullaNumero: _readString(j['patrulla_numero']),
     );
   }
 
@@ -1095,6 +1108,29 @@ class _PersonalItem {
 int? _readNullableInt(dynamic value) {
   final parsed = int.tryParse('${value ?? ''}');
   return parsed != null && parsed > 0 ? parsed : null;
+}
+
+double? _readNullableDouble(dynamic value) {
+  final parsed = double.tryParse('${value ?? ''}');
+  return parsed;
+}
+
+bool _readBool(dynamic value, {required bool fallback}) {
+  if (value is bool) return value;
+  if (value is num) return value == 1;
+
+  final normalized = '${value ?? ''}'.trim().toLowerCase();
+  if (normalized == '1' || normalized == 'true') return true;
+  if (normalized == '0' || normalized == 'false') return false;
+
+  return fallback;
+}
+
+bool _isStaleCapturedAt(String? capturedAtStr) {
+  if (capturedAtStr == null || capturedAtStr.trim().isEmpty) return true;
+  final dt = DateTime.tryParse(capturedAtStr.replaceFirst(' ', 'T'));
+  if (dt == null) return true;
+  return DateTime.now().difference(dt).inMinutes >= 3;
 }
 
 int? _readNestedId(dynamic raw) {
@@ -1257,7 +1293,9 @@ class _PatrullaTile extends StatelessWidget {
         : (item.isStale ? Colors.grey : Colors.green);
 
     final subtitle = !enabled
-        ? 'Ubicación desactivada'
+        ? (item.lastCapturedAtStr == null
+              ? 'Ubicación desactivada'
+              : 'Ubicación desactivada · Última: ${item.lastCapturedAtStr}')
         : (item.lastCapturedAtStr ?? 'Sin fecha');
 
     return Container(

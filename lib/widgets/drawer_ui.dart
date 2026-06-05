@@ -1,5 +1,10 @@
 import 'package:flutter/material.dart';
 
+EdgeInsets drawerScrollablePadding(BuildContext context) {
+  final bottomInset = MediaQuery.viewPaddingOf(context).bottom;
+  return EdgeInsets.fromLTRB(14, 0, 14, bottomInset + 72);
+}
+
 class DrawerHeaderPanel extends StatelessWidget {
   final IconData? icon;
   final String? avatarText;
