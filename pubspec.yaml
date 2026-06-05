@@ -50,7 +50,8 @@ dev_dependencies:
   flutter_launcher_icons: ^0.13.1
 
 flutter:
-  disable-swift-package-manager: true
+  config:
+    enable-swift-package-manager: false
 
   uses-material-design: true
 
