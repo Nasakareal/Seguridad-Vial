@@ -307,9 +307,9 @@ class _LesionadosScreenState extends State<LesionadosScreen> {
       return Container(
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: Colors.red.withOpacity(.06),
+          color: Colors.red.withValues(alpha: .06),
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: Colors.red.withOpacity(.2)),
+          border: Border.all(color: Colors.red.withValues(alpha: .2)),
         ),
         child: Text('Error:\n$_error'),
       );
@@ -359,6 +359,7 @@ class _LesionadoCard extends StatelessWidget {
     final edad = item['edad'];
     final sexo = item['sexo'];
     final tipoLesion = item['tipo_lesion'];
+    final tipoVictima = (item['tipo_victima'] ?? '').toString().trim();
     final hospitalizado = item['hospitalizado'];
     final createdAt = item['created_at'];
 
@@ -397,9 +398,11 @@ class _LesionadoCard extends StatelessWidget {
                       vertical: 6,
                     ),
                     decoration: BoxDecoration(
-                      color: Colors.blue.withOpacity(.10),
+                      color: Colors.blue.withValues(alpha: .10),
                       borderRadius: BorderRadius.circular(999),
-                      border: Border.all(color: Colors.blue.withOpacity(.25)),
+                      border: Border.all(
+                        color: Colors.blue.withValues(alpha: .25),
+                      ),
                     ),
                     child: Text(
                       'ID $id',
@@ -417,6 +420,7 @@ class _LesionadoCard extends StatelessWidget {
                 runSpacing: 6,
                 children: [
                   if (tipoLesion != null) _chip('Lesión: $tipoLesion'),
+                  if (tipoVictima.isNotEmpty) _chip('Tipo: $tipoVictima'),
                   if (edad != null) _chip('Edad: $edad'),
                   if (sexo != null) _chip('Sexo: $sexo'),
                   if (hospitalizado != null) _chip('Hosp: $hospitalizado'),

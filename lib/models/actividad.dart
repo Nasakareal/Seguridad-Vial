@@ -335,7 +335,7 @@ class Actividad {
       createdAt: _asNullableDate(json['created_at']),
       updatedAt: _asNullableDate(json['updated_at']),
       fecha: _asNullableString(json['fecha']),
-      hora: _asNullableString(json['hora']),
+      hora: _asNullableHour(json['hora']),
       lugar: _asNullableString(json['lugar']),
       municipio: _asNullableString(json['municipio']),
       carretera: _asNullableString(json['carretera']),
@@ -515,6 +515,18 @@ String? _asNullableString(dynamic v) {
   if (v is Map) return null;
   final s = v.toString().trim();
   return s.isEmpty ? null : s;
+}
+
+String? _asNullableHour(dynamic v) {
+  final s = _asNullableString(v);
+  if (s == null) return null;
+
+  final match = RegExp(
+    r'([01]?\d|2[0-3]):([0-5]\d)(?::[0-5]\d)?',
+  ).firstMatch(s);
+  if (match == null) return null;
+
+  return '${match.group(1)!.padLeft(2, '0')}:${match.group(2)!}';
 }
 
 String? _asNestedNullableString(dynamic v) {

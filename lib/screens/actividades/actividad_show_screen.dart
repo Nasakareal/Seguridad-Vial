@@ -257,7 +257,7 @@ class _ActividadShowScreenState extends State<ActividadShowScreen>
                       _kv('Subcategoria', a.subcategoria?.nombre ?? '—'),
                       _kv('Capturo', a.nombre),
                       _kv('Fecha', _displayDate(a.fecha)),
-                      _kv('Hora', _displayDate(a.hora)),
+                      _kv('Hora', _displayText(a.hora)),
                       _kv('Unidad', a.unidad?.nombre ?? '—'),
                       _kv('Delegacion', a.delegacion?.nombre ?? '—'),
                       _kv('Destacamento', a.destacamento?.nombre ?? '—'),

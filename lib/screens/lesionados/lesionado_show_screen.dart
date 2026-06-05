@@ -64,6 +64,7 @@ class LesionadoShowScreen extends StatelessWidget {
     final edad = it['edad'];
     final sexo = it['sexo'];
     final tipoLesion = _safeText(it['tipo_lesion']);
+    final tipoVictima = _safeText(it['tipo_victima']);
     final hospitalizado = it['hospitalizado'];
     final hospital = it['hospital'];
     final atencionEnSitio = it['atencion_en_sitio'];
@@ -93,6 +94,7 @@ class LesionadoShowScreen extends StatelessWidget {
                 if (hechoId > 0) _row('Hecho', '$hechoId'),
                 if (edad != null) _row('Edad', _safeText(edad)),
                 if (sexo != null) _row('Sexo', _safeText(sexo)),
+                if (tipoVictima != '—') _row('Tipo lesionado', tipoVictima),
                 if (createdAt != null) _row('Registrado', _safeText(createdAt)),
                 const SizedBox(height: 8),
                 Row(
@@ -105,9 +107,11 @@ class LesionadoShowScreen extends StatelessWidget {
                         vertical: 6,
                       ),
                       decoration: BoxDecoration(
-                        color: tipoColor.withOpacity(.10),
+                        color: tipoColor.withValues(alpha: .10),
                         borderRadius: BorderRadius.circular(999),
-                        border: Border.all(color: tipoColor.withOpacity(.25)),
+                        border: Border.all(
+                          color: tipoColor.withValues(alpha: .25),
+                        ),
                       ),
                       child: Text(
                         tipoLesion.toUpperCase(),
@@ -240,7 +244,7 @@ class _CardShell extends StatelessWidget {
           BoxShadow(
             blurRadius: 14,
             offset: const Offset(0, 8),
-            color: Colors.black.withOpacity(.06),
+            color: Colors.black.withValues(alpha: .06),
           ),
         ],
       ),

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../core/lesionados/lesionados_catalog.dart';
 import '../../services/offline_sync_service.dart';
 
 class LesionadoEditScreen extends StatefulWidget {
@@ -24,6 +25,8 @@ class _LesionadoEditScreenState extends State<LesionadoEditScreen> {
   String? _sexo; // Masculino | Femenino | Otro
 
   String _tipoLesion = 'Leve'; // Leve | Moderada | Grave | Fallecido
+  // Conductor | Pasajero | Peatón | Motociclista | Ciclista
+  String? _tipoVictima;
 
   bool _hospitalizado = false;
   final TextEditingController _hospitalCtrl = TextEditingController();
@@ -82,6 +85,7 @@ class _LesionadoEditScreenState extends State<LesionadoEditScreen> {
     } else {
       _tipoLesion = 'Leve';
     }
+    _tipoVictima = LesionadosCatalog.tipoVictimaValue(it['tipo_victima']);
 
     _hospitalizado = _toBool(it['hospitalizado'], fallback: false);
     _hospitalCtrl.text = (it['hospital'] ?? '').toString();
@@ -158,6 +162,7 @@ class _LesionadoEditScreenState extends State<LesionadoEditScreen> {
         if (_sexo != null && _sexo!.trim().isNotEmpty) 'sexo': _sexo,
 
         'tipo_lesion': _tipoLesion,
+        'tipo_victima': _tipoVictima,
 
         'hospitalizado': _hospitalizado,
         if (_hospitalizado && _hospitalCtrl.text.trim().isNotEmpty)
@@ -256,8 +261,9 @@ class _LesionadoEditScreenState extends State<LesionadoEditScreen> {
                               if (t.isEmpty) return null;
                               final n = int.tryParse(t);
                               if (n == null) return 'Edad inválida';
-                              if (n < 0 || n > 120)
+                              if (n < 0 || n > 120) {
                                 return 'Edad fuera de rango';
+                              }
                               return null;
                             },
                           ),
@@ -321,6 +327,33 @@ class _LesionadoEditScreenState extends State<LesionadoEditScreen> {
                       ],
                       onChanged: (v) =>
                           setState(() => _tipoLesion = v ?? 'Leve'),
+                    ),
+                    const SizedBox(height: 12),
+
+                    DropdownButtonFormField<String>(
+                      value: _tipoVictima,
+                      isExpanded: true,
+                      decoration: const InputDecoration(
+                        labelText: 'Tipo de lesionado',
+                        prefixIcon: Icon(Icons.assignment_ind_outlined),
+                        border: OutlineInputBorder(),
+                        isDense: true,
+                      ),
+                      items: LesionadosCatalog.tiposVictima
+                          .map(
+                            (tipo) => DropdownMenuItem<String>(
+                              value: tipo,
+                              child: Text(tipo),
+                            ),
+                          )
+                          .toList(),
+                      validator: (v) {
+                        if ((v ?? '').trim().isEmpty) {
+                          return 'Selecciona el tipo de lesionado';
+                        }
+                        return null;
+                      },
+                      onChanged: (v) => setState(() => _tipoVictima = v),
                     ),
                     const SizedBox(height: 12),
 
@@ -433,7 +466,7 @@ class _CardShell extends StatelessWidget {
           BoxShadow(
             blurRadius: 14,
             offset: const Offset(0, 8),
-            color: Colors.black.withOpacity(.06),
+            color: Colors.black.withValues(alpha: .06),
           ),
         ],
       ),

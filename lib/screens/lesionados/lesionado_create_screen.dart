@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../core/lesionados/lesionados_catalog.dart';
 import '../../services/local_draft_service.dart';
 import '../../services/offline_sync_service.dart';
 
@@ -24,6 +25,8 @@ class _LesionadoCreateScreenState extends State<LesionadoCreateScreen> {
   String? _sexo; // Masculino | Femenino | Otro
 
   String _tipoLesion = 'Leve'; // Leve | Moderada | Grave | Fallecido
+  // Conductor | Pasajero | Peatón | Motociclista | Ciclista
+  String? _tipoVictima;
   bool _hospitalizado = false;
   final TextEditingController _hospitalCtrl = TextEditingController();
 
@@ -120,6 +123,7 @@ class _LesionadoCreateScreenState extends State<LesionadoCreateScreen> {
     if (tipoLesion.isNotEmpty) {
       _tipoLesion = tipoLesion;
     }
+    _tipoVictima = LesionadosCatalog.tipoVictimaValue(body['tipo_victima']);
 
     _hospitalizado = _toBool(body['hospitalizado'], fallback: false);
     _hospitalCtrl.text = (body['hospital'] ?? '').toString();
@@ -145,6 +149,7 @@ class _LesionadoCreateScreenState extends State<LesionadoCreateScreen> {
     _edadCtrl.text = _str(draft['edad']);
     _sexo = _blankToNull(draft['sexo']);
     _tipoLesion = _blankToNull(draft['tipo_lesion']) ?? 'Leve';
+    _tipoVictima = LesionadosCatalog.tipoVictimaValue(draft['tipo_victima']);
     _hospitalizado = _toBool(draft['hospitalizado'], fallback: false);
     _hospitalCtrl.text = _str(draft['hospital']);
     _atencionEnSitio = _toBool(draft['atencion_en_sitio'], fallback: true);
@@ -159,6 +164,7 @@ class _LesionadoCreateScreenState extends State<LesionadoCreateScreen> {
       'edad': _edadCtrl.text,
       'sexo': _sexo,
       'tipo_lesion': _tipoLesion,
+      'tipo_victima': _tipoVictima,
       'hospitalizado': _hospitalizado,
       'hospital': _hospitalCtrl.text,
       'atencion_en_sitio': _atencionEnSitio,
@@ -230,6 +236,7 @@ class _LesionadoCreateScreenState extends State<LesionadoCreateScreen> {
         if (_sexo != null && _sexo!.trim().isNotEmpty) 'sexo': _sexo,
 
         'tipo_lesion': _tipoLesion,
+        'tipo_victima': _tipoVictima,
         'hospitalizado': _hospitalizado,
         if (_hospitalizado && _hospitalCtrl.text.trim().isNotEmpty)
           'hospital': _hospitalCtrl.text.trim(),
@@ -419,6 +426,36 @@ class _LesionadoCreateScreenState extends State<LesionadoCreateScreen> {
                       ],
                       onChanged: (v) {
                         setState(() => _tipoLesion = v ?? 'Leve');
+                        _markDraftChanged();
+                      },
+                    ),
+                    const SizedBox(height: 12),
+
+                    DropdownButtonFormField<String>(
+                      value: _tipoVictima,
+                      isExpanded: true,
+                      decoration: const InputDecoration(
+                        labelText: 'Tipo de lesionado',
+                        prefixIcon: Icon(Icons.assignment_ind_outlined),
+                        border: OutlineInputBorder(),
+                        isDense: true,
+                      ),
+                      items: LesionadosCatalog.tiposVictima
+                          .map(
+                            (tipo) => DropdownMenuItem<String>(
+                              value: tipo,
+                              child: Text(tipo),
+                            ),
+                          )
+                          .toList(),
+                      validator: (v) {
+                        if ((v ?? '').trim().isEmpty) {
+                          return 'Selecciona el tipo de lesionado';
+                        }
+                        return null;
+                      },
+                      onChanged: (v) {
+                        setState(() => _tipoVictima = v);
                         _markDraftChanged();
                       },
                     ),
