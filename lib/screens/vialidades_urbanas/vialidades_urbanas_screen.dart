@@ -92,6 +92,7 @@ class _VialidadesUrbanasScreenState extends State<VialidadesUrbanasScreen>
 
     try {
       final canSee = await AuthService.isVialidadesUrbanasUser(refresh: true);
+      final isAgenteVial = await AuthService.isAgenteVial();
       final hasFullOperationalAccess =
           await AuthService.hasFullOperationalAccess();
       final canCreate =
@@ -101,6 +102,12 @@ class _VialidadesUrbanasScreenState extends State<VialidadesUrbanasScreen>
       if (!canSee) {
         throw Exception(
           'Este menu es exclusivo para usuarios de la Unidad de Proteccion en Vialidades Urbanas.',
+        );
+      }
+
+      if (isAgenteVial && !hasFullOperationalAccess) {
+        throw Exception(
+          'Para Agente Vial, los dispositivos se capturan desde Actividades.',
         );
       }
 

@@ -76,7 +76,7 @@ class VialidadesUrbanasDispositivoDetalle {
       titulo: asText(json['titulo']),
       contenido: asText(json['contenido']),
       ubicacion: asText(json['ubicacion']),
-      hora: asText(json['hora']),
+      hora: _asHour(json['hora']),
     );
   }
 
@@ -269,7 +269,7 @@ class VialidadesUrbanasDispositivo {
           ? asText(catalogo?['nombre'])
           : 'Sin catalogo',
       fecha: asText(json['fecha']),
-      hora: asText(json['hora']),
+      hora: _asHour(json['hora']),
       asunto: asText(json['asunto']),
       municipio: asText(json['municipio']),
       lugar: asText(json['lugar']),
@@ -371,6 +371,18 @@ class VialidadesUrbanasDispositivo {
 int? _readNullableInt(dynamic value) {
   final parsed = int.tryParse('${value ?? ''}');
   return parsed != null && parsed > 0 ? parsed : null;
+}
+
+String _asHour(dynamic value) {
+  final raw = (value ?? '').toString().trim();
+  if (raw.isEmpty) return '';
+
+  final match = RegExp(
+    r'([01]?\d|2[0-3]):([0-5]\d)(?::[0-5]\d)?',
+  ).firstMatch(raw);
+  if (match == null) return '';
+
+  return '${match.group(1)!.padLeft(2, '0')}:${match.group(2)!}';
 }
 
 class VialidadesUrbanasTotales {

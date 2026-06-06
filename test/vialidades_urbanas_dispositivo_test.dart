@@ -69,4 +69,23 @@ void main() {
 
     expect(dispositivo.belongsToUser(46), isFalse);
   });
+
+  test('normalizes parent and detail hours', () {
+    final dispositivo = VialidadesUrbanasDispositivo.fromJson(<String, dynamic>{
+      'id': 15,
+      'hora': '2026-06-05T11:25:00.000000Z',
+      'catalogo': <String, dynamic>{'id': 1, 'nombre': 'Operativo'},
+      'detalles': <Map<String, dynamic>>[
+        <String, dynamic>{
+          'id': 10,
+          'orden': 1,
+          'contenido': 'Detalle',
+          'hora': '07:05:00',
+        },
+      ],
+    });
+
+    expect(dispositivo.hora, '11:25');
+    expect(dispositivo.detalles.first.hora, '07:05');
+  });
 }

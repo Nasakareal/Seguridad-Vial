@@ -11,11 +11,13 @@ import '../../models/actividad.dart';
 import '../../models/actividad_categoria.dart';
 import '../../models/actividad_fomento.dart';
 import '../../models/actividad_subcategoria.dart';
+import '../../models/vialidades_urbanas_dispositivo.dart';
 import '../../services/actividades_service.dart';
 import '../../services/auth_service.dart';
 import '../../services/geo_service.dart';
 import '../../services/local_draft_service.dart';
 import '../../services/vehiculo_form_service.dart';
+import '../../services/vialidades_urbanas_service.dart';
 import '../../widgets/actividad_count_field.dart';
 import '../../widgets/actividad_detenidos_field.dart';
 import '../../widgets/actividad_people_count_guard.dart';
@@ -40,7 +42,10 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
   bool _canEditCaptureTimestamp = false;
   bool _captureTimestampAccessLoaded = false;
   bool _isFomentoUser = false;
+  bool _isAgenteVial = false;
+  bool _loadingVialidadesDisponibles = false;
   String? _error;
+  String? _vialidadesDisponiblesError;
   String? _userLabel;
   String? _clientUuid;
   String _locationStatus = 'Aun no se ha capturado la ubicacion.';
@@ -48,9 +53,12 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
 
   List<ActividadCategoria> _categorias = [];
   List<ActividadSubcategoria> _subcategorias = [];
+  List<VialidadesUrbanasDispositivo> _vialidadesDisponibles =
+      const <VialidadesUrbanasDispositivo>[];
 
   int? _categoriaId;
   int? _subcategoriaId;
+  int? _vialidadesDispositivoId;
   int? _fomentoProgramaId;
   String? _fomentoNivelEducativo;
   String? _fomentoSector;
@@ -195,6 +203,7 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
     final name = await AuthService.getUserName();
     final email = await AuthService.getUserEmail();
     final unidadId = await AuthService.getUnidadId();
+    final isAgenteVial = await AuthService.isAgenteVial();
     if (!mounted) return;
     setState(() {
       final cleanedName = (name ?? '').trim();
@@ -203,7 +212,11 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
           ? cleanedName
           : (cleanedEmail.isNotEmpty ? cleanedEmail : 'Usuario actual');
       _isFomentoUser = unidadId == AuthService.unidadCulturaVialId;
+      _isAgenteVial = isAgenteVial;
     });
+    if (isAgenteVial) {
+      unawaited(_loadVialidadesDisponibles());
+    }
     await _maybeSelectDefaultFomentoCategory();
   }
 
@@ -278,6 +291,45 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _error = 'No se pudieron cargar subcategorias.\n$e');
+    }
+  }
+
+  DateTime _fechaParaDispositivosDisponibles() {
+    return DateTime.tryParse(_fechaCtrl.text.trim()) ?? DateTime.now();
+  }
+
+  Future<void> _loadVialidadesDisponibles() async {
+    if (!mounted) return;
+
+    setState(() {
+      _loadingVialidadesDisponibles = true;
+      _vialidadesDisponiblesError = null;
+    });
+
+    try {
+      final result = await VialidadesUrbanasService.fetchIndex(
+        fecha: _fechaParaDispositivosDisponibles(),
+      );
+      final items = result.items.where((item) => item.id > 0).toList();
+
+      if (!mounted) return;
+      setState(() {
+        _vialidadesDisponibles = items;
+        if (_vialidadesDispositivoId != null &&
+            !items.any((item) => item.id == _vialidadesDispositivoId)) {
+          _vialidadesDispositivoId = null;
+        }
+        _loadingVialidadesDisponibles = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _vialidadesDisponibles = const <VialidadesUrbanasDispositivo>[];
+        _vialidadesDispositivoId = null;
+        _loadingVialidadesDisponibles = false;
+        _vialidadesDisponiblesError =
+            'No se pudieron cargar dispositivos disponibles.\n$e';
+      });
     }
   }
 
@@ -1061,6 +1113,31 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
     _draft.notifyChanged();
   }
 
+  VialidadesUrbanasDispositivo? _selectedVialidadesDispositivo() {
+    final id = _vialidadesDispositivoId;
+    if (id == null) return null;
+    for (final item in _vialidadesDisponibles) {
+      if (item.id == id) return item;
+    }
+    return null;
+  }
+
+  Future<void> _openVialidadesDetalle({required bool capturar}) async {
+    final item = _selectedVialidadesDispositivo();
+    if (item == null) return;
+
+    final route = capturar
+        ? AppRoutes.vialidadesUrbanasDispositivoCreate
+        : AppRoutes.vialidadesUrbanasDispositivoShow;
+    await Navigator.pushNamed(
+      context,
+      route,
+      arguments: <String, dynamic>{'dispositivoId': item.id},
+    );
+    if (!mounted) return;
+    await _loadVialidadesDisponibles();
+  }
+
   Future<void> _submit() async {
     setState(_clearValidationErrors);
 
@@ -1236,6 +1313,132 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
     );
   }
 
+  String _shortDispositivoHour(String raw) {
+    final match = RegExp(
+      r'([01]?\d|2[0-3]):([0-5]\d)(?::[0-5]\d)?',
+    ).firstMatch(raw);
+    if (match == null) return raw.trim();
+    return '${match.group(1)!.padLeft(2, '0')}:${match.group(2)!}';
+  }
+
+  String _vialidadesDispositivoLabel(VialidadesUrbanasDispositivo item) {
+    final title = item.asunto.trim().isNotEmpty
+        ? item.asunto.trim()
+        : item.catalogoNombre.trim();
+    final parts = <String>[
+      '#${item.id}',
+      if (title.isNotEmpty) title,
+      if (item.hora.trim().isNotEmpty) _shortDispositivoHour(item.hora),
+    ];
+    return parts.join(' • ');
+  }
+
+  Widget _dispositivosDisponiblesCard() {
+    final ids = _vialidadesDisponibles.map((item) => item.id).toSet();
+    final safeValue = ids.contains(_vialidadesDispositivoId)
+        ? _vialidadesDispositivoId
+        : null;
+    final selected = _selectedVialidadesDispositivo();
+
+    return _card(
+      title: 'Dispositivos disponibles',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (_loadingVialidadesDisponibles)
+            const Center(child: CircularProgressIndicator())
+          else if (_vialidadesDisponiblesError != null)
+            Text(
+              _vialidadesDisponiblesError!,
+              style: const TextStyle(
+                color: Colors.red,
+                fontWeight: FontWeight.w700,
+              ),
+            )
+          else if (_vialidadesDisponibles.isEmpty)
+            const Text('Sin dispositivos disponibles para la fecha.')
+          else ...[
+            DropdownButtonFormField<int>(
+              value: safeValue,
+              isExpanded: true,
+              items: [
+                const DropdownMenuItem<int>(
+                  value: null,
+                  child: Text('Seleccione dispositivo...'),
+                ),
+                ..._vialidadesDisponibles.map(
+                  (item) => DropdownMenuItem<int>(
+                    value: item.id,
+                    child: Text(
+                      _vialidadesDispositivoLabel(item),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ),
+              ],
+              onChanged: _saving
+                  ? null
+                  : (value) {
+                      setState(() => _vialidadesDispositivoId = value);
+                    },
+              decoration: _dec('Dispositivo'),
+            ),
+            if (selected != null) ...[
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  _Pill(text: selected.catalogoNombre),
+                  if (selected.lugar.trim().isNotEmpty)
+                    _Pill(text: selected.lugar.trim()),
+                  if (selected.hora.trim().isNotEmpty)
+                    _Pill(text: _shortDispositivoHour(selected.hora)),
+                  _Pill(text: '${selected.detallesCount} detalles'),
+                ],
+              ),
+            ],
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: selected == null
+                        ? null
+                        : () => _openVialidadesDetalle(capturar: false),
+                    icon: const Icon(Icons.visibility_outlined),
+                    label: const Text('Ver detalle'),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: selected == null
+                        ? null
+                        : () => _openVialidadesDetalle(capturar: true),
+                    icon: const Icon(Icons.edit_note),
+                    label: const Text('Capturar detalle'),
+                  ),
+                ),
+              ],
+            ),
+          ],
+          const SizedBox(height: 10),
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton.icon(
+              onPressed: _loadingVialidadesDisponibles
+                  ? null
+                  : _loadVialidadesDisponibles,
+              icon: const Icon(Icons.refresh),
+              label: const Text('Actualizar'),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final hasCoords =
@@ -1263,6 +1466,11 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
                 child: Text(_error!),
               ),
             if (_error != null) const SizedBox(height: 12),
+
+            if (_isAgenteVial) ...[
+              _dispositivosDisponiblesCard(),
+              const SizedBox(height: 12),
+            ],
 
             _card(
               title: 'Datos generales',
@@ -1899,6 +2107,27 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
             ],
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _Pill extends StatelessWidget {
+  final String text;
+
+  const _Pill({required this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF1F5F9),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        text,
+        style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 12),
       ),
     );
   }
