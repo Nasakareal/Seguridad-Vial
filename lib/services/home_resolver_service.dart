@@ -38,6 +38,10 @@ class HomeResolverService {
   }
 
   static Future<bool> isAgenteVialHomeAvailable() async {
+    if (await AuthService.isFenixRole()) {
+      return false;
+    }
+
     final isAgenteVial = await AuthService.isAgenteVial();
     final unidadId = await AuthService.getUnidadId();
     final isVialidadesUrbanas =
@@ -49,6 +53,26 @@ class HomeResolverService {
     }
 
     return true;
+  }
+
+  static Future<bool> isMotociclistaHomeAvailable() async {
+    final isMotociclista = await AuthService.isMotociclistaRole();
+    final unidadId = await AuthService.getUnidadId();
+    final isVialidadesUrbanas =
+        unidadId == AuthService.unidadVialidadesUrbanasId ||
+        await AuthService.isVialidadesUrbanasUser();
+
+    return isMotociclista && isVialidadesUrbanas;
+  }
+
+  static Future<bool> isFenixHomeAvailable() async {
+    final isFenix = await AuthService.isFenixRole();
+    final unidadId = await AuthService.getUnidadId();
+    final isVialidadesUrbanas =
+        unidadId == AuthService.unidadVialidadesUrbanasId ||
+        await AuthService.isVialidadesUrbanasUser();
+
+    return isFenix && isVialidadesUrbanas;
   }
 
   static Future<bool> isDelegacionesPoliciaHomeAvailable() async {

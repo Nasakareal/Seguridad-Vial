@@ -8,9 +8,9 @@ import '../../core/municipios_michoacan.dart';
 import '../../models/vialidades_urbanas_dispositivo.dart';
 import '../../services/auth_service.dart';
 import '../../services/local_draft_service.dart';
+import '../../services/photo_picker_service.dart';
 import '../../services/vialidades_urbanas_form_service.dart';
 import '../../services/vialidades_urbanas_service.dart';
-import '../../widgets/landscape_photo_crop_screen.dart';
 import '../../widgets/municipio_autocomplete_field.dart';
 import '../../widgets/normalized_integer_input_formatter.dart';
 
@@ -373,16 +373,10 @@ class _VialidadesUrbanasCreateScreenState
   }
 
   Future<void> _pickPhoto(ImageSource source) async {
-    final picked = await _picker.pickImage(
-      source: source,
-      imageQuality: 85,
-      maxWidth: 2000,
-      maxHeight: 2000,
-    );
-    if (picked == null || !mounted) return;
-    final file = await LandscapePhotoCropScreen.cropIfNeeded(
+    final file = await PhotoPickerService.pickAndCropImage(
       context,
-      File(picked.path),
+      _picker,
+      source: source,
     );
     if (file == null) return;
     if (!mounted) return;

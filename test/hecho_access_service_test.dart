@@ -15,6 +15,7 @@ void main() {
     int? roleId,
     required int userId,
     required int delegacionId,
+    List<String> permissions = const <String>['editar hechos'],
   }) {
     SharedPreferences.setMockInitialValues(<String, Object>{
       'auth_role': role,
@@ -31,7 +32,7 @@ void main() {
         'unidad_id': AuthService.unidadDelegacionesId,
         'delegacion_id': delegacionId,
       }),
-      'auth_perms': <String>['editar hechos'],
+      'auth_perms': permissions,
     });
 
     return HechoAccessService.loadEditAccess();
@@ -47,6 +48,29 @@ void main() {
       );
 
       expect(access.canEditAnyHecho, isFalse);
+      expect(access.canEditDelegacionHechos, isTrue);
+      expect(
+        access.canEditHecho(<String, dynamic>{
+          'delegacion_id': 7,
+          'created_by': 202,
+          'puede_editar': false,
+        }),
+        isTrue,
+      );
+    },
+  );
+
+  test(
+    'delegaciones delegado can edit same delegacion without edit permission',
+    () async {
+      final access = await loadDelegacionesAccess(
+        role: 'Delegado',
+        userId: 101,
+        delegacionId: 7,
+        permissions: const <String>[],
+      );
+
+      expect(access.canEditByPermission, isFalse);
       expect(access.canEditDelegacionHechos, isTrue);
       expect(
         access.canEditHecho(<String, dynamic>{

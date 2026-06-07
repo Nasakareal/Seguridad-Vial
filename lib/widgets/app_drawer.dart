@@ -71,6 +71,10 @@ class AppDrawer extends StatelessWidget {
     if (current == route) return;
 
     if (route == AppRoutes.home) {
+      final motociclistaHomeAvailable =
+          await HomeResolverService.isMotociclistaHomeAvailable();
+      final fenixHomeAvailable =
+          await HomeResolverService.isFenixHomeAvailable();
       final agenteVialHomeAvailable =
           await HomeResolverService.isAgenteVialHomeAvailable();
       final agenteUpecHomeAvailable =
@@ -79,15 +83,19 @@ class AppDrawer extends StatelessWidget {
           await HomeResolverService.isDelegacionesPoliciaHomeAvailable();
       final peritoHomeAvailable =
           await HomeResolverService.isPeritoHomeAvailable();
-      final homeRoute = agenteVialHomeAvailable
-          ? AppRoutes.homeAgenteVial
-          : (agenteUpecHomeAvailable
-                ? AppRoutes.homeAgenteUpec
-                : (delegacionesHomeAvailable
-                      ? AppRoutes.homeDelegaciones
-                      : (peritoHomeAvailable
-                            ? AppRoutes.homePerito
-                            : AppRoutes.home)));
+      final homeRoute = motociclistaHomeAvailable
+          ? AppRoutes.homeMotociclista
+          : (fenixHomeAvailable
+                ? AppRoutes.homeFenix
+                : (agenteVialHomeAvailable
+                      ? AppRoutes.homeAgenteVial
+                      : (agenteUpecHomeAvailable
+                            ? AppRoutes.homeAgenteUpec
+                            : (delegacionesHomeAvailable
+                                  ? AppRoutes.homeDelegaciones
+                                  : (peritoHomeAvailable
+                                        ? AppRoutes.homePerito
+                                        : AppRoutes.home)))));
       navigator.pushNamedAndRemoveUntil(homeRoute, (_) => false);
       return;
     }

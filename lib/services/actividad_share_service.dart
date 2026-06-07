@@ -36,6 +36,56 @@ class ActividadShareService {
     await _compartirPayload(payload);
   }
 
+  static Future<void> compartirTextoConFotos({
+    required String texto,
+    List<String> fotos = const <String>[],
+  }) async {
+    final cleanText = texto.trim();
+    final urls = fotos
+        .map((e) => ActividadesService.toPublicUrl(e))
+        .where((e) => e.trim().isNotEmpty)
+        .toList();
+    final archivos = await _descargarArchivosTemporales(urls);
+
+    await _compartirTextoYDespuesImagenes(texto: cleanText, archivos: archivos);
+  }
+
+  static Future<void> compartirTextoConArchivosLocales({
+    required String texto,
+    List<String> archivos = const <String>[],
+  }) async {
+    final localFiles = archivos
+        .map((e) => e.trim())
+        .where((e) => e.isNotEmpty)
+        .map((e) => XFile(e))
+        .toList();
+
+    await _compartirTextoYDespuesImagenes(
+      texto: texto.trim(),
+      archivos: localFiles,
+    );
+  }
+
+  static Future<void> _compartirTextoYDespuesImagenes({
+    required String texto,
+    required List<XFile> archivos,
+  }) async {
+    if (texto.isNotEmpty) {
+      _pendingImages = archivos;
+      _awaitingReturnFromWhatsappText = archivos.isNotEmpty;
+
+      await _abrirTextoEnWhatsapp(texto);
+      return;
+    }
+
+    if (archivos.isNotEmpty) {
+      await _compartirSoloImagenes(archivos);
+      return;
+    }
+
+    throw Exception('No hay informacion disponible para compartir.');
+  }
+
   static Future<void> onAppResumed() async {
     if (!_awaitingReturnFromWhatsappText || _sendingImagesNow) {
       return;

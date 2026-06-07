@@ -87,6 +87,11 @@ class ActividadUpsertData {
       fields[key] = trimmed;
     }
 
+    void addOptionalCount(String key, String? value) {
+      final trimmed = (value ?? '').trim();
+      fields[key] = trimmed.isEmpty ? '0' : trimmed;
+    }
+
     if (actividadSubcategoriaId != null && actividadSubcategoriaId! > 0) {
       fields['actividad_subcategoria_id'] = actividadSubcategoriaId.toString();
     }
@@ -107,7 +112,7 @@ class ActividadUpsertData {
     add('observaciones', observaciones);
     add('personas_alcanzadas', personasAlcanzadas);
     add('personas_participantes', personasParticipantes);
-    add('personas_detenidas', personasDetenidas);
+    addOptionalCount('personas_detenidas', personasDetenidas);
     add('elementos_participantes_texto', elementosParticipantesTexto);
     add('patrullas_participantes_texto', patrullasParticipantesTexto);
 

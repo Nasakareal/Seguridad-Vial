@@ -7,7 +7,7 @@ import 'package:image_picker/image_picker.dart';
 
 import '../../app/routes.dart';
 import '../../services/auth_service.dart';
-import '../../widgets/landscape_photo_crop_screen.dart';
+import '../../services/photo_picker_service.dart';
 import '../../widgets/safe_network_image.dart';
 
 class VehiculosScreen extends StatefulWidget {
@@ -296,17 +296,10 @@ class _VehiculosScreenState extends State<VehiculosScreen> {
   }
 
   Future<void> _seleccionarYSubirFoto({required int vehiculoId}) async {
-    final picked = await _picker.pickImage(
-      source: ImageSource.gallery,
-      imageQuality: 85,
-      maxWidth: 2000,
-      maxHeight: 2000,
-    );
-    if (picked == null || !mounted) return;
-
-    final file = await LandscapePhotoCropScreen.cropIfNeeded(
+    final file = await PhotoPickerService.pickAndCropImage(
       context,
-      File(picked.path),
+      _picker,
+      source: ImageSource.gallery,
     );
     if (file == null) return;
     final len = await file.length();
@@ -472,17 +465,12 @@ class _VehiculosScreenState extends State<VehiculosScreen> {
         return StatefulBuilder(
           builder: (context, setModalState) {
             Future<void> pickInventoryPhoto() async {
-              final picked = await _picker.pickImage(
+              final file = await PhotoPickerService.pickAndCropImage(
+                context,
+                _picker,
                 source: ImageSource.gallery,
-                imageQuality: 85,
                 maxWidth: 2400,
                 maxHeight: 2400,
-              );
-              if (picked == null || !mounted || !context.mounted) return;
-
-              final file = await LandscapePhotoCropScreen.cropIfNeeded(
-                context,
-                File(picked.path),
               );
               if (file == null) return;
 

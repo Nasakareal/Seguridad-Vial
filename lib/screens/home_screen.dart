@@ -6,6 +6,7 @@ import 'package:seguridad_vial_app/app/routes.dart';
 import '../services/auth_service.dart';
 import '../services/app_version_service.dart';
 import '../services/feed_service.dart';
+import '../services/home_resolver_service.dart';
 import '../services/push_service.dart';
 
 import '../widgets/app_drawer.dart';
@@ -48,6 +49,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     _scrollController.addListener(_onScroll);
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+
+      if (await _redirectSpecialHomeIfNeeded()) return;
       if (!mounted) return;
 
       try {
@@ -99,6 +103,25 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     if (pos.pixels >= (pos.maxScrollExtent - 350)) {
       _feedCtrl.loadMore();
     }
+  }
+
+  Future<bool> _redirectSpecialHomeIfNeeded() async {
+    final motociclistaHome =
+        await HomeResolverService.isMotociclistaHomeAvailable();
+    if (!mounted) return true;
+    if (motociclistaHome) {
+      Navigator.pushReplacementNamed(context, AppRoutes.homeMotociclista);
+      return true;
+    }
+
+    final fenixHome = await HomeResolverService.isFenixHomeAvailable();
+    if (!mounted) return true;
+    if (fenixHome) {
+      Navigator.pushReplacementNamed(context, AppRoutes.homeFenix);
+      return true;
+    }
+
+    return false;
   }
 
   Future<void> _bootstrapOnce() async {

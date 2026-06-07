@@ -287,10 +287,7 @@ class HechoAccessService {
       canEditByPermission: canEditByPermission,
       canEditAnyHecho: canEditAny,
       canEditDelegacionHechos:
-          canEditByPermission &&
-          !excluded &&
-          isDelegaciones &&
-          (isAdministrativo || isDelegado),
+          !excluded && isDelegaciones && (isAdministrativo || isDelegado),
       isDelegacionesUser: isDelegaciones,
       hechosModuleExcluded: excluded,
       canEditOwnHechos:

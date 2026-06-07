@@ -10,8 +10,8 @@ import '../../../services/auth_service.dart';
 import '../../../services/hechos_form_service.dart';
 import '../../../services/local_draft_service.dart';
 import '../../../services/offline_sync_service.dart';
+import '../../../services/photo_picker_service.dart';
 import '../../../services/reverse_geocode_service.dart';
-import '../../../widgets/landscape_photo_crop_screen.dart';
 import '../../../widgets/municipio_autocomplete_field.dart';
 import 'ubicacion_card.dart';
 import 'photo_card.dart';
@@ -553,18 +553,12 @@ class _HechoFormState extends State<HechoForm> {
   }
 
   Future<void> _pickPhoto(bool isLugar) async {
-    final x = await _picker.pickImage(
+    final f = await PhotoPickerService.pickAndCropImage(
+      context,
+      _picker,
       source: ImageSource.gallery,
-      imageQuality: 85,
-      maxWidth: 2000,
-      maxHeight: 2000,
+      cropLandscape: isLugar,
     );
-    if (x == null || !mounted) return;
-
-    final pickedFile = File(x.path);
-    final f = isLugar
-        ? await LandscapePhotoCropScreen.cropIfNeeded(context, pickedFile)
-        : pickedFile;
     if (f == null) return;
     if (!mounted) return;
 

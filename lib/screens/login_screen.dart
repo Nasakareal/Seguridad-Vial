@@ -6,6 +6,8 @@ import '../services/offline_sync_service.dart';
 import 'home_agente_vial_screen.dart';
 import 'home_agente_upec_screen.dart';
 import 'home_delegaciones_screen.dart';
+import 'home_fenix_screen.dart';
+import 'home_motociclista_screen.dart';
 import 'home_screen.dart';
 import 'home_perito_screen.dart';
 import 'location_consent_screen.dart';
@@ -58,6 +60,10 @@ class _LoginScreenState extends State<LoginScreen> {
         await OfflineSyncService.flushPending();
 
         final askLocation = await AuthService.shouldAskLocation();
+        final motociclistaHomeAvailable =
+            await HomeResolverService.isMotociclistaHomeAvailable();
+        final fenixHomeAvailable =
+            await HomeResolverService.isFenixHomeAvailable();
         final agenteVialHomeAvailable =
             await HomeResolverService.isAgenteVialHomeAvailable();
         final agenteUpecHomeAvailable =
@@ -66,15 +72,19 @@ class _LoginScreenState extends State<LoginScreen> {
             await HomeResolverService.isDelegacionesPoliciaHomeAvailable();
         final peritoHomeAvailable =
             await HomeResolverService.isPeritoHomeAvailable();
-        final nextHome = agenteVialHomeAvailable
-            ? const HomeAgenteVialScreen()
-            : (agenteUpecHomeAvailable
-                  ? const HomeAgenteUpecScreen()
-                  : (delegacionesHomeAvailable
-                        ? const HomeDelegacionesScreen()
-                        : (peritoHomeAvailable
-                              ? const HomePeritoScreen()
-                              : const HomeScreen())));
+        final nextHome = motociclistaHomeAvailable
+            ? const HomeMotociclistaScreen()
+            : (fenixHomeAvailable
+                  ? const HomeFenixScreen()
+                  : (agenteVialHomeAvailable
+                        ? const HomeAgenteVialScreen()
+                        : (agenteUpecHomeAvailable
+                              ? const HomeAgenteUpecScreen()
+                              : (delegacionesHomeAvailable
+                                    ? const HomeDelegacionesScreen()
+                                    : (peritoHomeAvailable
+                                          ? const HomePeritoScreen()
+                                          : const HomeScreen())))));
 
         if (!mounted) return;
 

@@ -6,6 +6,8 @@ import '../screens/login_screen.dart';
 import '../screens/home_agente_vial_screen.dart';
 import '../screens/home_agente_upec_screen.dart';
 import '../screens/home_delegaciones_screen.dart';
+import '../screens/home_fenix_screen.dart';
+import '../screens/home_motociclista_screen.dart';
 import '../screens/home_screen.dart';
 import '../screens/home_perito_screen.dart';
 import '../screens/account/change_password_screen.dart';
@@ -73,6 +75,8 @@ import '../screens/actividades/actividades_screen.dart';
 import '../screens/actividades/actividad_create_screen.dart';
 import '../screens/actividades/actividad_edit_screen.dart';
 import '../screens/actividades/actividad_show_screen.dart';
+import '../screens/motociclista/motociclista_report_form_screen.dart';
+import '../screens/motociclista/motociclista_reports_screen.dart';
 import '../screens/cultura_vial/cultura_vial_home_screen.dart';
 import '../screens/cultura_vial/cultura_vial_join_screen.dart';
 import '../screens/constancias_manejo/constancias_manejo_screen.dart';
@@ -97,6 +101,12 @@ final Map<String, WidgetBuilder> appRoutesMap = {
   AppRoutes.homePerito: (context) => const HomePeritoScreen(),
   AppRoutes.homeAgenteUpec: (context) => const HomeAgenteUpecScreen(),
   AppRoutes.homeAgenteVial: (context) => const HomeAgenteVialScreen(),
+  AppRoutes.homeMotociclista: (context) => const HomeMotociclistaScreen(),
+  AppRoutes.homeFenix: (context) => const HomeFenixScreen(),
+  AppRoutes.motociclistaReporte: (context) =>
+      const MotociclistaReportFormScreen(),
+  AppRoutes.motociclistaReportes: (context) =>
+      const MotociclistaReportsScreen(),
   AppRoutes.homeDelegaciones: (context) => const HomeDelegacionesScreen(),
   AppRoutes.profile: (context) => const ProfileScreen(),
   AppRoutes.changePassword: (context) => const ChangePasswordScreen(),

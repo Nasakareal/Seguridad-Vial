@@ -11,10 +11,10 @@ import '../../models/actividad_fomento.dart';
 import '../../models/actividad_subcategoria.dart';
 import '../../services/actividades_service.dart';
 import '../../services/auth_service.dart';
+import '../../services/photo_picker_service.dart';
 import '../../widgets/actividad_count_field.dart';
 import '../../widgets/actividad_detenidos_field.dart';
 import '../../widgets/actividad_people_count_guard.dart';
-import '../../widgets/landscape_photo_crop_screen.dart';
 import '../../widgets/municipio_autocomplete_field.dart';
 import '../../widgets/normalized_integer_input_formatter.dart';
 import '../../widgets/safe_network_image.dart';
@@ -280,23 +280,10 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
       _removeFieldError(ActividadValidationTarget.fotos);
     });
 
-    final picker = ImagePicker();
-    final picked = await picker.pickMultiImage(
-      imageQuality: 85,
-      maxWidth: 2000,
-      maxHeight: 2000,
+    final files = await PhotoPickerService.pickAndCropMultiImage(
+      context,
+      ImagePicker(),
     );
-    if (picked.isEmpty || !mounted) return;
-
-    final files = <File>[];
-    for (final item in picked) {
-      final file = await LandscapePhotoCropScreen.cropIfNeeded(
-        context,
-        File(item.path),
-      );
-      if (!mounted) return;
-      if (file != null) files.add(file);
-    }
 
     if (files.isEmpty) return;
 
@@ -314,18 +301,10 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
       _removeFieldError(ActividadValidationTarget.fotos);
     });
 
-    final picker = ImagePicker();
-    final x = await picker.pickImage(
-      source: ImageSource.camera,
-      imageQuality: 85,
-      maxWidth: 2000,
-      maxHeight: 2000,
-    );
-    if (x == null || !mounted) return;
-
-    final file = await LandscapePhotoCropScreen.cropIfNeeded(
+    final file = await PhotoPickerService.pickAndCropImage(
       context,
-      File(x.path),
+      ImagePicker(),
+      source: ImageSource.camera,
     );
     if (file == null) return;
     if (!mounted) return;

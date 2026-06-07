@@ -16,12 +16,12 @@ import '../../services/actividades_service.dart';
 import '../../services/auth_service.dart';
 import '../../services/geo_service.dart';
 import '../../services/local_draft_service.dart';
+import '../../services/photo_picker_service.dart';
 import '../../services/vehiculo_form_service.dart';
 import '../../services/vialidades_urbanas_service.dart';
 import '../../widgets/actividad_count_field.dart';
 import '../../widgets/actividad_detenidos_field.dart';
 import '../../widgets/actividad_people_count_guard.dart';
-import '../../widgets/landscape_photo_crop_screen.dart';
 import '../../widgets/municipio_autocomplete_field.dart';
 import '../../widgets/normalized_integer_input_formatter.dart';
 import 'widgets/actividad_vehiculo_modal.dart';
@@ -335,7 +335,13 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
 
   bool _hydrateDraftFromArgs() {
     final args = ModalRoute.of(context)?.settings.arguments;
-    if (args is! Map || args['offlineDraft'] is! Map) return false;
+    if (args is! Map) return false;
+
+    if (_hydratePrefillFromArgs(args)) {
+      return true;
+    }
+
+    if (args['offlineDraft'] is! Map) return false;
 
     final draft = Map<String, dynamic>.from(args['offlineDraft'] as Map);
     final fields = _stringMapFrom(draft['fields']);
@@ -395,6 +401,58 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
     } else if (_notaGeoCtrl.text.trim().isNotEmpty) {
       _locationStatus = _notaGeoCtrl.text.trim();
     }
+    _syncFomentoTotal();
+    return true;
+  }
+
+  bool _hydratePrefillFromArgs(Map<dynamic, dynamic> args) {
+    final rawPrefill = args['actividadPrefill'] ?? args['prefill'];
+    if (rawPrefill == null) return false;
+
+    final prefill = rawPrefill is Map
+        ? Map<String, dynamic>.from(rawPrefill)
+        : Map<String, dynamic>.from(args);
+
+    _categoriaId =
+        _intValue(prefill['actividad_categoria_id']) ??
+        _intValue(prefill['categoria_id']) ??
+        _categoriaId;
+    _subcategoriaId =
+        _intValue(prefill['actividad_subcategoria_id']) ??
+        _intValue(prefill['subcategoria_id']) ??
+        _subcategoriaId;
+
+    void setText(TextEditingController ctrl, dynamic value) {
+      final text = _stringValue(value);
+      if (text != null) ctrl.text = text;
+    }
+
+    setText(_lugarCtrl, prefill['lugar']);
+    setText(_municipioCtrl, prefill['municipio']);
+    setText(_latCtrl, prefill['lat']);
+    setText(_lngCtrl, prefill['lng']);
+    setText(_coordenadasCtrl, prefill['coordenadas_texto']);
+    setText(_fuenteUbicacionCtrl, prefill['fuente_ubicacion']);
+    setText(_notaGeoCtrl, prefill['nota_geo']);
+    setText(_motivoCtrl, prefill['motivo']);
+    setText(_narrativaCtrl, prefill['narrativa']);
+    setText(_accionesCtrl, prefill['acciones_realizadas']);
+    setText(_observacionesCtrl, prefill['observaciones']);
+    setText(_personasAlcanzadasCtrl, prefill['personas_alcanzadas']);
+    setText(_personasParticipantesCtrl, prefill['personas_participantes']);
+    setText(_personasDetenidasCtrl, prefill['personas_detenidas']);
+    setText(_elementosCtrl, prefill['elementos_participantes_texto']);
+    setText(_patrullasCtrl, prefill['patrullas_participantes_texto']);
+
+    if (_categoriaId != null && _categoriaId! > 0 && _categorias.isNotEmpty) {
+      unawaited(
+        _loadSubcategorias(
+          _categoriaId!,
+          preferredSubcategoriaId: _subcategoriaId,
+        ),
+      );
+    }
+
     _syncFomentoTotal();
     return true;
   }
@@ -842,23 +900,11 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
       _removeFieldError(ActividadValidationTarget.fotos);
     });
 
-    final picked = await _picker.pickMultiImage(
-      imageQuality: 85,
-      maxWidth: 2000,
-      maxHeight: 2000,
+    final files = await PhotoPickerService.pickAndCropMultiImage(
+      context,
+      _picker,
     );
-    if (picked.isEmpty || !mounted) return;
-
-    final files = <File>[];
-    for (final item in picked) {
-      final file = await LandscapePhotoCropScreen.cropIfNeeded(
-        context,
-        File(item.path),
-      );
-      if (!mounted) return;
-      if (file != null) files.add(file);
-    }
-    if (files.isEmpty) return;
+    if (files.isEmpty || !mounted) return;
 
     setState(() {
       for (final file in files) {
@@ -877,17 +923,10 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
       _removeFieldError(ActividadValidationTarget.fotos);
     });
 
-    final x = await _picker.pickImage(
-      source: ImageSource.camera,
-      imageQuality: 85,
-      maxWidth: 2000,
-      maxHeight: 2000,
-    );
-    if (x == null || !mounted) return;
-
-    final file = await LandscapePhotoCropScreen.cropIfNeeded(
+    final file = await PhotoPickerService.pickAndCropImage(
       context,
-      File(x.path),
+      _picker,
+      source: ImageSource.camera,
     );
     if (file == null) return;
     if (!mounted) return;

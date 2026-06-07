@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../../app/routes.dart';
+import '../../services/auth_service.dart';
+import '../../services/pdf_document_service.dart';
 import '../../services/puestas_disposicion_service.dart';
 
 class PuestaDisposicionShowScreen extends StatefulWidget {
@@ -19,6 +21,7 @@ class _PuestaDisposicionShowScreenState
   String? _error;
   Map<String, dynamic>? _puesta;
   bool _bootstrapped = false;
+  bool _pdfBusy = false;
 
   int _idFromArgs() {
     final args = ModalRoute.of(context)?.settings.arguments;
@@ -93,6 +96,10 @@ class _PuestaDisposicionShowScreenState
     return text.isEmpty ? fallback : text;
   }
 
+  String _rawText(dynamic value) {
+    return (value ?? '').toString().trim();
+  }
+
   String _nestedName(String key) {
     final nested = _puesta?[key];
     if (nested is Map) {
@@ -162,12 +169,63 @@ class _PuestaDisposicionShowScreenState
     return 0;
   }
 
+  String _puestaPdfUrl(Map<String, dynamic> p) {
+    final id = _toInt(p['id']);
+    final archivo = _rawText(
+      p['archivo_puesta'] ??
+          p['archivo_puesta_url'] ??
+          p['archivo_url'] ??
+          p['pdf_url'],
+    );
+    if (id > 0 && archivo.isNotEmpty) {
+      return '${AuthService.baseUrl}/puestas-disposicion/$id/archivo';
+    }
+
+    final lower = archivo.toLowerCase();
+    if (lower.startsWith('http://') || lower.startsWith('https://')) {
+      return archivo;
+    }
+
+    return '';
+  }
+
+  String _puestaPdfFileName(Map<String, dynamic> p) {
+    final id = _toInt(p['id']);
+    final numero = _rawText(p['numero_puesta']);
+    final anio = _rawText(p['anio']);
+    final suffix = [
+      if (numero.isNotEmpty) numero,
+      if (anio.isNotEmpty) anio,
+    ].join('_');
+
+    if (suffix.isNotEmpty) return 'puesta_disposicion_$suffix.pdf';
+    return id > 0 ? 'puesta_disposicion_$id.pdf' : 'puesta_disposicion.pdf';
+  }
+
+  Future<void> _runPdfTask(Future<void> Function() task) async {
+    if (_pdfBusy) return;
+
+    setState(() => _pdfBusy = true);
+    try {
+      await task();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('No se pudo procesar el PDF: $e')));
+    } finally {
+      if (mounted) setState(() => _pdfBusy = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final p = _puesta ?? <String, dynamic>{};
     final numero = _text(p['numero_puesta']);
     final anio = _text(p['anio']);
     final hechoId = _hechoId(p);
+    final pdfUrl = _puestaPdfUrl(p);
+    final pdfFileName = _puestaPdfFileName(p);
 
     return Scaffold(
       backgroundColor: const Color(0xFFF6F7FB),
@@ -237,6 +295,59 @@ class _PuestaDisposicionShowScreenState
                   ),
                 ),
                 const SizedBox(height: 12),
+                if (pdfUrl.isNotEmpty) ...[
+                  _card(
+                    title: 'Archivo PDF',
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('Puesta a disposición cargada'),
+                        const SizedBox(height: 10),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: [
+                            OutlinedButton.icon(
+                              onPressed: _pdfBusy
+                                  ? null
+                                  : () => _runPdfTask(
+                                      () => PdfDocumentService.openFromUrl(
+                                        url: pdfUrl,
+                                        fileName: pdfFileName,
+                                      ),
+                                    ),
+                              icon: _pdfBusy
+                                  ? const SizedBox(
+                                      width: 16,
+                                      height: 16,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                      ),
+                                    )
+                                  : const Icon(Icons.visibility_outlined),
+                              label: const Text('Ver PDF'),
+                            ),
+                            ElevatedButton.icon(
+                              onPressed: _pdfBusy
+                                  ? null
+                                  : () => _runPdfTask(
+                                      () => PdfDocumentService.saveAndShareFromUrl(
+                                        url: pdfUrl,
+                                        fileName: pdfFileName,
+                                        shareText:
+                                            'Puesta a disposición ${numero == '-' ? '' : numero}',
+                                      ),
+                                    ),
+                              icon: const Icon(Icons.ios_share),
+                              label: const Text('Descargar y compartir'),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                ],
                 _card(
                   title: 'Fecha y lugar',
                   child: Column(

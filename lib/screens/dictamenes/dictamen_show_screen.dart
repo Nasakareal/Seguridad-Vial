@@ -317,11 +317,11 @@ class _DictamenShowScreenState extends State<DictamenShowScreen> {
     final lower = pth.toLowerCase();
     if (lower.startsWith('http://') || lower.startsWith('https://')) return pth;
 
-      final base = AuthService.baseUrl; // https://seguridadvial-mich.com/api
+    final base = AuthService.baseUrl; // https://seguridadvial-mich.com/api
     final root = base.replaceFirst(
       RegExp(r'/api/?$'),
       '',
-      ); // https://seguridadvial-mich.com
+    ); // https://seguridadvial-mich.com
 
     if (pth.startsWith('/storage/')) return '$root$pth';
     if (pth.startsWith('storage/')) return '$root/$pth';
@@ -607,7 +607,12 @@ class _DictamenShowScreenState extends State<DictamenShowScreen> {
                           final raw = (d['archivo_dictamen'] ?? '')
                               .toString()
                               .trim();
-                          final url = raw.isEmpty ? '' : _toPublicUrl(raw);
+                          final id = _dictamenIdFromArgs(context);
+                          final url = raw.isEmpty
+                              ? ''
+                              : (id > 0
+                                    ? '${AuthService.baseUrl}/dictamenes/$id/archivo'
+                                    : _toPublicUrl(raw));
                           final hasServerPdf = url.isNotEmpty;
 
                           return Column(

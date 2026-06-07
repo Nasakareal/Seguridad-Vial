@@ -13,7 +13,7 @@ import '../../services/guardianes_camino_dispositivo_form_service.dart';
 import '../../services/guardianes_camino_dispositivos_service.dart';
 import '../../services/guardianes_camino_share_service.dart';
 import '../../services/local_draft_service.dart';
-import '../../widgets/landscape_photo_crop_screen.dart';
+import '../../services/photo_picker_service.dart';
 import 'widgets/dispositivo_relacionados_modal.dart';
 
 enum _DynamicFieldKind { integer, decimal, text, select }
@@ -712,16 +712,10 @@ class _DispositivoFormScreenState extends State<DispositivoFormScreen> {
   }
 
   Future<void> _pickPhoto(ImageSource source) async {
-    final picked = await _picker.pickImage(
-      source: source,
-      imageQuality: 85,
-      maxWidth: 2000,
-      maxHeight: 2000,
-    );
-    if (picked == null || !mounted) return;
-    final file = await LandscapePhotoCropScreen.cropIfNeeded(
+    final file = await PhotoPickerService.pickAndCropImage(
       context,
-      File(picked.path),
+      _picker,
+      source: source,
     );
     if (file == null) return;
     if (!mounted) return;

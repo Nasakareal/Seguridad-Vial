@@ -6,10 +6,10 @@ import 'package:image_picker/image_picker.dart';
 import '../../models/vialidades_urbanas_dispositivo.dart';
 import '../../services/auth_service.dart';
 import '../../services/local_draft_service.dart';
+import '../../services/photo_picker_service.dart';
 import '../../services/vialidades_urbanas_detalles_form_service.dart';
 import '../../services/vialidades_urbanas_detalles_service.dart';
 import '../../services/vialidades_urbanas_service.dart';
-import '../../widgets/landscape_photo_crop_screen.dart';
 
 class VialidadesUrbanasDispositivoFormScreen extends StatefulWidget {
   final int dispositivoId;
@@ -297,16 +297,10 @@ class _VialidadesUrbanasDispositivoFormScreenState
   }
 
   Future<void> _pickPhoto(ImageSource source) async {
-    final picked = await _picker.pickImage(
-      source: source,
-      imageQuality: 85,
-      maxWidth: 2000,
-      maxHeight: 2000,
-    );
-    if (picked == null || !mounted) return;
-    final file = await LandscapePhotoCropScreen.cropIfNeeded(
+    final file = await PhotoPickerService.pickAndCropImage(
       context,
-      File(picked.path),
+      _picker,
+      source: source,
     );
     if (file == null) return;
     if (!mounted) return;

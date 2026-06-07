@@ -67,6 +67,8 @@ class PushService {
       final logged = await AuthService.isLoggedIn();
       if (!logged) return;
 
+      if (await AuthService.isVialidadesUrbanasNoWazeRole()) return;
+
       final apiToken = await AuthService.getToken();
       if (apiToken == null || apiToken.isEmpty) return;
 

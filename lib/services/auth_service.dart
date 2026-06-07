@@ -438,6 +438,43 @@ class AuthService {
     return _payloadHasRole(payload, 'responsable de turno');
   }
 
+  static Future<bool> isMotociclistaRole() async {
+    final role = await getRole();
+    if (_roleTextEquals(role, 'motociclista')) {
+      return true;
+    }
+
+    final payload = await getStoredUserPayload();
+    return _payloadHasExactRole(payload, 'motociclista');
+  }
+
+  static Future<bool> isFenixRole() async {
+    final role = await getRole();
+    if (_roleTextEquals(role, 'fenix') ||
+        _roleTextEquals(role, 'fénix') ||
+        _roleTextMatches(role, 'pie tierra')) {
+      return true;
+    }
+
+    final payload = await getStoredUserPayload();
+    return _payloadHasExactRole(payload, 'fenix') ||
+        _payloadHasExactRole(payload, 'fénix') ||
+        _payloadHasRole(payload, 'pie tierra');
+  }
+
+  static Future<bool> isVialidadesUrbanasNoWazeRole() async {
+    final unidadId = await getUnidadId();
+    final payload = await getStoredUserPayload();
+    final isVialidadesUrbanas =
+        unidadId == unidadVialidadesUrbanasId ||
+        _payloadMatchesVialidadesUrbanasStrict(payload);
+    if (!isVialidadesUrbanas) {
+      return false;
+    }
+
+    return await isMotociclistaRole() || await isFenixRole();
+  }
+
   static Future<bool> hasRoleName(String roleName) async {
     final role = await getRole();
     if (_roleTextMatches(role, roleName)) {
@@ -911,6 +948,10 @@ class AuthService {
         unidadId == unidadDelegacionesId ||
         _payloadMatchesDelegaciones(payload);
     if (isDelegaciones) {
+      if (await isAdministrativoRole()) {
+        return true;
+      }
+
       final permissions = await getPermissions();
       return permissions.contains('crear hechos');
     }

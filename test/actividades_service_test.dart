@@ -58,6 +58,21 @@ void main() {
     expect(error, isNull);
   });
 
+  test('sends zero detained people when the field is left empty', () {
+    const emptyTextData = ActividadUpsertData(
+      actividadCategoriaId: 1,
+      actividadSubcategoriaId: 2,
+      personasDetenidas: '',
+    );
+    const nullData = ActividadUpsertData(
+      actividadCategoriaId: 1,
+      actividadSubcategoriaId: 2,
+    );
+
+    expect(emptyTextData.toFields()['personas_detenidas'], '0');
+    expect(nullData.toFields()['personas_detenidas'], '0');
+  });
+
   test(
     'allows activity captures without timestamp when server clock is used',
     () async {

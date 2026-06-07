@@ -66,6 +66,41 @@ void main() {
     expect(await AuthService.getPermissions(), isNot(contains('crear hechos')));
   });
 
+  test(
+    'delegaciones administrativo can create hechos without explicit permission',
+    () async {
+      SharedPreferences.setMockInitialValues(<String, Object>{
+        'auth_role': 'Administrativo',
+        'auth_role_id': 5,
+        'auth_unidad_id': AuthService.unidadDelegacionesId,
+        'auth_user_payload': jsonEncode(<String, Object>{
+          'id': 18,
+          'role': <String, Object>{'id': 5, 'name': 'Administrativo'},
+          'unidad_id': AuthService.unidadDelegacionesId,
+        }),
+        'auth_perms': <String>['ver hechos'],
+      });
+
+      expect(await AuthService.canCreateHechos(), isTrue);
+    },
+  );
+
+  test('vialidades administrativo still cannot create hechos', () async {
+    SharedPreferences.setMockInitialValues(<String, Object>{
+      'auth_role': 'Administrativo',
+      'auth_role_id': 5,
+      'auth_unidad_id': AuthService.unidadVialidadesUrbanasId,
+      'auth_user_payload': jsonEncode(<String, Object>{
+        'id': 19,
+        'role': <String, Object>{'id': 5, 'name': 'Administrativo'},
+        'unidad_id': AuthService.unidadVialidadesUrbanasId,
+      }),
+      'auth_perms': <String>['ver hechos', 'crear hechos'],
+    });
+
+    expect(await AuthService.canCreateHechos(), isFalse);
+  });
+
   test('jefe de grupo gets implicit hechos listing access', () async {
     SharedPreferences.setMockInitialValues(<String, Object>{
       'auth_role': 'Jefe Grupo',
@@ -147,6 +182,45 @@ void main() {
       );
     },
   );
+
+  test('motociclista uses simplified vialidades home', () async {
+    SharedPreferences.setMockInitialValues(<String, Object>{
+      'auth_role': 'Motociclista',
+      'auth_unidad_id': AuthService.unidadVialidadesUrbanasId,
+      'auth_user_payload': jsonEncode(<String, Object>{
+        'id': 37,
+        'role': <String, Object>{'name': 'Motociclista'},
+        'unidad_id': AuthService.unidadVialidadesUrbanasId,
+      }),
+    });
+
+    expect(await AuthService.isMotociclistaRole(), isTrue);
+    expect(await AuthService.isVialidadesUrbanasNoWazeRole(), isTrue);
+    expect(await HomeResolverService.isMotociclistaHomeAvailable(), isTrue);
+    expect(await HomeResolverService.isAgenteVialHomeAvailable(), isFalse);
+  });
+
+  test('fenix uses pie tierra home without waze push scope', () async {
+    SharedPreferences.setMockInitialValues(<String, Object>{
+      'auth_role': 'Fenix',
+      'auth_unidad_id': AuthService.unidadVialidadesUrbanasId,
+      'auth_user_payload': jsonEncode(<String, Object>{
+        'id': 38,
+        'role': <String, Object>{'name': 'Fenix'},
+        'unidad_id': AuthService.unidadVialidadesUrbanasId,
+        'unidad': <String, Object>{
+          'id': AuthService.unidadVialidadesUrbanasId,
+          'nombre': 'PROTECCIÓN EN VIALIDADES URBANAS',
+        },
+      }),
+    });
+
+    expect(await AuthService.isFenixRole(), isTrue);
+    expect(await AuthService.isVialidadesUrbanasNoWazeRole(), isTrue);
+    expect(await HomeResolverService.isFenixHomeAvailable(), isTrue);
+    expect(await HomeResolverService.isAgenteVialHomeAvailable(), isFalse);
+    expect(await AuthService.canShareLocationTracking(), isFalse);
+  });
 
   test(
     'agente vial can add details to vialidades devices without create permission',

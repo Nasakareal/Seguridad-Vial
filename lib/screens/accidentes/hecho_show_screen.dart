@@ -8,6 +8,7 @@ import '../../services/tracking_service.dart';
 import '../../services/app_version_service.dart';
 import '../../services/hecho_access_service.dart';
 import '../../services/hecho_share_service.dart';
+import '../../services/pdf_document_service.dart';
 import '../../services/reportes_service.dart';
 
 import '../../widgets/app_drawer.dart';
@@ -40,6 +41,7 @@ class _HechoShowScreenState extends State<HechoShowScreen>
   int _hechoId = 0;
   bool _sharingWhatsapp = false;
   bool _downloadingReporte = false;
+  final Set<String> _busyPdfActions = <String>{};
   HechoEditAccess _editAccess = HechoEditAccess.none;
 
   Future<void> _bootstrapTrackingStatusOnly() async {
@@ -267,6 +269,311 @@ class _HechoShowScreenState extends State<HechoShowScreen>
     }
   }
 
+  bool _isPdfActionBusy(_PdfDocument doc, String action) {
+    return _busyPdfActions.contains('$action:${doc.key}');
+  }
+
+  Future<void> _runPdfAction({
+    required _PdfDocument doc,
+    required String action,
+    required Future<void> Function() task,
+  }) async {
+    final key = '$action:${doc.key}';
+    if (_busyPdfActions.contains(key)) return;
+
+    setState(() => _busyPdfActions.add(key));
+
+    try {
+      await task();
+    } catch (e) {
+      if (!mounted) return;
+      showDialog(
+        context: context,
+        builder: (_) => AlertDialog(
+          title: const Text('Error'),
+          content: Text('No se pudo procesar el PDF.\n\n$e'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Cerrar'),
+            ),
+          ],
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _busyPdfActions.remove(key));
+      }
+    }
+  }
+
+  Future<void> _verPdf(_PdfDocument doc) {
+    return _runPdfAction(
+      doc: doc,
+      action: 'open',
+      task: () =>
+          PdfDocumentService.openFromUrl(url: doc.url, fileName: doc.fileName),
+    );
+  }
+
+  Future<void> _descargarYCompartirPdf(_PdfDocument doc) {
+    return _runPdfAction(
+      doc: doc,
+      action: 'share',
+      task: () async {
+        await PdfDocumentService.saveAndShareFromUrl(
+          url: doc.url,
+          fileName: doc.fileName,
+          shareText: doc.shareText,
+        );
+
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('PDF guardado y listo para compartir')),
+        );
+      },
+    );
+  }
+
+  List<_PdfDocument> _pdfDocumentsFromHecho(
+    Map<String, dynamic> h,
+    int hechoId,
+  ) {
+    final documents = <_PdfDocument>[];
+    final seen = <String>{};
+
+    void addDocument(_PdfDocument doc) {
+      final cleanUrl = doc.url.trim();
+      if (cleanUrl.isEmpty || !seen.add('${doc.key}|$cleanUrl')) return;
+      documents.add(doc);
+    }
+
+    final dictamenId = _toInt(h['dictamen_id']);
+    final dictamenArchivo = _cleanText(h['dictamen_archivo']);
+    final dictamenArchivoUrl = _cleanText(h['dictamen_archivo_url']);
+    final dictamenUrl = dictamenArchivo.isEmpty
+        ? ''
+        : (dictamenId > 0
+              ? '${AuthService.baseUrl}/dictamenes/$dictamenId/archivo'
+              : _absoluteDocumentUrl(
+                  dictamenArchivoUrl.isNotEmpty
+                      ? dictamenArchivoUrl
+                      : dictamenArchivo,
+                ));
+    if (dictamenUrl.isNotEmpty) {
+      addDocument(
+        _PdfDocument(
+          key: 'dictamen:${dictamenId > 0 ? dictamenId : hechoId}',
+          title: 'Informe técnico',
+          subtitle: dictamenId > 0
+              ? 'Dictamen #$dictamenId'
+              : 'Dictamen vinculado',
+          url: _absoluteDocumentUrl(dictamenUrl),
+          fileName: 'informe_tecnico_hecho_$hechoId.pdf',
+          shareText: 'Informe técnico del hecho #$hechoId',
+        ),
+      );
+    }
+
+    for (final puesta in _puestasFromHecho(h)) {
+      final id = _toInt(puesta['id'] ?? puesta['puesta_disposicion_id']);
+      final url = _puestaPdfUrl(puesta);
+      if (url.isEmpty) continue;
+
+      final numero = _cleanText(puesta['numero_puesta']);
+      final anio = _cleanText(puesta['anio']);
+      final folio = [
+        if (numero.isNotEmpty) numero,
+        if (anio.isNotEmpty) anio,
+      ].join('/');
+
+      addDocument(
+        _PdfDocument(
+          key: 'puesta:${id > 0 ? id : documents.length}',
+          title: 'Puesta a disposición',
+          subtitle: folio.isNotEmpty ? 'Puesta $folio' : 'PDF vinculado',
+          url: url,
+          fileName: id > 0
+              ? 'puesta_disposicion_$id.pdf'
+              : 'puesta_disposicion_hecho_$hechoId.pdf',
+          shareText: folio.isNotEmpty
+              ? 'Puesta a disposición $folio del hecho #$hechoId'
+              : 'Puesta a disposición del hecho #$hechoId',
+        ),
+      );
+    }
+
+    return documents;
+  }
+
+  List<Map<String, dynamic>> _puestasFromHecho(Map<String, dynamic> h) {
+    final out = <Map<String, dynamic>>[];
+
+    void addMap(dynamic value) {
+      if (value is Map) out.add(Map<String, dynamic>.from(value));
+    }
+
+    void addList(dynamic value) {
+      if (value is! List) return;
+      for (final item in value) {
+        addMap(item);
+      }
+    }
+
+    addList(h['puestas_disposicion']);
+    addList(h['puestas']);
+    addMap(h['puesta_disposicion']);
+    addMap(h['puestaDisposicion']);
+
+    if (out.isEmpty) {
+      final id = _toInt(h['puesta_disposicion_id']);
+      final archivo = _cleanText(
+        h['archivo_puesta'] ?? h['archivo_puesta_url'],
+      );
+      if (id > 0 || archivo.isNotEmpty) {
+        out.add(<String, dynamic>{'id': id, 'archivo_puesta': archivo});
+      }
+    }
+
+    final seen = <int>{};
+    return out.where((puesta) {
+      final id = _toInt(puesta['id'] ?? puesta['puesta_disposicion_id']);
+      if (id <= 0) return true;
+      return seen.add(id);
+    }).toList();
+  }
+
+  String _puestaPdfUrl(Map<String, dynamic> puesta) {
+    final id = _toInt(puesta['id'] ?? puesta['puesta_disposicion_id']);
+    final direct = _cleanText(
+      puesta['archivo_puesta_url'] ??
+          puesta['archivo_url'] ??
+          puesta['pdf_url'] ??
+          puesta['url'],
+    );
+    final archivo = _cleanText(puesta['archivo_puesta'] ?? puesta['archivo']);
+    if (id > 0 && (archivo.isNotEmpty || direct.isNotEmpty)) {
+      return '${AuthService.baseUrl}/puestas-disposicion/$id/archivo';
+    }
+
+    if (direct.isNotEmpty) return _absoluteDocumentUrl(direct);
+    return archivo.isEmpty ? '' : _absoluteDocumentUrl(archivo);
+  }
+
+  String _absoluteDocumentUrl(String raw) {
+    final clean = raw.trim();
+    if (clean.isEmpty) return '';
+
+    final lower = clean.toLowerCase();
+    if (lower.startsWith('http://') || lower.startsWith('https://')) {
+      return clean;
+    }
+
+    if (clean.startsWith('/api/')) {
+      final root = AuthService.baseUrl.replaceFirst(RegExp(r'/api/?$'), '');
+      return '$root$clean';
+    }
+
+    if (clean.startsWith('api/')) {
+      final root = AuthService.baseUrl.replaceFirst(RegExp(r'/api/?$'), '');
+      return '$root/$clean';
+    }
+
+    return HechoShowHelpers.toPublicUrl(clean);
+  }
+
+  String _cleanText(dynamic value) {
+    final text = (value ?? '').toString().trim();
+    if (text == '—' || text == '-') return '';
+    return text;
+  }
+
+  int _toInt(dynamic value) {
+    if (value == null) return 0;
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    return int.tryParse(value.toString()) ?? 0;
+  }
+
+  Widget _pdfDocumentsCard(List<_PdfDocument> documents) {
+    if (documents.isEmpty) return const SizedBox.shrink();
+
+    return Card(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Row(
+              children: [
+                Icon(Icons.picture_as_pdf_outlined),
+                SizedBox(width: 8),
+                Text(
+                  'Documentos PDF',
+                  style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            for (var i = 0; i < documents.length; i++) ...[
+              _pdfDocumentRow(documents[i]),
+              if (i < documents.length - 1)
+                Divider(height: 18, color: Colors.grey.shade200),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _pdfDocumentRow(_PdfDocument doc) {
+    final opening = _isPdfActionBusy(doc, 'open');
+    final sharing = _isPdfActionBusy(doc, 'share');
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(doc.title, style: const TextStyle(fontWeight: FontWeight.w900)),
+        if (doc.subtitle.trim().isNotEmpty) ...[
+          const SizedBox(height: 3),
+          Text(doc.subtitle, style: TextStyle(color: Colors.grey.shade700)),
+        ],
+        const SizedBox(height: 10),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            OutlinedButton.icon(
+              onPressed: opening || sharing ? null : () => _verPdf(doc),
+              icon: opening
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.visibility_outlined),
+              label: const Text('Ver PDF'),
+            ),
+            ElevatedButton.icon(
+              onPressed: opening || sharing
+                  ? null
+                  : () => _descargarYCompartirPdf(doc),
+              icon: sharing
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.ios_share),
+              label: const Text('Descargar y compartir'),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
   Widget _section({
     required String title,
     required IconData icon,
@@ -416,6 +723,8 @@ class _HechoShowScreenState extends State<HechoShowScreen>
               .trim();
       return raw.isEmpty ? '' : HechoShowHelpers.toPublicUrl(raw);
     })();
+
+    final pdfDocuments = _pdfDocumentsFromHecho(h, hechoId);
 
     final identificacion = <_KV>[
       _KV('ID', HechoShowHelpers.safeText(h['id'])),
@@ -598,6 +907,11 @@ class _HechoShowScreenState extends State<HechoShowScreen>
                           : null,
                     ),
 
+                    if (pdfDocuments.isNotEmpty) ...[
+                      _pdfDocumentsCard(pdfDocuments),
+                      const SizedBox(height: 12),
+                    ],
+
                     if (puedeEditar) ...[
                       _quickActions(hechoId),
                       const SizedBox(height: 12),
@@ -640,6 +954,24 @@ class _HechoShowScreenState extends State<HechoShowScreen>
       ),
     );
   }
+}
+
+class _PdfDocument {
+  final String key;
+  final String title;
+  final String subtitle;
+  final String url;
+  final String fileName;
+  final String shareText;
+
+  const _PdfDocument({
+    required this.key,
+    required this.title,
+    required this.subtitle,
+    required this.url,
+    required this.fileName,
+    required this.shareText,
+  });
 }
 
 class _KV {
