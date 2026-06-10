@@ -41,7 +41,7 @@ class _MotociclistaReportFormScreenState
   String _dispositivoMotivo = 'Paso continuo';
   String _zonaMonitoreada = 'Avenidas';
   String _kilometros = '0';
-  String _informa = 'Motociclista';
+  String _informa = 'Águilas Motocicletas';
   var _elementos = 1;
   var _locating = false;
   var _saving = false;
@@ -136,7 +136,7 @@ class _MotociclistaReportFormScreenState
       estadoFuerza: '$_elementos elementos',
       zonaMonitoreada: _zonaMonitoreada,
       kilometrosRecorridos: _kilometros,
-      unidadCrp: 'MOTOCICLISTA',
+      unidadCrp: MotociclistaReportService.reportSourceMarker,
       numeroElementos: '$_elementos',
       informa: _informa,
     );

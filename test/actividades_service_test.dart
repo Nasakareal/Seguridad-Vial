@@ -342,6 +342,15 @@ void main() {
     expect(payload.message.split('Hora:').length - 1, 1);
   });
 
+  test('activity share payload can prefer original media paths', () {
+    final payload = ActividadNativeShareData.fromJson(const <String, dynamic>{
+      'texto': 'ACTIVIDAD',
+      'fotos': <String>['thumb.jpg'],
+    }).withMedia(<String>['original.jpg', 'original.jpg']);
+
+    expect(payload.media, <String>['original.jpg']);
+  });
+
   test('sends fomento detail fields using backend names', () {
     const data = ActividadUpsertData(
       actividadCategoriaId: 10,

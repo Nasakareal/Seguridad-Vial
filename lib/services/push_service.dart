@@ -25,6 +25,11 @@ class PushService {
     if (!isSupportedPlatform) return;
 
     try {
+      final logged = await AuthService.isLoggedIn();
+      if (logged && await AuthService.isVialidadesUrbanasNoWazeRole()) {
+        return;
+      }
+
       final messaging = FirebaseMessaging.instance;
       await messaging.setAutoInitEnabled(true);
       await messaging.requestPermission(

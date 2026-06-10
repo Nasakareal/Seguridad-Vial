@@ -132,26 +132,26 @@ class AppDrawer extends StatelessWidget {
     var permissions = await AuthService.getPermissions();
     var unidadId = await AuthService.getUnidadId();
     var canSeeCarreteras = await AuthService.isCarreterasUser();
-    var canSeeVialidadesUrbanas = await AuthService.isVialidadesUrbanasUser();
+    var canSeeVialidadesUrbanas =
+        await AuthService.canAccessVialidadesUrbanasMenu();
     var isSuperadmin = await AuthService.isSuperadmin();
     var hasFullOperationalAccess = await AuthService.hasFullOperationalAccess();
     var canReviewCarreteras = await _canReviewCarreteras();
     var canUseConstanciasManejo = await AuthService.canUseConstanciasManejo();
     var canViewMapaPatrullas = await AuthService.canViewMapaPatrullas();
-    var isAgenteVial = await AuthService.isAgenteVial();
 
     if (permissions.isEmpty) {
       await AuthService.refreshCurrentUserAccess();
       permissions = await AuthService.getPermissions();
       unidadId = await AuthService.getUnidadId();
       canSeeCarreteras = await AuthService.isCarreterasUser();
-      canSeeVialidadesUrbanas = await AuthService.isVialidadesUrbanasUser();
+      canSeeVialidadesUrbanas =
+          await AuthService.canAccessVialidadesUrbanasMenu();
       isSuperadmin = await AuthService.isSuperadmin();
       hasFullOperationalAccess = await AuthService.hasFullOperationalAccess();
       canReviewCarreteras = await _canReviewCarreteras();
       canUseConstanciasManejo = await AuthService.canUseConstanciasManejo();
       canViewMapaPatrullas = await AuthService.canViewMapaPatrullas();
-      isAgenteVial = await AuthService.isAgenteVial();
     }
 
     return _DrawerAccess(
@@ -164,7 +164,6 @@ class AppDrawer extends StatelessWidget {
       canReviewCarreteras: canReviewCarreteras,
       canUseConstanciasManejo: canUseConstanciasManejo,
       canViewMapaPatrullas: canViewMapaPatrullas,
-      isAgenteVial: isAgenteVial,
     );
   }
 
@@ -215,10 +214,7 @@ class AppDrawer extends StatelessWidget {
                     (perms.contains('editar operativos carreteras') ||
                         hasFullOperationalAccess);
                 final canSeeVialidadesUrbanas =
-                    !((snap.data?.isAgenteVial ?? false) &&
-                        !hasFullOperationalAccess) &&
-                    ((snap.data?.canSeeVialidadesUrbanas ?? false) ||
-                        hasFullOperationalAccess);
+                    snap.data?.canSeeVialidadesUrbanas ?? false;
                 final unidadId = snap.data?.unidadId;
                 final canSeeCulturaVial =
                     hasFullOperationalAccess ||
@@ -549,7 +545,6 @@ class _DrawerAccess {
   final bool canReviewCarreteras;
   final bool canUseConstanciasManejo;
   final bool canViewMapaPatrullas;
-  final bool isAgenteVial;
 
   const _DrawerAccess({
     required this.perms,
@@ -561,7 +556,6 @@ class _DrawerAccess {
     required this.canReviewCarreteras,
     required this.canUseConstanciasManejo,
     required this.canViewMapaPatrullas,
-    required this.isAgenteVial,
   });
 }
 

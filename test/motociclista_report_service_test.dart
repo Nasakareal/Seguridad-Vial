@@ -53,7 +53,7 @@ void main() {
       coordenadas: '',
       zonaMonitoreada: 'Avenidas',
       kilometrosRecorridos: '0',
-      unidadCrp: 'MOTOCICLISTA',
+      unidadCrp: MotociclistaReportService.reportSourceMarker,
       numeroElementos: '1',
       informa: 'María López',
     );
@@ -77,7 +77,10 @@ void main() {
     expect(fields['lugar'], 'Lugar informado');
     expect(fields['municipio'], 'MORELIA');
     expect(fields['personas_participantes'], '1');
-    expect(fields['patrullas_participantes_texto'], 'MOTOCICLISTA');
+    expect(
+      fields['patrullas_participantes_texto'],
+      MotociclistaReportService.reportSourceMarker,
+    );
     expect(fields['narrativa'], contains('MONITOREO SIN NOVEDAD'));
   });
 
@@ -147,7 +150,7 @@ void main() {
       lng: '-101.277612',
       coordenadas: '19.697543, -101.277612',
       motivo: 'Apoyo a la vialidad',
-      unidadCrp: 'MOTOCICLISTA',
+      unidadCrp: MotociclistaReportService.reportSourceMarker,
       numeroElementos: '1',
       informa: 'vialidad',
     );

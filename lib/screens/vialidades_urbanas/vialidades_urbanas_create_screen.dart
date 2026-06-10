@@ -145,9 +145,8 @@ class _VialidadesUrbanasCreateScreenState
     });
 
     try {
-      final isVialidadesUser = await AuthService.isVialidadesUrbanasUser(
-        refresh: true,
-      );
+      final canAccessVialidadesMenu =
+          await AuthService.canAccessVialidadesUrbanasMenu(refresh: true);
       final hasFullOperationalAccess =
           await AuthService.hasFullOperationalAccess();
       final canCreate =
@@ -155,9 +154,9 @@ class _VialidadesUrbanasCreateScreenState
           await AuthService.can('crear operativos vialidades');
       final canEditTimestamp = await AuthService.canEditCaptureTimestamp();
 
-      if (!isVialidadesUser || !canCreate) {
+      if (!canAccessVialidadesMenu || !canCreate) {
         throw Exception(
-          'Este modulo es exclusivo para la Unidad de Proteccion en Vialidades Urbanas.',
+          'Este modulo es exclusivo para Administrador y Subdirector de Vialidades Urbanas.',
         );
       }
 

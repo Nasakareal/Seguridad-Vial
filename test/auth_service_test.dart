@@ -173,6 +173,8 @@ void main() {
       });
 
       expect(await AuthService.isAgenteVial(), isTrue);
+      expect(await AuthService.isFenixRole(), isFalse);
+      expect(await AuthService.isVialidadesUrbanasNoWazeRole(), isTrue);
       expect(await HomeResolverService.isAgenteVialHomeAvailable(), isTrue);
       expect(await AuthService.canCreateHechos(), isFalse);
       expect(await AuthService.canShareLocationTracking(), isTrue);
@@ -182,6 +184,25 @@ void main() {
       );
     },
   );
+
+  test('agente vial is not treated as fenix when role text is noisy', () async {
+    SharedPreferences.setMockInitialValues(<String, Object>{
+      'auth_role': 'Agente Vial Pie Tierra',
+      'auth_role_id': 12,
+      'auth_unidad_id': AuthService.unidadVialidadesUrbanasId,
+      'auth_user_payload': jsonEncode(<String, Object>{
+        'id': 36,
+        'role': <String, Object>{'id': 12, 'name': 'Agente Vial Pie Tierra'},
+        'unidad_id': AuthService.unidadVialidadesUrbanasId,
+      }),
+    });
+
+    expect(await AuthService.isAgenteVial(), isTrue);
+    expect(await AuthService.isFenixRole(), isFalse);
+    expect(await AuthService.isVialidadesUrbanasNoWazeRole(), isTrue);
+    expect(await HomeResolverService.isAgenteVialHomeAvailable(), isTrue);
+    expect(await HomeResolverService.isFenixHomeAvailable(), isFalse);
+  });
 
   test('motociclista uses simplified vialidades home', () async {
     SharedPreferences.setMockInitialValues(<String, Object>{
@@ -243,6 +264,11 @@ void main() {
       });
 
       expect(await AuthService.can('crear operativos vialidades'), isFalse);
+      expect(await AuthService.canAccessVialidadesUrbanasMenu(), isFalse);
+      expect(
+        await AuthService.canFeedVialidadesUrbanasFromActivities(),
+        isTrue,
+      );
       expect(await AuthService.canCreateVialidadesUrbanasDetalles(), isTrue);
       expect(await AuthService.canEditAllVialidadesUrbanasDetalles(), isFalse);
       expect(await AuthService.canEditOwnVialidadesUrbanasDetalles(), isTrue);
@@ -256,6 +282,67 @@ void main() {
       );
     },
   );
+
+  test('vialidades menu is limited to administrador and subdirector', () async {
+    SharedPreferences.setMockInitialValues(<String, Object>{
+      'auth_role': 'Administrador',
+      'auth_role_id': 3,
+      'auth_unidad_id': AuthService.unidadVialidadesUrbanasId,
+      'auth_user_payload': jsonEncode(<String, Object>{
+        'role': <String, Object>{'id': 3, 'name': 'Administrador'},
+        'unidad_id': AuthService.unidadVialidadesUrbanasId,
+      }),
+    });
+
+    expect(await AuthService.canAccessVialidadesUrbanasMenu(), isTrue);
+    expect(await AuthService.canFeedVialidadesUrbanasFromActivities(), isFalse);
+
+    SharedPreferences.setMockInitialValues(<String, Object>{
+      'auth_role': 'Subdirector',
+      'auth_role_id': 2,
+      'auth_unidad_id': AuthService.unidadVialidadesUrbanasId,
+      'auth_user_payload': jsonEncode(<String, Object>{
+        'role': <String, Object>{'id': 2, 'name': 'Subdirector'},
+        'unidad_id': AuthService.unidadVialidadesUrbanasId,
+      }),
+    });
+
+    expect(await AuthService.canAccessVialidadesUrbanasMenu(), isTrue);
+
+    SharedPreferences.setMockInitialValues(<String, Object>{
+      'auth_role': 'Superadmin',
+      'auth_role_id': 1,
+      'auth_perms': <String>['ver operativos vialidades'],
+    });
+
+    expect(await AuthService.canAccessVialidadesUrbanasMenu(), isFalse);
+    expect(await AuthService.canFeedVialidadesUrbanasFromActivities(), isFalse);
+  });
+
+  test('non manager vialidades users feed devices from activities', () async {
+    SharedPreferences.setMockInitialValues(<String, Object>{
+      'auth_role': 'Administrativo',
+      'auth_role_id': 5,
+      'auth_user_id': 39,
+      'auth_unidad_id': AuthService.unidadVialidadesUrbanasId,
+      'auth_user_payload': jsonEncode(<String, Object>{
+        'id': 39,
+        'role': <String, Object>{'id': 5, 'name': 'Administrativo'},
+        'unidad_id': AuthService.unidadVialidadesUrbanasId,
+        'unidad': <String, Object>{
+          'id': AuthService.unidadVialidadesUrbanasId,
+          'nombre': 'PROTECCIÓN EN VIALIDADES URBANAS',
+        },
+      }),
+      'auth_perms': <String>['ver operativos vialidades'],
+    });
+
+    expect(await AuthService.canAccessVialidadesUrbanasMenu(), isFalse);
+    expect(await AuthService.canFeedVialidadesUrbanasFromActivities(), isTrue);
+    expect(await AuthService.canCreateVialidadesUrbanasDetalles(), isTrue);
+    expect(await AuthService.canEditOwnVialidadesUrbanasDetalles(), isTrue);
+    expect(await AuthService.canEditAllVialidadesUrbanasDetalles(), isFalse);
+  });
 
   test(
     'responsable de turno vialidades can view patrullas map as scoped read only',

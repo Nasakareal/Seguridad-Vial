@@ -26,6 +26,7 @@ class ActividadShareService {
       actividadId: actividadId,
       actividad: actividad,
     );
+    payload = _conFotosOriginalesLocales(payload, actividad);
     await _compartirPayload(payload);
   }
 
@@ -151,6 +152,15 @@ class ActividadShareService {
     } catch (_) {
       return withLocalHora;
     }
+  }
+
+  static ActividadNativeShareData _conFotosOriginalesLocales(
+    ActividadNativeShareData payload,
+    Actividad? actividad,
+  ) {
+    final originales = actividad?.allPhotoPaths ?? const <String>[];
+    if (originales.isEmpty) return payload;
+    return payload.withMedia(originales);
   }
 
   static Future<void> _abrirTextoEnWhatsapp(String texto) async {

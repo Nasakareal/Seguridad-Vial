@@ -216,6 +216,19 @@ class ActividadNativeShareData {
 
   bool get hasClockTimeInMessage => _hasClockTime(message);
 
+  ActividadNativeShareData withMedia(Iterable<String> rawMedia) {
+    final nextMedia = <String>[];
+    for (final item in rawMedia) {
+      final value = item.trim();
+      if (value.isNotEmpty && !nextMedia.contains(value)) {
+        nextMedia.add(value);
+      }
+    }
+
+    if (nextMedia.isEmpty) return this;
+    return ActividadNativeShareData(message: message, media: nextMedia);
+  }
+
   ActividadNativeShareData withHoraFallback(String? rawHora) {
     final nextMessage = _appendHoraIfMissing(message, rawHora);
     if (nextMessage == message) return this;

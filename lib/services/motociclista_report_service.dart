@@ -120,7 +120,8 @@ class MotociclistaCatalogTarget {
 }
 
 class MotociclistaReportService {
-  static const String reportSourceMarker = 'MOTOCICLISTA';
+  static const String reportSourceMarker = 'ÁGUILAS MOTOCICLETAS';
+  static const String legacyReportSourceMarker = 'MOTOCICLISTA';
 
   static Future<OfflineActionResult> guardarReporte({
     required MotociclistaReportDraft draft,
@@ -181,16 +182,21 @@ class MotociclistaReportService {
 
     for (var offset = 0; offset < safeDays; offset += 1) {
       final date = today.subtract(Duration(days: offset));
-      final items = await ActividadesService.fetchIndex(
-        date: date,
-        perPage: 20,
-        unidadId: AuthService.unidadVialidadesUrbanasId,
-        q: reportSourceMarker,
-      );
+      for (final marker in const <String>[
+        reportSourceMarker,
+        legacyReportSourceMarker,
+      ]) {
+        final items = await ActividadesService.fetchIndex(
+          date: date,
+          perPage: 20,
+          unidadId: AuthService.unidadVialidadesUrbanasId,
+          q: marker,
+        );
 
-      for (final item in items) {
-        if (isMotociclistaReport(item)) {
-          byId[item.id] = item;
+        for (final item in items) {
+          if (isMotociclistaReport(item)) {
+            byId[item.id] = item;
+          }
         }
       }
     }
@@ -203,7 +209,11 @@ class MotociclistaReportService {
   static bool isMotociclistaReport(Actividad actividad) {
     final patrullas = _normalize(actividad.patrullasParticipantesTexto ?? '');
     final observaciones = _normalize(actividad.observaciones ?? '');
-    return patrullas.contains(reportSourceMarker) ||
+    final reportMarker = _normalize(reportSourceMarker);
+    final legacyMarker = _normalize(legacyReportSourceMarker);
+    return patrullas.contains(reportMarker) ||
+        patrullas.contains(legacyMarker) ||
+        observaciones.contains('REPORTE AGUILAS MOTOCICLETAS') ||
         observaciones.contains('REPORTE MOTOCICLISTA');
   }
 
@@ -467,7 +477,7 @@ class MotociclistaReportService {
 
   static String _observaciones(MotociclistaReportDraft draft) {
     return [
-      'Reporte Motociclista: ${draft.kind.title}',
+      'Reporte Águilas Motocicletas: ${draft.kind.title}',
       if (draft.descripcion.trim().isNotEmpty)
         'Descripción: ${draft.descripcion.trim()}',
       if (draft.lesionados.trim().isNotEmpty)
@@ -571,7 +581,7 @@ class MotociclistaReportService {
   static String _subjectFromActivity(Actividad actividad) {
     final observaciones = actividad.observaciones ?? '';
     final match = RegExp(
-      r'Reporte\s+Motociclista:\s*([^\n\r]+)',
+      r'Reporte\s+(?:Águilas\s+Motocicletas|Aguilas\s+Motocicletas|Motociclista):\s*([^\n\r]+)',
       caseSensitive: false,
     ).firstMatch(observaciones);
     if (match != null) {
@@ -585,7 +595,7 @@ class MotociclistaReportService {
     final subcategoria = actividad.subcategoria?.nombre.trim() ?? '';
     if (subcategoria.isNotEmpty) return subcategoria;
 
-    return 'REPORTE MOTOCICLISTA';
+    return 'REPORTE ÁGUILAS MOTOCICLETAS';
   }
 
   static String _bodyFromActivity(Actividad actividad) {
@@ -610,7 +620,12 @@ class MotociclistaReportService {
 
   static String _shareUnit(Actividad actividad) {
     final patrullas = (actividad.patrullasParticipantesTexto ?? '').trim();
-    if (patrullas.isNotEmpty) return patrullas;
+    if (patrullas.isNotEmpty) {
+      if (_normalize(patrullas) == _normalize(legacyReportSourceMarker)) {
+        return reportSourceMarker;
+      }
+      return patrullas;
+    }
 
     final unidad = actividad.unidad?.nombre.trim() ?? '';
     if (unidad.isNotEmpty) return unidad;

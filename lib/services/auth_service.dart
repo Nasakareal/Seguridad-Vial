@@ -449,6 +449,10 @@ class AuthService {
   }
 
   static Future<bool> isFenixRole() async {
+    if (await isAgenteVial() || await isMotociclistaRole()) {
+      return false;
+    }
+
     final role = await getRole();
     if (_roleTextEquals(role, 'fenix') ||
         _roleTextEquals(role, 'fénix') ||
@@ -472,7 +476,9 @@ class AuthService {
       return false;
     }
 
-    return await isMotociclistaRole() || await isFenixRole();
+    return await isMotociclistaRole() ||
+        await isAgenteVial() ||
+        await isFenixRole();
   }
 
   static Future<bool> hasRoleName(String roleName) async {
@@ -799,6 +805,57 @@ class AuthService {
     return _payloadMatchesVialidadesUrbanas(payload);
   }
 
+  static Future<bool> isVialidadesUrbanasManagerRole() async {
+    final roleId = await getRoleId();
+    if (roleId == 2 || roleId == 3) {
+      return true;
+    }
+
+    return await _hasExactRoleName('administrador') ||
+        await _hasExactRoleName('subdirector');
+  }
+
+  static Future<bool> canAccessVialidadesUrbanasMenu({
+    bool refresh = false,
+  }) async {
+    if (refresh) {
+      await refreshCurrentUserAccess();
+    }
+
+    if (!await isVialidadesUrbanasManagerRole()) {
+      return false;
+    }
+
+    final unidadId = await getUnidadId();
+    if (unidadId == unidadVialidadesUrbanasId ||
+        unidadId == unidadSeguridadVialId) {
+      return true;
+    }
+
+    final payload = await getCurrentUserPayload(refresh: false);
+    return _payloadMatchesVialidadesUrbanas(payload);
+  }
+
+  static Future<bool> canFeedVialidadesUrbanasFromActivities({
+    bool refresh = false,
+  }) async {
+    if (refresh) {
+      await refreshCurrentUserAccess();
+    }
+
+    if (await canAccessVialidadesUrbanasMenu()) {
+      return false;
+    }
+
+    final unidadId = await getUnidadId();
+    if (unidadId == unidadVialidadesUrbanasId) {
+      return true;
+    }
+
+    final payload = await getCurrentUserPayload(refresh: false);
+    return _payloadMatchesVialidadesUrbanasStrict(payload);
+  }
+
   static Future<bool> canCreateVialidadesUrbanasDetalles({
     bool refresh = false,
   }) async {
@@ -821,6 +878,10 @@ class AuthService {
         _payloadMatchesVialidadesUrbanasStrict(payload);
     if (!isVialidadesUrbanas) {
       return false;
+    }
+
+    if (await canFeedVialidadesUrbanasFromActivities()) {
+      return true;
     }
 
     return await isAgenteVial() || _payloadHasRole(payload, 'agente vial');
@@ -872,6 +933,10 @@ class AuthService {
         _payloadMatchesVialidadesUrbanasStrict(payload);
     if (!isVialidadesUrbanas) {
       return false;
+    }
+
+    if (await canFeedVialidadesUrbanasFromActivities()) {
+      return true;
     }
 
     return await isAgenteVial() || _payloadHasRole(payload, 'agente vial');

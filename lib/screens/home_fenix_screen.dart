@@ -401,13 +401,6 @@ List<_FenixSection> _fenixSections() {
           motivo: 'Apoyo en paso peatonal',
         ),
         _FenixPreset(
-          label: 'Casa Michoacán',
-          categoriaId: _FenixPreset.operativos,
-          subcategoriaId: 87,
-          motivo: 'Conexión institucional',
-          lugar: 'Casa Michoacán',
-        ),
-        _FenixPreset(
           label: 'SSP',
           categoriaId: _FenixPreset.operativos,
           subcategoriaId: 87,
@@ -509,6 +502,61 @@ List<_FenixSection> _fenixSections() {
       ],
     ),
     _FenixSection(
+      title: 'Proximidad social',
+      icon: Icons.volunteer_activism_outlined,
+      color: Color(0xFF0F766E),
+      presets: [
+        _FenixPreset(
+          label: 'Prevención',
+          categoriaId: _FenixPreset.proximidad,
+          subcategoriaId: 68,
+          motivo: 'Prevención social',
+        ),
+        _FenixPreset(
+          label: 'Recorrido',
+          categoriaId: _FenixPreset.proximidad,
+          subcategoriaId: 69,
+          motivo: 'Recorrido de proximidad social',
+        ),
+        _FenixPreset(
+          label: 'Turistas',
+          categoriaId: _FenixPreset.proximidad,
+          subcategoriaId: 70,
+          motivo: 'Apoyo a turistas',
+        ),
+        _FenixPreset(
+          label: 'Adulto mayor',
+          categoriaId: _FenixPreset.proximidad,
+          subcategoriaId: 71,
+          motivo: 'Apoyo a persona de la tercera edad',
+        ),
+        _FenixPreset(
+          label: 'Persona perdida',
+          categoriaId: _FenixPreset.proximidad,
+          subcategoriaId: 72,
+          motivo: 'Apoyo a persona perdida',
+        ),
+        _FenixPreset(
+          label: 'Espacio público',
+          categoriaId: _FenixPreset.proximidad,
+          subcategoriaId: 73,
+          motivo: 'Recuperación de espacios públicos',
+        ),
+        _FenixPreset(
+          label: 'Persona en riesgo',
+          categoriaId: _FenixPreset.proximidad,
+          subcategoriaId: 68,
+          motivo: 'Apoyo por persona en riesgo',
+        ),
+        _FenixPreset(
+          label: 'Otra proximidad',
+          categoriaId: _FenixPreset.proximidad,
+          subcategoriaId: 74,
+          motivo: 'Otra actividad de proximidad social',
+        ),
+      ],
+    ),
+    _FenixSection(
       title: 'Protección / evento oficial',
       icon: Icons.account_balance_outlined,
       color: Color(0xFF7C3AED),
@@ -585,12 +633,6 @@ List<_FenixSection> _fenixSections() {
           categoriaId: _FenixPreset.abanderamientos,
           subcategoriaId: 20,
           motivo: 'Novedad por obra peligrosa',
-        ),
-        _FenixPreset(
-          label: 'Persona en riesgo',
-          categoriaId: _FenixPreset.proximidad,
-          subcategoriaId: 68,
-          motivo: 'Apoyo por persona en riesgo',
         ),
         _FenixPreset(
           label: 'Otro',
