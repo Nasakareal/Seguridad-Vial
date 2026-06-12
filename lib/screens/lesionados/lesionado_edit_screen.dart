@@ -18,6 +18,7 @@ class _LesionadoEditScreenState extends State<LesionadoEditScreen> {
 
   int _hechoId = 0;
   Map<String, dynamic>? _item;
+  String? _offlineDraftRequestId;
 
   // ===== Campos reales del backend =====
   final TextEditingController _nombreCtrl = TextEditingController();
@@ -107,6 +108,11 @@ class _LesionadoEditScreenState extends State<LesionadoEditScreen> {
     if (args is Map) {
       final hechoIdAny = args['hechoId'];
       _hechoId = int.tryParse((hechoIdAny ?? '0').toString()) ?? 0;
+      if (args['offlineDraft'] is Map) {
+        final draft = Map<String, dynamic>.from(args['offlineDraft'] as Map);
+        final draftId = (draft['id'] ?? '').toString().trim();
+        _offlineDraftRequestId = draftId.isEmpty ? null : draftId;
+      }
 
       final itemAny = args['item'];
       if (itemAny is Map) {
@@ -184,6 +190,7 @@ class _LesionadoEditScreenState extends State<LesionadoEditScreen> {
         method: 'PUT',
         uri: _putUri(_hechoId, lesionadoId),
         body: body,
+        requestId: _offlineDraftRequestId,
         successCodes: const <int>{200, 204},
       );
 

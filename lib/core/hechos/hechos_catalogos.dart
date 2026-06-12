@@ -27,6 +27,7 @@ class HechosCatalogos {
 
   static const List<String> tiposHecho = [
     'VOLCADURA',
+    'INCIDENTE DE TRÁNSITO',
     'SALIDA DE SUPERFICIE DE RODAMIENTO',
     'SUBIDA AL CAMELLÓN',
     'CAIDA DE MOTOCICLETA',

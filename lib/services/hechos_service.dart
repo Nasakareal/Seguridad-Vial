@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../services/auth_service.dart';
+import 'network_error_helper.dart';
 
 class HechosService {
   static Future<Map<String, dynamic>> fetchById(int id) async {
@@ -12,7 +13,9 @@ class HechosService {
     }
 
     final uri = Uri.parse('${AuthService.baseUrl}/hechos/$id');
-    final res = await http.get(uri, headers: headers);
+    final res = await http
+        .get(uri, headers: headers)
+        .timeout(NetworkErrorHelper.interactiveRequestTimeout);
 
     if (res.statusCode != 200) {
       throw Exception('HTTP ${res.statusCode}: ${res.body}');
@@ -41,7 +44,9 @@ class HechosService {
     }
 
     final uri = Uri.parse('${AuthService.baseUrl}/hechos/$hechoId/vehiculos');
-    final res = await http.get(uri, headers: headers);
+    final res = await http
+        .get(uri, headers: headers)
+        .timeout(NetworkErrorHelper.interactiveRequestTimeout);
 
     if (res.statusCode != 200) {
       throw Exception('HTTP ${res.statusCode}: ${res.body}');
@@ -60,5 +65,9 @@ class HechosService {
         .whereType<Map>()
         .map((item) => Map<String, dynamic>.from(item))
         .toList();
+  }
+
+  static String cleanExceptionMessage(Object error) {
+    return NetworkErrorHelper.friendlyMessage(error);
   }
 }

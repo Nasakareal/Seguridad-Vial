@@ -10,6 +10,7 @@ import '../models/dictamen_item.dart';
 import '../models/hecho_form_data.dart';
 import 'auth_service.dart';
 import 'delegacion_distance_service.dart';
+import 'network_error_helper.dart';
 import 'offline_sync_service.dart';
 import 'photo_orientation_service.dart';
 
@@ -89,9 +90,7 @@ class HechosFormService {
   }
 
   static String cleanExceptionMessage(Object error) {
-    final raw = error.toString().trim();
-    if (raw.isEmpty) return 'Ocurrió un error inesperado.';
-    return raw.replaceFirst(RegExp(r'^Exception:\s*'), '').trim();
+    return NetworkErrorHelper.friendlyMessage(error);
   }
 
   static String ymd(DateTime d) =>
@@ -380,6 +379,7 @@ class HechosFormService {
     required DictamenItem? dictamenSelected,
     File? fotoLugar,
     File? fotoSituacion,
+    String? requestId,
   }) async {
     final usesRelaxedHechosRules =
         await AuthService.isHechosCaptureRelaxedUser();
@@ -410,6 +410,7 @@ class HechosFormService {
         if (fotoSituacion != null)
           OfflineUploadFile(field: 'foto_situacion', path: fotoSituacion.path),
       ],
+      requestId: requestId,
       successCodes: const <int>{200},
       errorParser: parseBackendError,
     );
@@ -518,25 +519,38 @@ class HechosFormService {
       }
     }
 
+    void putGeoField(String key, String? value, {bool force = false}) {
+      final text = (value ?? '').trim();
+      if (text.isNotEmpty || force) {
+        fields[key] = text;
+      }
+    }
+
     if (d.hasCoords) {
       fields['lat'] = d.lat!.toStringAsFixed(7);
       fields['lng'] = d.lng!.toStringAsFixed(7);
 
-      if ((d.calidadGeo ?? '').trim().isNotEmpty) {
-        fields['calidad_geo'] = d.calidadGeo!.trim();
-      }
-      if ((d.notaGeo ?? '').trim().isNotEmpty) {
-        fields['nota_geo'] = d.notaGeo!.trim();
-      }
-      if ((d.fuenteUbicacion ?? '').trim().isNotEmpty) {
-        fields['fuente_ubicacion'] = d.fuenteUbicacion!.trim();
-      }
-      if ((d.ubicacionFormateada ?? '').trim().isNotEmpty) {
-        fields['ubicacion_formateada'] = d.ubicacionFormateada!.trim();
-      }
-      if ((d.placeId ?? '').trim().isNotEmpty) {
-        fields['place_id'] = d.placeId!.trim();
-      }
+      putGeoField('calidad_geo', d.calidadGeo, force: d.ubicacionEditada);
+      putGeoField('nota_geo', d.notaGeo, force: d.ubicacionEditada);
+      putGeoField(
+        'fuente_ubicacion',
+        d.fuenteUbicacion,
+        force: d.ubicacionEditada,
+      );
+      putGeoField(
+        'ubicacion_formateada',
+        d.ubicacionFormateada,
+        force: d.ubicacionEditada,
+      );
+      putGeoField('place_id', d.placeId, force: d.ubicacionEditada);
+    } else if (d.ubicacionEditada) {
+      fields['lat'] = '';
+      fields['lng'] = '';
+      fields['calidad_geo'] = '';
+      fields['nota_geo'] = '';
+      fields['fuente_ubicacion'] = '';
+      fields['ubicacion_formateada'] = '';
+      fields['place_id'] = '';
     }
 
     return fields;

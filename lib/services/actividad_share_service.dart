@@ -26,6 +26,7 @@ class ActividadShareService {
       actividadId: actividadId,
       actividad: actividad,
     );
+    payload = _conUbicacionFallback(payload, actividad);
     payload = _conFotosOriginalesLocales(payload, actividad);
     await _compartirPayload(payload);
   }
@@ -161,6 +162,69 @@ class ActividadShareService {
     final originales = actividad?.allPhotoPaths ?? const <String>[];
     if (originales.isEmpty) return payload;
     return payload.withMedia(originales);
+  }
+
+  static ActividadNativeShareData _conUbicacionFallback(
+    ActividadNativeShareData payload,
+    Actividad? actividad,
+  ) {
+    if (actividad == null || _mensajeTieneUbicacion(payload.message)) {
+      return payload;
+    }
+
+    final bloque = _bloqueUbicacion(actividad);
+    if (bloque.isEmpty) return payload;
+
+    return ActividadNativeShareData(
+      message: _insertarBloqueUbicacion(payload.message, bloque),
+      media: payload.media,
+    );
+  }
+
+  static bool _mensajeTieneUbicacion(String message) {
+    final upper = message.toUpperCase();
+    return upper.contains('COORDENADAS:') || upper.contains('GOOGLE MAPS:');
+  }
+
+  static String _bloqueUbicacion(Actividad actividad) {
+    final lat = actividad.lat;
+    final lng = actividad.lng;
+
+    if (lat != null && lng != null) {
+      final latText = lat.toStringAsFixed(7);
+      final lngText = lng.toStringAsFixed(7);
+      return 'COORDENADAS: $latText, $lngText\n'
+          'GOOGLE MAPS: https://www.google.com/maps?q=$latText,$lngText';
+    }
+
+    final coordenadas = (actividad.coordenadasTexto ?? '').trim();
+    if (coordenadas.isEmpty) return '';
+
+    return 'COORDENADAS: $coordenadas';
+  }
+
+  static String _insertarBloqueUbicacion(String message, String bloque) {
+    final text = message.trim();
+    if (text.isEmpty) return bloque;
+
+    final lines = text.split(RegExp(r'\r?\n'));
+    var insertAt = lines.indexWhere(
+      (line) => line.trim().toUpperCase().startsWith('HORA '),
+    );
+
+    if (insertAt < 0) {
+      insertAt = lines.indexWhere(
+        (line) => line.trim().toUpperCase().startsWith('FECHA '),
+      );
+    }
+
+    final blockLines = bloque.split('\n');
+    if (insertAt >= 0) {
+      lines.insertAll(insertAt + 1, blockLines);
+      return lines.join('\n').trim();
+    }
+
+    return '$text\n\n$bloque';
   }
 
   static Future<void> _abrirTextoEnWhatsapp(String texto) async {

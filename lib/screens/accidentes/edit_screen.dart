@@ -59,6 +59,15 @@ class _EditHechoScreenState extends State<EditHechoScreen> {
     return s == '1' || s == 'true' || s == 'si' || s == 'sí';
   }
 
+  String? _offlineDraftIdFromArgs() {
+    final args = ModalRoute.of(context)?.settings.arguments;
+    if (args is! Map || args['offlineDraft'] is! Map) return null;
+
+    final draft = Map<String, dynamic>.from(args['offlineDraft'] as Map);
+    final id = (draft['id'] ?? '').toString().trim();
+    return id.isEmpty ? null : id;
+  }
+
   Future<void> _loadEditAccess() async {
     _editAccess = await HechoAccessService.loadEditAccess(refresh: true);
     _canCreateLinkedPuesta = await AuthService.isDelegacionesUser(
@@ -255,8 +264,9 @@ class _EditHechoScreenState extends State<EditHechoScreen> {
       });
     } catch (e) {
       if (!mounted) return;
+      final message = HechosService.cleanExceptionMessage(e);
       setState(() {
-        _error = 'No se pudo cargar el hecho: $e';
+        _error = 'No se pudo cargar el hecho.\n$message';
         _loading = false;
       });
     }
@@ -508,6 +518,7 @@ class _EditHechoScreenState extends State<EditHechoScreen> {
                             dictamenSelected: dictamenSelected,
                             fotoLugar: fotoLugar,
                             fotoSituacion: fotoSituacion,
+                            requestId: _offlineDraftIdFromArgs(),
                           );
                         },
                     onSubmitted: _canCreateLinkedPuesta

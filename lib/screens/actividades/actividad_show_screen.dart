@@ -78,8 +78,9 @@ class _ActividadShowScreenState extends State<ActividadShowScreen>
       });
     } catch (e) {
       if (!mounted) return;
+      final message = ActividadesService.cleanExceptionMessage(e);
       setState(() {
-        _error = 'No se pudo cargar.\n$e';
+        _error = 'No se pudo cargar.\n$message';
         _loading = false;
       });
     }
@@ -97,9 +98,10 @@ class _ActividadShowScreenState extends State<ActividadShowScreen>
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('No se pudo compartir.\n$e')));
+      final message = ActividadesService.cleanExceptionMessage(e);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('No se pudo compartir.\n$message')),
+      );
     } finally {
       if (mounted) setState(() => _sharing = false);
     }

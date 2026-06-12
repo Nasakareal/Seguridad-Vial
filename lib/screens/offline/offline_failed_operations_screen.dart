@@ -99,13 +99,9 @@ class _OfflineFailedOperationsScreenState
     final destination = _destinationFor(op);
     if (destination == null) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Este registro todavía no tiene una corrección directa desde esta bandeja.',
-          ),
-        ),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(_correctionUnavailableReason(op))));
       return;
     }
 
@@ -194,9 +190,8 @@ class _OfflineFailedOperationsScreenState
     final url = (op['url'] ?? '').toString().trim().toLowerCase();
     final fields = _mapFrom(op['fields']);
 
-    if (method != 'POST') return null;
-
     if (label == 'hecho' &&
+        method == 'POST' &&
         url.endsWith('/hechos') &&
         (fields['_method'] ?? '').toString().trim().toUpperCase() != 'PUT') {
       if (!_canCreateHechos) return null;
@@ -206,7 +201,19 @@ class _OfflineFailedOperationsScreenState
       );
     }
 
+    if (label == 'hecho' &&
+        method == 'POST' &&
+        (fields['_method'] ?? '').toString().trim().toUpperCase() == 'PUT') {
+      final hechoId = _idFromUrl(url, RegExp(r'/hechos/(\d+)$'));
+      if (hechoId <= 0) return null;
+      return _OfflineDestination(
+        route: AppRoutes.accidentesEdit,
+        arguments: {'id': hechoId, 'offlineDraft': op},
+      );
+    }
+
     if (label == 'actividad' &&
+        method == 'POST' &&
         url.endsWith('/actividades') &&
         (fields['_method'] ?? '').toString().trim().toUpperCase() != 'PUT') {
       return _OfflineDestination(
@@ -215,7 +222,18 @@ class _OfflineFailedOperationsScreenState
       );
     }
 
-    if (label == 'vehículo' && url.endsWith('/vehiculos')) {
+    if (label == 'actividad' &&
+        method == 'POST' &&
+        (fields['_method'] ?? '').toString().trim().toUpperCase() == 'PUT') {
+      final actividadId = _idFromUrl(url, RegExp(r'/actividades/(\d+)$'));
+      if (actividadId <= 0) return null;
+      return _OfflineDestination(
+        route: AppRoutes.actividadesEdit,
+        arguments: {'actividad_id': actividadId, 'offlineDraft': op},
+      );
+    }
+
+    if (label == 'vehículo' && method == 'POST' && url.endsWith('/vehiculos')) {
       return _OfflineDestination(
         route: AppRoutes.vehiculosCreate,
         arguments: {
@@ -228,7 +246,24 @@ class _OfflineFailedOperationsScreenState
       );
     }
 
-    if (label == 'lesionado' && url.endsWith('/lesionados')) {
+    if (label == 'vehículo' && method == 'PUT') {
+      final match = RegExp(r'/hechos/(\d+)/vehiculos/(\d+)$').firstMatch(url);
+      final hechoId = int.tryParse(match?.group(1) ?? '') ?? 0;
+      final vehiculoId = int.tryParse(match?.group(2) ?? '') ?? 0;
+      if (hechoId <= 0 || vehiculoId <= 0) return null;
+      return _OfflineDestination(
+        route: AppRoutes.vehiculosEdit,
+        arguments: {
+          'hechoId': hechoId,
+          'vehiculoId': vehiculoId,
+          'offlineDraft': op,
+        },
+      );
+    }
+
+    if (label == 'lesionado' &&
+        method == 'POST' &&
+        url.endsWith('/lesionados')) {
       return _OfflineDestination(
         route: AppRoutes.lesionadoCreate,
         arguments: {
@@ -241,7 +276,45 @@ class _OfflineFailedOperationsScreenState
       );
     }
 
+    if (label == 'lesionado' && method == 'PUT') {
+      final match = RegExp(r'/hechos/(\d+)/lesionados/(\d+)$').firstMatch(url);
+      final hechoId = int.tryParse(match?.group(1) ?? '') ?? 0;
+      final lesionadoId = int.tryParse(match?.group(2) ?? '') ?? 0;
+      if (hechoId <= 0 || lesionadoId <= 0) return null;
+      final body = _mapFrom(op['body']);
+      return _OfflineDestination(
+        route: AppRoutes.lesionadoEdit,
+        arguments: {
+          'hechoId': hechoId,
+          'item': <String, dynamic>{...body, 'id': lesionadoId},
+          'offlineDraft': op,
+        },
+      );
+    }
+
     return null;
+  }
+
+  int _idFromUrl(String url, RegExp pattern) {
+    final match = pattern.firstMatch(url);
+    if (match == null) return 0;
+    return int.tryParse(match.group(1) ?? '') ?? 0;
+  }
+
+  String _correctionUnavailableReason(Map<String, dynamic> op) {
+    final label = (op['label'] ?? 'registro').toString().trim();
+    final method = (op['method'] ?? '').toString().trim().toUpperCase();
+    final url = (op['url'] ?? '').toString().trim();
+
+    if (label.toLowerCase() == 'hecho' && !_canCreateHechos) {
+      return 'Tu usuario no tiene permiso para abrir la corrección de este hecho.';
+    }
+
+    if (method == 'PUT' || _mapFrom(op['fields'])['_method'] == 'PUT') {
+      return 'No se pudo abrir la corrección porque faltan datos de ruta en el pendiente: $url';
+    }
+
+    return 'Este $label todavía no tiene una corrección directa desde esta bandeja.';
   }
 
   int _hechoIdFromOperation(Map<String, dynamic> op) {
@@ -432,6 +505,21 @@ class _OfflineFailedOperationsScreenState
     return (op['state'] ?? '').toString() == 'failed';
   }
 
+  String _detailFor(Map<String, dynamic> op) {
+    final failed = _isFailed(op);
+    final raw = (op['last_error'] ?? '').toString().trim();
+    if (raw.isEmpty) {
+      return failed
+          ? 'No hay detalle técnico guardado. Toca Reintentar para obtener el motivo actualizado.'
+          : 'Pendiente de sincronizar cuando haya conexión.';
+    }
+
+    return raw
+        .replaceFirst(RegExp(r'^Exception:\s*'), '')
+        .replaceAll(RegExp(r'\s+•\s+'), '\n• ')
+        .trim();
+  }
+
   String _actionLabelFor(Map<String, dynamic> op) {
     return _isFailed(op) ? 'Corregir' : 'Abrir';
   }
@@ -534,13 +622,7 @@ class _OfflineFailedOperationsScreenState
                       createdAt: _formatDate(
                         (op['created_at'] ?? '').toString(),
                       ),
-                      detail:
-                          (op['last_error'] ??
-                                  (_isFailed(op)
-                                      ? 'Sin detalle'
-                                      : 'Pendiente de sincronizar cuando haya conexión.'))
-                              .toString()
-                              .trim(),
+                      detail: _detailFor(op),
                       actionLabel: canCorrect ? _actionLabelFor(op) : null,
                       onAction: canCorrect ? () => _openCorrection(op) : null,
                       onDelete: () => _deleteOperation(op),
@@ -664,14 +746,29 @@ class _OperationCard extends StatelessWidget {
                     : const Color(0xFF99F6E4),
               ),
             ),
-            child: Text(
-              detail,
-              style: TextStyle(
-                color: isFailed
-                    ? const Color(0xFF9A3412)
-                    : const Color(0xFF115E59),
-                fontWeight: FontWeight.w700,
-              ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  isFailed ? 'Qué revisar' : 'Estado',
+                  style: TextStyle(
+                    color: isFailed
+                        ? const Color(0xFF9A3412)
+                        : const Color(0xFF115E59),
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  detail,
+                  style: TextStyle(
+                    color: isFailed
+                        ? const Color(0xFF9A3412)
+                        : const Color(0xFF115E59),
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
             ),
           ),
           if ((actionLabel != null && onAction != null) ||

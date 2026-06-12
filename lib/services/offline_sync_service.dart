@@ -44,6 +44,8 @@ class OfflineUploadFile {
 
 typedef OfflineErrorParser = String Function(String body, int statusCode);
 
+const Object _copySentinel = Object();
+
 class OfflineSyncService {
   static const String _queueKey = 'offline_sync_queue_v1';
   static const Duration _requestTimeout = Duration(seconds: 15);
@@ -234,6 +236,28 @@ class OfflineSyncService {
       }
       return OfflineActionResult.queued(message: queuedMessage);
     } on _PermanentSyncException catch (e) {
+      final existing = await _findOperationById(
+        ownerKey: ownerKey,
+        operationId: effectiveRequestId,
+      );
+      if (existing != null) {
+        await _appendOperation(
+          existing.copyWith(
+            mode: 'json',
+            method: method.toUpperCase(),
+            url: uri.toString(),
+            dependsOnOperationId: dependencyId,
+            body: body,
+            fields: const <String, String>{},
+            files: const <_QueuedUploadFile>[],
+            successCodes: successCodes.toList()..sort(),
+            attempts: 0,
+            nextAttemptAt: null,
+            state: _QueuedOperationState.failed,
+            lastError: e.message,
+          ),
+        );
+      }
       throw Exception(e.message);
     }
   }
@@ -351,6 +375,32 @@ class OfflineSyncService {
       }
       return OfflineActionResult.queued(message: queuedMessage);
     } on _PermanentSyncException catch (e) {
+      final existing = await _findOperationById(
+        ownerKey: ownerKey,
+        operationId: effectiveRequestId,
+      );
+      if (existing != null) {
+        final storedFiles = await _stashFilesForQueue(
+          effectiveRequestId,
+          files,
+        );
+        await _appendOperation(
+          existing.copyWith(
+            mode: 'multipart',
+            method: method.toUpperCase(),
+            url: uri.toString(),
+            dependsOnOperationId: dependencyId,
+            body: const <String, dynamic>{},
+            fields: fields,
+            files: storedFiles,
+            successCodes: successCodes.toList()..sort(),
+            attempts: 0,
+            nextAttemptAt: null,
+            state: _QueuedOperationState.failed,
+            lastError: e.message,
+          ),
+        );
+      }
       throw Exception(e.message);
     }
   }
@@ -608,6 +658,19 @@ class OfflineSyncService {
     }
     await _saveQueue(queue);
     await _refreshCounts();
+  }
+
+  static Future<_QueuedOperation?> _findOperationById({
+    required String ownerKey,
+    required String operationId,
+  }) async {
+    final queue = await _loadQueue();
+    for (final item in queue) {
+      if (item.ownerKey == ownerKey && item.id == operationId) {
+        return item;
+      }
+    }
+    return null;
   }
 
   static Future<void> _removeOperationById({
@@ -1189,8 +1252,16 @@ class _QueuedOperation {
   }
 
   _QueuedOperation copyWith({
+    String? method,
+    String? url,
+    String? mode,
+    Object? dependsOnOperationId = _copySentinel,
+    Map<String, dynamic>? body,
+    Map<String, String>? fields,
+    List<_QueuedUploadFile>? files,
+    List<int>? successCodes,
     int? attempts,
-    DateTime? nextAttemptAt,
+    Object? nextAttemptAt = _copySentinel,
     _QueuedOperationState? state,
     String? lastError,
   }) {
@@ -1198,17 +1269,21 @@ class _QueuedOperation {
       id: id,
       ownerKey: ownerKey,
       label: label,
-      method: method,
-      url: url,
-      mode: mode,
-      dependsOnOperationId: dependsOnOperationId,
-      body: body,
-      fields: fields,
-      files: files,
-      successCodes: successCodes,
+      method: method ?? this.method,
+      url: url ?? this.url,
+      mode: mode ?? this.mode,
+      dependsOnOperationId: identical(dependsOnOperationId, _copySentinel)
+          ? this.dependsOnOperationId
+          : dependsOnOperationId as String?,
+      body: body ?? this.body,
+      fields: fields ?? this.fields,
+      files: files ?? this.files,
+      successCodes: successCodes ?? this.successCodes,
       attempts: attempts ?? this.attempts,
       createdAt: createdAt,
-      nextAttemptAt: nextAttemptAt,
+      nextAttemptAt: identical(nextAttemptAt, _copySentinel)
+          ? this.nextAttemptAt
+          : nextAttemptAt as DateTime?,
       state: state ?? this.state,
       lastError: lastError,
     );

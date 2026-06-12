@@ -12,6 +12,7 @@ import '../screens/home_screen.dart';
 import '../screens/home_perito_screen.dart';
 import '../screens/account/change_password_screen.dart';
 import '../screens/account/profile_screen.dart';
+import '../screens/mis_capturas/mis_capturas_screen.dart';
 import '../screens/settings/personal_incidencia_form_screen.dart';
 import '../screens/settings/personal_show_screen.dart';
 import '../screens/settings/settings_home_screen.dart';
@@ -110,6 +111,7 @@ final Map<String, WidgetBuilder> appRoutesMap = {
   AppRoutes.homeDelegaciones: (context) => const HomeDelegacionesScreen(),
   AppRoutes.profile: (context) => const ProfileScreen(),
   AppRoutes.changePassword: (context) => const ChangePasswordScreen(),
+  AppRoutes.misCapturas: (context) => const MisCapturasScreen(),
   AppRoutes.settings: (context) => const SettingsHomeScreen(),
   AppRoutes.users: (context) => const SettingsUsersScreen(),
   AppRoutes.usersCreate: (context) => const UserCreateScreen(),

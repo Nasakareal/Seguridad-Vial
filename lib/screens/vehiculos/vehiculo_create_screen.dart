@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 
 import '../../app/routes.dart';
+import '../../core/vehiculos/marcas_vehiculo.dart';
 import '../../core/vehiculos/vehiculo_taxonomia.dart';
 import '../../core/vehiculos/aseguradoras_vehiculo.dart';
 import '../../core/vehiculos/colores_vehiculo.dart';
@@ -12,6 +13,7 @@ import '../../services/offline_sync_service.dart';
 import '../../services/vehiculo_form_service.dart';
 import '../../services/gruas_catalog_service.dart';
 import '../../widgets/antecedente_highlight_tile.dart';
+import '../../widgets/marca_vehiculo_dropdown.dart';
 import '../../widgets/tarjeta_circulacion_scanner_screen.dart';
 
 class VehiculoCreateScreen extends StatefulWidget {
@@ -131,6 +133,24 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
 
   void _setColor(String? value) {
     _colorCtrl.text = value ?? '';
+  }
+
+  String _marcaParaGuardar() {
+    return MarcasVehiculo.valueFromAny(
+          _t(_marcaCtrl),
+          tipoGeneral: _tipoGeneralSeleccionado,
+          carroceria: _tipoCarroceriaSeleccionada,
+        ) ??
+        _t(_marcaCtrl);
+  }
+
+  void _syncMarcaConTipoYCarroceria() {
+    final value = MarcasVehiculo.valueFromAny(
+      _marcaCtrl.text,
+      tipoGeneral: _tipoGeneralSeleccionado,
+      carroceria: _tipoCarroceriaSeleccionada,
+    );
+    _marcaCtrl.text = value ?? '';
   }
 
   int? _toIntOrNull(String s) {
@@ -323,6 +343,13 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
     _tipoGeneralSeleccionado ??= _inferirTipoGeneralPorCarroceria(
       _tipoCarroceriaSeleccionada,
     );
+    _marcaCtrl.text =
+        MarcasVehiculo.valueFromAny(
+          _marcaCtrl.text,
+          tipoGeneral: _tipoGeneralSeleccionado,
+          carroceria: _tipoCarroceriaSeleccionada,
+        ) ??
+        _marcaCtrl.text;
     _gruaIdSeleccionada = _intValue(body['grua_id']);
     _corralonGruaIdSeleccionada = _intValue(body['corralon_id']);
   }
@@ -452,7 +479,6 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
     }
 
     setState(() {
-      if (setText(_marcaCtrl, parsed.marca)) applied += 1;
       if (setText(_lineaCtrl, parsed.linea)) applied += 1;
       if (setText(_modeloCtrl, parsed.modelo)) applied += 1;
       if (setText(_colorCtrl, parsed.color)) applied += 1;
@@ -489,6 +515,18 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
         _tipoCarroceriaSeleccionada = tipoCarroceria;
         applied += 1;
       }
+
+      final hasShape =
+          (_tipoGeneralSeleccionado ?? '').trim().isNotEmpty &&
+          (_tipoCarroceriaSeleccionada ?? '').trim().isNotEmpty;
+      final marca = hasShape
+          ? MarcasVehiculo.valueFromAny(
+              parsed.marca,
+              tipoGeneral: _tipoGeneralSeleccionado,
+              carroceria: _tipoCarroceriaSeleccionada,
+            )
+          : MarcasVehiculo.normalize(parsed.marca);
+      if (setText(_marcaCtrl, marca)) applied += 1;
     });
 
     if (applied > 0) _markDraftChanged();
@@ -566,8 +604,9 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
     final tipoServicio = VehiculoFormService.tipoServicioPlacaValue(
       _t(_tipoServicioCtrl),
     );
+    final marca = _marcaParaGuardar();
     final validationError = VehiculoFormService.validateVehiculoBeforeSubmit(
-      marca: _t(_marcaCtrl),
+      marca: marca,
       linea: _t(_lineaCtrl),
       color: _t(_colorCtrl),
       tipoServicio: tipoServicio,
@@ -632,7 +671,7 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
         if (hechoId > 0) 'hecho_id': hechoId,
         if (hechoId <= 0 && normalizedHechoClientUuid.isNotEmpty)
           'hecho_client_uuid': normalizedHechoClientUuid,
-        'marca': _t(_marcaCtrl),
+        'marca': marca,
         'modelo': _t(_modeloCtrl).isEmpty ? null : _t(_modeloCtrl),
         'tipo': _tipoCarroceriaSeleccionada,
         'linea': _t(_lineaCtrl),
@@ -773,19 +812,6 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
                 label: const Text('Escanear tarjeta de circulación'),
               ),
               const SizedBox(height: 10),
-              TextFormField(
-                controller: _marcaCtrl,
-                decoration: const InputDecoration(
-                  labelText: 'Marca *',
-                  prefixIcon: Icon(Icons.local_offer),
-                ),
-                validator: (v) => VehiculoFormService.validateRequiredText(
-                  v,
-                  max: 50,
-                  label: 'Marca',
-                ),
-              ),
-              const SizedBox(height: 10),
               DropdownButtonFormField<String>(
                 value: _tipoGeneralSeleccionado,
                 decoration: const InputDecoration(
@@ -808,6 +834,7 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
                   setState(() {
                     _tipoGeneralSeleccionado = v;
                     _tipoCarroceriaSeleccionada = null;
+                    _syncMarcaConTipoYCarroceria();
                   });
                   _markDraftChanged();
                 },
@@ -844,13 +871,24 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
                 onChanged: carroceriasDisponibles.isEmpty
                     ? null
                     : (v) {
-                        setState(() => _tipoCarroceriaSeleccionada = v);
+                        setState(() {
+                          _tipoCarroceriaSeleccionada = v;
+                          _syncMarcaConTipoYCarroceria();
+                        });
                         _markDraftChanged();
                       },
                 validator: (v) {
                   if ((_tipoGeneralSeleccionado ?? '').isEmpty) return null;
                   return _tipoCarroceriaValidator(v);
                 },
+              ),
+              const SizedBox(height: 10),
+              MarcaVehiculoDropdown(
+                controller: _marcaCtrl,
+                tipoGeneral: _tipoGeneralSeleccionado,
+                carroceria: _tipoCarroceriaSeleccionada,
+                enabled: !_saving,
+                onChanged: (_) => _markDraftChanged(),
               ),
               const SizedBox(height: 10),
               TextFormField(

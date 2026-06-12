@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 
 import 'auth_service.dart';
+import 'network_error_helper.dart';
 
 int _seguimientoReadInt(dynamic value, {required int fallback}) {
   if (value is int) return value;
@@ -235,7 +236,9 @@ class AccidentesService {
       headers['Authorization'] = 'Bearer $token';
     }
 
-    final response = await http.get(uri, headers: headers);
+    final response = await http
+        .get(uri, headers: headers)
+        .timeout(NetworkErrorHelper.interactiveRequestTimeout);
 
     if (response.statusCode != 200) {
       throw Exception(_parseBackendError(response.body, response.statusCode));
@@ -293,7 +296,9 @@ class AccidentesService {
       headers['Authorization'] = 'Bearer $token';
     }
 
-    final response = await http.get(uri, headers: headers);
+    final response = await http
+        .get(uri, headers: headers)
+        .timeout(NetworkErrorHelper.interactiveRequestTimeout);
 
     if (response.statusCode != 200) {
       throw Exception(_parseBackendError(response.body, response.statusCode));
@@ -323,7 +328,9 @@ class AccidentesService {
       headers['Authorization'] = 'Bearer $token';
     }
 
-    final response = await http.get(uri, headers: headers);
+    final response = await http
+        .get(uri, headers: headers)
+        .timeout(NetworkErrorHelper.interactiveRequestTimeout);
 
     if (response.statusCode != 200) {
       throw Exception(_parseBackendError(response.body, response.statusCode));
@@ -355,7 +362,9 @@ class AccidentesService {
       'Authorization': 'Bearer $token',
     };
 
-    final resp = await http.get(uri, headers: headers);
+    final resp = await http
+        .get(uri, headers: headers)
+        .timeout(NetworkErrorHelper.interactiveRequestTimeout);
 
     if (resp.statusCode != 200) {
       throw Exception(_parseBackendError(resp.body, resp.statusCode));
@@ -402,7 +411,9 @@ class AccidentesService {
       'Authorization': 'Bearer $token',
     };
 
-    final resp = await http.get(uri, headers: headers);
+    final resp = await http
+        .get(uri, headers: headers)
+        .timeout(NetworkErrorHelper.interactiveRequestTimeout);
 
     if (resp.statusCode != 200) {
       throw Exception(_parseBackendError(resp.body, resp.statusCode));
@@ -432,7 +443,9 @@ class AccidentesService {
       '${AuthService.baseUrl}/hechos/$hechoId/whatsapp-link',
     );
 
-    final resp = await http.get(uri, headers: headers);
+    final resp = await http
+        .get(uri, headers: headers)
+        .timeout(NetworkErrorHelper.interactiveRequestTimeout);
 
     if (resp.statusCode != 200) {
       throw Exception(_parseBackendError(resp.body, resp.statusCode));
@@ -490,5 +503,9 @@ class AccidentesService {
     }
 
     return msg;
+  }
+
+  static String cleanExceptionMessage(Object error) {
+    return NetworkErrorHelper.friendlyMessage(error);
   }
 }

@@ -112,6 +112,15 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
     return null;
   }
 
+  String? _offlineDraftIdFromArgs() {
+    final args = ModalRoute.of(context)?.settings.arguments;
+    if (args is! Map || args['offlineDraft'] is! Map) return null;
+
+    final draft = Map<String, dynamic>.from(args['offlineDraft'] as Map);
+    final id = (draft['id'] ?? '').toString().trim();
+    return id.isEmpty ? null : id;
+  }
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -205,9 +214,10 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
       }
     } catch (e) {
       if (!mounted) return;
+      final message = ActividadesService.cleanExceptionMessage(e);
       setState(() {
         _loading = false;
-        _error = 'No se pudo cargar.\n$e';
+        _error = 'No se pudo cargar.\n$message';
       });
     }
   }
@@ -715,6 +725,7 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
         data: payload,
         fotos: List<File>.from(_fotosNuevas),
         eliminarFotos: _fotoIdsEliminar.toList(),
+        requestId: _offlineDraftIdFromArgs(),
       );
 
       if (!mounted) return;

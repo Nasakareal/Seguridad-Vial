@@ -65,15 +65,20 @@ class FeedService {
   static Future<FeedResponse> fetchFeed({
     required int limit,
     DateTime? date,
+    DateTime? desde,
+    DateTime? hasta,
     int? unidadId,
     int? delegacionId,
+    int? userId,
   }) async {
     final token = await AuthService.getToken();
     if (token == null || token.isEmpty) {
       throw Exception('No autenticado (token vacío).');
     }
 
-    final safeLimit = limit.clamp(1, 50);
+    final safeLimit = userId != null && userId > 0
+        ? limit.clamp(1, 200)
+        : limit.clamp(1, 50);
     final ownDelegacionFilterId = await AuthService.getFeedDelegacionFilterId();
     final explicitDelegacionFilterId = delegacionId != null && delegacionId > 0
         ? delegacionId
@@ -87,10 +92,20 @@ class FeedService {
 
     final query = <String, String>{'limit': safeLimit.toString()};
 
-    if (date != null) {
+    String ymd(DateTime d) {
       String two(int x) => x.toString().padLeft(2, '0');
-      final ymd = '${date.year}-${two(date.month)}-${two(date.day)}';
-      query['date'] = ymd;
+      return '${d.year}-${two(d.month)}-${two(d.day)}';
+    }
+
+    if (date != null) {
+      query['date'] = ymd(date);
+    } else {
+      if (desde != null) {
+        query['desde'] = ymd(desde);
+      }
+      if (hasta != null) {
+        query['hasta'] = ymd(hasta);
+      }
     }
 
     if (unidadId != null && unidadId > 0) {
@@ -101,6 +116,10 @@ class FeedService {
     if (delegacionFilterId != null && delegacionFilterId > 0) {
       query['delegacion_id'] = delegacionFilterId.toString();
       query['delegacion_ids'] = delegacionFilterId.toString();
+    }
+
+    if (userId != null && userId > 0) {
+      query['user_id'] = userId.toString();
     }
 
     final uri = Uri.parse(

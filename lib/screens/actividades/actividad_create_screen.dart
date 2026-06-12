@@ -269,7 +269,8 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
       }
     } catch (e) {
       if (!mounted) return;
-      setState(() => _error = 'No se pudieron cargar categorias.\n$e');
+      final message = ActividadesService.cleanExceptionMessage(e);
+      setState(() => _error = 'No se pudieron cargar categorías.\n$message');
     }
   }
 
@@ -305,7 +306,8 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
       _scheduleC5iHechoRedirectCheck();
     } catch (e) {
       if (!mounted) return;
-      setState(() => _error = 'No se pudieron cargar subcategorias.\n$e');
+      final message = ActividadesService.cleanExceptionMessage(e);
+      setState(() => _error = 'No se pudieron cargar subcategorías.\n$message');
     }
   }
 
@@ -338,12 +340,13 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
       });
     } catch (e) {
       if (!mounted) return;
+      final message = ActividadesService.cleanExceptionMessage(e);
       setState(() {
         _vialidadesDisponibles = const <VialidadesUrbanasDispositivo>[];
         _vialidadesDispositivoId = null;
         _loadingVialidadesDisponibles = false;
         _vialidadesDisponiblesError =
-            'No se pudieron cargar dispositivos disponibles.\n$e';
+            'No se pudieron cargar dispositivos disponibles.\n$message';
       });
     }
   }

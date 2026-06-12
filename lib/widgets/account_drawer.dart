@@ -137,6 +137,17 @@ class AppAccountDrawer extends StatelessWidget {
                             indent: 66,
                           ),
                           DrawerActionTile(
+                            icon: Icons.manage_search_outlined,
+                            title: 'Mis capturas',
+                            subtitle: 'Registros subidos por mi usuario',
+                            onTap: () => _goTo(context, AppRoutes.misCapturas),
+                          ),
+                          Divider(
+                            height: 1,
+                            color: Colors.grey.shade200,
+                            indent: 66,
+                          ),
+                          DrawerActionTile(
                             icon: Icons.lock_outline,
                             title: 'Cambiar contraseña',
                             subtitle: 'Actualizar credenciales de acceso',
@@ -193,6 +204,17 @@ class AppAccountDrawer extends StatelessWidget {
                                   context,
                                   AppRoutes.settingsStatisticsFiles,
                                   arguments: 'siniestros',
+                                ),
+                              ),
+                            if (summary?.access.canSeeDelegacionesFiles == true)
+                              DrawerActionTile(
+                                icon: Icons.rule_folder_outlined,
+                                title: 'Revisión Excel Delegaciones',
+                                subtitle:
+                                    'Ver registros contemplados y alertas',
+                                onTap: () => _goTo(
+                                  context,
+                                  AppRoutes.delegacionesExcelRevision,
                                 ),
                               ),
                             if (summary?.access.canSeeDelegacionesFiles == true)

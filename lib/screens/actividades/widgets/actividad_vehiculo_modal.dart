@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/vehiculos/estados_republica.dart';
+import '../../../core/vehiculos/marcas_vehiculo.dart';
 import '../../../core/vehiculos/vehiculo_taxonomia.dart';
 import '../../../models/actividad.dart';
 import '../../../services/gruas_catalog_service.dart';
 import '../../../services/vehiculo_form_service.dart';
 import '../../../widgets/antecedente_highlight_tile.dart';
+import '../../../widgets/marca_vehiculo_dropdown.dart';
 import '../../../widgets/tarjeta_circulacion_scanner_screen.dart';
 
 Future<ActividadVehiculo?> showActividadVehiculoModal(BuildContext context) {
@@ -78,6 +80,24 @@ class _ActividadVehiculoModalState extends State<_ActividadVehiculoModal> {
   String? _nullIfEmpty(String value) {
     final clean = value.trim();
     return clean.isEmpty ? null : clean;
+  }
+
+  String _marcaParaGuardar() {
+    return MarcasVehiculo.valueFromAny(
+          _t(_marcaCtrl),
+          tipoGeneral: _tipoGeneral,
+          carroceria: _carroceria,
+        ) ??
+        _t(_marcaCtrl);
+  }
+
+  void _syncMarcaConTipoYCarroceria() {
+    final value = MarcasVehiculo.valueFromAny(
+      _marcaCtrl.text,
+      tipoGeneral: _tipoGeneral,
+      carroceria: _carroceria,
+    );
+    _marcaCtrl.text = value ?? '';
   }
 
   InputDecoration _dec(String label, {IconData? icon}) {
@@ -179,7 +199,6 @@ class _ActividadVehiculoModalState extends State<_ActividadVehiculoModal> {
     }
 
     setState(() {
-      if (setText(_marcaCtrl, parsed.marca)) applied += 1;
       if (setText(_lineaCtrl, parsed.linea)) applied += 1;
       if (setText(_modeloCtrl, parsed.modelo)) applied += 1;
       if (setText(_colorCtrl, parsed.color)) applied += 1;
@@ -228,6 +247,18 @@ class _ActividadVehiculoModalState extends State<_ActividadVehiculoModal> {
         _carroceria = carroceria;
         applied += 1;
       }
+
+      final hasShape =
+          (_tipoGeneral ?? '').trim().isNotEmpty &&
+          (_carroceria ?? '').trim().isNotEmpty;
+      final marca = hasShape
+          ? MarcasVehiculo.valueFromAny(
+              parsed.marca,
+              tipoGeneral: _tipoGeneral,
+              carroceria: _carroceria,
+            )
+          : MarcasVehiculo.normalize(parsed.marca);
+      if (setText(_marcaCtrl, marca)) applied += 1;
     });
 
     return applied;
@@ -258,6 +289,7 @@ class _ActividadVehiculoModalState extends State<_ActividadVehiculoModal> {
     );
     final serieClean = VehiculoFormService.normalizeSerie(_t(_serieCtrl));
     final capacidad = int.tryParse(_t(_capacidadCtrl)) ?? 0;
+    final marca = _marcaParaGuardar();
     final montoDanos = double.tryParse(_t(_montoDanosCtrl));
     final gruaNombre = GruasCatalogService.findNameById(
       _gruas,
@@ -271,7 +303,7 @@ class _ActividadVehiculoModalState extends State<_ActividadVehiculoModal> {
     Navigator.pop(
       context,
       ActividadVehiculo(
-        marca: _t(_marcaCtrl),
+        marca: marca,
         modelo: _nullIfEmpty(_t(_modeloCtrl)),
         tipoGeneral: _tipoGeneral,
         tipo: _carroceria ?? '',
@@ -424,17 +456,6 @@ class _ActividadVehiculoModalState extends State<_ActividadVehiculoModal> {
                 ),
               ),
               const SizedBox(height: 10),
-              TextFormField(
-                controller: _marcaCtrl,
-                decoration: _dec('Marca *', icon: Icons.local_offer),
-                textCapitalization: TextCapitalization.characters,
-                validator: (v) => VehiculoFormService.validateRequiredText(
-                  v,
-                  max: 50,
-                  label: 'Marca',
-                ),
-              ),
-              const SizedBox(height: 10),
               DropdownButtonFormField<String>(
                 value: _tipoGeneral,
                 decoration: _dec(
@@ -457,6 +478,7 @@ class _ActividadVehiculoModalState extends State<_ActividadVehiculoModal> {
                   setState(() {
                     _tipoGeneral = value;
                     _carroceria = null;
+                    _syncMarcaConTipoYCarroceria();
                   });
                 },
                 validator: _requiredSelect,
@@ -486,11 +508,21 @@ class _ActividadVehiculoModalState extends State<_ActividadVehiculoModal> {
                       ],
                 onChanged: carrocerias.isEmpty
                     ? null
-                    : (value) => setState(() => _carroceria = value),
+                    : (value) => setState(() {
+                        _carroceria = value;
+                        _syncMarcaConTipoYCarroceria();
+                      }),
                 validator: (value) {
                   if ((_tipoGeneral ?? '').trim().isEmpty) return null;
                   return _requiredSelect(value);
                 },
+              ),
+              const SizedBox(height: 10),
+              MarcaVehiculoDropdown(
+                controller: _marcaCtrl,
+                tipoGeneral: _tipoGeneral,
+                carroceria: _carroceria,
+                decoration: _dec('Marca *', icon: Icons.local_offer),
               ),
               const SizedBox(height: 10),
               TextFormField(

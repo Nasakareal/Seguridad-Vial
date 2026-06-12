@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
 import '../../services/auth_service.dart';
+import '../../core/vehiculos/marcas_vehiculo.dart';
 import '../../core/vehiculos/vehiculo_taxonomia.dart';
 import '../../core/vehiculos/aseguradoras_vehiculo.dart';
 import '../../core/vehiculos/colores_vehiculo.dart';
@@ -11,6 +12,7 @@ import '../../services/gruas_catalog_service.dart';
 import '../../services/offline_sync_service.dart';
 import '../../services/vehiculo_form_service.dart';
 import '../../widgets/antecedente_highlight_tile.dart';
+import '../../widgets/marca_vehiculo_dropdown.dart';
 
 class VehiculoEditScreen extends StatefulWidget {
   const VehiculoEditScreen({super.key});
@@ -58,6 +60,8 @@ class _VehiculoEditScreenState extends State<VehiculoEditScreen> {
   bool _argsOk = false;
   bool _inicializo = false;
   List<Map<String, dynamic>> _vehiculosSnapshot = const [];
+  String? _offlineDraftRequestId;
+  Map<String, dynamic>? _offlineDraftBody;
 
   String? _tipoGeneralSeleccionado;
   String? _tipoCarroceriaSeleccionada;
@@ -77,13 +81,28 @@ class _VehiculoEditScreenState extends State<VehiculoEditScreen> {
             .map((item) => Map<String, dynamic>.from(item))
             .toList();
       }
+      if (args['offlineDraft'] is Map) {
+        final draft = Map<String, dynamic>.from(args['offlineDraft'] as Map);
+        final draftId = (draft['id'] ?? '').toString().trim();
+        _offlineDraftRequestId = draftId.isEmpty ? null : draftId;
+        if (draft['body'] is Map) {
+          _offlineDraftBody = Map<String, dynamic>.from(draft['body'] as Map);
+        }
+      }
     }
 
     _argsOk = _hechoId > 0 && _vehiculoId > 0;
     _inicializo = true;
 
     if (_argsOk) {
-      _init();
+      final draftBody = _offlineDraftBody;
+      if (draftBody != null) {
+        _applyDraftBody(draftBody);
+        setState(() => _loading = false);
+        _cargarGruas();
+      } else {
+        _init();
+      }
     } else {
       setState(() {
         _loading = false;
@@ -125,6 +144,24 @@ class _VehiculoEditScreenState extends State<VehiculoEditScreen> {
 
   void _setColor(String? value) {
     _colorCtrl.text = value ?? '';
+  }
+
+  String _marcaParaGuardar() {
+    return MarcasVehiculo.valueFromAny(
+          _t(_marcaCtrl),
+          tipoGeneral: _tipoGeneralSeleccionado,
+          carroceria: _tipoCarroceriaSeleccionada,
+        ) ??
+        _t(_marcaCtrl);
+  }
+
+  void _syncMarcaConTipoYCarroceria() {
+    final value = MarcasVehiculo.valueFromAny(
+      _marcaCtrl.text,
+      tipoGeneral: _tipoGeneralSeleccionado,
+      carroceria: _tipoCarroceriaSeleccionada,
+    );
+    _marcaCtrl.text = value ?? '';
   }
 
   int? _toIntOrNull(String s) {
@@ -460,6 +497,60 @@ class _VehiculoEditScreenState extends State<VehiculoEditScreen> {
     return EstadosRepublica.valueFromAny(apiValue);
   }
 
+  void _applyDraftBody(Map<String, dynamic> body) {
+    _marcaCtrl.text = (body['marca'] ?? '').toString();
+    _modeloCtrl.text = (body['modelo'] ?? '').toString();
+    _lineaCtrl.text = (body['linea'] ?? '').toString();
+    _colorCtrl.text = (body['color'] ?? '').toString();
+    _placasCtrl.text = (body['placas'] ?? '').toString();
+    _serieCtrl.text = (body['serie'] ?? '').toString();
+    _capacidadCtrl.text = (body['capacidad_personas'] ?? '5').toString();
+    _tipoServicioCtrl.text = VehiculoFormService.tipoServicioPlacaValue(
+      (body['tipo_servicio'] ?? '').toString(),
+    );
+    _tarjetaCirculacionNombreCtrl.text =
+        (body['tarjeta_circulacion_nombre'] ?? '').toString();
+    _aseguradoraCtrl.text =
+        AseguradorasVehiculo.valueFromAny(
+          (body['aseguradora'] ?? '').toString(),
+        ) ??
+        '';
+    _montoDanosCtrl.text = (body['monto_danos'] ?? '').toString();
+    _partesDanadasCtrl.text = (body['partes_danadas'] ?? '').toString();
+    _antecedenteVehiculo = _toBool(body['antecedente_vehiculo']);
+
+    final carroceriaRaw = (body['tipo'] ?? '').toString().trim();
+    final carroceria = VehiculoTaxonomia.normalizeCarroceria(carroceriaRaw);
+    final tipoGeneralRaw = (body['tipo_general'] ?? '').toString().trim();
+    _tipoGeneralSeleccionado =
+        (tipoGeneralRaw.isNotEmpty &&
+            VehiculoTaxonomia.carrocerias.containsKey(tipoGeneralRaw))
+        ? tipoGeneralRaw
+        : _inferirTipoGeneralPorCarroceria(carroceria);
+    _tipoCarroceriaSeleccionada = _canonCarroceria(
+      _tipoGeneralSeleccionado,
+      carroceria,
+    );
+    _marcaCtrl.text =
+        MarcasVehiculo.valueFromAny(
+          _marcaCtrl.text,
+          tipoGeneral: _tipoGeneralSeleccionado,
+          carroceria: _tipoCarroceriaSeleccionada,
+        ) ??
+        _marcaCtrl.text;
+
+    final placasClean = _limpiaPlacas((body['placas'] ?? '').toString());
+    _estadoPlacasSeleccionado = placasClean.isEmpty
+        ? null
+        : _canonEstadoValueFromApi((body['estado_placas'] ?? '').toString());
+
+    _gruaIdSeleccionada = int.tryParse((body['grua_id'] ?? '').toString());
+    _corralonGruaIdSeleccionada = int.tryParse(
+      (body['corralon_id'] ?? '').toString(),
+    );
+    _corralonNombreCargado = (body['corralon'] ?? '').toString().trim();
+  }
+
   Future<void> _init() async {
     try {
       await Future.wait([_cargarGruas(), _cargarVehiculo()]);
@@ -576,6 +667,13 @@ class _VehiculoEditScreenState extends State<VehiculoEditScreen> {
       _tipoGeneralSeleccionado,
       carroceriaApi,
     );
+    _marcaCtrl.text =
+        MarcasVehiculo.valueFromAny(
+          _marcaCtrl.text,
+          tipoGeneral: _tipoGeneralSeleccionado,
+          carroceria: _tipoCarroceriaSeleccionada,
+        ) ??
+        _marcaCtrl.text;
 
     final placasClean = _limpiaPlacas((data['placas'] ?? '').toString());
     final estadoApi = (data['estado_placas'] ?? '').toString();
@@ -689,8 +787,9 @@ class _VehiculoEditScreenState extends State<VehiculoEditScreen> {
     final tipoServicio = VehiculoFormService.tipoServicioPlacaValue(
       _t(_tipoServicioCtrl),
     );
+    final marca = _marcaParaGuardar();
     final validationError = VehiculoFormService.validateVehiculoBeforeSubmit(
-      marca: _t(_marcaCtrl),
+      marca: marca,
       linea: _t(_lineaCtrl),
       color: _t(_colorCtrl),
       tipoServicio: tipoServicio,
@@ -751,7 +850,7 @@ class _VehiculoEditScreenState extends State<VehiculoEditScreen> {
       );
 
       final payload = <String, dynamic>{
-        'marca': _t(_marcaCtrl),
+        'marca': marca,
         'modelo': _t(_modeloCtrl).isEmpty ? null : _t(_modeloCtrl),
         'tipo': (tipoCarroceria ?? '').trim(),
         'linea': _t(_lineaCtrl),
@@ -781,6 +880,7 @@ class _VehiculoEditScreenState extends State<VehiculoEditScreen> {
         method: 'PUT',
         uri: uri,
         body: payload,
+        requestId: _offlineDraftRequestId,
         successCodes: const <int>{200},
       );
 
@@ -853,20 +953,6 @@ class _VehiculoEditScreenState extends State<VehiculoEditScreen> {
                 key: _formKey,
                 child: ListView(
                   children: [
-                    TextFormField(
-                      controller: _marcaCtrl,
-                      decoration: const InputDecoration(
-                        labelText: 'Marca *',
-                        prefixIcon: Icon(Icons.local_offer),
-                      ),
-                      validator: (v) =>
-                          VehiculoFormService.validateRequiredText(
-                            v,
-                            max: 50,
-                            label: 'Marca',
-                          ),
-                    ),
-                    const SizedBox(height: 10),
                     DropdownButtonFormField<String>(
                       value: _tipoGeneralSeleccionado,
                       decoration: const InputDecoration(
@@ -889,6 +975,7 @@ class _VehiculoEditScreenState extends State<VehiculoEditScreen> {
                         setState(() {
                           _tipoGeneralSeleccionado = v;
                           _tipoCarroceriaSeleccionada = null;
+                          _syncMarcaConTipoYCarroceria();
                         });
                       },
                       validator: _tipoGeneralValidator,
@@ -923,14 +1010,23 @@ class _VehiculoEditScreenState extends State<VehiculoEditScreen> {
                             ],
                       onChanged: carroceriasDisponibles.isEmpty
                           ? null
-                          : (v) =>
-                                setState(() => _tipoCarroceriaSeleccionada = v),
+                          : (v) => setState(() {
+                              _tipoCarroceriaSeleccionada = v;
+                              _syncMarcaConTipoYCarroceria();
+                            }),
                       validator: (v) {
                         if ((_tipoGeneralSeleccionado ?? '').isEmpty) {
                           return null;
                         }
                         return _tipoCarroceriaValidator(v);
                       },
+                    ),
+                    const SizedBox(height: 10),
+                    MarcaVehiculoDropdown(
+                      controller: _marcaCtrl,
+                      tipoGeneral: _tipoGeneralSeleccionado,
+                      carroceria: _tipoCarroceriaSeleccionada,
+                      enabled: !_saving,
                     ),
                     const SizedBox(height: 10),
                     TextFormField(

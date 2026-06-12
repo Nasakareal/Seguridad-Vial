@@ -47,6 +47,7 @@ class HechoFormData {
 
   double? lat;
   double? lng;
+  bool ubicacionEditada = false;
   String? calidadGeo;
   String? notaGeo;
   String? fuenteUbicacion;

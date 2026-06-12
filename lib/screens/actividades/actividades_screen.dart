@@ -194,8 +194,11 @@ class _ActividadesScreenState extends State<ActividadesScreen>
         _subcategoriaId = null;
       });
 
+      final message = ActividadesService.cleanExceptionMessage(e);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('No se pudieron cargar subcategorias.\n$e')),
+        SnackBar(
+          content: Text('No se pudieron cargar subcategorías.\n$message'),
+        ),
       );
     }
   }
@@ -226,11 +229,40 @@ class _ActividadesScreenState extends State<ActividadesScreen>
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _items = [];
         _loading = false;
-        _error = 'No se pudieron obtener las actividades.\n$e';
+        final message = ActividadesService.cleanExceptionMessage(e);
+        _error = 'No se pudieron obtener las actividades.\n$message';
       });
     }
+  }
+
+  Widget _buildLoadError() {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.orange.withValues(alpha: .08),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.orange.withValues(alpha: .28)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.wifi_off, color: Colors.orange.shade800),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              _error!,
+              style: TextStyle(
+                color: Colors.orange.shade900,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          TextButton(onPressed: _load, child: const Text('Reintentar')),
+        ],
+      ),
+    );
   }
 
   Future<void> _shareTotals() async {
@@ -243,8 +275,9 @@ class _ActividadesScreenState extends State<ActividadesScreen>
       );
     } catch (e) {
       if (!mounted) return;
+      final message = ActividadesService.cleanExceptionMessage(e);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('No se pudo compartir totales.\n$e')),
+        SnackBar(content: Text('No se pudo compartir totales.\n$message')),
       );
     } finally {
       if (mounted) setState(() => _sharingTotals = false);
@@ -281,11 +314,12 @@ class _ActividadesScreenState extends State<ActividadesScreen>
       ).showSnackBar(const SnackBar(content: Text('Actividad eliminada.')));
     } catch (e) {
       if (!mounted) return;
+      final message = ActividadesService.cleanExceptionMessage(e);
       showDialog(
         context: context,
         builder: (_) => AlertDialog(
           title: const Text('Error'),
-          content: Text('No se pudo eliminar.\n\n$e'),
+          content: Text('No se pudo eliminar.\n\n$message'),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
@@ -596,17 +630,16 @@ class _ActividadesScreenState extends State<ActividadesScreen>
                 child: _filtersBar(),
               ),
               const SizedBox(height: 12),
+              if (!_loading && _error != null) ...[
+                _buildLoadError(),
+                const SizedBox(height: 12),
+              ],
               if (_loading)
                 const Padding(
                   padding: EdgeInsets.only(top: 40),
                   child: Center(child: CircularProgressIndicator()),
                 )
-              else if (_error != null)
-                Padding(
-                  padding: const EdgeInsets.only(top: 30),
-                  child: Center(child: Text(_error!)),
-                )
-              else if (_items.isEmpty)
+              else if (_items.isEmpty && _error == null)
                 const Padding(
                   padding: EdgeInsets.only(top: 40),
                   child: Center(
@@ -658,10 +691,12 @@ class _ActividadesScreenState extends State<ActividadesScreen>
                                 );
                               } catch (e) {
                                 if (!context.mounted) return;
+                                final message =
+                                    ActividadesService.cleanExceptionMessage(e);
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   SnackBar(
                                     content: Text(
-                                      'No se pudo compartir la actividad.\n$e',
+                                      'No se pudo compartir la actividad.\n$message',
                                     ),
                                   ),
                                 );

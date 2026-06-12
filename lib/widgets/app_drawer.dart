@@ -11,6 +11,10 @@ class AppDrawer extends StatelessWidget {
   const AppDrawer({super.key, required this.trackingOn});
 
   static const String permBusqueda = 'ver busqueda';
+  static const String permEstadisticas = 'ver estadisticas';
+  static const String permEstadisticasGlobales = 'ver estadisticas globales';
+  static const String permEstadisticasActividades =
+      'ver estadisticas actividades';
   static const String permDictamenes = 'ver dictamenes';
   static const String permPuestasDisposicion = 'ver puestas a disposicion';
   static const String permHechos = 'ver hechos';
@@ -234,6 +238,24 @@ class AppDrawer extends StatelessWidget {
                     (_allowed(perms, permDictamenes) && unidadId == 1);
                 final canSeeConstanciasManejo =
                     snap.data?.canUseConstanciasManejo ?? false;
+                final canBypassEstadisticasPerm =
+                    hasFullOperationalAccess || isSuperadmin;
+                final canSeeEstadisticasGlobales =
+                    _allowed(
+                      perms,
+                      permEstadisticasGlobales,
+                      all: canBypassEstadisticasPerm,
+                    ) ||
+                    _allowed(
+                      perms,
+                      permEstadisticas,
+                      all: canBypassEstadisticasPerm,
+                    );
+                final canSeeEstadisticasActividades = _allowed(
+                  perms,
+                  permEstadisticasActividades,
+                  all: canBypassEstadisticasPerm,
+                );
                 final canSeeMapaPatrullas =
                     snap.data?.canViewMapaPatrullas ?? false;
                 final canSeeMapaIncidencias = _allowed(
@@ -263,6 +285,44 @@ class AppDrawer extends StatelessWidget {
                           AppRoutes.hechosBuscar,
                           requiredPerm: permBusqueda,
                         ),
+                      ),
+
+                    if (canSeeEstadisticasGlobales ||
+                        canSeeEstadisticasActividades)
+                      _DrawerGroup(
+                        icon: Icons.insights,
+                        label: 'Estadísticas',
+                        subtitle: 'Siniestros, actividades e indicadores',
+                        children: [
+                          if (canSeeEstadisticasGlobales)
+                            _DrawerSubItem(
+                              icon: Icons.car_crash,
+                              label: 'Siniestros',
+                              subtitle: 'Indicadores y hechos filtrados',
+                              onTap: () => _nav(
+                                context,
+                                AppRoutes.estadisticasGlobales,
+                                requiredPerm:
+                                    canBypassEstadisticasPerm ||
+                                        _allowed(perms, permEstadisticas)
+                                    ? null
+                                    : permEstadisticasGlobales,
+                              ),
+                            ),
+                          if (canSeeEstadisticasActividades)
+                            _DrawerSubItem(
+                              icon: Icons.photo_library,
+                              label: 'Actividades',
+                              subtitle: 'Indicadores y capturas filtradas',
+                              onTap: () => _nav(
+                                context,
+                                AppRoutes.estadisticasActividades,
+                                requiredPerm: canBypassEstadisticasPerm
+                                    ? null
+                                    : permEstadisticasActividades,
+                              ),
+                            ),
+                        ],
                       ),
 
                     const SizedBox(height: 12),

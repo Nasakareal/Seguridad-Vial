@@ -12,6 +12,7 @@ import '../models/actividad_fomento.dart';
 import '../models/actividad_subcategoria.dart';
 import 'auth_service.dart';
 import 'delegacion_distance_service.dart';
+import 'network_error_helper.dart';
 import 'offline_sync_service.dart';
 import 'photo_orientation_service.dart';
 import 'vehiculo_form_service.dart';
@@ -478,9 +479,7 @@ class ActividadesService {
   }
 
   static String cleanExceptionMessage(Object error) {
-    final raw = error.toString().trim();
-    if (raw.isEmpty) return 'Ocurrió un error inesperado.';
-    return raw.replaceFirst(RegExp(r'^Exception:\s*'), '').trim();
+    return NetworkErrorHelper.friendlyMessage(error);
   }
 
   static String formatValidationIssues(
@@ -767,7 +766,9 @@ class ActividadesService {
     }
 
     final uri = Uri.parse(_base).replace(queryParameters: qp);
-    final resp = await http.get(uri, headers: headers);
+    final resp = await http
+        .get(uri, headers: headers)
+        .timeout(NetworkErrorHelper.interactiveRequestTimeout);
 
     if (resp.statusCode < 200 || resp.statusCode >= 300) {
       throw Exception(_parseBackendError(resp.body, resp.statusCode));
@@ -782,7 +783,9 @@ class ActividadesService {
     final uri = Uri.parse(
       '${AuthService.baseUrl}/estadisticas-actividades/catalogos/unidades',
     );
-    final resp = await http.get(uri, headers: headers);
+    final resp = await http
+        .get(uri, headers: headers)
+        .timeout(NetworkErrorHelper.interactiveRequestTimeout);
 
     if (resp.statusCode < 200 || resp.statusCode >= 300) {
       throw Exception(_parseBackendError(resp.body, resp.statusCode));
@@ -802,7 +805,9 @@ class ActividadesService {
     final headers = await _headersJson();
     final uri = Uri.parse('$_base/$id');
 
-    final resp = await http.get(uri, headers: headers);
+    final resp = await http
+        .get(uri, headers: headers)
+        .timeout(NetworkErrorHelper.interactiveRequestTimeout);
 
     if (resp.statusCode < 200 || resp.statusCode >= 300) {
       throw Exception(_parseBackendError(resp.body, resp.statusCode));
@@ -825,7 +830,9 @@ class ActividadesService {
     try {
       final headers = await _headersJson();
       final uri = Uri.parse('$_base/categorias');
-      final resp = await http.get(uri, headers: headers);
+      final resp = await http
+          .get(uri, headers: headers)
+          .timeout(NetworkErrorHelper.interactiveRequestTimeout);
 
       if (resp.statusCode < 200 || resp.statusCode >= 300) {
         throw Exception(_parseBackendError(resp.body, resp.statusCode));
@@ -862,7 +869,9 @@ class ActividadesService {
     try {
       final headers = await _headersJson();
       final uri = Uri.parse('$_base/subcategorias/$categoriaId');
-      final resp = await http.get(uri, headers: headers);
+      final resp = await http
+          .get(uri, headers: headers)
+          .timeout(NetworkErrorHelper.interactiveRequestTimeout);
 
       if (resp.statusCode < 200 || resp.statusCode >= 300) {
         throw Exception(_parseBackendError(resp.body, resp.statusCode));
@@ -934,7 +943,9 @@ class ActividadesService {
       if (categoria.id <= 0) continue;
       try {
         final uri = Uri.parse('$_base/subcategorias/${categoria.id}');
-        final resp = await http.get(uri, headers: headers);
+        final resp = await http
+            .get(uri, headers: headers)
+            .timeout(NetworkErrorHelper.interactiveRequestTimeout);
         if (resp.statusCode < 200 || resp.statusCode >= 300) continue;
 
         final raw = jsonDecode(resp.body);
@@ -952,7 +963,9 @@ class ActividadesService {
     final headers = await _headersJson();
     final uri = Uri.parse('$_base/$actividadId/compartir');
 
-    final resp = await http.get(uri, headers: headers);
+    final resp = await http
+        .get(uri, headers: headers)
+        .timeout(NetworkErrorHelper.interactiveRequestTimeout);
     if (resp.statusCode < 200 || resp.statusCode >= 300) {
       throw Exception(_parseBackendError(resp.body, resp.statusCode));
     }
@@ -973,7 +986,9 @@ class ActividadesService {
       '$_base/compartir-totales-whatsapp',
     ).replace(queryParameters: {'fecha': _fmtYmd(fecha)});
 
-    final resp = await http.get(uri, headers: headers);
+    final resp = await http
+        .get(uri, headers: headers)
+        .timeout(NetworkErrorHelper.interactiveRequestTimeout);
     if (resp.statusCode < 200 || resp.statusCode >= 300) {
       throw Exception(_parseBackendError(resp.body, resp.statusCode));
     }
@@ -1063,6 +1078,7 @@ class ActividadesService {
     required ActividadUpsertData data,
     List<File> fotos = const <File>[],
     List<int> eliminarFotos = const <int>[],
+    String? requestId,
   }) async {
     final fields = data.toFields();
     await _addDelegacionKilometrosRecorridos(
@@ -1092,6 +1108,7 @@ class ActividadesService {
         for (final foto in landscapeFotos)
           OfflineUploadFile(field: 'fotos[]', path: foto.path),
       ],
+      requestId: requestId,
       successCodes: const <int>{200},
       errorParser: _parseBackendError,
     );

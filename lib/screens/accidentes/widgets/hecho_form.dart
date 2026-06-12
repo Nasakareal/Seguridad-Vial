@@ -303,6 +303,7 @@ class _HechoFormState extends State<HechoForm> {
     d.montoDanos = _str(draft['monto_danos']);
     d.lat = _doubleValue(draft['lat']);
     d.lng = _doubleValue(draft['lng']);
+    d.ubicacionEditada = _boolValue(draft['ubicacion_editada']);
     d.calidadGeo = _blankToNull(draft['calidad_geo']);
     d.notaGeo = _blankToNull(draft['nota_geo']);
     d.fuenteUbicacion = _blankToNull(draft['fuente_ubicacion']);
@@ -369,6 +370,7 @@ class _HechoFormState extends State<HechoForm> {
       'monto_danos': _montoCtrl.text,
       'lat': d.lat,
       'lng': d.lng,
+      'ubicacion_editada': d.ubicacionEditada,
       'calidad_geo': d.calidadGeo,
       'nota_geo': d.notaGeo,
       'fuente_ubicacion': d.fuenteUbicacion,

@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 
 import '../models/vialidades_urbanas_dispositivo.dart';
 import 'auth_service.dart';
+import 'network_error_helper.dart';
 
 class VialidadesUrbanasService {
   static String get _base => '${AuthService.baseUrl}/vialidades-urbanas';
@@ -82,7 +83,9 @@ class VialidadesUrbanasService {
       },
     );
 
-    final resp = await http.get(uri, headers: headers);
+    final resp = await http
+        .get(uri, headers: headers)
+        .timeout(NetworkErrorHelper.interactiveRequestTimeout);
 
     if (resp.statusCode < 200 || resp.statusCode >= 300) {
       throw Exception(_parseBackendError(resp.body, resp.statusCode));
@@ -154,7 +157,9 @@ class VialidadesUrbanasService {
       '$_base/1/resumen',
     ).replace(queryParameters: <String, String>{'fecha': _fmtYmd(fecha)});
 
-    final resp = await http.get(uri, headers: headers);
+    final resp = await http
+        .get(uri, headers: headers)
+        .timeout(NetworkErrorHelper.interactiveRequestTimeout);
 
     if (resp.statusCode < 200 || resp.statusCode >= 300) {
       throw Exception(_parseBackendError(resp.body, resp.statusCode));
@@ -181,7 +186,9 @@ class VialidadesUrbanasService {
       '$_base/$referenceId/whatsapp',
     ).replace(queryParameters: <String, String>{'fecha': _fmtYmd(fecha)});
 
-    final resp = await http.get(uri, headers: headers);
+    final resp = await http
+        .get(uri, headers: headers)
+        .timeout(NetworkErrorHelper.interactiveRequestTimeout);
 
     if (resp.statusCode < 200 || resp.statusCode >= 300) {
       throw Exception(_parseBackendError(resp.body, resp.statusCode));

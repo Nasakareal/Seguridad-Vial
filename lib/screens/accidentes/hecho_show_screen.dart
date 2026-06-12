@@ -1,13 +1,11 @@
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
 
 import '../../services/auth_service.dart';
 import '../../services/tracking_service.dart';
 import '../../services/app_version_service.dart';
 import '../../services/hecho_access_service.dart';
 import '../../services/hecho_share_service.dart';
+import '../../services/hechos_service.dart';
 import '../../services/pdf_document_service.dart';
 import '../../services/reportes_service.dart';
 
@@ -133,31 +131,7 @@ class _HechoShowScreenState extends State<HechoShowScreen>
     });
 
     try {
-      final token = await AuthService.getToken();
-      final headers = <String, String>{'Accept': 'application/json'};
-      if (token != null && token.isNotEmpty) {
-        headers['Authorization'] = 'Bearer $token';
-      }
-
-      final uri = Uri.parse('${AuthService.baseUrl}/hechos/$id');
-      final res = await http.get(uri, headers: headers);
-
-      if (res.statusCode != 200) {
-        throw Exception('HTTP ${res.statusCode}: ${res.body}');
-      }
-
-      final raw = jsonDecode(res.body);
-      Map<String, dynamic> hecho;
-
-      if (raw is Map<String, dynamic> && raw['data'] is Map) {
-        hecho = Map<String, dynamic>.from(raw['data']);
-      } else if (raw is Map<String, dynamic> && raw['hecho'] is Map) {
-        hecho = Map<String, dynamic>.from(raw['hecho']);
-      } else if (raw is Map<String, dynamic>) {
-        hecho = raw;
-      } else {
-        hecho = {};
-      }
+      final hecho = await HechosService.fetchById(id);
 
       if (!mounted) return;
       setState(() {
@@ -166,9 +140,10 @@ class _HechoShowScreenState extends State<HechoShowScreen>
       });
     } catch (e) {
       if (!mounted) return;
+      final message = HechosService.cleanExceptionMessage(e);
       setState(() {
         _hecho = null;
-        _error = 'No se pudo cargar el hecho: $e';
+        _error = 'No se pudo cargar el hecho.\n$message';
         _cargando = false;
       });
     }

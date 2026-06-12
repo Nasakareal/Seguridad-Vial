@@ -35,6 +35,7 @@ class _AccidentesScreenState extends State<AccidentesScreen>
   List<Map<String, dynamic>> _delegaciones = [];
   bool _cargando = true;
   bool _cargandoDelegaciones = false;
+  String? _loadError;
 
   late String _fechaSeleccionada;
 
@@ -635,7 +636,10 @@ class _AccidentesScreenState extends State<AccidentesScreen>
 
   Future<void> _obtenerHechos() async {
     if (!mounted) return;
-    setState(() => _cargando = true);
+    setState(() {
+      _cargando = true;
+      _loadError = null;
+    });
 
     try {
       final hechosMap = await AccidentesService.fetchHechos(
@@ -647,26 +651,48 @@ class _AccidentesScreenState extends State<AccidentesScreen>
       setState(() {
         _hechos = hechosMap;
         _cargando = false;
+        _loadError = null;
       });
     } catch (e) {
       if (!mounted) return;
-      setState(() => _cargando = false);
-
-      if (!mounted) return;
-      showDialog(
-        context: context,
-        builder: (_) => AlertDialog(
-          title: const Text('Error'),
-          content: Text('No se pudieron obtener los hechos.\n\n$e'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Cerrar'),
-            ),
-          ],
-        ),
-      );
+      final message = AccidentesService.cleanExceptionMessage(e);
+      setState(() {
+        _cargando = false;
+        _loadError = 'No se pudieron obtener los hechos.\n$message';
+      });
     }
+  }
+
+  Widget _buildLoadError() {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.orange.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.orange.withValues(alpha: 0.28)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.wifi_off, color: Colors.orange.shade800),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              _loadError!,
+              style: TextStyle(
+                color: Colors.orange.shade900,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          TextButton(
+            onPressed: _obtenerHechos,
+            child: const Text('Reintentar'),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _seleccionarFecha() async {
@@ -732,11 +758,12 @@ class _AccidentesScreenState extends State<AccidentesScreen>
       );
     } catch (e) {
       if (!mounted) return;
+      final message = AccidentesService.cleanExceptionMessage(e);
       showDialog(
         context: context,
         builder: (_) => AlertDialog(
           title: const Text('Error'),
-          content: Text('No se pudo descargar el reporte.\n\n$e'),
+          content: Text('No se pudo descargar el reporte.\n\n$message'),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(),
@@ -759,11 +786,12 @@ class _AccidentesScreenState extends State<AccidentesScreen>
       await HechoShareService.compartirEnWhatsapp(hechoId: hechoId);
     } catch (e) {
       if (!mounted) return;
+      final message = AccidentesService.cleanExceptionMessage(e);
       showDialog(
         context: context,
         builder: (_) => AlertDialog(
           title: const Text('Error'),
-          content: Text('No se pudo compartir el hecho.\n\n$e'),
+          content: Text('No se pudo compartir el hecho.\n\n$message'),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(),
@@ -981,12 +1009,16 @@ class _AccidentesScreenState extends State<AccidentesScreen>
               if (_trackingOn) const SizedBox(height: 16),
               _buildFiltrosCard(totalFiltrado: hechosFiltrados.length),
               const SizedBox(height: 12),
+              if (!_cargando && _loadError != null) ...[
+                _buildLoadError(),
+                const SizedBox(height: 12),
+              ],
               if (_cargando)
                 const Padding(
                   padding: EdgeInsets.only(top: 40),
                   child: Center(child: CircularProgressIndicator()),
                 )
-              else if (hechosFiltrados.isEmpty)
+              else if (hechosFiltrados.isEmpty && _loadError == null)
                 const Padding(
                   padding: EdgeInsets.only(top: 40),
                   child: Center(
