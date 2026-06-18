@@ -1,9 +1,13 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
+import 'package:image_picker/image_picker.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
+import '../../app/routes.dart';
+import '../../core/licencias/licencia_barcode_payload.dart';
 import '../services/auth_service.dart';
 import '../../services/local_draft_service.dart';
 import '../../services/vehiculo_form_service.dart';
@@ -71,6 +75,16 @@ class _VehiculoConductorCreateScreenState
     if (v is bool) return v;
     final s = (v ?? '').toString().toLowerCase().trim();
     return s == '1' || s == 'true' || s == 'si' || s == 'sí';
+  }
+
+  String _telefonoMx10(String raw) {
+    var digits = raw.replaceAll(RegExp(r'\D+'), '');
+    if (digits.length == 13 && digits.startsWith('521')) {
+      digits = digits.substring(3);
+    } else if (digits.length == 12 && digits.startsWith('52')) {
+      digits = digits.substring(2);
+    }
+    return digits;
   }
 
   Future<Map<String, String>> _headers() async {
@@ -253,6 +267,7 @@ class _VehiculoConductorCreateScreenState
     }
 
     setState(() {
+      if (setText(_numeroLicenciaCtrl, parsed.numeroLicencia)) applied += 1;
       if (setText(_nombreCtrl, parsed.nombre)) applied += 1;
       if (setText(_tipoLicenciaCtrl, parsed.tipoLicencia)) applied += 1;
 
@@ -275,13 +290,39 @@ class _VehiculoConductorCreateScreenState
     return applied;
   }
 
+  void _abrirPuntosLicencia() {
+    final numero = _numeroLicenciaCtrl.text.trim();
+    if (numero.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Primero escanea o captura el número de licencia.'),
+        ),
+      );
+      return;
+    }
+
+    Navigator.pushNamed(
+      context,
+      AppRoutes.licenciasPuntos,
+      arguments: <String, dynamic>{
+        'numero_licencia': numero,
+        'titular_nombre': _nombreCtrl.text.trim(),
+        'tipo_licencia': _tipoLicenciaCtrl.text.trim(),
+        'telefono': _telefonoMx10(_telefonoCtrl.text),
+        'hecho_id': hechoId,
+        'vehiculo_id': vehiculoId,
+      },
+    );
+  }
+
   Future<void> _guardar() async {
     if (_guardando) return;
     if (!_formKey.currentState!.validate()) return;
 
+    final telefono = _telefonoMx10(_telefonoCtrl.text);
     final validationError = VehiculoFormService.validateConductorBeforeSubmit(
       nombre: _nombreCtrl.text.trim(),
-      telefono: _telefonoCtrl.text.trim(),
+      telefono: telefono,
       domicilio: _domicilioCtrl.text.trim(),
       sexo: _sexo,
       ocupacion: _ocupacionCtrl.text.trim(),
@@ -341,9 +382,7 @@ class _VehiculoConductorCreateScreenState
 
         // ===== CONDUCTOR =====
         'conductor_nombre': _nombreCtrl.text.trim(),
-        'telefono': _telefonoCtrl.text.trim().isEmpty
-            ? null
-            : _telefonoCtrl.text.trim(),
+        'telefono': telefono.isEmpty ? null : telefono,
         'domicilio': _domicilioCtrl.text.trim().isEmpty
             ? null
             : _domicilioCtrl.text.trim(),
@@ -541,6 +580,12 @@ class _VehiculoConductorCreateScreenState
                       icon: const Icon(Icons.qr_code_scanner),
                       label: const Text('Escanear licencia de conducir'),
                     ),
+                    const SizedBox(height: 8),
+                    OutlinedButton.icon(
+                      onPressed: _guardando ? null : _abrirPuntosLicencia,
+                      icon: const Icon(Icons.scoreboard_outlined),
+                      label: const Text('Consultar puntos de esta licencia'),
+                    ),
                     const SizedBox(height: 10),
                     TextFormField(
                       controller: _nombreCtrl,
@@ -560,8 +605,13 @@ class _VehiculoConductorCreateScreenState
                     TextFormField(
                       controller: _telefonoCtrl,
                       keyboardType: TextInputType.phone,
+                      inputFormatters: [
+                        FilteringTextInputFormatter.digitsOnly,
+                        LengthLimitingTextInputFormatter(10),
+                      ],
                       decoration: const InputDecoration(
                         labelText: 'Teléfono (10 dígitos)',
+                        helperText: 'Ejemplo: 4434765057. No escribas 521.',
                         prefixIcon: Icon(Icons.phone),
                       ),
                       validator: VehiculoFormService.validateTelefono,
@@ -775,24 +825,101 @@ class _LicenciaScannerScreen extends StatefulWidget {
 
 class _LicenciaScannerScreenState extends State<_LicenciaScannerScreen> {
   final MobileScannerController _controller = MobileScannerController(
+    cameraResolution: const Size(1920, 1080),
+    lensType: CameraLensType.normal,
+    formats: const <BarcodeFormat>[BarcodeFormat.qrCode],
     detectionSpeed: DetectionSpeed.noDuplicates,
-    autoZoom: true,
+    autoZoom: false,
+    initialZoom: 0,
   );
+  final ImagePicker _picker = ImagePicker();
 
   bool _handled = false;
 
-  void _handleDetect(BarcodeCapture capture) {
-    if (_handled) return;
+  bool _finishCapture(BarcodeCapture capture) {
+    if (_handled) return true;
 
     for (final barcode in capture.barcodes) {
-      final raw = barcode.rawValue?.trim() ?? '';
+      final raw = LicenciaBarcodePayload.fromBarcode(barcode)?.trim() ?? '';
       if (raw.isEmpty) continue;
 
       _handled = true;
       unawaited(_controller.stop());
-      if (!mounted) return;
+      if (!mounted) return true;
       Navigator.pop(context, raw);
+      return true;
+    }
+
+    return false;
+  }
+
+  void _handleDetect(BarcodeCapture capture) {
+    _finishCapture(capture);
+  }
+
+  Future<void> _scanFromPhoto() async {
+    if (_handled) return;
+
+    await _controller.stop();
+    try {
+      final picked = await _picker.pickImage(
+        source: ImageSource.camera,
+        preferredCameraDevice: CameraDevice.rear,
+        imageQuality: 100,
+      );
+      if (picked == null || !mounted || _handled) return;
+
+      final capture = await _controller.analyzeImage(picked.path);
+      if (capture != null && _finishCapture(capture)) return;
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'No se pudo leer el QR en la foto. Tómala más cerca, bien enfocada y con el QR completo.',
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('No se pudo analizar la foto: $e')),
+      );
+    } finally {
+      if (mounted && !_handled) {
+        unawaited(_controller.start());
+      }
+    }
+  }
+
+  Future<void> _focusAt(Offset localPosition, Size size) async {
+    if (!_controller.value.isInitialized || !_controller.value.isRunning) {
       return;
+    }
+
+    final dx = size.width <= 0
+        ? 0.5
+        : (localPosition.dx / size.width).clamp(0.0, 1.0).toDouble();
+    final dy = size.height <= 0
+        ? 0.5
+        : (localPosition.dy / size.height).clamp(0.0, 1.0).toDouble();
+
+    try {
+      await _controller.setFocusPoint(Offset(dx, dy));
+    } catch (_) {
+      // Some devices ignore manual focus while the analyzer is busy.
+    }
+  }
+
+  Future<void> _focusCenter() async {
+    if (!_controller.value.isInitialized || !_controller.value.isRunning) {
+      return;
+    }
+
+    try {
+      await _controller.setFocusPoint(const Offset(0.5, 0.5));
+    } catch (_) {
+      // Best effort only; scanning still works on devices without tap focus.
     }
   }
 
@@ -817,57 +944,105 @@ class _LicenciaScannerScreenState extends State<_LicenciaScannerScreen> {
             onPressed: () => _controller.toggleTorch(),
           ),
           IconButton(
+            tooltip: 'Quitar zoom',
+            icon: const Icon(Icons.zoom_out_map),
+            onPressed: () => unawaited(_controller.resetZoomScale()),
+          ),
+          IconButton(
+            tooltip: 'Enfocar',
+            icon: const Icon(Icons.center_focus_strong),
+            onPressed: () => unawaited(_focusCenter()),
+          ),
+          IconButton(
+            tooltip: 'Tomar foto',
+            icon: const Icon(Icons.camera_alt_outlined),
+            onPressed: () => unawaited(_scanFromPhoto()),
+          ),
+          IconButton(
             tooltip: 'Cambiar cámara',
             icon: const Icon(Icons.cameraswitch),
             onPressed: () => _controller.switchCamera(),
           ),
         ],
       ),
-      body: Stack(
-        children: [
-          MobileScanner(
-            controller: _controller,
-            onDetect: _handleDetect,
-            errorBuilder: (context, error) {
-              return Center(
-                child: Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: Text(
-                    'No se pudo iniciar la cámara.\n\n$error',
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(color: Colors.white),
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          final previewSize = Size(constraints.maxWidth, constraints.maxHeight);
+          return GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTapDown: (details) =>
+                unawaited(_focusAt(details.localPosition, previewSize)),
+            child: Stack(
+              children: [
+                MobileScanner(
+                  controller: _controller,
+                  fit: BoxFit.contain,
+                  onDetect: _handleDetect,
+                  errorBuilder: (context, error) {
+                    return Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(24),
+                        child: Text(
+                          'No se pudo iniciar la cámara.\n\n$error',
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(color: Colors.white),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+                Center(
+                  child: Container(
+                    width: (constraints.maxWidth - 48).clamp(240.0, 340.0),
+                    height: (constraints.maxWidth - 48).clamp(240.0, 340.0),
+                    decoration: BoxDecoration(
+                      border: Border.all(color: Colors.white, width: 3),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
                   ),
                 ),
-              );
-            },
-          ),
-          Center(
-            child: Container(
-              width: 280,
-              height: 180,
-              decoration: BoxDecoration(
-                border: Border.all(color: Colors.white, width: 3),
-                borderRadius: BorderRadius.circular(8),
-              ),
-            ),
-          ),
-          Align(
-            alignment: Alignment.bottomCenter,
-            child: Container(
-              width: double.infinity,
-              color: Colors.black.withValues(alpha: 0.72),
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
-              child: const Text(
-                'Apunta al código de la licencia. Se llenarán nombre, tipo y vigencia cuando el formato sea reconocible.',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w700,
+                Align(
+                  alignment: Alignment.topCenter,
+                  child: Container(
+                    margin: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 10,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withValues(alpha: 0.66),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Text(
+                      'QR de licencia: ponlo completo dentro del cuadro, sin acercarlo demasiado. Toca el QR para enfocar.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
                 ),
-              ),
+                Align(
+                  alignment: Alignment.bottomCenter,
+                  child: Container(
+                    width: double.infinity,
+                    color: Colors.black.withValues(alpha: 0.72),
+                    padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
+                    child: const Text(
+                      'Si no lee en vivo, toca el icono de cámara y toma una foto nítida del QR completo.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
-          ),
-        ],
+          );
+        },
       ),
     );
   }

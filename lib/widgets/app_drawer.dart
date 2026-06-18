@@ -24,6 +24,7 @@ class AppDrawer extends StatelessWidget {
   static const String permGruas = 'ver gruas';
   static const String permMapa = 'ver mapa';
   static const String permSustento = 'ver sustento legal';
+  static const String permPuntosLicencias = 'ver puntos licencias';
 
   Future<void> _nav(
     BuildContext context,
@@ -263,6 +264,11 @@ class AppDrawer extends StatelessWidget {
                   permMapa,
                   all: canSeeAllButtons,
                 );
+                final canSeeLicenciasPuntos =
+                    canSeeAllButtons ||
+                    isSuperadmin ||
+                    unidadId != null ||
+                    _allowed(perms, permPuntosLicencias);
 
                 return ListView(
                   padding: drawerScrollablePadding(context),
@@ -438,6 +444,14 @@ class AppDrawer extends StatelessWidget {
                                 _nav(context, AppRoutes.constanciasManejo),
                           ),
                         ],
+                      ),
+
+                    if (canSeeLicenciasPuntos)
+                      _DrawerItem(
+                        icon: Icons.scoreboard_outlined,
+                        label: 'Puntos de licencia',
+                        subtitle: 'Escanear licencia y revisar saldo',
+                        onTap: () => _nav(context, AppRoutes.licenciasPuntos),
                       ),
 
                     if (canSeeCulturaVial)

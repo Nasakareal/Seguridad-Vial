@@ -10,6 +10,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'auth_service.dart';
+import 'network_status_service.dart';
 
 class OfflineActionResult {
   final bool synced;
@@ -207,9 +208,13 @@ class OfflineSyncService {
         ownerKey: ownerKey,
         operationId: effectiveRequestId,
       );
+      NetworkStatusService.markOnline();
       unawaited(flushPending());
       return OfflineActionResult.synced(responseBody: response.body);
     } on _RetryableSyncException catch (e) {
+      if (_looksLikeConnectivityIssue(e.message)) {
+        NetworkStatusService.markOffline();
+      }
       final queuedMessage = _queuedRetryMessage(e.message);
       final op = _QueuedOperation(
         id: effectiveRequestId,
@@ -345,9 +350,13 @@ class OfflineSyncService {
         ownerKey: ownerKey,
         operationId: effectiveRequestId,
       );
+      NetworkStatusService.markOnline();
       unawaited(flushPending());
       return OfflineActionResult.synced(responseBody: response.body);
     } on _RetryableSyncException catch (e) {
+      if (_looksLikeConnectivityIssue(e.message)) {
+        NetworkStatusService.markOffline();
+      }
       final queuedMessage = _queuedRetryMessage(e.message);
       final storedFiles = await _stashFilesForQueue(effectiveRequestId, files);
       final op = _QueuedOperation(
@@ -514,6 +523,7 @@ class OfflineSyncService {
 
         try {
           await _performQueuedOperation(op);
+          NetworkStatusService.markOnline();
           synced += 1;
           changed = true;
           completedIds.add(op.id);
@@ -522,6 +532,9 @@ class OfflineSyncService {
           changed = true;
           retryableCount += 1;
           firstRetryableMessage ??= e.message;
+          if (_looksLikeConnectivityIssue(e.message)) {
+            NetworkStatusService.markOffline();
+          }
           final nextAttempts = op.attempts + 1;
           if (!_looksLikeConnectivityIssue(e.message) &&
               nextAttempts >= _maxServerRetryAttempts) {
@@ -815,17 +828,21 @@ class OfflineSyncService {
         successCodes: successCodes,
         errorParser: errorParser,
       );
+      NetworkStatusService.markOnline();
       return response;
     } on TimeoutException {
       _trace('JSON !! timeout $method $uri id=$requestId');
+      NetworkStatusService.markOffline();
       throw const _RetryableSyncException(
         'Tiempo de espera agotado al sincronizar.',
       );
     } on SocketException {
       _trace('JSON !! socket $method $uri id=$requestId');
+      NetworkStatusService.markOffline();
       throw const _RetryableSyncException('Sin conexión disponible.');
     } on http.ClientException catch (e) {
       _trace('JSON !! client $method $uri id=$requestId error=${_clip('$e')}');
+      NetworkStatusService.markOffline();
       throw const _RetryableSyncException(
         'No fue posible conectar con el servidor.',
       );
@@ -893,19 +910,23 @@ class OfflineSyncService {
         successCodes: successCodes,
         errorParser: errorParser,
       );
+      NetworkStatusService.markOnline();
       return response;
     } on TimeoutException {
       _trace('MULTIPART !! timeout $method $uri id=$requestId');
+      NetworkStatusService.markOffline();
       throw const _RetryableSyncException(
         'Tiempo de espera agotado al sincronizar.',
       );
     } on SocketException {
       _trace('MULTIPART !! socket $method $uri id=$requestId');
+      NetworkStatusService.markOffline();
       throw const _RetryableSyncException('Sin conexión disponible.');
     } on http.ClientException catch (e) {
       _trace(
         'MULTIPART !! client $method $uri id=$requestId error=${_clip('$e')}',
       );
+      NetworkStatusService.markOffline();
       throw const _RetryableSyncException(
         'No fue posible conectar con el servidor.',
       );

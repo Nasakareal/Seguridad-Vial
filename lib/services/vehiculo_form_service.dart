@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import '../core/licencias/licencia_qr_parser.dart';
 import '../core/vehiculos/estados_republica.dart';
 import '../core/vehiculos/vehiculo_taxonomia.dart';
 import 'offline_sync_service.dart';
@@ -52,16 +53,20 @@ class VehiculoQrData {
 
 class ConductorLicenseQrData {
   final String rawText;
+  final String? numeroLicencia;
   final String? nombre;
   final String? tipoLicencia;
+  final DateTime? fechaNacimiento;
   final DateTime? expedicion;
   final DateTime? vigencia;
   final bool permanente;
 
   const ConductorLicenseQrData({
     required this.rawText,
+    this.numeroLicencia,
     this.nombre,
     this.tipoLicencia,
+    this.fechaNacimiento,
     this.expedicion,
     this.vigencia,
     this.permanente = false,
@@ -69,9 +74,11 @@ class ConductorLicenseQrData {
 
   bool get hasAnyValue {
     return <String?>[
+          numeroLicencia,
           nombre,
           tipoLicencia,
         ].any((value) => (value ?? '').trim().isNotEmpty) ||
+        fechaNacimiento != null ||
         expedicion != null ||
         vigencia != null ||
         permanente;
@@ -299,16 +306,19 @@ class VehiculoFormService {
     final rawText = raw.trim();
     if (rawText.isEmpty) return const ConductorLicenseQrData(rawText: '');
 
+    final parsed = LicenciaQrParser.parse(rawText);
     final dates = _licenseDates(rawText);
     final header = _licenseTextBeforeDates(rawText);
     final segments = _licenseHeaderSegments(header);
 
-    final nombre = segments.isNotEmpty
+    final fallbackNombre = segments.isNotEmpty
         ? _upperLicenseValue(segments.first)
         : null;
-    final tipoLicencia = segments.length > 1
-        ? _upperLicenseValue(segments[1])
-        : _inferLicenseType(rawText);
+    final fallbackTipo = segments.length > 1
+        ? _normalizeParsedLicenseType(_upperLicenseValue(segments[1]))
+        : null;
+    final tipoLicencia =
+        parsed.tipoLicencia ?? fallbackTipo ?? _inferLicenseType(rawText);
 
     final expedicion = dates.isNotEmpty ? dates.first : null;
     final vigencia = dates.isEmpty
@@ -318,11 +328,13 @@ class VehiculoFormService {
 
     return ConductorLicenseQrData(
       rawText: rawText,
-      nombre: nombre,
+      numeroLicencia: parsed.numeroLicencia,
+      nombre: parsed.nombre ?? fallbackNombre,
       tipoLicencia: tipoLicencia,
-      expedicion: expedicion,
-      vigencia: permanente ? null : vigencia,
-      permanente: permanente,
+      fechaNacimiento: parsed.fechaNacimiento,
+      expedicion: parsed.expedicion ?? expedicion,
+      vigencia: parsed.vigencia ?? (permanente ? null : vigencia),
+      permanente: parsed.permanente || permanente,
     );
   }
 
@@ -1162,6 +1174,35 @@ class VehiculoFormService {
     }
 
     return null;
+  }
+
+  static String? _normalizeParsedLicenseType(String? value) {
+    final text = (value ?? '').trim();
+    if (text.isEmpty) return null;
+    if (RegExp(r'^\d{1,2}$').hasMatch(text)) return null;
+    if (const {
+      'ENE',
+      'FEB',
+      'MAR',
+      'ABR',
+      'MAY',
+      'JUN',
+      'JUL',
+      'AGO',
+      'SEP',
+      'SEPT',
+      'OCT',
+      'NOV',
+      'DIC',
+    }.contains(_removeAccents(text).toUpperCase())) {
+      return null;
+    }
+    if (RegExp(
+      r'\d{1,2}[\s|/\-.]+[A-Z]{3,4}[\s|/\-.]+\d{2,4}',
+    ).hasMatch(_removeAccents(text).toUpperCase())) {
+      return null;
+    }
+    return text;
   }
 
   static String _removeAccents(String value) {

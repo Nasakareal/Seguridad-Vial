@@ -3,6 +3,8 @@ import 'dart:io';
 
 import 'package:http/http.dart' as http;
 
+import 'network_status_service.dart';
+
 class NetworkErrorHelper {
   static const Duration interactiveRequestTimeout = Duration(seconds: 8);
 
@@ -37,7 +39,10 @@ class NetworkErrorHelper {
     Object error, {
     String fallback = 'Ocurrió un error inesperado.',
   }) {
-    if (isConnectivityIssue(error)) return offlineCaptureMessage;
+    if (isConnectivityIssue(error)) {
+      NetworkStatusService.markOffline();
+      return offlineCaptureMessage;
+    }
 
     final raw = error.toString().trim();
     if (raw.isEmpty) return fallback;

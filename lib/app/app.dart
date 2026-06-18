@@ -4,6 +4,7 @@ import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import '../core/globals.dart';
 import '../core/platform_support.dart';
 import '../widgets/alerts_listener.dart';
+import '../widgets/offline_connection_banner.dart';
 import '../widgets/offline_sync_listener.dart';
 
 import 'auth_gate.dart';
@@ -26,10 +27,11 @@ class SeguridadVialApp extends StatelessWidget {
       ),
       builder: (context, child) {
         final appChild = child ?? const SizedBox.shrink();
+        final offlineAwareChild = OfflineConnectionBanner(child: appChild);
         if (!supportsForegroundTaskShell) {
-          return appChild;
+          return offlineAwareChild;
         }
-        return WithForegroundTask(child: appChild);
+        return WithForegroundTask(child: offlineAwareChild);
       },
       home: const PushNavBinder(
         child: AlertsListener(child: OfflineSyncListener(child: AuthGate())),
