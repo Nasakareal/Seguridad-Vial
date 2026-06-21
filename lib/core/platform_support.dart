@@ -22,7 +22,22 @@ bool get supportsBackgroundLocationTracking {
   return Platform.isAndroid || Platform.isIOS;
 }
 
+bool get isMobilePlatform {
+  if (kIsWeb) return false;
+  return Platform.isAndroid || Platform.isIOS;
+}
+
 bool get isDesktopTestPlatform {
   if (kIsWeb) return false;
   return Platform.isWindows || Platform.isLinux || Platform.isMacOS;
+}
+
+String get currentPlatformLabel {
+  if (kIsWeb) return 'web';
+  if (Platform.isAndroid) return 'android';
+  if (Platform.isIOS) return 'ios';
+  if (Platform.isMacOS) return 'macos';
+  if (Platform.isWindows) return 'windows';
+  if (Platform.isLinux) return 'linux';
+  return 'unknown';
 }

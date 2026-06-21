@@ -596,4 +596,311 @@ void main() {
       expect(await AuthService.canEditConstanciasManejo(), isFalse);
     },
   );
+
+  test(
+    'single mobile session scope only applies to perito from siniestros',
+    () async {
+      expect(
+        AuthService.userPayloadRequiresSingleMobileSession(<String, dynamic>{
+          'role': <String, Object>{'id': 4, 'name': 'Perito'},
+          'unidad_id': 1,
+        }),
+        isTrue,
+      );
+
+      expect(
+        AuthService.userPayloadRequiresSingleMobileSession(<String, dynamic>{
+          'role': <String, Object>{'id': 4, 'name': 'Perito'},
+          'unidad_id': AuthService.unidadProteccionCarreterasId,
+        }),
+        isFalse,
+      );
+
+      expect(
+        AuthService.userPayloadRequiresSingleMobileSession(<String, dynamic>{
+          'role': <String, Object>{'id': 9, 'name': 'Jefe Grupo'},
+          'unidad_id': 1,
+        }),
+        isFalse,
+      );
+    },
+  );
+
+  test('stored user reports single mobile session scope', () async {
+    SharedPreferences.setMockInitialValues(<String, Object>{
+      'auth_role': 'Perito',
+      'auth_role_id': 4,
+      'auth_unidad_id': 1,
+      'auth_user_payload': jsonEncode(<String, Object>{
+        'id': 17,
+        'roles': <Map<String, Object>>[
+          <String, Object>{'id': 4, 'name': 'Perito'},
+        ],
+        'unidad_id': 1,
+      }),
+    });
+
+    expect(await AuthService.requiresSingleMobileSessionForCurrentUser(), true);
+
+    SharedPreferences.setMockInitialValues(<String, Object>{
+      'auth_role': 'Perito',
+      'auth_role_id': 4,
+      'auth_unidad_id': AuthService.unidadProteccionCarreterasId,
+      'auth_user_payload': jsonEncode(<String, Object>{
+        'id': 18,
+        'role': <String, Object>{'id': 4, 'name': 'Perito'},
+        'unidad_id': AuthService.unidadProteccionCarreterasId,
+      }),
+    });
+
+    expect(
+      await AuthService.requiresSingleMobileSessionForCurrentUser(),
+      false,
+    );
+  });
+
+  test('secure password policy rejects weak passwords', () {
+    final weak = AuthService.validateSecurePassword(
+      'Siniestros123!',
+      currentPassword: 'Anterior-123!',
+      email: 'perito@example.com',
+      name: 'Juan Perez',
+    );
+
+    expect(weak.isValid, isFalse);
+    expect(
+      weak.errors,
+      contains('Evita palabras o secuencias fáciles de adivinar.'),
+    );
+
+    final strong = AuthService.validateSecurePassword(
+      'Clave-Fuerte-2026',
+      currentPassword: 'Anterior-123!',
+      email: 'perito@example.com',
+      name: 'Juan Perez',
+    );
+
+    expect(strong.isValid, isTrue);
+  });
+
+  test(
+    'siniestros non subdirector must confirm secure password before discounting license points',
+    () async {
+      SharedPreferences.setMockInitialValues(<String, Object>{
+        'auth_role': 'Perito',
+        'auth_role_id': 4,
+        'auth_user_id': 77,
+        'auth_unidad_id': 1,
+        'auth_user_payload': jsonEncode(<String, Object>{
+          'id': 77,
+          'role': <String, Object>{'id': 4, 'name': 'Perito'},
+          'unidad_id': 1,
+        }),
+      });
+
+      expect(
+        await AuthService.requiresSecurePasswordForLicensePointDiscount(),
+        isTrue,
+      );
+      expect(
+        await AuthService.canDiscountLicensePointsByPasswordGate(),
+        isFalse,
+      );
+
+      await AuthService.markSecurePasswordConfirmedForCurrentUser();
+
+      expect(
+        await AuthService.canDiscountLicensePointsByPasswordGate(),
+        isTrue,
+      );
+    },
+  );
+
+  test(
+    'subdirector and non siniestros users bypass secure password discount gate',
+    () async {
+      SharedPreferences.setMockInitialValues(<String, Object>{
+        'auth_role': 'Subdirector',
+        'auth_role_id': 2,
+        'auth_user_id': 78,
+        'auth_unidad_id': 1,
+        'auth_user_payload': jsonEncode(<String, Object>{
+          'id': 78,
+          'role': <String, Object>{'id': 2, 'name': 'Subdirector'},
+          'unidad_id': 1,
+        }),
+      });
+
+      expect(
+        await AuthService.requiresSecurePasswordForLicensePointDiscount(),
+        isFalse,
+      );
+      expect(
+        await AuthService.canDiscountLicensePointsByPasswordGate(),
+        isTrue,
+      );
+
+      SharedPreferences.setMockInitialValues(<String, Object>{
+        'auth_role': 'Perito',
+        'auth_role_id': 4,
+        'auth_user_id': 79,
+        'auth_unidad_id': AuthService.unidadProteccionCarreterasId,
+        'auth_user_payload': jsonEncode(<String, Object>{
+          'id': 79,
+          'role': <String, Object>{'id': 4, 'name': 'Perito'},
+          'unidad_id': AuthService.unidadProteccionCarreterasId,
+        }),
+      });
+
+      expect(
+        await AuthService.requiresSecurePasswordForLicensePointDiscount(),
+        isFalse,
+      );
+      expect(
+        await AuthService.canDiscountLicensePointsByPasswordGate(),
+        isTrue,
+      );
+    },
+  );
+
+  test('license points shift gate blocks siniestros by default', () async {
+    SharedPreferences.setMockInitialValues(<String, Object>{
+      'auth_role': 'Perito',
+      'auth_role_id': 4,
+      'auth_unidad_id': 1,
+      'auth_user_payload': jsonEncode(<String, Object>{
+        'id': 81,
+        'role': <String, Object>{'id': 4, 'name': 'Perito'},
+        'unidad_id': 1,
+        'turno': <String, Object>{'id': 1, 'nombre': 'Turno A'},
+      }),
+    });
+
+    final access = await AuthService.licensePointsSiniestrosShiftAccess(
+      refresh: false,
+    );
+
+    expect(access.applies, isTrue);
+    expect(access.allowed, isFalse);
+    expect(access.message, contains('Acceso bloqueado por turno'));
+  });
+
+  test('license points shift gate allows non siniestros users', () async {
+    SharedPreferences.setMockInitialValues(<String, Object>{
+      'auth_role': 'Perito',
+      'auth_role_id': 4,
+      'auth_unidad_id': AuthService.unidadProteccionCarreterasId,
+      'auth_user_payload': jsonEncode(<String, Object>{
+        'id': 82,
+        'role': <String, Object>{'id': 4, 'name': 'Perito'},
+        'unidad_id': AuthService.unidadProteccionCarreterasId,
+      }),
+    });
+
+    final access = await AuthService.licensePointsSiniestrosShiftAccess(
+      refresh: false,
+    );
+
+    expect(access.applies, isFalse);
+    expect(access.allowed, isTrue);
+  });
+
+  test(
+    'license points shift gate compares user turn against active turn',
+    () async {
+      SharedPreferences.setMockInitialValues(<String, Object>{
+        'auth_role': 'Perito',
+        'auth_role_id': 4,
+        'auth_unidad_id': 1,
+        'auth_user_payload': jsonEncode(<String, Object>{
+          'id': 83,
+          'role': <String, Object>{'id': 4, 'name': 'Perito'},
+          'unidad_id': 1,
+          'turno': <String, Object>{'id': 1, 'nombre': 'Turno A'},
+          'turno_activo': 'B',
+        }),
+      });
+
+      var access = await AuthService.licensePointsSiniestrosShiftAccess(
+        refresh: false,
+      );
+
+      expect(access.applies, isTrue);
+      expect(access.allowed, isFalse);
+      expect(access.message, contains('Turno B'));
+
+      SharedPreferences.setMockInitialValues(<String, Object>{
+        'auth_role': 'Perito',
+        'auth_role_id': 4,
+        'auth_unidad_id': 1,
+        'auth_user_payload': jsonEncode(<String, Object>{
+          'id': 84,
+          'role': <String, Object>{'id': 4, 'name': 'Perito'},
+          'unidad_id': 1,
+          'turno': <String, Object>{'id': 2, 'nombre': 'Turno B'},
+          'turno_activo': 'B',
+        }),
+      });
+
+      access = await AuthService.licensePointsSiniestrosShiftAccess(
+        refresh: false,
+      );
+
+      expect(access.applies, isTrue);
+      expect(access.allowed, isTrue);
+    },
+  );
+
+  test(
+    'license points shift gate accepts explicit backend working flag',
+    () async {
+      SharedPreferences.setMockInitialValues(<String, Object>{
+        'auth_role': 'Administrativo',
+        'auth_role_id': 5,
+        'auth_unidad_id': 1,
+        'auth_user_payload': jsonEncode(<String, Object>{
+          'id': 85,
+          'role': <String, Object>{'id': 5, 'name': 'Administrativo'},
+          'unidad_id': 1,
+          'esta_trabajando': true,
+        }),
+      });
+
+      final access = await AuthService.licensePointsSiniestrosShiftAccess(
+        refresh: false,
+      );
+
+      expect(access.applies, isTrue);
+      expect(access.allowed, isTrue);
+    },
+  );
+
+  test(
+    'license points shift gate accepts backend licencias puntos turno payload',
+    () async {
+      SharedPreferences.setMockInitialValues(<String, Object>{
+        'auth_role': 'Perito',
+        'auth_role_id': 4,
+        'auth_unidad_id': 1,
+        'auth_user_payload': jsonEncode(<String, Object>{
+          'id': 86,
+          'role': <String, Object>{'id': 4, 'name': 'Perito'},
+          'unidad_id': 1,
+          'turno': <String, Object>{'id': 1, 'nombre': 'A'},
+          'licencias_puntos_turno': <String, Object>{
+            'allowed': false,
+            'turno_en_servicio': <String, Object>{'id': 2, 'nombre': 'B'},
+          },
+        }),
+      });
+
+      final access = await AuthService.licensePointsSiniestrosShiftAccess(
+        refresh: false,
+      );
+
+      expect(access.applies, isTrue);
+      expect(access.allowed, isFalse);
+      expect(access.message, contains('Turno B'));
+    },
+  );
 }

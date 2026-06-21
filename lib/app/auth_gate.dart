@@ -26,6 +26,11 @@ class AuthGate extends StatelessWidget {
       return const WelcomeScreen();
     }
 
+    final sessionAllowed = await AuthService.validateStoredSession();
+    if (!sessionAllowed) {
+      return const WelcomeScreen();
+    }
+
     final motociclistaHome =
         await HomeResolverService.isMotociclistaHomeAvailable();
     if (motociclistaHome) {

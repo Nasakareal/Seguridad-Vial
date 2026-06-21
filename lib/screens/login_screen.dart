@@ -51,11 +51,14 @@ class _LoginScreenState extends State<LoginScreen> {
     });
 
     try {
-      final ok = await AuthService.login(email: email, password: password);
+      final result = await AuthService.loginDetailed(
+        email: email,
+        password: password,
+      );
 
       if (!mounted) return;
 
-      if (ok) {
+      if (result.success) {
         await OfflineSyncService.initialize();
         await OfflineSyncService.flushPending();
 
@@ -97,7 +100,7 @@ class _LoginScreenState extends State<LoginScreen> {
           (_) => false,
         );
       } else {
-        setState(() => _error = 'Credenciales incorrectas');
+        setState(() => _error = result.message ?? 'Credenciales incorrectas');
       }
     } catch (_) {
       if (!mounted) return;

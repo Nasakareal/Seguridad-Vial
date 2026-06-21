@@ -99,6 +99,7 @@ class PushService {
       _lastSubmittedOwnerKey = ownerKey;
 
       final uri = Uri.parse('${AuthService.baseUrl}/device-tokens');
+      final mobileSession = await AuthService.mobileSessionPayload();
 
       final resp = await http
           .post(
@@ -112,6 +113,7 @@ class PushService {
               'token': fcm,
               'platform': _platform(),
               'reason': reason,
+              ...mobileSession,
             }),
           )
           .timeout(const Duration(seconds: 8));

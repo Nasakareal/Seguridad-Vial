@@ -125,7 +125,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Usa una contraseña fácil de recordar para ti, pero difícil de adivinar para otros.',
+                    'Usa una contraseña segura. Debe ser distinta a la actual y no debe contener datos fáciles de adivinar.',
                     style: TextStyle(
                       color: Colors.grey.shade700,
                       height: 1.35,
@@ -150,22 +150,24 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
                         _PasswordField(
                           controller: _passwordCtrl,
                           label: 'Nueva contraseña',
-                          hintText: 'Minimo 6 caracteres',
+                          hintText: 'Mínimo 12 caracteres',
                           obscureText: _hideNew,
                           validator: (value) {
                             final text = value?.trim() ?? '';
                             if (text.isEmpty) {
                               return 'Escribe la nueva contraseña.';
                             }
-                            if (text.length < 6) {
-                              return 'Debe tener al menos 6 caracteres.';
-                            }
-                            return null;
+                            return AuthService.validateSecurePassword(
+                              text,
+                              currentPassword: _currentCtrl.text.trim(),
+                            ).firstError;
                           },
                           onToggleVisibility: () {
                             setState(() => _hideNew = !_hideNew);
                           },
                         ),
+                        const SizedBox(height: 8),
+                        const _PasswordPolicyNotice(),
                         const SizedBox(height: 12),
                         _PasswordField(
                           controller: _confirmCtrl,
@@ -215,6 +217,31 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _PasswordPolicyNotice extends StatelessWidget {
+  const _PasswordPolicyNotice();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFEFF6FF),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFBFDBFE)),
+      ),
+      child: const Text(
+        'Contraseña segura: 12 caracteres o más, mayúscula, minúscula, número y símbolo. No uses tu nombre, correo, "siniestros", "seguridad" ni secuencias como 123456.',
+        style: TextStyle(
+          color: Color(0xFF1E3A8A),
+          fontWeight: FontWeight.w800,
+          height: 1.3,
         ),
       ),
     );

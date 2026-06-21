@@ -94,6 +94,10 @@
 	<key>NSCameraUsageDescription</key>
 	<string>Usamos la cámara para capturar evidencia y adjuntarla a los reportes.</string>
 
+	<!-- Face ID / Touch ID para acciones sensibles -->
+	<key>NSFaceIDUsageDescription</key>
+	<string>Usamos Face ID o Touch ID para confirmar el acceso y los movimientos de puntos de licencia.</string>
+
 	<!-- Fotos/Galería (image_picker) -->
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Usamos tu galería para seleccionar evidencia y adjuntarla a los reportes.</string>

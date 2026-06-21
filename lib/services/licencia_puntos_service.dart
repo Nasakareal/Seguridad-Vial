@@ -183,6 +183,18 @@ class LicenciaPuntosService {
     return (value ?? '').toString().trim();
   }
 
+  static String _stringOr(String primary, String fallback) {
+    return primary.trim().isNotEmpty ? primary.trim() : fallback.trim();
+  }
+
+  static Map<String, String> _stringMap(dynamic raw) {
+    if (raw is! Map) return const <String, String>{};
+
+    return raw.map(
+      (key, value) => MapEntry(key.toString().trim(), value.toString().trim()),
+    )..removeWhere((key, value) => key.isEmpty || value.isEmpty);
+  }
+
   static int _saldoLegal(dynamic value) {
     final parsed = _int(value, saldoLegalMaximo);
     return parsed < saldoLegalMaximo ? saldoLegalMaximo : parsed;
@@ -211,11 +223,74 @@ class LicenciaPuntosService {
   }
 }
 
+class LicenciaTipoCatalog {
+  static const options = <String, String>{
+    'SERVICIO_PUBLICO': 'Servicio público',
+    'AUTOMOVILISTA': 'Automovilista',
+    'CHOFER': 'Chofer',
+    'MOTOCICLISTA': 'Motociclista',
+    'PERMISO': 'Permiso',
+  };
+
+  static const _aliases = <String, String>{
+    'SERVICIOPUBLICO': 'SERVICIO_PUBLICO',
+    'PUBLICO': 'SERVICIO_PUBLICO',
+    'AUTOMOVILISTA': 'AUTOMOVILISTA',
+    'PARTICULAR': 'AUTOMOVILISTA',
+    'A': 'AUTOMOVILISTA',
+    'CHOFER': 'CHOFER',
+    'OPERADOR': 'CHOFER',
+    'B': 'CHOFER',
+    'MOTOCICLISTA': 'MOTOCICLISTA',
+    'MOTOCICLETA': 'MOTOCICLISTA',
+    'MOTO': 'MOTOCICLISTA',
+    'C': 'MOTOCICLISTA',
+    'PERMISO': 'PERMISO',
+  };
+
+  static String? normalize(String? raw) {
+    final value = (raw ?? '').trim();
+    if (value.isEmpty) return null;
+    if (options.containsKey(value)) return value;
+
+    final key = _removeAccents(
+      value,
+    ).toUpperCase().replaceAll(RegExp(r'[^A-Z0-9]+'), '');
+
+    return _aliases[key];
+  }
+
+  static String label(String? raw) {
+    final normalized = normalize(raw);
+    if (normalized != null) return options[normalized] ?? normalized;
+    return (raw ?? '').trim();
+  }
+
+  static String _removeAccents(String value) {
+    return value
+        .replaceAll('á', 'a')
+        .replaceAll('é', 'e')
+        .replaceAll('í', 'i')
+        .replaceAll('ó', 'o')
+        .replaceAll('ú', 'u')
+        .replaceAll('ü', 'u')
+        .replaceAll('ñ', 'n')
+        .replaceAll('Á', 'A')
+        .replaceAll('É', 'E')
+        .replaceAll('Í', 'I')
+        .replaceAll('Ó', 'O')
+        .replaceAll('Ú', 'U')
+        .replaceAll('Ü', 'U')
+        .replaceAll('Ñ', 'N');
+  }
+}
+
 class LicenciaPuntosMeta {
   final int saldoInicial;
   final int saldoMaximo;
   final int mesesRecuperacionTiempo;
   final LicenciaPuntosAbilities abilities;
+  final Map<String, String> tiposLicencia;
   final List<LicenciaPuntoInfraccion> infracciones;
 
   const LicenciaPuntosMeta({
@@ -223,11 +298,13 @@ class LicenciaPuntosMeta {
     required this.saldoMaximo,
     required this.mesesRecuperacionTiempo,
     required this.abilities,
+    required this.tiposLicencia,
     required this.infracciones,
   });
 
   factory LicenciaPuntosMeta.fromJson(Map<String, dynamic> json) {
     final list = json['infracciones'];
+    final tipos = LicenciaPuntosService._stringMap(json['tipos_licencia']);
     return LicenciaPuntosMeta(
       saldoInicial: LicenciaPuntosService._saldoLegal(json['saldo_inicial']),
       saldoMaximo: LicenciaPuntosService._saldoLegal(json['saldo_maximo']),
@@ -238,6 +315,7 @@ class LicenciaPuntosMeta {
       abilities: LicenciaPuntosAbilities.fromJson(
         LicenciaPuntosService._map(json['abilities']),
       ),
+      tiposLicencia: tipos.isEmpty ? LicenciaTipoCatalog.options : tipos,
       infracciones: list is List
           ? list
                 .whereType<Map>()
@@ -293,6 +371,7 @@ class LicenciaPuntoInfraccion {
   final String nombre;
   final int puntos;
   final String descripcion;
+  final String fundamentoLegal;
 
   const LicenciaPuntoInfraccion({
     required this.id,
@@ -300,6 +379,7 @@ class LicenciaPuntoInfraccion {
     required this.nombre,
     required this.puntos,
     required this.descripcion,
+    required this.fundamentoLegal,
   });
 
   factory LicenciaPuntoInfraccion.fromJson(Map<String, dynamic> json) {
@@ -309,6 +389,7 @@ class LicenciaPuntoInfraccion {
       nombre: LicenciaPuntosService._string(json['nombre']),
       puntos: LicenciaPuntosService._int(json['puntos']),
       descripcion: LicenciaPuntosService._string(json['descripcion']),
+      fundamentoLegal: LicenciaPuntosService._string(json['fundamento_legal']),
     );
   }
 }
@@ -317,6 +398,7 @@ class LicenciaPuntoCuenta {
   final int? id;
   final String numeroLicencia;
   final String tipoLicencia;
+  final String tipoLicenciaLabel;
   final String titularNombre;
   final String curp;
   final String telefono;
@@ -334,6 +416,7 @@ class LicenciaPuntoCuenta {
     required this.id,
     required this.numeroLicencia,
     required this.tipoLicencia,
+    required this.tipoLicenciaLabel,
     required this.titularNombre,
     required this.curp,
     required this.telefono,
@@ -356,6 +439,12 @@ class LicenciaPuntoCuenta {
       id: id > 0 ? id : null,
       numeroLicencia: LicenciaPuntosService._string(json['numero_licencia']),
       tipoLicencia: LicenciaPuntosService._string(json['tipo_licencia']),
+      tipoLicenciaLabel: LicenciaPuntosService._stringOr(
+        LicenciaPuntosService._string(json['tipo_licencia_label']),
+        LicenciaTipoCatalog.label(
+          LicenciaPuntosService._string(json['tipo_licencia']),
+        ),
+      ),
       titularNombre: LicenciaPuntosService._string(json['titular_nombre']),
       curp: LicenciaPuntosService._string(json['curp']),
       telefono: LicenciaPuntosService._string(json['telefono']),
@@ -402,6 +491,7 @@ class LicenciaPuntoMovimiento {
   final String referencia;
   final String descripcion;
   final String infraccionNombre;
+  final String infraccionFundamentoLegal;
 
   const LicenciaPuntoMovimiento({
     required this.tipo,
@@ -412,6 +502,7 @@ class LicenciaPuntoMovimiento {
     required this.referencia,
     required this.descripcion,
     required this.infraccionNombre,
+    required this.infraccionFundamentoLegal,
   });
 
   factory LicenciaPuntoMovimiento.fromJson(Map<String, dynamic> json) {
@@ -425,6 +516,9 @@ class LicenciaPuntoMovimiento {
       referencia: LicenciaPuntosService._string(json['referencia']),
       descripcion: LicenciaPuntosService._string(json['descripcion']),
       infraccionNombre: LicenciaPuntosService._string(infraccion['nombre']),
+      infraccionFundamentoLegal: LicenciaPuntosService._string(
+        infraccion['fundamento_legal'],
+      ),
     );
   }
 }

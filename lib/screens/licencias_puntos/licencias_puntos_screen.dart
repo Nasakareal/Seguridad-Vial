@@ -5,9 +5,11 @@ import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
+import '../../app/routes.dart';
 import '../../core/licencias/licencia_barcode_payload.dart';
 import '../../core/licencias/licencia_qr_parser.dart';
 import '../../services/auth_service.dart';
+import '../../services/biometric_auth_service.dart';
 import '../../services/licencia_puntos_service.dart';
 import '../../widgets/account_drawer.dart';
 import '../../widgets/app_drawer.dart';
@@ -21,6 +23,7 @@ class LicenciasPuntosScreen extends StatefulWidget {
 }
 
 class _LicenciasPuntosScreenState extends State<LicenciasPuntosScreen> {
+  final _biometricAuth = BiometricAuthService();
   final _numeroCtrl = TextEditingController();
   final _titularCtrl = TextEditingController();
   final _tipoCtrl = TextEditingController();
@@ -33,8 +36,15 @@ class _LicenciasPuntosScreenState extends State<LicenciasPuntosScreen> {
 
   bool _loading = true;
   bool _busy = false;
+  bool _shiftChecking = true;
+  bool _shiftAllowed = false;
+  bool _biometricChecking = true;
+  bool _biometricVerified = false;
   bool _initializedArgs = false;
+  bool _pendingInitialSearch = false;
   String? _error;
+  String? _shiftError;
+  String? _biometricError;
   LicenciaPuntosMeta? _meta;
   LicenciaPuntoCuenta? _cuenta;
   LicenciaQrData? _lastScan;
@@ -44,7 +54,9 @@ class _LicenciasPuntosScreenState extends State<LicenciasPuntosScreen> {
   @override
   void initState() {
     super.initState();
-    unawaited(_loadMeta());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) unawaited(_prepareModuleAccess());
+    });
   }
 
   @override
@@ -57,13 +69,15 @@ class _LicenciasPuntosScreenState extends State<LicenciasPuntosScreen> {
     if (args is Map) {
       _numeroCtrl.text = (args['numero_licencia'] ?? '').toString().trim();
       _titularCtrl.text = (args['titular_nombre'] ?? '').toString().trim();
-      _tipoCtrl.text = (args['tipo_licencia'] ?? '').toString().trim();
+      _tipoCtrl.text =
+          LicenciaTipoCatalog.normalize(
+            (args['tipo_licencia'] ?? '').toString(),
+          ) ??
+          '';
       _telefonoCtrl.text = _telefonoMx10((args['telefono'] ?? '').toString());
       _hechoId = int.tryParse((args['hecho_id'] ?? '').toString());
       if (_numeroCtrl.text.trim().isNotEmpty) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted) unawaited(_buscar());
-        });
+        _pendingInitialSearch = true;
       }
     }
   }
@@ -117,6 +131,138 @@ class _LicenciasPuntosScreenState extends State<LicenciasPuntosScreen> {
     }
   }
 
+  Future<void> _prepareModuleAccess() async {
+    setState(() {
+      _shiftChecking = true;
+      _shiftAllowed = false;
+      _shiftError = null;
+      _loading = false;
+      _error = null;
+    });
+
+    final access = await AuthService.licensePointsSiniestrosShiftAccess();
+    if (!mounted) return;
+
+    if (!access.allowed) {
+      setState(() {
+        _shiftChecking = false;
+        _shiftAllowed = false;
+        _shiftError = access.message;
+      });
+      return;
+    }
+
+    setState(() {
+      _shiftChecking = false;
+      _shiftAllowed = true;
+    });
+    await _unlockModuleWithBiometrics();
+  }
+
+  Future<void> _unlockModuleWithBiometrics() async {
+    setState(() {
+      _biometricChecking = true;
+      _biometricError = null;
+      _loading = false;
+      _error = null;
+    });
+
+    final result = await _biometricAuth.verify(
+      localizedReason:
+          'Verifica tu identidad con huella o rostro para entrar a Puntos de licencia.',
+    );
+    if (!mounted) return;
+
+    if (!result.allowed) {
+      setState(() {
+        _biometricChecking = false;
+        _biometricVerified = false;
+        _biometricError = result.message;
+      });
+      return;
+    }
+
+    setState(() {
+      _biometricChecking = false;
+      _biometricVerified = true;
+      _loading = true;
+    });
+
+    await _loadMeta();
+    if (!mounted) return;
+
+    if (_pendingInitialSearch && _numeroCtrl.text.trim().isNotEmpty) {
+      _pendingInitialSearch = false;
+      await _buscar();
+    }
+  }
+
+  Future<bool> _verifyBiometricForAction(String localizedReason) async {
+    final result = await _biometricAuth.verify(
+      localizedReason: localizedReason,
+    );
+    if (result.allowed) return true;
+    if (mounted) _showSnack(result.message);
+    return false;
+  }
+
+  Future<bool> _ensureSiniestrosWorkingTurn() async {
+    final access = await AuthService.licensePointsSiniestrosShiftAccess();
+    if (access.allowed) return true;
+
+    if (mounted) _showSnack(access.message);
+    return false;
+  }
+
+  Future<bool> _ensureSecurePasswordForDiscount() async {
+    if (await AuthService.canDiscountLicensePointsByPasswordGate()) {
+      return true;
+    }
+    if (!mounted) return false;
+
+    final changed = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Actualiza tu contraseña'),
+          content: const Text(
+            'Para quitar puntos a licencias, todo usuario de Siniestros debe cambiar primero su contraseña por una segura. El rol Subdirector está exceptuado.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Después'),
+            ),
+            ElevatedButton.icon(
+              onPressed: () async {
+                final result = await Navigator.of(
+                  dialogContext,
+                ).pushNamed(AppRoutes.changePassword);
+                if (!dialogContext.mounted) return;
+                Navigator.pop(dialogContext, result == true);
+              },
+              icon: const Icon(Icons.lock_reset),
+              label: const Text('Cambiar contraseña'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (changed == true &&
+        await AuthService.canDiscountLicensePointsByPasswordGate()) {
+      return true;
+    }
+
+    if (mounted) {
+      _showSnack(
+        'Debes cambiar tu contraseña por una segura antes de quitar puntos.',
+      );
+    }
+    return false;
+  }
+
   Future<void> _buscar() async {
     final numero = _numeroCtrl.text.trim();
     if (numero.isEmpty) {
@@ -138,7 +284,8 @@ class _LicenciasPuntosScreenState extends State<LicenciasPuntosScreen> {
           _titularCtrl.text = cuenta.titularNombre;
         }
         if (_tipoCtrl.text.trim().isEmpty) {
-          _tipoCtrl.text = cuenta.tipoLicencia;
+          _tipoCtrl.text =
+              LicenciaTipoCatalog.normalize(cuenta.tipoLicencia) ?? '';
         }
         if (_telefonoCtrl.text.trim().isEmpty) {
           _telefonoCtrl.text = _telefonoMx10(cuenta.telefono);
@@ -172,8 +319,9 @@ class _LicenciasPuntosScreenState extends State<LicenciasPuntosScreen> {
       if ((parsed.nombre ?? '').trim().isNotEmpty) {
         _titularCtrl.text = parsed.nombre!;
       }
-      if ((parsed.tipoLicencia ?? '').trim().isNotEmpty) {
-        _tipoCtrl.text = parsed.tipoLicencia!;
+      final tipoLicencia = LicenciaTipoCatalog.normalize(parsed.tipoLicencia);
+      if ((tipoLicencia ?? '').trim().isNotEmpty) {
+        _tipoCtrl.text = tipoLicencia!;
       }
     });
 
@@ -183,7 +331,7 @@ class _LicenciasPuntosScreenState extends State<LicenciasPuntosScreen> {
   Future<void> _aplicarDescuento() async {
     final infraccionId = _infraccionId;
     if (infraccionId == null || infraccionId <= 0) {
-      _showSnack('Selecciona una infracción.');
+      _showSnack('Selecciona una penalización.');
       return;
     }
     if (_numeroCtrl.text.trim().isEmpty) {
@@ -197,8 +345,19 @@ class _LicenciasPuntosScreenState extends State<LicenciasPuntosScreen> {
       return;
     }
 
+    final shiftAllowed = await _ensureSiniestrosWorkingTurn();
+    if (!shiftAllowed) return;
+
+    final passwordAllowed = await _ensureSecurePasswordForDiscount();
+    if (!passwordAllowed) return;
+
     setState(() => _busy = true);
     try {
+      final authorized = await _verifyBiometricForAction(
+        'Verifica con huella o rostro antes de restar puntos de la licencia.',
+      );
+      if (!authorized) return;
+
       final updated = await LicenciaPuntosService.registrarInfraccion(
         cuentaId: _cuenta?.id,
         numeroLicencia: _numeroCtrl.text,
@@ -212,7 +371,7 @@ class _LicenciasPuntosScreenState extends State<LicenciasPuntosScreen> {
       );
       if (!mounted) return;
       setState(() => _cuenta = updated);
-      _showSnack('Descuento aplicado correctamente.');
+      _showSnack('Penalización aplicada correctamente.');
     } catch (e) {
       if (!mounted) return;
       _showSnack(LicenciaPuntosService.cleanExceptionMessage(e));
@@ -242,8 +401,16 @@ class _LicenciasPuntosScreenState extends State<LicenciasPuntosScreen> {
       return;
     }
 
+    final shiftAllowed = await _ensureSiniestrosWorkingTurn();
+    if (!shiftAllowed) return;
+
     setState(() => _busy = true);
     try {
+      final authorized = await _verifyBiometricForAction(
+        'Verifica con huella o rostro antes de acreditar puntos a la licencia.',
+      );
+      if (!authorized) return;
+
       final updated = await LicenciaPuntosService.acreditarCapacitacion(
         cuentaId: cuentaId,
         puntos: puntos,
@@ -284,7 +451,25 @@ class _LicenciasPuntosScreenState extends State<LicenciasPuntosScreen> {
       drawer: const AppDrawer(trackingOn: false),
       endDrawer: AppAccountDrawer(onLogout: () => _logout(context)),
       body: SafeArea(
-        child: _loading
+        child: !_shiftAllowed
+            ? _ShiftGateView(
+                checking: _shiftChecking,
+                message: _shiftError,
+                onRetry: _shiftChecking
+                    ? null
+                    : () => unawaited(_prepareModuleAccess()),
+                onExit: () => Navigator.maybePop(context),
+              )
+            : !_biometricVerified
+            ? _BiometricGateView(
+                checking: _biometricChecking,
+                message: _biometricError,
+                onRetry: _biometricChecking
+                    ? null
+                    : () => unawaited(_prepareModuleAccess()),
+                onExit: () => Navigator.maybePop(context),
+              )
+            : _loading
             ? const Center(child: CircularProgressIndicator())
             : RefreshIndicator(
                 onRefresh: _loadMeta,
@@ -310,6 +495,8 @@ class _LicenciasPuntosScreenState extends State<LicenciasPuntosScreen> {
                       numeroCtrl: _numeroCtrl,
                       titularCtrl: _titularCtrl,
                       tipoCtrl: _tipoCtrl,
+                      tiposLicencia:
+                          meta?.tiposLicencia ?? LicenciaTipoCatalog.options,
                       telefonoCtrl: _telefonoCtrl,
                       onSearch: _buscar,
                       onScan: _scanLicencia,
@@ -354,6 +541,152 @@ class _LicenciasPuntosScreenState extends State<LicenciasPuntosScreen> {
                 ),
               ),
       ),
+    );
+  }
+}
+
+class _ShiftGateView extends StatelessWidget {
+  final bool checking;
+  final String? message;
+  final VoidCallback? onRetry;
+  final VoidCallback onExit;
+
+  const _ShiftGateView({
+    required this.checking,
+    required this.message,
+    required this.onRetry,
+    required this.onExit,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (checking) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              CircularProgressIndicator(),
+              SizedBox(height: 16),
+              Text(
+                'Validando turno activo...',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontWeight: FontWeight.w800),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 28, 16, 28),
+      children: [
+        _Panel(
+          icon: Icons.lock_clock,
+          title: 'Módulo bloqueado por turno',
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                message ??
+                    'El backend no confirmó que estés trabajando actualmente. Por seguridad, el módulo queda bloqueado.',
+                style: TextStyle(
+                  color: Colors.grey.shade800,
+                  fontWeight: FontWeight.w800,
+                  height: 1.35,
+                ),
+              ),
+              const SizedBox(height: 14),
+              ElevatedButton.icon(
+                onPressed: onRetry,
+                icon: const Icon(Icons.refresh),
+                label: const Text('Validar de nuevo'),
+              ),
+              const SizedBox(height: 10),
+              OutlinedButton.icon(
+                onPressed: onExit,
+                icon: const Icon(Icons.arrow_back),
+                label: const Text('Salir del módulo'),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _BiometricGateView extends StatelessWidget {
+  final bool checking;
+  final String? message;
+  final VoidCallback? onRetry;
+  final VoidCallback onExit;
+
+  const _BiometricGateView({
+    required this.checking,
+    required this.message,
+    required this.onRetry,
+    required this.onExit,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (checking) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              CircularProgressIndicator(),
+              SizedBox(height: 16),
+              Text(
+                'Solicitando verificación biométrica...',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontWeight: FontWeight.w800),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 28, 16, 28),
+      children: [
+        _Panel(
+          icon: Icons.fingerprint,
+          title: 'Biometría obligatoria',
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                message ??
+                    'Para usar puntos de licencia necesitas huella o rostro registrado en este dispositivo.',
+                style: TextStyle(
+                  color: Colors.grey.shade800,
+                  fontWeight: FontWeight.w800,
+                  height: 1.35,
+                ),
+              ),
+              const SizedBox(height: 14),
+              ElevatedButton.icon(
+                onPressed: onRetry,
+                icon: const Icon(Icons.fingerprint),
+                label: const Text('Verificar de nuevo'),
+              ),
+              const SizedBox(height: 10),
+              OutlinedButton.icon(
+                onPressed: onExit,
+                icon: const Icon(Icons.arrow_back),
+                label: const Text('Salir del módulo'),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }
@@ -413,6 +746,7 @@ class _LookupCard extends StatelessWidget {
   final TextEditingController numeroCtrl;
   final TextEditingController titularCtrl;
   final TextEditingController tipoCtrl;
+  final Map<String, String> tiposLicencia;
   final TextEditingController telefonoCtrl;
   final Future<void> Function() onSearch;
   final Future<void> Function() onScan;
@@ -422,6 +756,7 @@ class _LookupCard extends StatelessWidget {
     required this.numeroCtrl,
     required this.titularCtrl,
     required this.tipoCtrl,
+    required this.tiposLicencia,
     required this.telefonoCtrl,
     required this.onSearch,
     required this.onScan,
@@ -456,13 +791,24 @@ class _LookupCard extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 10),
-          TextField(
-            controller: tipoCtrl,
+          DropdownButtonFormField<String>(
+            value: LicenciaTipoCatalog.normalize(tipoCtrl.text),
+            isExpanded: true,
             decoration: const InputDecoration(
               labelText: 'Tipo de licencia',
               prefixIcon: Icon(Icons.badge),
               border: OutlineInputBorder(),
             ),
+            hint: const Text('Seleccionar'),
+            items: tiposLicencia.entries
+                .map(
+                  (entry) => DropdownMenuItem<String>(
+                    value: entry.key,
+                    child: Text(entry.value),
+                  ),
+                )
+                .toList(),
+            onChanged: busy ? null : (value) => tipoCtrl.text = value ?? '',
           ),
           const SizedBox(height: 10),
           TextField(
@@ -563,6 +909,12 @@ class _CuentaCard extends StatelessWidget {
           const SizedBox(height: 12),
           _InfoLine(label: 'Licencia', value: c.numeroLicencia),
           _InfoLine(
+            label: 'Tipo',
+            value: c.tipoLicenciaLabel.isEmpty
+                ? 'Pendiente'
+                : c.tipoLicenciaLabel,
+          ),
+          _InfoLine(
             label: 'Titular',
             value: c.titularNombre.isEmpty ? 'Pendiente' : c.titularNombre,
           ),
@@ -626,7 +978,7 @@ class _DiscountActionCard extends StatelessWidget {
     }
     return _Panel(
       icon: Icons.remove_circle_outline,
-      title: 'Restar puntos por infracción',
+      title: 'Restar puntos por penalización',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -640,7 +992,7 @@ class _DiscountActionCard extends StatelessWidget {
                 border: Border.all(color: const Color(0xFFFED7AA)),
               ),
               child: const Text(
-                'Primero registra infracciones en Admin Settings. La app no permite inventar puntos manuales.',
+                'Primero registra penalizaciones en Admin Settings. La app no permite inventar puntos manuales.',
                 style: TextStyle(
                   color: Color(0xFF9A3412),
                   fontWeight: FontWeight.w900,
@@ -653,7 +1005,7 @@ class _DiscountActionCard extends StatelessWidget {
               value: infraccionId,
               isExpanded: true,
               decoration: const InputDecoration(
-                labelText: 'Infracción del catálogo',
+                labelText: 'Penalización del catálogo',
                 border: OutlineInputBorder(),
               ),
               items: meta.infracciones
@@ -742,7 +1094,7 @@ class _RecoveryActionCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           const Text(
-            'Esta sección es aparte del descuento por infracción. Úsala sólo para cursos validados por Fomento.',
+            'Esta sección es aparte del descuento por penalización. Úsala sólo para cursos validados por Fomento.',
             style: TextStyle(
               color: Color(0xFF1E3A8A),
               fontWeight: FontWeight.w800,
@@ -827,7 +1179,8 @@ class _AutomaticDiscountNotice extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final puntos = infraccion?.puntos ?? 0;
-    final nombre = infraccion?.nombre ?? 'Selecciona una infracción';
+    final nombre = infraccion?.nombre ?? 'Selecciona una penalización';
+    final fundamento = infraccion?.fundamentoLegal.trim() ?? '';
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(12),
@@ -842,15 +1195,31 @@ class _AutomaticDiscountNotice extends StatelessWidget {
           const Icon(Icons.rule, color: Color(0xFFB91C1C)),
           const SizedBox(width: 10),
           Expanded(
-            child: Text(
-              puntos > 0
-                  ? '$nombre resta $puntos punto${puntos == 1 ? '' : 's'} automáticamente. Ese valor viene del catálogo en Admin Settings.'
-                  : 'Selecciona la infracción. Los puntos se toman del catálogo en Admin Settings.',
-              style: const TextStyle(
-                color: Color(0xFF7F1D1D),
-                fontWeight: FontWeight.w900,
-                height: 1.3,
-              ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  puntos > 0
+                      ? '$nombre resta $puntos punto${puntos == 1 ? '' : 's'} automáticamente. Ese valor viene del catálogo en Admin Settings.'
+                      : 'Selecciona la penalización. Los puntos se toman del catálogo en Admin Settings.',
+                  style: const TextStyle(
+                    color: Color(0xFF7F1D1D),
+                    fontWeight: FontWeight.w900,
+                    height: 1.3,
+                  ),
+                ),
+                if (fundamento.isNotEmpty) ...[
+                  const SizedBox(height: 6),
+                  Text(
+                    fundamento,
+                    style: const TextStyle(
+                      color: Color(0xFF7F1D1D),
+                      fontWeight: FontWeight.w700,
+                      height: 1.3,
+                    ),
+                  ),
+                ],
+              ],
             ),
           ),
         ],
@@ -895,6 +1264,8 @@ class _HistoryCard extends StatelessWidget {
             subtitle: Text(
               [
                 if (mov.descripcion.isNotEmpty) mov.descripcion,
+                if (mov.infraccionFundamentoLegal.isNotEmpty)
+                  mov.infraccionFundamentoLegal,
                 if (mov.referencia.isNotEmpty) 'Folio: ${mov.referencia}',
                 'Saldo ${mov.saldoAnterior} -> ${mov.saldoNuevo}',
               ].join('\n'),

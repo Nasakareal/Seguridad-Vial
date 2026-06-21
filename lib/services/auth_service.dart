@@ -1,11 +1,60 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math';
 
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/platform_support.dart';
 import 'push_service.dart';
+
+class AuthLoginResult {
+  final bool success;
+  final String? message;
+  final bool singleDeviceConflict;
+
+  const AuthLoginResult._({
+    required this.success,
+    this.message,
+    this.singleDeviceConflict = false,
+  });
+
+  const AuthLoginResult.success() : this._(success: true);
+
+  const AuthLoginResult.failure(
+    String message, {
+    bool singleDeviceConflict = false,
+  }) : this._(
+         success: false,
+         message: message,
+         singleDeviceConflict: singleDeviceConflict,
+       );
+}
+
+class PasswordStrengthResult {
+  final List<String> errors;
+
+  const PasswordStrengthResult(this.errors);
+
+  bool get isValid => errors.isEmpty;
+
+  String? get firstError => errors.isEmpty ? null : errors.first;
+}
+
+class SiniestrosShiftAccessResult {
+  final bool applies;
+  final bool allowed;
+  final String message;
+
+  const SiniestrosShiftAccessResult({
+    required this.applies,
+    required this.allowed,
+    required this.message,
+  });
+
+  const SiniestrosShiftAccessResult.allowed({bool applies = false})
+    : this(applies: applies, allowed: true, message: '');
+}
 
 class AuthService {
   static const String _baseUrl = 'https://seguridadvial-mich.com/api';
@@ -22,6 +71,9 @@ class AuthService {
   static const String _delegacionIdKey = 'auth_delegacion_id';
   static const String _destacamentoIdKey = 'auth_destacamento_id';
   static const String _sessionOwnerKeyKey = 'auth_session_owner_key';
+  static const String _mobileDeviceIdKey = 'mobile_device_id';
+  static const String _strongPasswordConfirmedPrefix =
+      'strong_password_confirmed_v1';
   static const int unidadDelegacionesId = 2;
   static const int unidadSeguridadVialId = 3;
   static const int unidadProteccionCarreterasId = 4;
@@ -39,18 +91,35 @@ class AuthService {
     required String email,
     required String password,
   }) async {
+    final result = await loginDetailed(email: email, password: password);
+    return result.success;
+  }
+
+  static Future<AuthLoginResult> loginDetailed({
+    required String email,
+    required String password,
+  }) async {
     try {
+      final loginBody = <String, String>{'email': email, 'password': password};
+      loginBody.addAll(await _mobileSessionPayload(includeOnAnyMobile: true));
+
       final response = await http
           .post(
             Uri.parse('$_baseUrl/login'),
             headers: {'Accept': 'application/json'},
-            body: {'email': email, 'password': password},
+            body: loginBody,
           )
           .timeout(const Duration(seconds: 12));
 
       if (response.statusCode != 200) {
         await _clearLocalSession();
-        return false;
+        return AuthLoginResult.failure(
+          _parseLoginError(response.body, response.statusCode),
+          singleDeviceConflict: _isSingleMobileSessionConflict(
+            response.body,
+            response.statusCode,
+          ),
+        );
       }
 
       final data = jsonDecode(response.body);
@@ -58,7 +127,9 @@ class AuthService {
       final token = data['token'];
       if (token == null || token.toString().trim().isEmpty) {
         await _clearLocalSession();
-        return false;
+        return const AuthLoginResult.failure(
+          'Respuesta inválida del servidor.',
+        );
       }
 
       String? role;
@@ -190,10 +261,12 @@ class AuthService {
         PushService.registerDeviceToken(reason: 'login');
       } catch (_) {}
 
-      return true;
+      return const AuthLoginResult.success();
     } catch (_) {
       await _clearLocalSession();
-      return false;
+      return const AuthLoginResult.failure(
+        'Error al conectar con el servidor.',
+      );
     }
   }
 
@@ -582,6 +655,152 @@ class AuthService {
 
     final payload = await getCurrentUserPayload(refresh: false);
     return _payloadMatchesSiniestros(payload);
+  }
+
+  static Future<bool> isSiniestrosUnitUser({bool refresh = false}) async {
+    if (refresh) {
+      await refreshCurrentUserAccess();
+    }
+
+    final unidadId = await getUnidadId();
+    if (unidadId == 1) return true;
+
+    final payload = await getCurrentUserPayload(refresh: false);
+    return _payloadMatchesSiniestros(payload);
+  }
+
+  static Future<bool> isSubdirectorRole() async {
+    final roleId = await getRoleId();
+    if (roleId == 2) return true;
+
+    final role = await getRole();
+    if (_roleTextEquals(role, 'subdirector')) return true;
+
+    final payload = await getStoredUserPayload();
+    return _payloadHasExactRole(payload, 'subdirector');
+  }
+
+  static Future<bool> requiresSecurePasswordForLicensePointDiscount() async {
+    if (!await isSiniestrosUnitUser()) return false;
+    return !await isSubdirectorRole();
+  }
+
+  static Future<bool> canDiscountLicensePointsByPasswordGate() async {
+    if (!await requiresSecurePasswordForLicensePointDiscount()) return true;
+    return hasConfirmedSecurePasswordForCurrentUser();
+  }
+
+  static Future<bool> hasConfirmedSecurePasswordForCurrentUser() async {
+    final payload = await getStoredUserPayload();
+    final serverFlag = _payloadSecurePasswordConfirmed(payload);
+    if (serverFlag != null) return serverFlag;
+
+    final key = await _strongPasswordConfirmedKey();
+    if (key == null) return false;
+
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(key) ?? false;
+  }
+
+  static Future<void> markSecurePasswordConfirmedForCurrentUser() async {
+    final key = await _strongPasswordConfirmedKey();
+    if (key == null) return;
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(key, true);
+  }
+
+  static Future<SiniestrosShiftAccessResult>
+  licensePointsSiniestrosShiftAccess({bool refresh = true}) async {
+    if (refresh) {
+      await refreshCurrentUserAccess();
+    }
+
+    final unidadId = await getUnidadId();
+    final payload = await getStoredUserPayload();
+    final isSiniestros = unidadId == 1 || _payloadMatchesSiniestros(payload);
+    if (!isSiniestros) {
+      return const SiniestrosShiftAccessResult.allowed();
+    }
+
+    final working = _payloadConfirmsSiniestrosWorkingTurn(payload);
+    if (working == true) {
+      return const SiniestrosShiftAccessResult.allowed(applies: true);
+    }
+
+    final userTurno = _payloadTurnoLabel(payload) ?? 'tu turno';
+    final activeTurno = _payloadActiveTurnoLabel(payload);
+    final detail = activeTurno == null
+        ? 'El backend no confirmó que $userTurno esté trabajando actualmente.'
+        : 'Hoy está trabajando $activeTurno; $userTurno no puede entrar.';
+
+    return SiniestrosShiftAccessResult(
+      applies: true,
+      allowed: false,
+      message:
+          'Acceso bloqueado por turno. $detail Este módulo sólo está disponible para el turno activo de Siniestros.',
+    );
+  }
+
+  static Future<bool> requiresSingleMobileSessionForCurrentUser() async {
+    final role = await getRole();
+    final roleId = await getRoleId();
+    final unidadId = await getUnidadId();
+    final payload = await getStoredUserPayload();
+
+    return userPayloadRequiresSingleMobileSession(
+      payload,
+      role: role,
+      roleId: roleId,
+      unidadId: unidadId,
+    );
+  }
+
+  static bool userPayloadRequiresSingleMobileSession(
+    Map<String, dynamic>? payload, {
+    String? role,
+    int? roleId,
+    int? unidadId,
+  }) {
+    final isPerito =
+        roleId == 4 ||
+        _roleTextMatches(role, 'perito') ||
+        _payloadHasRole(payload, 'perito');
+    if (!isPerito) return false;
+
+    return unidadId == 1 || _payloadMatchesSiniestros(payload);
+  }
+
+  static Future<bool> validateStoredSession() async {
+    if (!isMobilePlatform) return true;
+    if (!await requiresSingleMobileSessionForCurrentUser()) return true;
+
+    try {
+      await _refreshCurrentUserProfile();
+      return await isLoggedIn();
+    } catch (_) {
+      return await isLoggedIn();
+    }
+  }
+
+  static Future<Map<String, String>> mobileSessionHeaders({
+    bool includeOnAnyMobile = false,
+  }) async {
+    final payload = await _mobileSessionPayload(
+      includeOnAnyMobile: includeOnAnyMobile,
+    );
+    if (payload.isEmpty) return const <String, String>{};
+
+    return <String, String>{
+      'X-Mobile-Device-Id': payload['mobile_device_id'] ?? '',
+      'X-Mobile-Platform': payload['mobile_platform'] ?? '',
+    }..removeWhere((_, value) => value.trim().isEmpty);
+  }
+
+  static Future<Map<String, String>> mobileSessionPayload({
+    bool includeOnAnyMobile = false,
+  }) {
+    return _mobileSessionPayload(includeOnAnyMobile: includeOnAnyMobile);
   }
 
   static Future<bool> isDelegacionesUser({bool refresh = false}) async {
@@ -1066,9 +1285,15 @@ class AuthService {
           headers: {
             'Authorization': 'Bearer $token',
             'Accept': 'application/json',
+            ...await mobileSessionHeaders(),
           },
         )
         .timeout(const Duration(seconds: 10));
+
+    if (_isInvalidSessionStatus(res.statusCode)) {
+      await _clearLocalSession();
+      return const <String>[];
+    }
 
     if (res.statusCode != 200) return await getPermissions();
 
@@ -1113,12 +1338,14 @@ class AuthService {
 
     if (token != null && token.isNotEmpty) {
       try {
+        final mobileHeaders = await mobileSessionHeaders();
         await http
             .post(
               Uri.parse('$_baseUrl/logout'),
               headers: {
                 'Authorization': 'Bearer $token',
                 'Accept': 'application/json',
+                ...mobileHeaders,
               },
             )
             .timeout(const Duration(seconds: 8));
@@ -1149,6 +1376,18 @@ class AuthService {
     required String newPassword,
     required String confirmPassword,
   }) async {
+    if (newPassword.trim() != confirmPassword.trim()) {
+      throw Exception('La confirmación no coincide.');
+    }
+
+    final strength = await validateSecurePasswordForCurrentUser(
+      newPassword,
+      currentPassword: currentPassword,
+    );
+    if (!strength.isValid) {
+      throw Exception(strength.errors.join('\n'));
+    }
+
     final token = await getToken();
     if (token == null || token.trim().isEmpty) {
       throw Exception('Sesión inválida. Vuelve a iniciar sesión.');
@@ -1179,6 +1418,89 @@ class AuthService {
         ),
       );
     }
+
+    await markSecurePasswordConfirmedForCurrentUser();
+  }
+
+  static Future<PasswordStrengthResult> validateSecurePasswordForCurrentUser(
+    String password, {
+    String? currentPassword,
+  }) async {
+    final payload = await getStoredUserPayload();
+    final email = await getUserEmail() ?? _extractUserEmail(payload);
+    final name =
+        await getUserName(refreshIfMissing: false) ?? _extractUserName(payload);
+
+    return validateSecurePassword(
+      password,
+      currentPassword: currentPassword,
+      email: email,
+      name: name,
+    );
+  }
+
+  static PasswordStrengthResult validateSecurePassword(
+    String password, {
+    String? currentPassword,
+    String? email,
+    String? name,
+  }) {
+    final errors = <String>[];
+    final value = password.trim();
+
+    if (value.length < 12) {
+      errors.add('Debe tener al menos 12 caracteres.');
+    }
+    if (!RegExp(r'[A-ZÁÉÍÓÚÑ]').hasMatch(value)) {
+      errors.add('Debe incluir al menos una mayúscula.');
+    }
+    if (!RegExp(r'[a-záéíóúñ]').hasMatch(value)) {
+      errors.add('Debe incluir al menos una minúscula.');
+    }
+    if (!RegExp(r'\d').hasMatch(value)) {
+      errors.add('Debe incluir al menos un número.');
+    }
+    if (!RegExp(r'[^A-Za-zÁÉÍÓÚÑáéíóúñ0-9]').hasMatch(value)) {
+      errors.add('Debe incluir al menos un símbolo.');
+    }
+
+    final current = currentPassword?.trim() ?? '';
+    if (current.isNotEmpty && value == current) {
+      errors.add('Debe ser diferente a la contraseña actual.');
+    }
+
+    final normalized = value.toLowerCase();
+    final emailUser = (email ?? '').trim().toLowerCase().split('@').first;
+    if (emailUser.length >= 4 && normalized.contains(emailUser)) {
+      errors.add('No debe contener tu correo.');
+    }
+
+    final nameParts = (name ?? '')
+        .toLowerCase()
+        .split(RegExp(r'\s+'))
+        .where((part) => part.length >= 4);
+    for (final part in nameParts) {
+      if (normalized.contains(part)) {
+        errors.add('No debe contener tu nombre.');
+        break;
+      }
+    }
+
+    const weakWords = <String>[
+      'password',
+      'contrasena',
+      'contraseña',
+      'seguridad',
+      'siniestros',
+      'michoacan',
+      '123456',
+      'qwerty',
+    ];
+    if (weakWords.any(normalized.contains)) {
+      errors.add('Evita palabras o secuencias fáciles de adivinar.');
+    }
+
+    return PasswordStrengthResult(errors);
   }
 
   static Future<void> _clearLocalSession() async {
@@ -1219,11 +1541,17 @@ class AuthService {
           headers: {
             'Authorization': 'Bearer $token',
             'Accept': 'application/json',
+            ...await mobileSessionHeaders(),
           },
         )
         .timeout(const Duration(seconds: 10));
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
+      if (_isInvalidSessionStatus(response.statusCode) ||
+          _isSingleMobileSessionConflict(response.body, response.statusCode)) {
+        await _clearLocalSession();
+      }
+
       throw Exception(
         _parseAuthError(
           response.body,
@@ -1306,7 +1634,435 @@ class AuthService {
       return 'Sesión inválida. Vuelve a iniciar sesión.';
     }
 
+    if (_isSingleMobileSessionConflict(body, statusCode)) {
+      return _singleMobileSessionMessage;
+    }
+
     return fallback;
+  }
+
+  static String _parseLoginError(String body, int statusCode) {
+    if (_isSingleMobileSessionConflict(body, statusCode)) {
+      return _singleMobileSessionMessage;
+    }
+
+    return _parseAuthError(
+      body,
+      statusCode,
+      fallback: 'Credenciales incorrectas.',
+    );
+  }
+
+  static const String _singleMobileSessionMessage =
+      'Esta cuenta de Perito de Siniestros ya tiene una sesión activa en otro dispositivo móvil.';
+
+  static bool _isInvalidSessionStatus(int statusCode) {
+    return statusCode == 401 || statusCode == 419;
+  }
+
+  static bool _isSingleMobileSessionConflict(String body, int statusCode) {
+    if (statusCode == 409 || statusCode == 423) return true;
+
+    final text = body.toLowerCase();
+    return text.contains('single_device') ||
+        text.contains('single device') ||
+        text.contains('sesion_unica') ||
+        text.contains('sesión única') ||
+        text.contains('session_conflict') ||
+        text.contains('active session') ||
+        text.contains('sesion activa') ||
+        text.contains('sesión activa') ||
+        text.contains('otro dispositivo');
+  }
+
+  static Future<String?> _strongPasswordConfirmedKey() async {
+    final owner = await getSessionOwnerKey();
+    final normalized = owner?.trim() ?? '';
+    if (normalized.isEmpty) return null;
+    return '${_strongPasswordConfirmedPrefix}_$normalized';
+  }
+
+  static bool? _payloadSecurePasswordConfirmed(Map<String, dynamic>? payload) {
+    if (payload == null || payload.isEmpty) return null;
+
+    for (final key in const <String>[
+      'must_change_password',
+      'requires_password_change',
+      'password_change_required',
+      'force_password_change',
+      'temporary_password',
+      'password_is_temporary',
+    ]) {
+      if (_rawFlagIsTrue(payload[key])) return false;
+    }
+
+    for (final key in const <String>[
+      'secure_password_confirmed',
+      'strong_password_confirmed',
+      'password_strength_verified',
+      'password_changed_after_mobile_policy',
+    ]) {
+      if (_rawFlagIsTrue(payload[key])) return true;
+    }
+
+    final flags = payload['flags'];
+    if (flags is Map) {
+      final nested = _payloadSecurePasswordConfirmed(
+        Map<String, dynamic>.from(flags),
+      );
+      if (nested != null) return nested;
+    }
+
+    return null;
+  }
+
+  static bool? _payloadConfirmsSiniestrosWorkingTurn(
+    Map<String, dynamic>? payload,
+  ) {
+    if (payload == null || payload.isEmpty) return null;
+
+    final direct = _firstExplicitBool(payload, const <String>[
+      'puede_acceder_modulo_puntos_licencia',
+      'puedeAccederModuloPuntosLicencia',
+      'can_access_license_points',
+      'canAccessLicensePoints',
+      'licencias_puntos_turno_permitido',
+      'licenciasPuntosTurnoPermitido',
+      'allowed',
+      'permitido',
+      'esta_trabajando',
+      'estaTrabajando',
+      'trabajando',
+      'en_turno',
+      'enTurno',
+      'is_working',
+      'isWorking',
+      'on_shift',
+      'onShift',
+      'working_today',
+      'workingToday',
+      'turno_activo',
+      'turnoActivo',
+      'turno_en_servicio',
+      'turnoEnServicio',
+      'turno_trabajando',
+      'turnoTrabajando',
+      'servicio_activo',
+      'servicioActivo',
+      'guardia_activa',
+      'guardiaActiva',
+    ]);
+    if (direct != null) return direct;
+
+    for (final key in const <String>[
+      'licencias_puntos_turno',
+      'licenciasPuntosTurno',
+      'license_points_turn',
+      'licensePointsTurn',
+      'license_points_shift_access',
+      'licensePointsShiftAccess',
+    ]) {
+      final value = payload[key];
+      if (value is Map) {
+        final nested = _payloadConfirmsSiniestrosWorkingTurn(
+          Map<String, dynamic>.from(value),
+        );
+        if (nested != null) return nested;
+      }
+    }
+
+    final flags = payload['flags'];
+    if (flags is Map) {
+      final fromFlags = _payloadConfirmsSiniestrosWorkingTurn(
+        Map<String, dynamic>.from(flags),
+      );
+      if (fromFlags != null) return fromFlags;
+    }
+
+    for (final key in const <String>[
+      'turno',
+      'turno_actual',
+      'turnoActual',
+      'jornada',
+      'guardia',
+      'asistencia',
+    ]) {
+      final value = payload[key];
+      if (value is Map) {
+        final nested = _payloadConfirmsSiniestrosWorkingTurn(
+          Map<String, dynamic>.from(value),
+        );
+        if (nested != null) return nested;
+      }
+    }
+
+    return _payloadActiveTurnMatchesUserTurn(payload);
+  }
+
+  static bool? _payloadActiveTurnMatchesUserTurn(Map<String, dynamic> payload) {
+    final userTurnId = _payloadUserTurnId(payload);
+    final userTurnKey = _payloadTurnoKey(payload);
+    if (userTurnId == null && userTurnKey == null) return null;
+
+    var sawActiveTurn = false;
+    for (final active in _activeTurnCandidates(payload)) {
+      if (active == null) continue;
+      sawActiveTurn = true;
+
+      final activeId = _readNestedId(active);
+      if (activeId != null && userTurnId != null) {
+        return activeId == userTurnId;
+      }
+
+      final activeKey = _turnoKey(active);
+      if (activeKey != null && userTurnKey != null) {
+        return activeKey == userTurnKey;
+      }
+    }
+
+    return sawActiveTurn ? false : null;
+  }
+
+  static Iterable<dynamic> _activeTurnCandidates(Map<String, dynamic> payload) {
+    final nested = <dynamic>[];
+    for (final key in const <String>[
+      'licencias_puntos_turno',
+      'licenciasPuntosTurno',
+      'license_points_turn',
+      'licensePointsTurn',
+      'license_points_shift_access',
+      'licensePointsShiftAccess',
+    ]) {
+      final value = payload[key];
+      if (value is Map) {
+        nested.add(value['turno_en_servicio']);
+        nested.add(value['turnoEnServicio']);
+        nested.add(value['turno_activo']);
+        nested.add(value['turnoActivo']);
+      }
+    }
+
+    return <dynamic>[
+      payload['turno_activo'],
+      payload['turnoActivo'],
+      payload['turno_en_servicio'],
+      payload['turnoEnServicio'],
+      payload['turno_trabajando'],
+      payload['turnoTrabajando'],
+      payload['turno_de_guardia'],
+      payload['turnoDeGuardia'],
+      payload['guardia_activa'],
+      payload['guardiaActiva'],
+      payload['turno_laboral_actual'],
+      payload['turnoLaboralActual'],
+      payload['active_turn'],
+      payload['activeTurn'],
+      payload['working_turn'],
+      payload['workingTurn'],
+      ...nested,
+    ];
+  }
+
+  static bool? _firstExplicitBool(Map raw, List<String> keys) {
+    for (final key in keys) {
+      if (!raw.containsKey(key)) continue;
+      final value = _explicitBool(raw[key]);
+      if (value != null) return value;
+    }
+    return null;
+  }
+
+  static bool? _explicitBool(dynamic value) {
+    if (value is bool) return value;
+
+    final number = int.tryParse(value?.toString().trim() ?? '');
+    if (number != null) return number > 0;
+
+    final text = value?.toString().trim().toLowerCase() ?? '';
+    if (text.isEmpty) return null;
+    if (text == 'true' ||
+        text == 'yes' ||
+        text == 'si' ||
+        text == 'sí' ||
+        text == 'activo' ||
+        text == 'activa' ||
+        text == 'trabajando' ||
+        text == 'en turno') {
+      return true;
+    }
+    if (text == 'false' ||
+        text == 'no' ||
+        text == '0' ||
+        text == 'inactivo' ||
+        text == 'inactiva' ||
+        text == 'descanso' ||
+        text == 'fuera de turno') {
+      return false;
+    }
+
+    return null;
+  }
+
+  static int? _payloadUserTurnId(Map<String, dynamic>? payload) {
+    if (payload == null || payload.isEmpty) return null;
+    return _readNullableInt(payload['turno_id']) ??
+        _readNullableInt(payload['turnoId']) ??
+        _readNestedId(payload['turno']) ??
+        _readNestedId(payload['turno_usuario']) ??
+        _readNestedId(payload['turnoUsuario']);
+  }
+
+  static String? _payloadTurnoKey(Map<String, dynamic>? payload) {
+    if (payload == null || payload.isEmpty) return null;
+    for (final value in <dynamic>[
+      payload['turno'],
+      payload['turno_usuario'],
+      payload['turnoUsuario'],
+      payload['turno_nombre'],
+      payload['turnoNombre'],
+      payload['turno_label'],
+      payload['turnoLabel'],
+      payload['turno_clave'],
+      payload['turnoClave'],
+    ]) {
+      final key = _turnoKey(value);
+      if (key != null) return key;
+    }
+    return null;
+  }
+
+  static String? _payloadTurnoLabel(Map<String, dynamic>? payload) {
+    final raw = _payloadTurnoRaw(payload);
+    final label = _turnoLabel(raw);
+    return label == null ? null : 'Turno $label';
+  }
+
+  static String? _payloadActiveTurnoLabel(Map<String, dynamic>? payload) {
+    if (payload == null || payload.isEmpty) return null;
+    for (final active in _activeTurnCandidates(payload)) {
+      final label = _turnoLabel(active);
+      if (label != null) return 'Turno $label';
+    }
+    return null;
+  }
+
+  static dynamic _payloadTurnoRaw(Map<String, dynamic>? payload) {
+    if (payload == null || payload.isEmpty) return null;
+    for (final value in <dynamic>[
+      payload['turno'],
+      payload['turno_usuario'],
+      payload['turnoUsuario'],
+      payload['turno_nombre'],
+      payload['turnoNombre'],
+      payload['turno_label'],
+      payload['turnoLabel'],
+      payload['turno_clave'],
+      payload['turnoClave'],
+    ]) {
+      if (value != null) return value;
+    }
+    return null;
+  }
+
+  static String? _turnoLabel(dynamic raw) {
+    if (raw == null) return null;
+    if (raw is Map) {
+      for (final key in const <String>[
+        'clave',
+        'letra',
+        'nombre',
+        'name',
+        'label',
+        'descripcion',
+      ]) {
+        final label = _turnoLabel(raw[key]);
+        if (label != null) return label;
+      }
+      return null;
+    }
+
+    final key = _turnoKey(raw);
+    if (key == null) return null;
+    return key;
+  }
+
+  static String? _turnoKey(dynamic raw) {
+    if (raw == null) return null;
+    if (raw is Map) {
+      for (final key in const <String>[
+        'clave',
+        'letra',
+        'nombre',
+        'name',
+        'label',
+        'descripcion',
+      ]) {
+        final value = _turnoKey(raw[key]);
+        if (value != null) return value;
+      }
+      return null;
+    }
+
+    var text = _normalizeUnitText(raw.toString())
+        .replaceAll(RegExp(r'\bTURNO\b'), ' ')
+        .replaceAll(RegExp(r'\bGUARDIA\b'), ' ')
+        .replaceAll(RegExp(r'\bACTIVO\b'), ' ')
+        .replaceAll(RegExp(r'\bACTIVA\b'), ' ')
+        .replaceAll(RegExp(r'[^A-Z0-9]+'), ' ')
+        .trim();
+
+    if (text.isEmpty) return null;
+    final parts = text.split(RegExp(r'\s+')).where((part) => part.isNotEmpty);
+    for (final part in parts) {
+      if (part == 'A' || part == 'B') return part;
+    }
+
+    text = text.replaceAll(' ', '');
+    if (text == 'A' || text == 'B') return text;
+    return null;
+  }
+
+  static Future<Map<String, String>> _mobileSessionPayload({
+    required bool includeOnAnyMobile,
+  }) async {
+    if (!isMobilePlatform) return const <String, String>{};
+
+    if (!includeOnAnyMobile &&
+        !await requiresSingleMobileSessionForCurrentUser()) {
+      return const <String, String>{};
+    }
+
+    final deviceId = await _getOrCreateMobileDeviceId();
+    return <String, String>{
+      'mobile_device_id': deviceId,
+      'device_id': deviceId,
+      'mobile_platform': currentPlatformLabel,
+      'device_platform': currentPlatformLabel,
+      'client_type': 'mobile',
+    };
+  }
+
+  static Future<String> _getOrCreateMobileDeviceId() async {
+    final prefs = await SharedPreferences.getInstance();
+    final stored = prefs.getString(_mobileDeviceIdKey)?.trim() ?? '';
+    if (stored.isNotEmpty) return stored;
+
+    final generated = _generateInstallId();
+    await prefs.setString(_mobileDeviceIdKey, generated);
+    return generated;
+  }
+
+  static String _generateInstallId() {
+    final random = Random.secure();
+    final bytes = List<int>.generate(16, (_) => random.nextInt(256));
+    bytes[6] = (bytes[6] & 0x0F) | 0x40;
+    bytes[8] = (bytes[8] & 0x3F) | 0x80;
+    String hex(int start, int end) => bytes
+        .sublist(start, end)
+        .map((byte) => byte.toRadixString(16).padLeft(2, '0'))
+        .join();
+
+    return '${hex(0, 4)}-${hex(4, 6)}-${hex(6, 8)}-${hex(8, 10)}-${hex(10, 16)}';
   }
 
   static Map<String, dynamic>? _extractUserPayload(dynamic raw) {
