@@ -138,6 +138,21 @@ class WelcomeScreen extends StatelessWidget {
                 SizedBox(
                   width: double.infinity,
                   child: OutlinedButton.icon(
+                    onPressed: () => Navigator.pushNamed(
+                      context,
+                      AppRoutes.licenciasPuntosPublica,
+                    ),
+                    icon: const Icon(Icons.scoreboard_outlined),
+                    label: const Text(
+                      'Consultar puntos de licencia',
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
                     onPressed: () =>
                         Navigator.pushNamed(context, AppRoutes.culturaVialJoin),
                     icon: const Icon(Icons.sports_esports),

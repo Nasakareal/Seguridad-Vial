@@ -42,9 +42,16 @@ class _LicenciasPuntosScreenState extends State<LicenciasPuntosScreen> {
   bool _biometricVerified = false;
   bool _initializedArgs = false;
   bool _pendingInitialSearch = false;
+  bool _isFomentoLicensePointsUser = false;
+  bool _discountRequiresRefreshBeforeRetry = false;
+  bool _recoveryRequiresRefreshBeforeRetry = false;
   String? _error;
   String? _shiftError;
   String? _biometricError;
+  String? _discountSignature;
+  String? _discountIdempotencyKey;
+  String? _recoverySignature;
+  String? _recoveryIdempotencyKey;
   LicenciaPuntosMeta? _meta;
   LicenciaPuntoCuenta? _cuenta;
   LicenciaQrData? _lastScan;
@@ -54,6 +61,8 @@ class _LicenciasPuntosScreenState extends State<LicenciasPuntosScreen> {
   @override
   void initState() {
     super.initState();
+    _setNewDiscountFolio();
+    _setNewRecoveryFolio();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) unawaited(_prepareModuleAccess());
     });
@@ -114,9 +123,11 @@ class _LicenciasPuntosScreenState extends State<LicenciasPuntosScreen> {
 
     try {
       final meta = await LicenciaPuntosService.meta();
+      final isFomentoUser = await AuthService.isFomentoCulturaVialUser();
       if (!mounted) return;
       setState(() {
         _meta = meta;
+        _isFomentoLicensePointsUser = isFomentoUser;
         _infraccionId = meta.infracciones.isNotEmpty
             ? meta.infracciones.first.id
             : null;
@@ -290,6 +301,8 @@ class _LicenciasPuntosScreenState extends State<LicenciasPuntosScreen> {
         if (_telefonoCtrl.text.trim().isEmpty) {
           _telefonoCtrl.text = _telefonoMx10(cuenta.telefono);
         }
+        _discountRequiresRefreshBeforeRetry = false;
+        _recoveryRequiresRefreshBeforeRetry = false;
       });
     } catch (e) {
       if (!mounted) return;
@@ -328,6 +341,142 @@ class _LicenciasPuntosScreenState extends State<LicenciasPuntosScreen> {
     await _buscar();
   }
 
+  void _ensureDiscountFolio() {
+    if (_referenciaCtrl.text.trim().isEmpty) {
+      _setNewDiscountFolio();
+    }
+  }
+
+  void _ensureRecoveryFolio() {
+    if (_capacitacionReferenciaCtrl.text.trim().isEmpty) {
+      _setNewRecoveryFolio();
+    }
+  }
+
+  void _setNewDiscountFolio() {
+    _referenciaCtrl.text = LicenciaPuntosService.createMovimientoFolio('LPD');
+    _clearDiscountOperation();
+  }
+
+  void _setNewRecoveryFolio() {
+    _capacitacionReferenciaCtrl.text =
+        LicenciaPuntosService.createMovimientoFolio('LPC');
+    _clearRecoveryOperation();
+  }
+
+  void _regenerateDiscountFolio() {
+    setState(_setNewDiscountFolio);
+  }
+
+  void _regenerateRecoveryFolio() {
+    setState(_setNewRecoveryFolio);
+  }
+
+  String _operationSignature(Iterable<Object?> values) {
+    return values.map((value) => (value ?? '').toString().trim()).join('\n');
+  }
+
+  String _discountOperationSignature({
+    required int infraccionId,
+    required String telefono,
+  }) {
+    return _operationSignature(<Object?>[
+      'descuento',
+      _cuenta?.id,
+      _numeroCtrl.text.trim().toUpperCase(),
+      _titularCtrl.text,
+      _tipoCtrl.text,
+      telefono,
+      infraccionId,
+      _hechoId,
+      _referenciaCtrl.text,
+      _descripcionCtrl.text,
+    ]);
+  }
+
+  String _recoveryOperationSignature({
+    required int cuentaId,
+    required int puntos,
+  }) {
+    return _operationSignature(<Object?>[
+      'capacitacion',
+      cuentaId,
+      puntos,
+      _capacitacionReferenciaCtrl.text,
+      _capacitacionDescripcionCtrl.text,
+    ]);
+  }
+
+  String _discountIdempotencyKeyFor(String signature) {
+    final existing = _discountIdempotencyKey?.trim() ?? '';
+    if (_discountSignature == signature && existing.isNotEmpty) {
+      return existing;
+    }
+
+    final key = LicenciaPuntosService.createIdempotencyKey(
+      'licencia-descuento',
+    );
+    _discountSignature = signature;
+    _discountIdempotencyKey = key;
+    return key;
+  }
+
+  String _recoveryIdempotencyKeyFor(String signature) {
+    final existing = _recoveryIdempotencyKey?.trim() ?? '';
+    if (_recoverySignature == signature && existing.isNotEmpty) {
+      return existing;
+    }
+
+    final key = LicenciaPuntosService.createIdempotencyKey(
+      'licencia-capacitacion',
+    );
+    _recoverySignature = signature;
+    _recoveryIdempotencyKey = key;
+    return key;
+  }
+
+  void _clearDiscountOperation() {
+    _discountSignature = null;
+    _discountIdempotencyKey = null;
+    _discountRequiresRefreshBeforeRetry = false;
+  }
+
+  void _clearRecoveryOperation() {
+    _recoverySignature = null;
+    _recoveryIdempotencyKey = null;
+    _recoveryRequiresRefreshBeforeRetry = false;
+  }
+
+  bool _looksLikeUnconfirmedNetworkMutation(Object error) {
+    if (error is TimeoutException) return true;
+
+    final text = error.toString().toLowerCase();
+    return text.contains('timeout') ||
+        text.contains('timed out') ||
+        text.contains('socket') ||
+        text.contains('network') ||
+        text.contains('connection') ||
+        text.contains('conex') ||
+        text.contains('host lookup') ||
+        text.contains('failed host');
+  }
+
+  Future<bool> _refreshBeforeRetryIfNeeded({
+    required bool requiredRefresh,
+    required String? previousSignature,
+    required String currentSignature,
+  }) async {
+    if (!requiredRefresh || previousSignature != currentSignature) {
+      return false;
+    }
+
+    _showSnack(
+      'La petición anterior no se pudo confirmar. Para evitar duplicarla, primero se volverá a consultar el saldo.',
+    );
+    await _buscar();
+    return true;
+  }
+
   Future<void> _aplicarDescuento() async {
     final infraccionId = _infraccionId;
     if (infraccionId == null || infraccionId <= 0) {
@@ -344,6 +493,18 @@ class _LicenciasPuntosScreenState extends State<LicenciasPuntosScreen> {
       _showSnack(telefonoError);
       return;
     }
+    _ensureDiscountFolio();
+
+    final signature = _discountOperationSignature(
+      infraccionId: infraccionId,
+      telefono: telefono,
+    );
+    final shouldOnlyRefresh = await _refreshBeforeRetryIfNeeded(
+      requiredRefresh: _discountRequiresRefreshBeforeRetry,
+      previousSignature: _discountSignature,
+      currentSignature: signature,
+    );
+    if (shouldOnlyRefresh) return;
 
     final shiftAllowed = await _ensureSiniestrosWorkingTurn();
     if (!shiftAllowed) return;
@@ -358,6 +519,7 @@ class _LicenciasPuntosScreenState extends State<LicenciasPuntosScreen> {
       );
       if (!authorized) return;
 
+      final idempotencyKey = _discountIdempotencyKeyFor(signature);
       final updated = await LicenciaPuntosService.registrarInfraccion(
         cuentaId: _cuenta?.id,
         numeroLicencia: _numeroCtrl.text,
@@ -368,13 +530,24 @@ class _LicenciasPuntosScreenState extends State<LicenciasPuntosScreen> {
         hechoId: _hechoId,
         referencia: _referenciaCtrl.text,
         descripcion: _descripcionCtrl.text,
+        idempotencyKey: idempotencyKey,
       );
       if (!mounted) return;
-      setState(() => _cuenta = updated);
+      setState(() {
+        _cuenta = updated;
+        _setNewDiscountFolio();
+      });
       _showSnack('Penalización aplicada correctamente.');
     } catch (e) {
       if (!mounted) return;
-      _showSnack(LicenciaPuntosService.cleanExceptionMessage(e));
+      if (_looksLikeUnconfirmedNetworkMutation(e)) {
+        setState(() => _discountRequiresRefreshBeforeRetry = true);
+        _showSnack(
+          'No se pudo confirmar el descuento por la conexión. Reconsulta la licencia antes de intentar otra vez.',
+        );
+      } else {
+        _showSnack(LicenciaPuntosService.cleanExceptionMessage(e));
+      }
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -400,6 +573,18 @@ class _LicenciasPuntosScreenState extends State<LicenciasPuntosScreen> {
       _showSnack('Los puntos deben estar entre 1 y $maxPuntos.');
       return;
     }
+    _ensureRecoveryFolio();
+
+    final signature = _recoveryOperationSignature(
+      cuentaId: cuentaId,
+      puntos: puntos,
+    );
+    final shouldOnlyRefresh = await _refreshBeforeRetryIfNeeded(
+      requiredRefresh: _recoveryRequiresRefreshBeforeRetry,
+      previousSignature: _recoverySignature,
+      currentSignature: signature,
+    );
+    if (shouldOnlyRefresh) return;
 
     final shiftAllowed = await _ensureSiniestrosWorkingTurn();
     if (!shiftAllowed) return;
@@ -411,18 +596,30 @@ class _LicenciasPuntosScreenState extends State<LicenciasPuntosScreen> {
       );
       if (!authorized) return;
 
+      final idempotencyKey = _recoveryIdempotencyKeyFor(signature);
       final updated = await LicenciaPuntosService.acreditarCapacitacion(
         cuentaId: cuentaId,
         puntos: puntos,
         referencia: _capacitacionReferenciaCtrl.text,
         descripcion: _capacitacionDescripcionCtrl.text,
+        idempotencyKey: idempotencyKey,
       );
       if (!mounted) return;
-      setState(() => _cuenta = updated);
+      setState(() {
+        _cuenta = updated;
+        _setNewRecoveryFolio();
+      });
       _showSnack('Puntos acreditados correctamente.');
     } catch (e) {
       if (!mounted) return;
-      _showSnack(LicenciaPuntosService.cleanExceptionMessage(e));
+      if (_looksLikeUnconfirmedNetworkMutation(e)) {
+        setState(() => _recoveryRequiresRefreshBeforeRetry = true);
+        _showSnack(
+          'No se pudo confirmar la capacitación por la conexión. Reconsulta la licencia antes de intentar otra vez.',
+        );
+      } else {
+        _showSnack(LicenciaPuntosService.cleanExceptionMessage(e));
+      }
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -439,7 +636,13 @@ class _LicenciasPuntosScreenState extends State<LicenciasPuntosScreen> {
   Widget build(BuildContext context) {
     final meta = _meta;
     final abilities = meta?.abilities;
-    final writesLocked = abilities?.moduleWritesLocked ?? true;
+    final canRestarPuntos = abilities?.canRestarPuntos ?? false;
+    final canSumarPuntos =
+        (abilities?.canSumarPuntos ?? false) || _isFomentoLicensePointsUser;
+    final writesLocked =
+        (abilities?.moduleWritesLocked ?? true) &&
+        !canRestarPuntos &&
+        !canSumarPuntos;
     final cuenta = _cuenta;
 
     return Scaffold(
@@ -507,8 +710,7 @@ class _LicenciasPuntosScreenState extends State<LicenciasPuntosScreen> {
                     ],
                     const SizedBox(height: 14),
                     _CuentaCard(cuenta: cuenta),
-                    if (meta != null &&
-                        (abilities?.canRestarPuntos ?? false)) ...[
+                    if (meta != null && canRestarPuntos) ...[
                       const SizedBox(height: 14),
                       _DiscountActionCard(
                         busy: _busy,
@@ -519,11 +721,11 @@ class _LicenciasPuntosScreenState extends State<LicenciasPuntosScreen> {
                         onInfraccionChanged: (value) {
                           setState(() => _infraccionId = value);
                         },
+                        onRegenerateFolio: _regenerateDiscountFolio,
                         onRestar: _aplicarDescuento,
                       ),
                     ],
-                    if (meta != null &&
-                        (abilities?.canSumarPuntos ?? false)) ...[
+                    if (meta != null && canSumarPuntos) ...[
                       const SizedBox(height: 14),
                       _RecoveryActionCard(
                         busy: _busy,
@@ -532,6 +734,7 @@ class _LicenciasPuntosScreenState extends State<LicenciasPuntosScreen> {
                         referenciaCtrl: _capacitacionReferenciaCtrl,
                         descripcionCtrl: _capacitacionDescripcionCtrl,
                         puntosCtrl: _puntosCtrl,
+                        onRegenerateFolio: _regenerateRecoveryFolio,
                         onSumar: _acreditarCapacitacion,
                       ),
                     ],
@@ -955,6 +1158,7 @@ class _DiscountActionCard extends StatelessWidget {
   final TextEditingController referenciaCtrl;
   final TextEditingController descripcionCtrl;
   final ValueChanged<int?> onInfraccionChanged;
+  final VoidCallback onRegenerateFolio;
   final Future<void> Function() onRestar;
 
   const _DiscountActionCard({
@@ -964,6 +1168,7 @@ class _DiscountActionCard extends StatelessWidget {
     required this.referenciaCtrl,
     required this.descripcionCtrl,
     required this.onInfraccionChanged,
+    required this.onRegenerateFolio,
     required this.onRestar,
   });
 
@@ -1024,9 +1229,16 @@ class _DiscountActionCard extends StatelessWidget {
           const SizedBox(height: 10),
           TextField(
             controller: referenciaCtrl,
-            decoration: const InputDecoration(
-              labelText: 'Referencia / folio',
-              border: OutlineInputBorder(),
+            readOnly: true,
+            enabled: !busy,
+            decoration: InputDecoration(
+              labelText: 'Folio automático',
+              border: const OutlineInputBorder(),
+              suffixIcon: IconButton(
+                tooltip: 'Generar otro folio',
+                onPressed: busy ? null : onRegenerateFolio,
+                icon: const Icon(Icons.refresh),
+              ),
             ),
           ),
           const SizedBox(height: 10),
@@ -1062,6 +1274,7 @@ class _RecoveryActionCard extends StatelessWidget {
   final TextEditingController referenciaCtrl;
   final TextEditingController descripcionCtrl;
   final TextEditingController puntosCtrl;
+  final VoidCallback onRegenerateFolio;
   final Future<void> Function() onSumar;
 
   const _RecoveryActionCard({
@@ -1071,6 +1284,7 @@ class _RecoveryActionCard extends StatelessWidget {
     required this.referenciaCtrl,
     required this.descripcionCtrl,
     required this.puntosCtrl,
+    required this.onRegenerateFolio,
     required this.onSumar,
   });
 
@@ -1120,9 +1334,16 @@ class _RecoveryActionCard extends StatelessWidget {
           const SizedBox(height: 10),
           TextField(
             controller: referenciaCtrl,
-            decoration: const InputDecoration(
-              labelText: 'Referencia del curso',
-              border: OutlineInputBorder(),
+            readOnly: true,
+            enabled: !busy,
+            decoration: InputDecoration(
+              labelText: 'Folio automático del curso',
+              border: const OutlineInputBorder(),
+              suffixIcon: IconButton(
+                tooltip: 'Generar otro folio',
+                onPressed: busy ? null : onRegenerateFolio,
+                icon: const Icon(Icons.refresh),
+              ),
             ),
           ),
           const SizedBox(height: 10),

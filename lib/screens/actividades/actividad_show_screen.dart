@@ -121,6 +121,30 @@ class _ActividadShowScreenState extends State<ActividadShowScreen>
     return '${value.toStringAsFixed(2)} km';
   }
 
+  String _normalizeForMatch(String? value) {
+    return (value ?? '')
+        .toUpperCase()
+        .replaceAll('Á', 'A')
+        .replaceAll('É', 'E')
+        .replaceAll('Í', 'I')
+        .replaceAll('Ó', 'O')
+        .replaceAll('Ú', 'U')
+        .replaceAll('Ñ', 'N')
+        .trim();
+  }
+
+  bool _isDelegacionesActivity(Actividad a) {
+    final unidad = _normalizeForMatch(a.unidad?.nombre);
+    if (unidad.contains('DELEGACIONES')) {
+      return true;
+    }
+
+    final delegacion = a.delegacion;
+    final delegacionName = _normalizeForMatch(delegacion?.nombre);
+    return delegacion != null &&
+        (delegacion.id > 0 || delegacionName.isNotEmpty);
+  }
+
   Widget _photoCarousel(Actividad a) {
     final photos = a.allPhotoPaths;
     if (photos.isEmpty) {
@@ -202,6 +226,7 @@ class _ActividadShowScreenState extends State<ActividadShowScreen>
   @override
   Widget build(BuildContext context) {
     final a = _actividad;
+    final isDelegaciones = a != null && _isDelegacionesActivity(a);
 
     return Scaffold(
       backgroundColor: const Color(0xFFF6F7FB),
@@ -262,7 +287,8 @@ class _ActividadShowScreenState extends State<ActividadShowScreen>
                       _kv('Hora', _displayText(a.hora)),
                       _kv('Unidad', a.unidad?.nombre ?? '—'),
                       _kv('Delegacion', a.delegacion?.nombre ?? '—'),
-                      _kv('Destacamento', a.destacamento?.nombre ?? '—'),
+                      if (!isDelegaciones)
+                        _kv('Destacamento', a.destacamento?.nombre ?? '—'),
                     ],
                   ),
                 ),
@@ -274,9 +300,11 @@ class _ActividadShowScreenState extends State<ActividadShowScreen>
                     children: [
                       _kv('Lugar', _displayText(a.lugar)),
                       _kv('Municipio', _displayText(a.municipio)),
-                      _kv('Carretera', _displayText(a.carretera)),
-                      _kv('Tramo', _displayText(a.tramo)),
-                      _kv('Kilometro', _displayText(a.kilometro)),
+                      if (!isDelegaciones) ...[
+                        _kv('Carretera', _displayText(a.carretera)),
+                        _kv('Tramo', _displayText(a.tramo)),
+                        _kv('Kilometro', _displayText(a.kilometro)),
+                      ],
                       _kv('Latitud', a.lat?.toString() ?? '—'),
                       _kv('Longitud', a.lng?.toString() ?? '—'),
                       _kv('Coordenadas', _displayText(a.coordenadasTexto)),

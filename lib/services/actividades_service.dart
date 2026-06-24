@@ -404,6 +404,36 @@ class ActividadesService {
     return isC5iReport && isHechoOrSiniestro;
   }
 
+  static bool shouldRedirectDelegacionesActivityToHecho({
+    required String categoriaNombre,
+    required String subcategoriaNombre,
+    bool userCanCaptureHechos = true,
+    bool appliesToUser = true,
+  }) {
+    if (!userCanCaptureHechos || !appliesToUser) return false;
+
+    final categoria = _normalizeCatalogLabel(categoriaNombre);
+    final subcategoria = _normalizeCatalogLabel(subcategoriaNombre);
+    final combined = '$categoria $subcategoria';
+
+    final isC5iReport =
+        categoria.contains('REPORTE') &&
+        (categoria.contains('C5I') || categoria.contains('C5'));
+    final looksLikeHecho = _looksLikeHechoCatalogText(combined);
+    final isAbanderamiento = categoria.contains('ABANDERAMIENTO');
+
+    return (isC5iReport && looksLikeHecho) ||
+        isAbanderamiento ||
+        looksLikeHecho;
+  }
+
+  static bool _looksLikeHechoCatalogText(String text) {
+    return text.contains('ACCIDENTE') ||
+        text.contains('HECHO DE TRANSITO') ||
+        text.contains('HECHOS DE TRANSITO') ||
+        text.contains('SINIESTRO');
+  }
+
   static String toPublicUrl(String pathOrUrl) {
     final p = pathOrUrl.trim();
     if (p.isEmpty) return '';
@@ -922,8 +952,7 @@ class ActividadesService {
   _prioritizeFomentoSubcategoriasForCurrentUser(
     List<ActividadSubcategoria> subcategorias,
   ) async {
-    final unidadId = await AuthService.getUnidadId();
-    if (unidadId != AuthService.unidadCulturaVialId) return subcategorias;
+    if (!await AuthService.isFomentoCulturaVialUser()) return subcategorias;
     return prioritizeFomentoSubcategorias(subcategorias);
   }
 

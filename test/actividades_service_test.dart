@@ -295,6 +295,76 @@ void main() {
     );
   });
 
+  test(
+    'redirects delegaciones accident and siniestro activities to hechos',
+    () {
+      expect(
+        ActividadesService.shouldRedirectDelegacionesActivityToHecho(
+          categoriaNombre: 'Reportes de C5i',
+          subcategoriaNombre: 'Accidentes',
+        ),
+        isTrue,
+      );
+      expect(
+        ActividadesService.shouldRedirectDelegacionesActivityToHecho(
+          categoriaNombre: 'Reportes de C5i',
+          subcategoriaNombre: 'Hechos de tránsito',
+        ),
+        isTrue,
+      );
+      expect(
+        ActividadesService.shouldRedirectDelegacionesActivityToHecho(
+          categoriaNombre: 'Servicios',
+          subcategoriaNombre: 'Siniestros',
+        ),
+        isTrue,
+      );
+    },
+  );
+
+  test('redirects delegaciones abanderamientos to hechos', () {
+    expect(
+      ActividadesService.shouldRedirectDelegacionesActivityToHecho(
+        categoriaNombre: 'Abanderamientos',
+        subcategoriaNombre: 'Cortes de circulación',
+      ),
+      isTrue,
+    );
+    expect(
+      ActividadesService.shouldRedirectDelegacionesActivityToHecho(
+        categoriaNombre: 'Abanderamientos',
+        subcategoriaNombre: '',
+      ),
+      isTrue,
+    );
+  });
+
+  test('does not redirect normal activities or users outside rule', () {
+    expect(
+      ActividadesService.shouldRedirectDelegacionesActivityToHecho(
+        categoriaNombre: 'Monitoreos',
+        subcategoriaNombre: 'Periféricos',
+      ),
+      isFalse,
+    );
+    expect(
+      ActividadesService.shouldRedirectDelegacionesActivityToHecho(
+        categoriaNombre: 'Reportes de C5i',
+        subcategoriaNombre: 'Accidentes',
+        appliesToUser: false,
+      ),
+      isFalse,
+    );
+    expect(
+      ActividadesService.shouldRedirectDelegacionesActivityToHecho(
+        categoriaNombre: 'Reportes de C5i',
+        subcategoriaNombre: 'Accidentes',
+        userCanCaptureHechos: false,
+      ),
+      isFalse,
+    );
+  });
+
   test('parses fomento metadata from activity catalogs', () {
     final unidad = ActividadRef.fromJson(const <String, dynamic>{
       'id': 2,

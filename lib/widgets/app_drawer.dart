@@ -119,6 +119,9 @@ class AppDrawer extends StatelessWidget {
     if (requiredUnitId == AuthService.unidadProteccionCarreterasId) {
       return AuthService.isCarreterasUser();
     }
+    if (requiredUnitId == AuthService.unidadCulturaVialId) {
+      return AuthService.isFomentoCulturaVialUser();
+    }
 
     return (await AuthService.getUnidadId()) == requiredUnitId;
   }
@@ -144,6 +147,9 @@ class AppDrawer extends StatelessWidget {
     var canReviewCarreteras = await _canReviewCarreteras();
     var canUseConstanciasManejo = await AuthService.canUseConstanciasManejo();
     var canViewMapaPatrullas = await AuthService.canViewMapaPatrullas();
+    var canUseLicensePointsModule =
+        await AuthService.canUseLicensePointsModule();
+    var canUseCulturaVial = await AuthService.isFomentoCulturaVialUser();
 
     if (permissions.isEmpty) {
       await AuthService.refreshCurrentUserAccess();
@@ -157,6 +163,8 @@ class AppDrawer extends StatelessWidget {
       canReviewCarreteras = await _canReviewCarreteras();
       canUseConstanciasManejo = await AuthService.canUseConstanciasManejo();
       canViewMapaPatrullas = await AuthService.canViewMapaPatrullas();
+      canUseLicensePointsModule = await AuthService.canUseLicensePointsModule();
+      canUseCulturaVial = await AuthService.isFomentoCulturaVialUser();
     }
 
     return _DrawerAccess(
@@ -169,6 +177,8 @@ class AppDrawer extends StatelessWidget {
       canReviewCarreteras: canReviewCarreteras,
       canUseConstanciasManejo: canUseConstanciasManejo,
       canViewMapaPatrullas: canViewMapaPatrullas,
+      canUseLicensePointsModule: canUseLicensePointsModule,
+      canUseCulturaVial: canUseCulturaVial,
     );
   }
 
@@ -223,7 +233,7 @@ class AppDrawer extends StatelessWidget {
                 final unidadId = snap.data?.unidadId;
                 final canSeeCulturaVial =
                     hasFullOperationalAccess ||
-                    unidadId == AuthService.unidadCulturaVialId;
+                    (snap.data?.canUseCulturaVial ?? false);
                 final isSuperadmin = snap.data?.isSuperadmin ?? false;
                 final canSeeAllButtons = hasFullOperationalAccess;
                 final canSeePuestas =
@@ -265,10 +275,7 @@ class AppDrawer extends StatelessWidget {
                   all: canSeeAllButtons,
                 );
                 final canSeeLicenciasPuntos =
-                    canSeeAllButtons ||
-                    isSuperadmin ||
-                    unidadId != null ||
-                    _allowed(perms, permPuntosLicencias);
+                    snap.data?.canUseLicensePointsModule ?? false;
 
                 return ListView(
                   padding: drawerScrollablePadding(context),
@@ -619,6 +626,8 @@ class _DrawerAccess {
   final bool canReviewCarreteras;
   final bool canUseConstanciasManejo;
   final bool canViewMapaPatrullas;
+  final bool canUseLicensePointsModule;
+  final bool canUseCulturaVial;
 
   const _DrawerAccess({
     required this.perms,
@@ -630,6 +639,8 @@ class _DrawerAccess {
     required this.canReviewCarreteras,
     required this.canUseConstanciasManejo,
     required this.canViewMapaPatrullas,
+    required this.canUseLicensePointsModule,
+    required this.canUseCulturaVial,
   });
 }
 

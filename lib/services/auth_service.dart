@@ -579,6 +579,35 @@ class AuthService {
     return hasRoleName('administrativo');
   }
 
+  static Future<bool> isFomentoCulturaVialUser({bool refresh = false}) async {
+    if (refresh) {
+      await refreshCurrentUserAccess();
+    }
+
+    final role = await getRole();
+    final payload = await getStoredUserPayload();
+    final unidadId = await getUnidadId();
+    final belongsToFomento =
+        unidadId == unidadCulturaVialId ||
+        _payloadMatchesFomentoCulturaVial(payload);
+    final hasPlainInstructorRole =
+        _roleTextEquals(role, 'instructor') ||
+        _payloadHasExactRole(payload, 'instructor');
+    if (belongsToFomento && hasPlainInstructorRole) {
+      return true;
+    }
+
+    final hasInstructorRole =
+        _roleTextMatches(role, 'instructor de fomento') ||
+        _payloadHasRole(payload, 'instructor de fomento') ||
+        _payloadHasRole(payload, 'instructor fomento');
+    if (hasInstructorRole) {
+      return true;
+    }
+
+    return belongsToFomento;
+  }
+
   static Future<bool> canSeeFullDelegacionesFeed() async {
     if (!await isDelegacionesUser()) {
       return false;
@@ -592,6 +621,14 @@ class AuthService {
 
     final payload = await getStoredUserPayload();
     return _payloadHasChildDelegations(payload);
+  }
+
+  static Future<bool> shouldRedirectDelegacionesActivitiesToHechos() async {
+    if (!await isDelegacionesUser()) {
+      return false;
+    }
+
+    return await isPolicia() || await isDelegadoRole();
   }
 
   static Future<int?> getFeedDelegacionFilterId() async {
@@ -837,6 +874,26 @@ class AuthService {
 
     final payload = await getCurrentUserPayload(refresh: false);
     return _payloadHasAnyUnitId(payload, const <int>{1, unidadDelegacionesId});
+  }
+
+  static Future<bool> canUseLicensePointsModule({bool refresh = false}) async {
+    if (refresh) {
+      await refreshCurrentUserAccess();
+    }
+
+    if (await isSuperadmin() || await hasFullOperationalAccess()) {
+      return true;
+    }
+
+    if (await can('ver puntos licencias')) {
+      return true;
+    }
+
+    if (await isSiniestrosUnitUser()) {
+      return true;
+    }
+
+    return isFomentoCulturaVialUser();
   }
 
   static Future<bool> canEditConstanciasManejo({bool refresh = false}) async {
@@ -2361,6 +2418,90 @@ class AuthService {
     return false;
   }
 
+  static bool _payloadMatchesFomentoCulturaVial(Map<String, dynamic>? payload) {
+    if (payload == null || payload.isEmpty) {
+      return false;
+    }
+
+    final directId =
+        _readNullableInt(payload['unidad_id']) ??
+        _readNullableInt(payload['unidad_org_id']);
+    if (directId == unidadCulturaVialId) {
+      return true;
+    }
+
+    final candidates = <dynamic>[
+      payload['unidad'],
+      payload['unidad_principal'],
+      payload['unidadPrincipal'],
+      payload['unidad_nombre'],
+      payload['unidadName'],
+      payload['unidad_label'],
+      payload['area'],
+      payload['areas'],
+      payload['unidades'],
+    ];
+
+    if (_rolePayloadMatchesFomentoCulturaVial(payload['role']) ||
+        _rolePayloadMatchesFomentoCulturaVial(payload['roles'])) {
+      return true;
+    }
+
+    for (final candidate in candidates) {
+      if (_dynamicContainsFomentoCulturaVial(candidate)) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  static bool _rolePayloadMatchesFomentoCulturaVial(dynamic raw) {
+    if (raw == null) {
+      return false;
+    }
+
+    if (raw is Map) {
+      final directUnitId =
+          _readNullableInt(raw['unidad_id']) ??
+          _readNullableInt(raw['unidad_org_id']) ??
+          _readNullableInt(raw['unit_id']);
+      if (directUnitId == unidadCulturaVialId) {
+        return true;
+      }
+
+      final candidates = <dynamic>[
+        raw['unidad'],
+        raw['unidad_principal'],
+        raw['unidadPrincipal'],
+        raw['unidad_nombre'],
+        raw['unidadName'],
+        raw['unidad_label'],
+        raw['area'],
+        raw['areas'],
+        raw['unidades'],
+      ];
+
+      for (final candidate in candidates) {
+        if (_dynamicContainsFomentoCulturaVial(candidate)) {
+          return true;
+        }
+      }
+
+      return false;
+    }
+
+    if (raw is Iterable) {
+      for (final item in raw) {
+        if (_rolePayloadMatchesFomentoCulturaVial(item)) {
+          return true;
+        }
+      }
+    }
+
+    return false;
+  }
+
   static bool _payloadMatchesHechosCreateExcludedUnit(
     Map<String, dynamic>? payload,
   ) {
@@ -3097,6 +3238,60 @@ class AuthService {
     if (raw is Iterable) {
       for (final item in raw) {
         if (_dynamicContainsVialidadesUrbanas(item)) {
+          return true;
+        }
+      }
+    }
+
+    return false;
+  }
+
+  static bool _dynamicContainsFomentoCulturaVial(dynamic raw) {
+    if (raw == null) {
+      return false;
+    }
+
+    final id = _readNullableInt(raw);
+    if (id == unidadCulturaVialId) {
+      return true;
+    }
+
+    if (raw is String) {
+      final normalized = _normalizeUnitText(raw);
+      return normalized.contains('FOMENTO A LA CULTURA VIAL') ||
+          normalized.contains('FOMENTO CULTURA VIAL') ||
+          normalized.contains('CULTURA VIAL');
+    }
+
+    if (raw is Map) {
+      final nestedId = _readNullableInt(
+        raw['id'] ?? raw['value'] ?? raw['unidad_id'] ?? raw['unidad_org_id'],
+      );
+      if (nestedId == unidadCulturaVialId) {
+        return true;
+      }
+
+      final names = <dynamic>[
+        raw['name'],
+        raw['nombre'],
+        raw['label'],
+        raw['descripcion'],
+        raw['title'],
+        raw['slug'],
+      ];
+
+      for (final value in names) {
+        if (_dynamicContainsFomentoCulturaVial(value)) {
+          return true;
+        }
+      }
+
+      return false;
+    }
+
+    if (raw is Iterable) {
+      for (final item in raw) {
+        if (_dynamicContainsFomentoCulturaVial(item)) {
           return true;
         }
       }

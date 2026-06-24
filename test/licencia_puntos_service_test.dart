@@ -2,6 +2,25 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:seguridad_vial_app/services/licencia_puntos_service.dart';
 
 void main() {
+  test('generates scoped idempotency keys for point movements', () {
+    final first = LicenciaPuntosService.createIdempotencyKey(
+      'Licencia Descuento',
+    );
+    final second = LicenciaPuntosService.createIdempotencyKey(
+      'Licencia Descuento',
+    );
+
+    expect(first, startsWith('licencia-descuento-'));
+    expect(second, startsWith('licencia-descuento-'));
+    expect(first, isNot(second));
+  });
+
+  test('generates readable automatic movement folios', () {
+    final folio = LicenciaPuntosService.createMovimientoFolio('LPD');
+
+    expect(folio, matches(RegExp(r'^LPD-\d{8}-\d{6}-[A-F0-9]{6}$')));
+  });
+
   test('parses legal basis from catalog and movement payloads', () {
     const fundamento =
         'Fundamentado en el Reglamento de la Ley de Movilidad y Seguridad Vial vigente en el Estado.';

@@ -92,6 +92,7 @@ class AppRoutes {
   static const String constanciasManejoDetalle = '/constancias-manejo/detalle';
   static const String moduloExamenesDiarios = '/modulo-examenes-diarios';
   static const String licenciasPuntos = '/licencias-puntos';
+  static const String licenciasPuntosPublica = '/consulta-puntos-licencia';
 
   static const String dispositivos = '/dispositivos';
   static const String dispositivosCreate = '/dispositivos/create';

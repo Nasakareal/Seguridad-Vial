@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:math';
 
 import 'package:http/http.dart' as http;
 
@@ -10,17 +11,71 @@ class LicenciaPuntosService {
 
   static String get _base => '${AuthService.baseUrl}/licencias-puntos';
 
-  static Future<Map<String, String>> _headers({bool json = true}) async {
+  static Future<Map<String, String>> _headers({
+    bool json = true,
+    String? idempotencyKey,
+  }) async {
     final token = await AuthService.getToken();
     if (token == null || token.trim().isEmpty) {
       throw Exception('Sesión inválida. Vuelve a iniciar sesión.');
     }
 
+    final cleanIdempotencyKey = idempotencyKey?.trim() ?? '';
     return <String, String>{
       'Accept': 'application/json',
       if (json) 'Content-Type': 'application/json',
       'Authorization': 'Bearer $token',
+      if (cleanIdempotencyKey.isNotEmpty)
+        'Idempotency-Key': cleanIdempotencyKey,
+      if (cleanIdempotencyKey.isNotEmpty)
+        'X-Idempotency-Key': cleanIdempotencyKey,
     };
+  }
+
+  static Map<String, String> _publicHeaders({bool json = false}) {
+    return <String, String>{
+      'Accept': 'application/json',
+      if (json) 'Content-Type': 'application/json',
+    };
+  }
+
+  static String createIdempotencyKey(String prefix) {
+    final cleanPrefix = prefix
+        .trim()
+        .toLowerCase()
+        .replaceAll(RegExp(r'[^a-z0-9_-]+'), '-')
+        .replaceAll(RegExp(r'-+'), '-')
+        .replaceAll(RegExp(r'^-|-$'), '');
+    final random = Random.secure();
+    final randomPart = List<int>.generate(
+      16,
+      (_) => random.nextInt(256),
+    ).map((byte) => byte.toRadixString(16).padLeft(2, '0')).join();
+    final stamp = DateTime.now().toUtc().microsecondsSinceEpoch.toRadixString(
+      16,
+    );
+    final base = '$stamp-$randomPart';
+    return cleanPrefix.isEmpty ? base : '$cleanPrefix-$base';
+  }
+
+  static String createMovimientoFolio(String prefix) {
+    final cleanPrefix = prefix
+        .trim()
+        .toUpperCase()
+        .replaceAll(RegExp(r'[^A-Z0-9]+'), '-')
+        .replaceAll(RegExp(r'-+'), '-')
+        .replaceAll(RegExp(r'^-|-$'), '');
+    final now = DateTime.now().toLocal();
+    String two(int value) => value.toString().padLeft(2, '0');
+    final date = '${now.year}${two(now.month)}${two(now.day)}';
+    final time = '${two(now.hour)}${two(now.minute)}${two(now.second)}';
+    final random = Random.secure();
+    final suffix = List<int>.generate(
+      3,
+      (_) => random.nextInt(256),
+    ).map((byte) => byte.toRadixString(16).padLeft(2, '0')).join();
+
+    return '${cleanPrefix.isEmpty ? 'LP' : cleanPrefix}-$date-$time-${suffix.toUpperCase()}';
   }
 
   static LicenciaQrData parseLicencia(String raw) {
@@ -56,6 +111,49 @@ class LicenciaPuntosService {
     return LicenciaPuntoCuenta.fromJson(_map(raw['data']));
   }
 
+  static Future<LicenciaPuntoCuenta> buscarPublicaPorNumero(
+    String numeroLicencia,
+  ) async {
+    final numero = numeroLicencia.trim();
+    if (numero.isEmpty) {
+      throw Exception('Captura el número de licencia.');
+    }
+
+    final encoded = Uri.encodeComponent(numero);
+    final urls = <String>[
+      '$_base/public/numero/$encoded',
+      '$_base/public/$encoded',
+      '$_base/consulta-publica/numero/$encoded',
+      '$_base/consulta-publica/$encoded',
+      '${AuthService.baseUrl}/public/licencias-puntos/numero/$encoded',
+    ];
+
+    Object? firstError;
+    for (final url in urls) {
+      final resp = await http
+          .get(Uri.parse(url), headers: _publicHeaders())
+          .timeout(const Duration(seconds: 15));
+
+      if (resp.statusCode >= 200 && resp.statusCode < 300) {
+        final raw = _decode(resp);
+        return LicenciaPuntoCuenta.fromJson(_map(raw['data']));
+      }
+
+      final error = Exception(
+        cleanExceptionMessage(_backendError(resp.body, resp.statusCode)),
+      );
+      firstError ??= error;
+
+      if (resp.statusCode != 401 &&
+          resp.statusCode != 403 &&
+          resp.statusCode != 404) {
+        throw error;
+      }
+    }
+
+    throw firstError ?? Exception('No se pudo consultar la licencia.');
+  }
+
   static Future<LicenciaPuntoCuenta> registrarInfraccion({
     int? cuentaId,
     required String numeroLicencia,
@@ -66,7 +164,9 @@ class LicenciaPuntosService {
     int? hechoId,
     String? referencia,
     String? descripcion,
+    String? idempotencyKey,
   }) async {
+    final cleanIdempotencyKey = idempotencyKey?.trim() ?? '';
     final body = <String, dynamic>{
       if (cuentaId != null && cuentaId > 0) 'cuenta_id': cuentaId,
       if (cuentaId == null || cuentaId <= 0) 'numero_licencia': numeroLicencia,
@@ -81,12 +181,14 @@ class LicenciaPuntosService {
         'referencia': referencia!.trim(),
       if ((descripcion ?? '').trim().isNotEmpty)
         'descripcion': descripcion!.trim(),
+      if (cleanIdempotencyKey.isNotEmpty)
+        'idempotency_key': cleanIdempotencyKey,
     };
 
     final resp = await http
         .post(
           Uri.parse('$_base/infracciones'),
-          headers: await _headers(),
+          headers: await _headers(idempotencyKey: cleanIdempotencyKey),
           body: jsonEncode(body),
         )
         .timeout(const Duration(seconds: 20));
@@ -100,17 +202,21 @@ class LicenciaPuntosService {
     required int puntos,
     String? referencia,
     String? descripcion,
+    String? idempotencyKey,
   }) async {
+    final cleanIdempotencyKey = idempotencyKey?.trim() ?? '';
     final resp = await http
         .post(
           Uri.parse('$_base/$cuentaId/capacitacion'),
-          headers: await _headers(),
+          headers: await _headers(idempotencyKey: cleanIdempotencyKey),
           body: jsonEncode(<String, dynamic>{
             'puntos': puntos,
             if ((referencia ?? '').trim().isNotEmpty)
               'referencia': referencia!.trim(),
             if ((descripcion ?? '').trim().isNotEmpty)
               'descripcion': descripcion!.trim(),
+            if (cleanIdempotencyKey.isNotEmpty)
+              'idempotency_key': cleanIdempotencyKey,
           }),
         )
         .timeout(const Duration(seconds: 20));

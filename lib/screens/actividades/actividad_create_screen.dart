@@ -43,6 +43,7 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
   bool _canEditCaptureTimestamp = false;
   bool _captureTimestampAccessLoaded = false;
   bool _isFomentoUser = false;
+  bool _delegacionesActivityHechoRedirectUser = false;
   bool _showVialidadesDisponibles = false;
   bool _loadingVialidadesDisponibles = false;
   String? _error;
@@ -206,7 +207,9 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
   Future<void> _loadUserLabel() async {
     final name = await AuthService.getUserName();
     final email = await AuthService.getUserEmail();
-    final unidadId = await AuthService.getUnidadId();
+    final isFomentoUser = await AuthService.isFomentoCulturaVialUser();
+    final delegacionesActivityHechoRedirectUser =
+        await AuthService.shouldRedirectDelegacionesActivitiesToHechos();
     final showVialidadesDisponibles =
         await AuthService.canFeedVialidadesUrbanasFromActivities();
     final isMotociclista = await AuthService.isMotociclistaRole();
@@ -224,7 +227,9 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
           ? cleanedName
           : (cleanedEmail.isNotEmpty ? cleanedEmail : 'Usuario actual');
       _actividadNarrativaGrupo = narrativaGrupo;
-      _isFomentoUser = unidadId == AuthService.unidadCulturaVialId;
+      _isFomentoUser = isFomentoUser;
+      _delegacionesActivityHechoRedirectUser =
+          delegacionesActivityHechoRedirectUser;
       _showVialidadesDisponibles = showVialidadesDisponibles;
     });
     _applyNarrativaTemplateIfPossible();
@@ -303,7 +308,7 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
       });
       _syncFomentoTotal();
       _applyNarrativaTemplateIfPossible();
-      _scheduleC5iHechoRedirectCheck();
+      _scheduleActividadHechoRedirectCheck();
     } catch (e) {
       if (!mounted) return;
       final message = ActividadesService.cleanExceptionMessage(e);
@@ -950,14 +955,14 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
     );
   }
 
-  void _scheduleC5iHechoRedirectCheck() {
+  void _scheduleActividadHechoRedirectCheck() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      unawaited(_redirectToHechoIfC5iReport());
+      unawaited(_redirectToHechoIfNeeded());
     });
   }
 
-  Future<void> _redirectToHechoIfC5iReport() async {
+  Future<void> _redirectToHechoIfNeeded() async {
     if (_redirectingToHecho || !mounted) return;
     if (_isFomentoUser) return;
 
@@ -966,13 +971,21 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
 
     final categoria = _selectedCategoria();
     final subcategoria = _selectedSubcategoria();
-    if (categoria == null || subcategoria == null) return;
+    if (categoria == null) return;
+    final subcategoriaNombre = subcategoria?.nombre ?? '';
 
-    final shouldRedirect = ActividadesService.shouldRedirectC5iReportToHecho(
-      categoriaNombre: categoria.nombre,
-      subcategoriaNombre: subcategoria.nombre,
-      userCanCaptureHechos: userCanCaptureHechos,
-    );
+    final shouldRedirect =
+        ActividadesService.shouldRedirectC5iReportToHecho(
+          categoriaNombre: categoria.nombre,
+          subcategoriaNombre: subcategoriaNombre,
+          userCanCaptureHechos: userCanCaptureHechos,
+        ) ||
+        ActividadesService.shouldRedirectDelegacionesActivityToHecho(
+          categoriaNombre: categoria.nombre,
+          subcategoriaNombre: subcategoriaNombre,
+          userCanCaptureHechos: userCanCaptureHechos,
+          appliesToUser: _delegacionesActivityHechoRedirectUser,
+        );
     if (!shouldRedirect) return;
 
     _redirectingToHecho = true;
@@ -980,16 +993,14 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
     if (!mounted) return;
 
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Ese reporte C5i debe capturarse como hecho.'),
-      ),
+      const SnackBar(content: Text('Ese registro debe capturarse como hecho.')),
     );
     Navigator.pushReplacementNamed(
       context,
       AppRoutes.accidentesCreate,
       arguments: {
         'prefill': {
-          'source': 'actividad_c5i_redirect',
+          'source': 'actividad_hecho_redirect',
           'lugar': _lugarCtrl.text.trim(),
           'municipio': _trimMunicipio(_municipioCtrl) ?? '',
           'lat': _latCtrl.text.trim(),
@@ -1722,7 +1733,7 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
                               _applyNarrativaTemplateIfPossible();
                             }
                             _draft.notifyChanged();
-                            _scheduleC5iHechoRedirectCheck();
+                            _scheduleActividadHechoRedirectCheck();
                           },
                     decoration: _dec(
                       'Subcategoria',

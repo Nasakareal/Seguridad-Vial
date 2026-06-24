@@ -55,7 +55,7 @@ class AdministrativeAccessService {
     final isVialidades =
         unidadId == AuthService.unidadVialidadesUrbanasId ||
         await AuthService.isVialidadesUrbanasUser();
-    final isFomento = unidadId == AuthService.unidadCulturaVialId;
+    final isFomento = await AuthService.isFomentoCulturaVialUser();
     final isSeguridadVial = unidadId == AuthService.unidadSeguridadVialId;
 
     final canSeeUsers =

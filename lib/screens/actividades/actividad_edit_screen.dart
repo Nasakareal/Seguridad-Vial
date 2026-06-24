@@ -183,7 +183,7 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
       final cats = await ActividadesService.fetchCategorias();
       final a = await ActividadesService.fetchShow(id);
       final canEditTimestamp = await AuthService.canEditCaptureTimestamp();
-      final unidadId = await AuthService.getUnidadId();
+      final isFomentoUser = await AuthService.isFomentoCulturaVialUser();
       final isMotociclista = await AuthService.isMotociclistaRole();
       final isAgenteVial = await AuthService.isAgenteVial();
       final isFenix = await AuthService.isFenixRole();
@@ -205,7 +205,7 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
         _subcategoriaId = a.actividadSubcategoriaId;
         _actividadNarrativaGrupo = narrativaGrupo;
         _canEditCaptureTimestamp = canEditTimestamp;
-        _isFomentoUser = unidadId == AuthService.unidadCulturaVialId;
+        _isFomentoUser = isFomentoUser;
         _loading = false;
       });
 

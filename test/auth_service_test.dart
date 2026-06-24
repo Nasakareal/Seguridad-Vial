@@ -154,6 +154,77 @@ void main() {
   });
 
   test(
+    'delegaciones policia and delegado are redirected from activities to hechos',
+    () async {
+      SharedPreferences.setMockInitialValues(<String, Object>{
+        'auth_role': 'Policia',
+        'auth_role_id': 10,
+        'auth_unidad_id': AuthService.unidadDelegacionesId,
+        'auth_user_payload': jsonEncode(<String, Object>{
+          'id': 31,
+          'role': <String, Object>{'id': 10, 'name': 'Policia'},
+          'unidad_id': AuthService.unidadDelegacionesId,
+        }),
+      });
+
+      expect(
+        await AuthService.shouldRedirectDelegacionesActivitiesToHechos(),
+        isTrue,
+      );
+
+      SharedPreferences.setMockInitialValues(<String, Object>{
+        'auth_role': 'Delegado',
+        'auth_unidad_id': AuthService.unidadDelegacionesId,
+        'auth_user_payload': jsonEncode(<String, Object>{
+          'id': 32,
+          'role': <String, Object>{'name': 'Delegado'},
+          'unidad_id': AuthService.unidadDelegacionesId,
+        }),
+      });
+
+      expect(
+        await AuthService.shouldRedirectDelegacionesActivitiesToHechos(),
+        isTrue,
+      );
+    },
+  );
+
+  test(
+    'subdelegado and non delegaciones do not get activity to hecho redirect',
+    () async {
+      SharedPreferences.setMockInitialValues(<String, Object>{
+        'auth_role': 'Subdelegado',
+        'auth_unidad_id': AuthService.unidadDelegacionesId,
+        'auth_user_payload': jsonEncode(<String, Object>{
+          'id': 33,
+          'role': <String, Object>{'name': 'Subdelegado'},
+          'unidad_id': AuthService.unidadDelegacionesId,
+        }),
+      });
+
+      expect(
+        await AuthService.shouldRedirectDelegacionesActivitiesToHechos(),
+        isFalse,
+      );
+
+      SharedPreferences.setMockInitialValues(<String, Object>{
+        'auth_role': 'Delegado',
+        'auth_unidad_id': AuthService.unidadProteccionCarreterasId,
+        'auth_user_payload': jsonEncode(<String, Object>{
+          'id': 34,
+          'role': <String, Object>{'name': 'Delegado'},
+          'unidad_id': AuthService.unidadProteccionCarreterasId,
+        }),
+      });
+
+      expect(
+        await AuthService.shouldRedirectDelegacionesActivitiesToHechos(),
+        isFalse,
+      );
+    },
+  );
+
+  test(
     'agente vial uses vialidades home and hourly tracking profile',
     () async {
       SharedPreferences.setMockInitialValues(<String, Object>{
@@ -596,6 +667,48 @@ void main() {
       expect(await AuthService.canEditConstanciasManejo(), isFalse);
     },
   );
+
+  test(
+    'instructor role in fomento unit keeps fomento and license points access',
+    () async {
+      SharedPreferences.setMockInitialValues(<String, Object>{
+        'auth_role': 'Instructor',
+        'auth_user_payload': jsonEncode(<String, Object>{
+          'id': 70,
+          'role': <String, Object>{
+            'id': 9,
+            'name': 'Instructor',
+            'unidad': <String, Object>{
+              'id': AuthService.unidadCulturaVialId,
+              'nombre': 'UNIDAD DE FOMENTO A LA CULTURA VIAL',
+            },
+          },
+        }),
+        'auth_perms': <String>[],
+      });
+
+      expect(await AuthService.isFomentoCulturaVialUser(), isTrue);
+      expect(await AuthService.canUseLicensePointsModule(), isTrue);
+    },
+  );
+
+  test('cultura vial unit keeps fomento access without role text', () async {
+    SharedPreferences.setMockInitialValues(<String, Object>{
+      'auth_unidad_id': AuthService.unidadCulturaVialId,
+      'auth_user_payload': jsonEncode(<String, Object>{
+        'id': 71,
+        'unidad_id': AuthService.unidadCulturaVialId,
+        'unidad': <String, Object>{
+          'id': AuthService.unidadCulturaVialId,
+          'nombre': 'Fomento a la Cultura Vial',
+        },
+      }),
+      'auth_perms': <String>[],
+    });
+
+    expect(await AuthService.isFomentoCulturaVialUser(), isTrue);
+    expect(await AuthService.canUseLicensePointsModule(), isTrue);
+  });
 
   test(
     'single mobile session scope only applies to perito from siniestros',
