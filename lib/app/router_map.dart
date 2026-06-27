@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'package:seguridad_vial_app/app/routes.dart';
 
+import '../models/conduce_legalidad.dart';
 import '../screens/login_screen.dart';
 import '../screens/home_agente_vial_screen.dart';
 import '../screens/home_agente_upec_screen.dart';
@@ -84,6 +85,10 @@ import '../screens/constancias_manejo/constancias_manejo_screen.dart';
 import '../screens/constancias_manejo/constancia_manejo_scan_screen.dart';
 import '../screens/licencias_puntos/licencias_puntos_screen.dart';
 import '../screens/licencias_puntos/licencias_puntos_public_screen.dart';
+import '../screens/conduce_legalidad/conduce_legalidad_captura_screen.dart';
+import '../screens/conduce_legalidad/conduce_legalidad_operativo_form_screen.dart';
+import '../screens/conduce_legalidad/conduce_legalidad_screen.dart';
+import '../screens/conduce_legalidad/conduce_legalidad_show_screen.dart';
 import '../screens/modulo_examenes_diarios/modulo_examenes_diarios_screen.dart';
 import '../screens/dispositivos/dispositivo_create_screen.dart';
 import '../screens/dispositivos/dispositivo_show_screen.dart';
@@ -207,6 +212,9 @@ final Map<String, WidgetBuilder> appRoutesMap = {
   AppRoutes.licenciasPuntos: (context) => const LicenciasPuntosScreen(),
   AppRoutes.licenciasPuntosPublica: (context) =>
       const LicenciasPuntosPublicScreen(),
+  AppRoutes.conduceLegalidad: (context) => const ConduceLegalidadScreen(),
+  AppRoutes.conduceLegalidadCreate: (context) =>
+      const ConduceLegalidadOperativoFormScreen(),
   AppRoutes.moduloExamenesDiarios: (context) =>
       const ModuloExamenesDiariosScreen(),
   AppRoutes.dispositivos: (context) => const DispositivosScreen(),
@@ -247,6 +255,25 @@ int? _readDispositivoIdFromArgs(Object? args) {
   return null;
 }
 
+int? _readOperativoIdFromArgs(Object? args) {
+  if (args == null) return null;
+  if (args is int) return args;
+  if (args is String) return int.tryParse(args);
+  if (args is Map) {
+    final raw = args['operativoId'] ?? args['id'];
+    if (raw is int) return raw;
+    if (raw is String) return int.tryParse(raw);
+  }
+  return null;
+}
+
+ConduceLegalidadCaptura? _readConduceLegalidadCapturaFromArgs(Object? args) {
+  if (args is Map && args['captura'] is ConduceLegalidadCaptura) {
+    return args['captura'] as ConduceLegalidadCaptura;
+  }
+  return null;
+}
+
 Route<dynamic>? onGenerateRoute(RouteSettings settings) {
   final name = settings.name ?? '';
 
@@ -282,6 +309,46 @@ Route<dynamic>? onGenerateRoute(RouteSettings settings) {
 
     return MaterialPageRoute(
       builder: (_) => VialidadesUrbanasDispositivoShowScreen(dispositivoId: id),
+      settings: settings,
+    );
+  }
+
+  if (name == AppRoutes.conduceLegalidadShow) {
+    final id = _readOperativoIdFromArgs(settings.arguments);
+    if (id == null) {
+      return MaterialPageRoute(
+        builder: (_) => const _UnknownArgsScreen(
+          routeName: '/conduce-legalidad/show',
+          message: 'sin operativoId',
+        ),
+        settings: settings,
+      );
+    }
+
+    return MaterialPageRoute(
+      builder: (_) => ConduceLegalidadShowScreen(operativoId: id),
+      settings: settings,
+    );
+  }
+
+  if (name == AppRoutes.conduceLegalidadCaptura) {
+    final id = _readOperativoIdFromArgs(settings.arguments);
+    final captura = _readConduceLegalidadCapturaFromArgs(settings.arguments);
+    if (id == null) {
+      return MaterialPageRoute(
+        builder: (_) => const _UnknownArgsScreen(
+          routeName: '/conduce-legalidad/captura',
+          message: 'sin operativoId',
+        ),
+        settings: settings,
+      );
+    }
+
+    return MaterialPageRoute(
+      builder: (_) => ConduceLegalidadCapturaScreen(
+        operativoId: id,
+        initialCaptura: captura,
+      ),
       settings: settings,
     );
   }

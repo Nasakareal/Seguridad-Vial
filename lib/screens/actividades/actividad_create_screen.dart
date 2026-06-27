@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -25,6 +26,7 @@ import '../../widgets/actividad_detenidos_field.dart';
 import '../../widgets/actividad_people_count_guard.dart';
 import '../../widgets/municipio_autocomplete_field.dart';
 import '../../widgets/normalized_integer_input_formatter.dart';
+import 'actividad_ui_labels.dart';
 import 'widgets/actividad_vehiculo_modal.dart';
 import 'widgets/fomento_cultura_vial_panel.dart';
 
@@ -253,10 +255,13 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
 
   void _setNow() {
     final now = DateTime.now();
-    _fechaCtrl.text =
-        '${now.year.toString().padLeft(4, '0')}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+    _fechaCtrl.text = _fmtYmd(now);
     _horaCtrl.text =
         '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
+  }
+
+  String _fmtYmd(DateTime value) {
+    return '${value.year.toString().padLeft(4, '0')}-${value.month.toString().padLeft(2, '0')}-${value.day.toString().padLeft(2, '0')}';
   }
 
   Future<void> _loadCategorias() async {
@@ -867,21 +872,6 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
     'mujeres': _fomentoMujeresCtrl,
   };
 
-  int? _defaultFomentoCategoriaId(List<ActividadCategoria> categorias) {
-    for (final categoria in categorias) {
-      final slug = (categoria.slug ?? '').trim().toLowerCase();
-      final nombre = categoria.nombre.trim().toUpperCase();
-      if (slug == 'capacitaciones' || nombre == 'CAPACITACIONES') {
-        return categoria.id;
-      }
-    }
-
-    for (final categoria in categorias) {
-      if (categoria.requiereFomentoCulturaVial) return categoria.id;
-    }
-    return null;
-  }
-
   Future<void> _maybeSelectDefaultFomentoCategory() async {
     if (!mounted ||
         !_isFomentoUser ||
@@ -889,7 +879,7 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
         _categorias.isEmpty) {
       return;
     }
-    final defaultId = _defaultFomentoCategoriaId(_categorias);
+    final defaultId = ActividadUiLabels.defaultFomentoCategoriaId(_categorias);
     if (defaultId == null) return;
 
     if (!mounted) return;
@@ -1335,7 +1325,10 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
       ).showSnackBar(SnackBar(content: Text(result.message)));
       await _draft.discard();
       if (!mounted) return;
-      Navigator.pop(context, true);
+      Navigator.pop(context, <String, dynamic>{
+        'changed': true,
+        'date': _createdActivityDate(result.responseBody, payload),
+      });
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -1345,6 +1338,33 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
       });
     } finally {
       if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  String _createdActivityDate(String? responseBody, ActividadUpsertData data) {
+    final fromResponse = _dateFromCreateResponse(responseBody);
+    if (fromResponse != null) return fromResponse;
+
+    final fromPayload = (data.fecha ?? '').trim();
+    if (fromPayload.isNotEmpty) return fromPayload;
+
+    return _fmtYmd(DateTime.now());
+  }
+
+  String? _dateFromCreateResponse(String? responseBody) {
+    final body = responseBody?.trim() ?? '';
+    if (body.isEmpty) return null;
+
+    try {
+      final raw = jsonDecode(body);
+      if (raw is! Map) return null;
+
+      final data = raw['data'] is Map ? raw['data'] as Map : raw;
+      final date = (data['fecha'] ?? data['date'] ?? '').toString().trim();
+      if (DateTime.tryParse(date) == null) return null;
+      return date;
+    } catch (_) {
+      return null;
     }
   }
 
@@ -1712,7 +1732,12 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
                       ..._subcategorias.map(
                         (s) => DropdownMenuItem<int>(
                           value: s.id,
-                          child: Text(s.nombre),
+                          child: Text(
+                            ActividadUiLabels.subcategoriaNombre(
+                              s,
+                              isFomentoUser: _isFomentoUser,
+                            ),
+                          ),
                         ),
                       ),
                     ],

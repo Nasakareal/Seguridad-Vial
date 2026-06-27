@@ -19,6 +19,7 @@ import '../../widgets/actividad_people_count_guard.dart';
 import '../../widgets/municipio_autocomplete_field.dart';
 import '../../widgets/normalized_integer_input_formatter.dart';
 import '../../widgets/safe_network_image.dart';
+import 'actividad_ui_labels.dart';
 import 'widgets/actividad_vehiculo_modal.dart';
 import 'widgets/fomento_cultura_vial_panel.dart';
 
@@ -1195,7 +1196,12 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
                         ..._subcategorias.map(
                           (s) => DropdownMenuItem<int>(
                             value: s.id,
-                            child: Text(s.nombre),
+                            child: Text(
+                              ActividadUiLabels.subcategoriaNombre(
+                                s,
+                                isFomentoUser: _isFomentoUser,
+                              ),
+                            ),
                           ),
                         ),
                       ],

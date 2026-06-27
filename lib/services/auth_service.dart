@@ -896,6 +896,67 @@ class AuthService {
     return isFomentoCulturaVialUser();
   }
 
+  static Future<bool> canAccessConduceLegalidad({bool refresh = false}) async {
+    if (refresh) {
+      await refreshCurrentUserAccess();
+    }
+
+    return isLoggedIn();
+  }
+
+  static Future<bool> canFeedConduceLegalidad({bool refresh = false}) async {
+    return canAccessConduceLegalidad(refresh: refresh);
+  }
+
+  static Future<bool> canManageConduceLegalidad({bool refresh = false}) async {
+    if (refresh) {
+      await refreshCurrentUserAccess();
+    }
+
+    if (await isSuperadmin() || await hasFullOperationalAccess()) {
+      return true;
+    }
+
+    final payload = await getCurrentUserPayload(refresh: false);
+    final isVialidadesUrbanas = await _isCurrentVialidadesUrbanasStrict(
+      payload,
+    );
+    if (!isVialidadesUrbanas) {
+      return false;
+    }
+
+    if (await isResponsableTurno() || await isSubdirectorRole()) {
+      return true;
+    }
+
+    return can('editar conduce legalidad');
+  }
+
+  static Future<bool> canCreateConduceLegalidad({bool refresh = false}) async {
+    if (refresh) {
+      await refreshCurrentUserAccess();
+    }
+
+    if (await canManageConduceLegalidad()) {
+      return true;
+    }
+
+    final payload = await getCurrentUserPayload(refresh: false);
+    if (!await _isCurrentVialidadesUrbanasStrict(payload)) {
+      return false;
+    }
+
+    return can('crear conduce legalidad');
+  }
+
+  static Future<bool> _isCurrentVialidadesUrbanasStrict(
+    Map<String, dynamic>? payload,
+  ) async {
+    final unidadId = await getUnidadId();
+    return unidadId == unidadVialidadesUrbanasId ||
+        _payloadMatchesVialidadesUrbanasStrict(payload);
+  }
+
   static Future<bool> canEditConstanciasManejo({bool refresh = false}) async {
     if (refresh) {
       await refreshCurrentUserAccess();

@@ -25,6 +25,7 @@ class AppDrawer extends StatelessWidget {
   static const String permMapa = 'ver mapa';
   static const String permSustento = 'ver sustento legal';
   static const String permPuntosLicencias = 'ver puntos licencias';
+  static const String permConduceLegalidad = 'ver conduce legalidad';
 
   Future<void> _nav(
     BuildContext context,
@@ -150,6 +151,8 @@ class AppDrawer extends StatelessWidget {
     var canUseLicensePointsModule =
         await AuthService.canUseLicensePointsModule();
     var canUseCulturaVial = await AuthService.isFomentoCulturaVialUser();
+    var canAccessConduceLegalidad =
+        await AuthService.canAccessConduceLegalidad();
 
     if (permissions.isEmpty) {
       await AuthService.refreshCurrentUserAccess();
@@ -165,6 +168,7 @@ class AppDrawer extends StatelessWidget {
       canViewMapaPatrullas = await AuthService.canViewMapaPatrullas();
       canUseLicensePointsModule = await AuthService.canUseLicensePointsModule();
       canUseCulturaVial = await AuthService.isFomentoCulturaVialUser();
+      canAccessConduceLegalidad = await AuthService.canAccessConduceLegalidad();
     }
 
     return _DrawerAccess(
@@ -179,6 +183,7 @@ class AppDrawer extends StatelessWidget {
       canViewMapaPatrullas: canViewMapaPatrullas,
       canUseLicensePointsModule: canUseLicensePointsModule,
       canUseCulturaVial: canUseCulturaVial,
+      canAccessConduceLegalidad: canAccessConduceLegalidad,
     );
   }
 
@@ -276,6 +281,9 @@ class AppDrawer extends StatelessWidget {
                 );
                 final canSeeLicenciasPuntos =
                     snap.data?.canUseLicensePointsModule ?? false;
+                final canSeeConduceLegalidad =
+                    snap.data?.canAccessConduceLegalidad ??
+                    _allowed(perms, permConduceLegalidad, all: isSuperadmin);
 
                 return ListView(
                   padding: drawerScrollablePadding(context),
@@ -461,6 +469,14 @@ class AppDrawer extends StatelessWidget {
                         onTap: () => _nav(context, AppRoutes.licenciasPuntos),
                       ),
 
+                    if (canSeeConduceLegalidad)
+                      _DrawerItem(
+                        icon: Icons.fact_check_outlined,
+                        label: 'Conduce legalidad',
+                        subtitle: 'Operativos, capturas y fundamentos',
+                        onTap: () => _nav(context, AppRoutes.conduceLegalidad),
+                      ),
+
                     if (canSeeCulturaVial)
                       _DrawerItem(
                         icon: Icons.sports_esports,
@@ -628,6 +644,7 @@ class _DrawerAccess {
   final bool canViewMapaPatrullas;
   final bool canUseLicensePointsModule;
   final bool canUseCulturaVial;
+  final bool canAccessConduceLegalidad;
 
   const _DrawerAccess({
     required this.perms,
@@ -641,6 +658,7 @@ class _DrawerAccess {
     required this.canViewMapaPatrullas,
     required this.canUseLicensePointsModule,
     required this.canUseCulturaVial,
+    required this.canAccessConduceLegalidad,
   });
 }
 

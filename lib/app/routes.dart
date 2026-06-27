@@ -94,6 +94,11 @@ class AppRoutes {
   static const String licenciasPuntos = '/licencias-puntos';
   static const String licenciasPuntosPublica = '/consulta-puntos-licencia';
 
+  static const String conduceLegalidad = '/conduce-legalidad';
+  static const String conduceLegalidadCreate = '/conduce-legalidad/create';
+  static const String conduceLegalidadShow = '/conduce-legalidad/show';
+  static const String conduceLegalidadCaptura = '/conduce-legalidad/captura';
+
   static const String dispositivos = '/dispositivos';
   static const String dispositivosCreate = '/dispositivos/create';
   static const String dispositivosShow = '/dispositivos/show';

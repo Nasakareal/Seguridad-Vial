@@ -1,28 +1,70 @@
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'auth_service.dart';
 
 class GruasCatalogService {
+  static const String _cachePrefix = 'gruas_catalog_cache_v2';
+  static const int _unidadSiniestrosId = 1;
+
   static Future<List<Map<String, dynamic>>> fetchVisibleGruas() async {
     final access = await _currentAccess();
     if (!access.hasFullAccess && access.unidadFiltroId == null) {
       return const <Map<String, dynamic>>[];
     }
 
-    final uri = Uri.parse('${AuthService.baseUrl}/gruas').replace(
+    return _fetchForAccess(access, cacheKey: _cacheKeyForAccess(access));
+  }
+
+  static Future<List<Map<String, dynamic>>> fetchSiniestrosGruas() {
+    const access = _GruasAccess(
+      hasFullAccess: false,
+      unidadFiltroId: _unidadSiniestrosId,
+      delegacionFiltroId: null,
+      queryParameters: <String, String>{},
+    );
+
+    return _fetchForAccess(
+      access,
+      cacheKey: '${_cachePrefix}_siniestros',
+      endpointPath: '/conduce-legalidad/gruas-siniestros',
+    );
+  }
+
+  static Future<List<Map<String, dynamic>>> _fetchForAccess(
+    _GruasAccess access, {
+    required String cacheKey,
+    String endpointPath = '/gruas',
+  }) async {
+    final uri = Uri.parse('${AuthService.baseUrl}$endpointPath').replace(
       queryParameters: access.queryParameters.isEmpty
           ? null
           : access.queryParameters,
     );
 
-    final res = await http.get(uri, headers: await _headers());
-    if (res.statusCode < 200 || res.statusCode >= 300) {
-      throw Exception(_errorText(res));
-    }
+    try {
+      final res = await http.get(uri, headers: await _headers());
+      if (res.statusCode < 200 || res.statusCode >= 300) {
+        throw Exception(_errorText(res));
+      }
 
-    final raw = jsonDecode(_decodeBody(res));
+      final gruas = _parseGruas(_decodeBody(res), access);
+      await _saveCache(cacheKey, gruas);
+      return gruas;
+    } catch (_) {
+      final cached = await _loadCache(cacheKey);
+      if (cached.isNotEmpty) return cached;
+      rethrow;
+    }
+  }
+
+  static List<Map<String, dynamic>> _parseGruas(
+    String body,
+    _GruasAccess access,
+  ) {
+    final raw = jsonDecode(body);
     final list = raw is Map && raw['data'] is List
         ? raw['data'] as List
         : raw is List
@@ -42,6 +84,49 @@ class GruasCatalogService {
     });
 
     return gruas;
+  }
+
+  static String _cacheKeyForAccess(_GruasAccess access) {
+    final params = access.queryParameters.entries.toList()
+      ..sort((a, b) => a.key.compareTo(b.key));
+    final suffix = params.isEmpty
+        ? 'all'
+        : params.map((entry) => '${entry.key}_${entry.value}').join('_');
+    return '${_cachePrefix}_$suffix';
+  }
+
+  static Future<void> _saveCache(
+    String key,
+    List<Map<String, dynamic>> gruas,
+  ) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(key, jsonEncode(gruas));
+  }
+
+  static Future<List<Map<String, dynamic>>> _loadCache(String key) async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(key);
+    if (raw == null || raw.trim().isEmpty) {
+      return const <Map<String, dynamic>>[];
+    }
+
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! List) return const <Map<String, dynamic>>[];
+
+      final gruas = decoded
+          .whereType<Map>()
+          .map((item) => Map<String, dynamic>.from(item))
+          .toList();
+      gruas.sort((a, b) {
+        return displayName(
+          a,
+        ).toUpperCase().compareTo(displayName(b).toUpperCase());
+      });
+      return gruas;
+    } catch (_) {
+      return const <Map<String, dynamic>>[];
+    }
   }
 
   static int? idOf(Map<String, dynamic> grua) {
@@ -180,6 +265,7 @@ class GruasCatalogService {
     return <String, String>{
       'Accept': 'application/json',
       'Authorization': 'Bearer $token',
+      ...await AuthService.mobileSessionHeaders(),
     };
   }
 

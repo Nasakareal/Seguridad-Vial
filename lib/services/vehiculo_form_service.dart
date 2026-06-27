@@ -90,6 +90,7 @@ class VehiculoFormService {
   static const String tipoServicioPublicoEstatal = 'SERVICIO PÚBLICO ESTATAL';
   static const String tipoServicioPublicoFederal = 'SERVICIO PÚBLICO FEDERAL';
   static const String tipoServicioOficial = 'OFICIAL';
+  static const String estadoPlacasFederal = 'Federal';
 
   static const List<String> tiposServicioPlaca = <String>[
     tipoServicioParticular,
@@ -138,6 +139,22 @@ class VehiculoFormService {
   static String? validateTipoServicioPlaca(String? value) {
     if (tiposServicioPlaca.contains((value ?? '').trim())) return null;
     return 'Selecciona un tipo de servicio válido.';
+  }
+
+  static bool isTipoServicioPublicoFederal(String? value) {
+    return normalizeTipoServicioPlaca(value) == tipoServicioPublicoFederal;
+  }
+
+  static String? estadoPlacasParaPayload({
+    required String placas,
+    required String tipoServicio,
+    required String? estadoPlacas,
+  }) {
+    if (normalizePlacas(placas).isEmpty) return null;
+    if (isTipoServicioPublicoFederal(tipoServicio)) {
+      return estadoPlacasFederal;
+    }
+    return normalizeEstadoPlacas(estadoPlacas);
   }
 
   static VehiculoQrData parseTarjetaCirculacionQr(String raw) {
@@ -488,9 +505,12 @@ class VehiculoFormService {
     final placasError = validatePlacas(placas);
     if (placasError != null) return placasError;
 
+    final tipoServicioError = validateTipoServicioPlaca(tipoServicio);
+    if (tipoServicioError != null) return tipoServicioError;
+
     final placasClean = normalizePlacas(placas);
     final estadoClean = normalizeEstadoPlacas(estadoPlacas);
-    if (placasClean.isNotEmpty) {
+    if (placasClean.isNotEmpty && !isTipoServicioPublicoFederal(tipoServicio)) {
       if (estadoClean == null) {
         return 'Si capturas placas, también debes capturar el estado de placas.';
       }
@@ -504,9 +524,6 @@ class VehiculoFormService {
 
     final capacidadError = validateCapacidad(capacidad);
     if (capacidadError != null) return capacidadError;
-
-    final tipoServicioError = validateTipoServicioPlaca(tipoServicio);
-    if (tipoServicioError != null) return tipoServicioError;
 
     final tarjetaError = validateOptionalText(
       tarjetaCirculacionNombre,

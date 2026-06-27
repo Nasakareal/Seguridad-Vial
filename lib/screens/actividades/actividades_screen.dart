@@ -14,6 +14,7 @@ import '../../widgets/account_drawer.dart';
 import '../../widgets/header_card.dart';
 import '../../widgets/safe_network_image.dart';
 import '../login_screen.dart';
+import 'actividad_ui_labels.dart';
 
 class ActividadesScreen extends StatefulWidget {
   const ActividadesScreen({super.key});
@@ -28,6 +29,7 @@ class _ActividadesScreenState extends State<ActividadesScreen>
   bool _bootstrapped = false;
   bool _busy = false;
   bool _sharingTotals = false;
+  bool _isFomentoUser = false;
 
   DateTime _selectedDate = DateTime.now();
 
@@ -114,11 +116,29 @@ class _ActividadesScreenState extends State<ActividadesScreen>
   }
 
   Future<void> _go(BuildContext context, String route, {Object? args}) async {
-    final changed = await Navigator.pushNamed(context, route, arguments: args);
+    final result = await Navigator.pushNamed(context, route, arguments: args);
     if (!mounted) return;
-    if (changed == true) {
+    if (_routeChanged(result)) {
+      final resultDate = _dateFromRouteResult(result);
+      if (resultDate != null) {
+        setState(() => _selectedDate = resultDate);
+      }
       await _load();
     }
+  }
+
+  bool _routeChanged(Object? result) {
+    if (result == true) return true;
+    if (result is Map) return result['changed'] == true;
+    return false;
+  }
+
+  DateTime? _dateFromRouteResult(Object? result) {
+    if (result is! Map) return null;
+    final raw = result['date'] ?? result['fecha'];
+    final parsed = DateTime.tryParse(raw?.toString() ?? '');
+    if (parsed == null) return null;
+    return DateTime(parsed.year, parsed.month, parsed.day);
   }
 
   String _fmtYmd(DateTime d) {
@@ -158,13 +178,36 @@ class _ActividadesScreenState extends State<ActividadesScreen>
   }
 
   Future<void> _loadCatalogos() async {
+    var isFomentoUser = false;
+    try {
+      isFomentoUser = await AuthService.isFomentoCulturaVialUser();
+    } catch (_) {}
+
     try {
       final cats = await ActividadesService.fetchCategorias();
       if (!mounted) return;
-      setState(() => _categorias = cats);
+
+      final defaultCategoriaId = isFomentoUser && _categoriaId == null
+          ? ActividadUiLabels.defaultFomentoCategoriaId(cats)
+          : null;
+
+      setState(() {
+        _isFomentoUser = isFomentoUser;
+        _categorias = cats;
+        if (defaultCategoriaId != null) {
+          _categoriaId = defaultCategoriaId;
+        }
+      });
+
+      if (defaultCategoriaId != null) {
+        await _loadSubcategorias(defaultCategoriaId);
+      }
     } catch (_) {
       if (!mounted) return;
-      setState(() => _categorias = const []);
+      setState(() {
+        _isFomentoUser = isFomentoUser;
+        _categorias = const [];
+      });
     }
 
     try {
@@ -214,7 +257,7 @@ class _ActividadesScreenState extends State<ActividadesScreen>
     try {
       final items = await ActividadesService.fetchIndex(
         date: _selectedDate,
-        perPage: 20,
+        perPage: 50,
         actividadCategoriaId: _categoriaId,
         actividadSubcategoriaId: _subcategoriaId,
         unidadId: _unidadId,
@@ -503,7 +546,13 @@ class _ActividadesScreenState extends State<ActividadesScreen>
                   ..._subcategorias.map(
                     (s) => DropdownMenuItem<int>(
                       value: s.id,
-                      child: Text(s.nombre, overflow: TextOverflow.ellipsis),
+                      child: Text(
+                        ActividadUiLabels.subcategoriaNombre(
+                          s,
+                          isFomentoUser: _isFomentoUser,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
                   ),
                 ],
@@ -580,7 +629,10 @@ class _ActividadesScreenState extends State<ActividadesScreen>
   String _subtitle(Actividad a) {
     final parts = <String>[
       if ((a.subcategoria?.nombre ?? '').trim().isNotEmpty)
-        a.subcategoria!.nombre,
+        ActividadUiLabels.subcategoriaNombre(
+          a.subcategoria,
+          isFomentoUser: _isFomentoUser,
+        ),
       if ((a.municipio ?? '').trim().isNotEmpty) a.municipio!.trim(),
       if ((a.fecha ?? '').trim().isNotEmpty) a.fecha!.trim(),
       if ((a.hora ?? '').trim().isNotEmpty) a.hora!.trim(),

@@ -793,6 +793,7 @@ class OfflineSyncService {
       'Authorization': 'Bearer $token',
       'X-Client-Request-Id': requestId,
       'X-Requested-With': 'XMLHttpRequest',
+      ...await AuthService.mobileSessionHeaders(),
     };
 
     try {
@@ -872,6 +873,7 @@ class OfflineSyncService {
       'Authorization': 'Bearer $token',
       'X-Client-Request-Id': requestId,
       'X-Requested-With': 'XMLHttpRequest',
+      ...await AuthService.mobileSessionHeaders(),
     });
     request.fields.addAll(fields);
 

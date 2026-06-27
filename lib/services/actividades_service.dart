@@ -330,9 +330,130 @@ class ActividadNativeShareData {
   }
 }
 
+class ActividadesIndexPage {
+  final List<Actividad> items;
+  final int currentPage;
+  final int? lastPage;
+  final int? total;
+  final int perPage;
+  final bool hasMore;
+
+  const ActividadesIndexPage({
+    required this.items,
+    required this.currentPage,
+    required this.lastPage,
+    required this.total,
+    required this.perPage,
+    required this.hasMore,
+  });
+
+  factory ActividadesIndexPage.fromJson(dynamic raw, {int requestedPage = 1}) {
+    Map<String, dynamic>? envelope;
+    Map<String, dynamic>? paginator;
+    Map<String, dynamic>? meta;
+    Map<String, dynamic>? links;
+    dynamic listRaw;
+
+    if (raw is Map) {
+      envelope = Map<String, dynamic>.from(raw);
+      final data = envelope['data'];
+      meta = _map(envelope['meta']);
+      links = _map(envelope['links']);
+
+      if (data is Map) {
+        paginator = Map<String, dynamic>.from(data);
+        final inner = paginator['data'];
+        if (inner is List) {
+          listRaw = inner;
+        }
+      } else if (data is List) {
+        paginator = envelope;
+        listRaw = data;
+      } else if (envelope['items'] is List) {
+        paginator = envelope;
+        listRaw = envelope['items'];
+      }
+    } else if (raw is List) {
+      listRaw = raw;
+    }
+
+    final items = _itemsFrom(listRaw);
+    final currentPage =
+        _int(meta?['current_page']) ??
+        _int(paginator?['current_page']) ??
+        requestedPage;
+    final lastPage = _int(meta?['last_page']) ?? _int(paginator?['last_page']);
+    final total = _int(meta?['total']) ?? _int(paginator?['total']);
+    final perPage =
+        _int(meta?['per_page']) ??
+        _int(paginator?['per_page']) ??
+        (items.isEmpty ? 1 : items.length);
+    final nextUrl =
+        _string(paginator?['next_page_url']) ?? _string(links?['next']);
+
+    final hasMore = _hasMore(
+      currentPage: currentPage,
+      lastPage: lastPage,
+      total: total,
+      perPage: perPage,
+      nextUrl: nextUrl,
+    );
+
+    return ActividadesIndexPage(
+      items: items,
+      currentPage: currentPage,
+      lastPage: lastPage,
+      total: total,
+      perPage: perPage,
+      hasMore: hasMore,
+    );
+  }
+
+  static Map<String, dynamic>? _map(dynamic value) {
+    if (value is! Map) return null;
+    return Map<String, dynamic>.from(value);
+  }
+
+  static List<Actividad> _itemsFrom(dynamic value) {
+    if (value is! List) return const <Actividad>[];
+    return value
+        .whereType<Map>()
+        .map((e) => Actividad.fromJson(Map<String, dynamic>.from(e)))
+        .toList();
+  }
+
+  static int? _int(dynamic value) {
+    if (value == null) return null;
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    return int.tryParse(value.toString());
+  }
+
+  static String? _string(dynamic value) {
+    final text = value?.toString().trim() ?? '';
+    if (text.isEmpty || text.toLowerCase() == 'null') return null;
+    return text;
+  }
+
+  static bool _hasMore({
+    required int currentPage,
+    required int? lastPage,
+    required int? total,
+    required int perPage,
+    required String? nextUrl,
+  }) {
+    if (lastPage != null) return currentPage < lastPage;
+    if (total != null && perPage > 0) return currentPage * perPage < total;
+    return nextUrl != null;
+  }
+}
+
 class ActividadesService {
   static String get _base => '${AuthService.baseUrl}/actividades';
   static const String _categoriasCacheKey = 'actividades_categorias_cache_v1';
+  static const int _maxIndexPerPage = 100;
+  static const int _maxIndexItems = 500;
+  static const int _maxIndexPages = 30;
   static const int _maxImageBytes = 4 * 1024 * 1024;
   static const int suspiciousReachedCount = 1000;
   static const int suspiciousParticipantsCount = 5;
@@ -735,41 +856,49 @@ class ActividadesService {
     return issues;
   }
 
-  static List<Actividad> _decodeActividadesList(dynamic raw) {
-    if (raw is Map<String, dynamic>) {
-      final data = raw['data'];
-
-      if (data is Map<String, dynamic>) {
-        final inner = data['data'];
-        if (inner is List) {
-          return inner
-              .whereType<Map>()
-              .map((e) => Actividad.fromJson(Map<String, dynamic>.from(e)))
-              .toList();
-        }
-      }
-
-      if (data is List) {
-        return data
-            .whereType<Map>()
-            .map((e) => Actividad.fromJson(Map<String, dynamic>.from(e)))
-            .toList();
-      }
-    }
-
-    if (raw is List) {
-      return raw
-          .whereType<Map>()
-          .map((e) => Actividad.fromJson(Map<String, dynamic>.from(e)))
-          .toList();
-    }
-
-    return const <Actividad>[];
-  }
-
   static Future<List<Actividad>> fetchIndex({
     required DateTime date,
-    int perPage = 20,
+    int perPage = 50,
+    int? actividadCategoriaId,
+    int? actividadSubcategoriaId,
+    int? unidadId,
+    String? q,
+  }) async {
+    final items = <Actividad>[];
+    final seenIds = <int>{};
+    var pageNumber = 1;
+
+    while (items.length < _maxIndexItems && pageNumber <= _maxIndexPages) {
+      final page = await fetchIndexPage(
+        date: date,
+        page: pageNumber,
+        perPage: perPage,
+        actividadCategoriaId: actividadCategoriaId,
+        actividadSubcategoriaId: actividadSubcategoriaId,
+        unidadId: unidadId,
+        q: q,
+      );
+
+      final countBeforePage = items.length;
+      for (final item in page.items) {
+        if (seenIds.add(item.id)) {
+          items.add(item);
+        }
+        if (items.length >= _maxIndexItems) break;
+      }
+
+      if (!page.hasMore || page.items.isEmpty) break;
+      if (items.length == countBeforePage) break;
+      pageNumber += 1;
+    }
+
+    return items;
+  }
+
+  static Future<ActividadesIndexPage> fetchIndexPage({
+    required DateTime date,
+    int page = 1,
+    int perPage = 50,
     int? actividadCategoriaId,
     int? actividadSubcategoriaId,
     int? unidadId,
@@ -778,10 +907,13 @@ class ActividadesService {
     final headers = await _headersJson();
 
     final qp = <String, String>{
-      'per_page': perPage.clamp(1, 20).toString(),
+      'per_page': perPage.clamp(1, _maxIndexPerPage).toString(),
       'date': _fmtYmd(date),
     };
 
+    if (page > 1) {
+      qp['page'] = page.toString();
+    }
     if (actividadCategoriaId != null && actividadCategoriaId > 0) {
       qp['actividad_categoria_id'] = actividadCategoriaId.toString();
     }
@@ -805,7 +937,7 @@ class ActividadesService {
     }
 
     final raw = jsonDecode(resp.body);
-    return _decodeActividadesList(raw);
+    return ActividadesIndexPage.fromJson(raw, requestedPage: page);
   }
 
   static Future<List<ActividadRef>> fetchUnidadesFiltro() async {

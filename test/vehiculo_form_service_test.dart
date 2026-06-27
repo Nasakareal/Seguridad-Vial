@@ -2,6 +2,29 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:seguridad_vial_app/services/vehiculo_form_service.dart';
 
 void main() {
+  String? validateVehicle({
+    required String tipoServicio,
+    required String? estadoPlacas,
+  }) {
+    return VehiculoFormService.validateVehiculoBeforeSubmit(
+      marca: 'NISSAN',
+      linea: 'VERSA',
+      color: 'BLANCO',
+      tipoServicio: tipoServicio,
+      partesDanadas: 'NINGUNA',
+      tipoGeneral: 'AUTOMOVIL',
+      tipoCarroceria: 'SEDAN',
+      placas: 'ABC123',
+      estadoPlacas: estadoPlacas,
+      serie: '',
+      capacidad: '5',
+      montoDanos: '0',
+      modelo: '2024',
+      tarjetaCirculacionNombre: '',
+      aseguradora: '',
+    );
+  }
+
   test('tipo servicio placa only accepts the closed catalog', () {
     expect(VehiculoFormService.tiposServicioPlaca, const <String>[
       'PARTICULAR',
@@ -39,6 +62,35 @@ void main() {
     expect(
       VehiculoFormService.normalizeTipoServicioPlaca('gobierno'),
       'OFICIAL',
+    );
+  });
+
+  test('servicio publico federal no exige estado de placas', () {
+    expect(
+      validateVehicle(
+        tipoServicio: 'SERVICIO PÚBLICO FEDERAL',
+        estadoPlacas: null,
+      ),
+      isNull,
+    );
+    expect(
+      VehiculoFormService.estadoPlacasParaPayload(
+        placas: 'ABC123',
+        tipoServicio: 'SERVICIO PÚBLICO FEDERAL',
+        estadoPlacas: null,
+      ),
+      'Federal',
+    );
+  });
+
+  test('servicio no federal sigue exigiendo estado de placas', () {
+    expect(
+      validateVehicle(tipoServicio: 'PARTICULAR', estadoPlacas: null),
+      'Si capturas placas, también debes capturar el estado de placas.',
+    );
+    expect(
+      validateVehicle(tipoServicio: 'PARTICULAR', estadoPlacas: 'MICHOACAN'),
+      isNull,
     );
   });
 }

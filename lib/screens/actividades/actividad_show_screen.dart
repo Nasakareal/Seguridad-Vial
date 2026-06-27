@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 
+import '../../app/routes.dart';
 import '../../models/actividad.dart';
 import '../../services/actividad_share_service.dart';
 import '../../services/actividades_service.dart';
+import '../../services/auth_service.dart';
 import '../../widgets/photo_viewer.dart';
 import '../../widgets/safe_network_image.dart';
+import 'actividad_ui_labels.dart';
 import 'widgets/actividad_vehiculo_modal.dart';
 
 class ActividadShowScreen extends StatefulWidget {
@@ -21,6 +24,7 @@ class _ActividadShowScreenState extends State<ActividadShowScreen>
   String? _error;
   Actividad? _actividad;
   bool _bootstrapped = false;
+  bool _isFomentoUser = false;
 
   int? _idFromArgs() {
     final args = ModalRoute.of(context)?.settings.arguments;
@@ -70,10 +74,15 @@ class _ActividadShowScreenState extends State<ActividadShowScreen>
     });
 
     try {
+      var isFomentoUser = false;
+      try {
+        isFomentoUser = await AuthService.isFomentoCulturaVialUser();
+      } catch (_) {}
       final a = await ActividadesService.fetchShow(id);
       if (!mounted) return;
       setState(() {
         _actividad = a;
+        _isFomentoUser = isFomentoUser;
         _loading = false;
       });
     } catch (e) {
@@ -104,6 +113,21 @@ class _ActividadShowScreenState extends State<ActividadShowScreen>
       );
     } finally {
       if (mounted) setState(() => _sharing = false);
+    }
+  }
+
+  Future<void> _edit() async {
+    final a = _actividad;
+    if (a == null) return;
+
+    final changed = await Navigator.pushNamed(
+      context,
+      AppRoutes.actividadesEdit,
+      arguments: {'actividad_id': a.id},
+    );
+
+    if (changed == true && mounted) {
+      await _load();
     }
   }
 
@@ -236,6 +260,11 @@ class _ActividadShowScreenState extends State<ActividadShowScreen>
         title: const Text('Detalle de actividad'),
         actions: [
           IconButton(
+            tooltip: 'Editar',
+            onPressed: a == null ? null : _edit,
+            icon: const Icon(Icons.edit),
+          ),
+          IconButton(
             tooltip: 'Compartir por WhatsApp',
             onPressed: _sharing ? null : _shareWhatsapp,
             icon: _sharing
@@ -281,7 +310,13 @@ class _ActividadShowScreenState extends State<ActividadShowScreen>
                     children: [
                       _kv('ID', '#${a.id}'),
                       _kv('Categoria', a.categoria?.nombre ?? '—'),
-                      _kv('Subcategoria', a.subcategoria?.nombre ?? '—'),
+                      _kv(
+                        'Subcategoria',
+                        ActividadUiLabels.subcategoriaNombre(
+                          a.subcategoria,
+                          isFomentoUser: _isFomentoUser,
+                        ),
+                      ),
                       _kv('Capturo', a.nombre),
                       _kv('Fecha', _displayDate(a.fecha)),
                       _kv('Hora', _displayText(a.hora)),

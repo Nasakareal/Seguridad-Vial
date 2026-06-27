@@ -5,6 +5,7 @@ import 'package:seguridad_vial_app/models/actividad.dart';
 import 'package:seguridad_vial_app/models/actividad_categoria.dart';
 import 'package:seguridad_vial_app/models/actividad_fomento.dart';
 import 'package:seguridad_vial_app/models/actividad_subcategoria.dart';
+import 'package:seguridad_vial_app/screens/actividades/actividad_ui_labels.dart';
 import 'package:seguridad_vial_app/services/actividades_service.dart';
 import 'package:seguridad_vial_app/widgets/normalized_integer_input_formatter.dart';
 
@@ -391,6 +392,36 @@ void main() {
     expect(subcategoria.programasFomento.single.nombre, 'PEATON SEGURO');
   });
 
+  test('uses capacitaciones as default fomento category', () {
+    const categorias = <ActividadCategoria>[
+      ActividadCategoria(id: 1, nombre: 'Operativos'),
+      ActividadCategoria(
+        id: 2,
+        nombre: 'CAPACITACIONES',
+        slug: 'capacitaciones',
+        requiereFomentoCulturaVial: true,
+      ),
+    ];
+
+    expect(ActividadUiLabels.defaultFomentoCategoriaId(categorias), 2);
+  });
+
+  test('shortens talleres de seguridad vial only for fomento users', () {
+    const subcategoria = ActividadSubcategoria(
+      id: 10,
+      nombre: 'Talleres de Seguridad Vial',
+    );
+
+    expect(
+      ActividadUiLabels.subcategoriaNombre(subcategoria, isFomentoUser: true),
+      'Talleres',
+    );
+    expect(
+      ActividadUiLabels.subcategoriaNombre(subcategoria, isFomentoUser: false),
+      'Talleres de Seguridad Vial',
+    );
+  });
+
   test('activity share payload adds hour fallback after date', () {
     final payload = ActividadNativeShareData.fromJson(const <String, dynamic>{
       'texto': 'ACTIVIDAD\nFecha: 2026-04-25\nMunicipio: MORELIA',
@@ -419,6 +450,43 @@ void main() {
     }).withMedia(<String>['original.jpg', 'original.jpg']);
 
     expect(payload.media, <String>['original.jpg']);
+  });
+
+  test('decodes activity index pagination metadata', () {
+    final page = ActividadesIndexPage.fromJson(const <String, dynamic>{
+      'data': <Map<String, dynamic>>[
+        <String, dynamic>{'id': 1, 'actividad_categoria_id': 10},
+      ],
+      'meta': <String, dynamic>{
+        'current_page': 1,
+        'last_page': 2,
+        'per_page': 20,
+        'total': 21,
+      },
+      'links': <String, dynamic>{'next': '/actividades?page=2'},
+    });
+
+    expect(page.items.single.id, 1);
+    expect(page.currentPage, 1);
+    expect(page.hasMore, isTrue);
+  });
+
+  test('decodes nested activity paginator responses', () {
+    final page = ActividadesIndexPage.fromJson(const <String, dynamic>{
+      'data': <String, dynamic>{
+        'current_page': 2,
+        'last_page': 2,
+        'per_page': 20,
+        'total': 21,
+        'data': <Map<String, dynamic>>[
+          <String, dynamic>{'id': 21, 'actividad_categoria_id': 10},
+        ],
+      },
+    });
+
+    expect(page.items.single.id, 21);
+    expect(page.currentPage, 2);
+    expect(page.hasMore, isFalse);
   });
 
   test('sends fomento detail fields using backend names', () {

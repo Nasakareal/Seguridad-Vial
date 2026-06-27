@@ -505,9 +505,10 @@ class _VehiculoEditScreenState extends State<VehiculoEditScreen> {
     _placasCtrl.text = (body['placas'] ?? '').toString();
     _serieCtrl.text = (body['serie'] ?? '').toString();
     _capacidadCtrl.text = (body['capacidad_personas'] ?? '5').toString();
-    _tipoServicioCtrl.text = VehiculoFormService.tipoServicioPlacaValue(
+    final tipoServicio = VehiculoFormService.tipoServicioPlacaValue(
       (body['tipo_servicio'] ?? '').toString(),
     );
+    _tipoServicioCtrl.text = tipoServicio;
     _tarjetaCirculacionNombreCtrl.text =
         (body['tarjeta_circulacion_nombre'] ?? '').toString();
     _aseguradoraCtrl.text =
@@ -540,7 +541,9 @@ class _VehiculoEditScreenState extends State<VehiculoEditScreen> {
         _marcaCtrl.text;
 
     final placasClean = _limpiaPlacas((body['placas'] ?? '').toString());
-    _estadoPlacasSeleccionado = placasClean.isEmpty
+    _estadoPlacasSeleccionado =
+        placasClean.isEmpty ||
+            VehiculoFormService.isTipoServicioPublicoFederal(tipoServicio)
         ? null
         : _canonEstadoValueFromApi((body['estado_placas'] ?? '').toString());
 
@@ -636,9 +639,10 @@ class _VehiculoEditScreenState extends State<VehiculoEditScreen> {
     _placasCtrl.text = (data['placas'] ?? '').toString();
     _serieCtrl.text = (data['serie'] ?? '').toString();
     _capacidadCtrl.text = (data['capacidad_personas'] ?? '5').toString();
-    _tipoServicioCtrl.text = VehiculoFormService.tipoServicioPlacaValue(
+    final tipoServicio = VehiculoFormService.tipoServicioPlacaValue(
       (data['tipo_servicio'] ?? '').toString(),
     );
+    _tipoServicioCtrl.text = tipoServicio;
     _tarjetaCirculacionNombreCtrl.text =
         (data['tarjeta_circulacion_nombre'] ?? '').toString();
     _aseguradoraCtrl.text =
@@ -677,7 +681,9 @@ class _VehiculoEditScreenState extends State<VehiculoEditScreen> {
 
     final placasClean = _limpiaPlacas((data['placas'] ?? '').toString());
     final estadoApi = (data['estado_placas'] ?? '').toString();
-    _estadoPlacasSeleccionado = placasClean.isEmpty
+    _estadoPlacasSeleccionado =
+        placasClean.isEmpty ||
+            VehiculoFormService.isTipoServicioPublicoFederal(tipoServicio)
         ? null
         : _canonEstadoValueFromApi(estadoApi);
 
@@ -840,8 +846,10 @@ class _VehiculoEditScreenState extends State<VehiculoEditScreen> {
       final corralonNombre = _nombreGruaById(_corralonGruaIdSeleccionada);
 
       final placasClean = _limpiaPlacas(_t(_placasCtrl));
-      final estadoClean = VehiculoFormService.normalizeEstadoPlacas(
-        _estadoPlacasSeleccionado,
+      final estadoPlacasPayload = VehiculoFormService.estadoPlacasParaPayload(
+        placas: placasClean,
+        tipoServicio: tipoServicio,
+        estadoPlacas: _estadoPlacasSeleccionado,
       );
 
       final tipoCarroceria = _canonCarroceria(
@@ -856,7 +864,7 @@ class _VehiculoEditScreenState extends State<VehiculoEditScreen> {
         'linea': _t(_lineaCtrl),
         'color': _t(_colorCtrl),
         'placas': placasClean.isEmpty ? null : placasClean,
-        'estado_placas': placasClean.isEmpty ? null : estadoClean,
+        'estado_placas': estadoPlacasPayload,
         'serie': VehiculoFormService.normalizeSerie(_t(_serieCtrl)),
         'capacidad_personas': _toIntOrNull(_t(_capacidadCtrl)) ?? 0,
         'tipo_servicio': tipoServicio,
@@ -921,14 +929,23 @@ class _VehiculoEditScreenState extends State<VehiculoEditScreen> {
     final carroceriasDisponibles = _carroceriasDeTipoGeneral(
       _tipoGeneralSeleccionado,
     );
+    final tipoServicioSeleccionado = VehiculoFormService.tipoServicioPlacaValue(
+      _tipoServicioCtrl.text,
+    );
+    final esServicioPublicoFederal =
+        VehiculoFormService.isTipoServicioPublicoFederal(
+          tipoServicioSeleccionado,
+        );
     final tienePlacas = _limpiaPlacas(_t(_placasCtrl)).isNotEmpty;
+    final requiereEstadoPlacas = tienePlacas && !esServicioPublicoFederal;
     final aseguradoraSeleccionada = _aseguradoraDropdownValue();
     final colorSeleccionado = _colorDropdownValue();
     final coloresDisponibles = ColoresVehiculo.opcionesConActual(
       colorSeleccionado,
     );
 
-    if (!tienePlacas && _estadoPlacasSeleccionado != null) {
+    if ((!tienePlacas || esServicioPublicoFederal) &&
+        _estadoPlacasSeleccionado != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
         setState(() => _estadoPlacasSeleccionado = null);
@@ -1095,7 +1112,36 @@ class _VehiculoEditScreenState extends State<VehiculoEditScreen> {
                       validator: VehiculoFormService.validatePlacas,
                       onChanged: (_) => setState(() {}),
                     ),
-                    if (tienePlacas) ...[
+                    const SizedBox(height: 10),
+                    DropdownButtonFormField<String>(
+                      isExpanded: true,
+                      value: tipoServicioSeleccionado,
+                      decoration: const InputDecoration(
+                        labelText: 'Tipo de servicio de placa *',
+                        prefixIcon: Icon(Icons.miscellaneous_services),
+                      ),
+                      items: VehiculoFormService.tiposServicioPlaca
+                          .map(
+                            (value) => DropdownMenuItem(
+                              value: value,
+                              child: Text(value),
+                            ),
+                          )
+                          .toList(),
+                      onChanged: (value) {
+                        if (value == null) return;
+                        setState(() {
+                          _tipoServicioCtrl.text = value;
+                          if (VehiculoFormService.isTipoServicioPublicoFederal(
+                            value,
+                          )) {
+                            _estadoPlacasSeleccionado = null;
+                          }
+                        });
+                      },
+                      validator: VehiculoFormService.validateTipoServicioPlaca,
+                    ),
+                    if (requiereEstadoPlacas) ...[
                       const SizedBox(height: 10),
                       DropdownButtonFormField<String>(
                         value: _estadoPlacasSeleccionado,
@@ -1118,7 +1164,7 @@ class _VehiculoEditScreenState extends State<VehiculoEditScreen> {
                         onChanged: (v) =>
                             setState(() => _estadoPlacasSeleccionado = v),
                         validator: (v) {
-                          if (!tienePlacas) return null;
+                          if (!requiereEstadoPlacas) return null;
                           if ((v ?? '').trim().isEmpty) {
                             return 'Requerido si capturas placas';
                           }
@@ -1144,30 +1190,6 @@ class _VehiculoEditScreenState extends State<VehiculoEditScreen> {
                         prefixIcon: Icon(Icons.people),
                       ),
                       validator: VehiculoFormService.validateCapacidad,
-                    ),
-                    const SizedBox(height: 10),
-                    DropdownButtonFormField<String>(
-                      isExpanded: true,
-                      value: VehiculoFormService.tipoServicioPlacaValue(
-                        _tipoServicioCtrl.text,
-                      ),
-                      decoration: const InputDecoration(
-                        labelText: 'Tipo de servicio de placa *',
-                        prefixIcon: Icon(Icons.miscellaneous_services),
-                      ),
-                      items: VehiculoFormService.tiposServicioPlaca
-                          .map(
-                            (value) => DropdownMenuItem(
-                              value: value,
-                              child: Text(value),
-                            ),
-                          )
-                          .toList(),
-                      onChanged: (value) {
-                        if (value == null) return;
-                        setState(() => _tipoServicioCtrl.text = value);
-                      },
-                      validator: VehiculoFormService.validateTipoServicioPlaca,
                     ),
                     const SizedBox(height: 10),
                     TextFormField(

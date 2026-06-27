@@ -322,9 +322,10 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
     _placasCtrl.text = (body['placas'] ?? '').toString();
     _serieCtrl.text = (body['serie'] ?? '').toString();
     _capacidadCtrl.text = (body['capacidad_personas'] ?? '5').toString();
-    _tipoServicioCtrl.text = VehiculoFormService.tipoServicioPlacaValue(
+    final tipoServicio = VehiculoFormService.tipoServicioPlacaValue(
       (body['tipo_servicio'] ?? '').toString(),
     );
+    _tipoServicioCtrl.text = tipoServicio;
     _tarjetaCirculacionNombreCtrl.text =
         (body['tarjeta_circulacion_nombre'] ?? '').toString();
     _aseguradoraCtrl.text =
@@ -335,9 +336,12 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
     _montoDanosCtrl.text = (body['monto_danos'] ?? '').toString();
     _partesDanadasCtrl.text = (body['partes_danadas'] ?? '').toString();
     _antecedenteVehiculo = _toBool(body['antecedente_vehiculo']);
-    _estadoPlacasSeleccionado = EstadosRepublica.valueFromAny(
-      (body['estado_placas'] ?? '').toString(),
-    );
+    _estadoPlacasSeleccionado =
+        VehiculoFormService.isTipoServicioPublicoFederal(tipoServicio)
+        ? null
+        : EstadosRepublica.valueFromAny(
+            (body['estado_placas'] ?? '').toString(),
+          );
     _tipoGeneralSeleccionado = _blankToNull(body['tipo_general']);
     _tipoCarroceriaSeleccionada = _blankToNull(body['tipo']);
     _tipoGeneralSeleccionado ??= _inferirTipoGeneralPorCarroceria(
@@ -355,6 +359,10 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
   }
 
   Map<String, dynamic> _draftValues() {
+    final tipoServicio = VehiculoFormService.tipoServicioPlacaValue(
+      _tipoServicioCtrl.text,
+    );
+
     return <String, dynamic>{
       'marca': _marcaCtrl.text,
       'modelo': _modeloCtrl.text,
@@ -363,12 +371,13 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
       'linea': _lineaCtrl.text,
       'color': _colorCtrl.text,
       'placas': _placasCtrl.text,
-      'estado_placas': _estadoPlacasSeleccionado,
+      'estado_placas':
+          VehiculoFormService.isTipoServicioPublicoFederal(tipoServicio)
+          ? null
+          : _estadoPlacasSeleccionado,
       'serie': _serieCtrl.text,
       'capacidad_personas': _capacidadCtrl.text,
-      'tipo_servicio': VehiculoFormService.tipoServicioPlacaValue(
-        _tipoServicioCtrl.text,
-      ),
+      'tipo_servicio': tipoServicio,
       'tarjeta_circulacion_nombre': _tarjetaCirculacionNombreCtrl.text,
       'grua_id': _gruaIdSeleccionada,
       'corralon_id': _corralonGruaIdSeleccionada,
@@ -495,11 +504,23 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
         applied += 1;
       }
 
-      final estado = parsed.estadoPlacas;
-      if ((estado ?? '').trim().isNotEmpty &&
-          _estadoPlacasSeleccionado != estado) {
-        _estadoPlacasSeleccionado = estado;
-        applied += 1;
+      final tipoServicioActual = VehiculoFormService.tipoServicioPlacaValue(
+        _tipoServicioCtrl.text,
+      );
+      if (VehiculoFormService.isTipoServicioPublicoFederal(
+        tipoServicioActual,
+      )) {
+        if (_estadoPlacasSeleccionado != null) {
+          _estadoPlacasSeleccionado = null;
+          applied += 1;
+        }
+      } else {
+        final estado = parsed.estadoPlacas;
+        if ((estado ?? '').trim().isNotEmpty &&
+            _estadoPlacasSeleccionado != estado) {
+          _estadoPlacasSeleccionado = estado;
+          applied += 1;
+        }
       }
 
       final tipoGeneral = parsed.tipoGeneral;
@@ -662,8 +683,10 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
 
       final placasClean = VehiculoFormService.normalizePlacas(_t(_placasCtrl));
 
-      final estadoClean = VehiculoFormService.normalizeEstadoPlacas(
-        _estadoPlacasSeleccionado,
+      final estadoPlacasPayload = VehiculoFormService.estadoPlacasParaPayload(
+        placas: placasClean,
+        tipoServicio: tipoServicio,
+        estadoPlacas: _estadoPlacasSeleccionado,
       );
 
       final payload = <String, dynamic>{
@@ -677,7 +700,7 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
         'linea': _t(_lineaCtrl),
         'color': _t(_colorCtrl),
         'placas': placasClean.isEmpty ? null : placasClean,
-        'estado_placas': placasClean.isEmpty ? null : estadoClean,
+        'estado_placas': estadoPlacasPayload,
         'serie': VehiculoFormService.normalizeSerie(_t(_serieCtrl)),
         'capacidad_personas': _toIntOrNull(_t(_capacidadCtrl)) ?? 0,
         'tipo_servicio': tipoServicio,
@@ -763,14 +786,25 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
     final carroceriasDisponibles = _carroceriasDeTipoGeneral(
       _tipoGeneralSeleccionado,
     );
-    final tienePlacas = _t(_placasCtrl).isNotEmpty;
+    final tipoServicioSeleccionado = VehiculoFormService.tipoServicioPlacaValue(
+      _tipoServicioCtrl.text,
+    );
+    final esServicioPublicoFederal =
+        VehiculoFormService.isTipoServicioPublicoFederal(
+          tipoServicioSeleccionado,
+        );
+    final tienePlacas = VehiculoFormService.normalizePlacas(
+      _t(_placasCtrl),
+    ).isNotEmpty;
+    final requiereEstadoPlacas = tienePlacas && !esServicioPublicoFederal;
     final aseguradoraSeleccionada = _aseguradoraDropdownValue();
     final colorSeleccionado = _colorDropdownValue();
     final coloresDisponibles = ColoresVehiculo.opcionesConActual(
       colorSeleccionado,
     );
 
-    if (!tienePlacas && _estadoPlacasSeleccionado != null) {
+    if ((!tienePlacas || esServicioPublicoFederal) &&
+        _estadoPlacasSeleccionado != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
         setState(() => _estadoPlacasSeleccionado = null);
@@ -958,7 +992,35 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
                   _markDraftChanged();
                 },
               ),
-              if (tienePlacas) ...[
+              const SizedBox(height: 10),
+              DropdownButtonFormField<String>(
+                isExpanded: true,
+                value: tipoServicioSeleccionado,
+                decoration: const InputDecoration(
+                  labelText: 'Tipo de servicio de placa *',
+                  prefixIcon: Icon(Icons.miscellaneous_services),
+                ),
+                items: VehiculoFormService.tiposServicioPlaca
+                    .map(
+                      (value) =>
+                          DropdownMenuItem(value: value, child: Text(value)),
+                    )
+                    .toList(),
+                onChanged: (value) {
+                  if (value == null) return;
+                  setState(() {
+                    _tipoServicioCtrl.text = value;
+                    if (VehiculoFormService.isTipoServicioPublicoFederal(
+                      value,
+                    )) {
+                      _estadoPlacasSeleccionado = null;
+                    }
+                  });
+                  _markDraftChanged();
+                },
+                validator: VehiculoFormService.validateTipoServicioPlaca,
+              ),
+              if (requiereEstadoPlacas) ...[
                 const SizedBox(height: 10),
                 DropdownButtonFormField<String>(
                   value: _estadoPlacasSeleccionado,
@@ -983,7 +1045,7 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
                     _markDraftChanged();
                   },
                   validator: (v) {
-                    if (!tienePlacas) return null;
+                    if (!requiereEstadoPlacas) return null;
                     if ((v ?? '').trim().isEmpty) {
                       return 'Requerido si capturas placas';
                     }
@@ -1009,29 +1071,6 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
                   prefixIcon: Icon(Icons.people),
                 ),
                 validator: VehiculoFormService.validateCapacidad,
-              ),
-              const SizedBox(height: 10),
-              DropdownButtonFormField<String>(
-                isExpanded: true,
-                value: VehiculoFormService.tipoServicioPlacaValue(
-                  _tipoServicioCtrl.text,
-                ),
-                decoration: const InputDecoration(
-                  labelText: 'Tipo de servicio de placa *',
-                  prefixIcon: Icon(Icons.miscellaneous_services),
-                ),
-                items: VehiculoFormService.tiposServicioPlaca
-                    .map(
-                      (value) =>
-                          DropdownMenuItem(value: value, child: Text(value)),
-                    )
-                    .toList(),
-                onChanged: (value) {
-                  if (value == null) return;
-                  setState(() => _tipoServicioCtrl.text = value);
-                  _markDraftChanged();
-                },
-                validator: VehiculoFormService.validateTipoServicioPlaca,
               ),
               const SizedBox(height: 10),
               TextFormField(
