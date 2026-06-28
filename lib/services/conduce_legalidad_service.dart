@@ -7,6 +7,86 @@ import '../models/conduce_legalidad.dart';
 import 'auth_service.dart';
 import 'offline_sync_service.dart';
 
+class ConduceLegalidadNativeShareData {
+  final String title;
+  final String message;
+  final List<String> media;
+  final int? operativoId;
+  final int? capturaId;
+  final String? tipo;
+
+  const ConduceLegalidadNativeShareData({
+    required this.title,
+    required this.message,
+    required this.media,
+    this.operativoId,
+    this.capturaId,
+    this.tipo,
+  });
+
+  factory ConduceLegalidadNativeShareData.fromJson(Map<String, dynamic> raw) {
+    final source = raw['data'] is Map
+        ? Map<String, dynamic>.from(raw['data'] as Map)
+        : raw;
+
+    final media = <String>[];
+    void addMedia(dynamic value) {
+      final text = (value ?? '').toString().trim();
+      if (text.isNotEmpty) media.add(text);
+    }
+
+    addMedia(source['foto']);
+
+    final fotosRaw = source['fotos'];
+    if (fotosRaw is List) {
+      for (final item in fotosRaw) {
+        addMedia(item);
+      }
+    }
+
+    final mediaRaw = source['media'];
+    if (mediaRaw is List) {
+      for (final item in mediaRaw) {
+        addMedia(item);
+      }
+    }
+
+    final seen = <String>{};
+    final cleanMedia = <String>[
+      for (final item in media)
+        if (seen.add(item)) item,
+    ];
+
+    return ConduceLegalidadNativeShareData(
+      title: (source['title'] ?? 'Operativo Conduce con Legalidad')
+          .toString()
+          .trim(),
+      message: (source['texto'] ?? source['message'] ?? '').toString().trim(),
+      media: cleanMedia,
+      operativoId: _readNullableInt(
+        source['operativo_id'] ?? raw['operativo_id'],
+      ),
+      capturaId: _readNullableInt(source['captura_id'] ?? raw['captura_id']),
+      tipo: _readString(source['tipo'] ?? raw['tipo']),
+    );
+  }
+}
+
+int? _readNullableInt(dynamic value) {
+  if (value is int) return value > 0 ? value : null;
+  if (value is num) {
+    final parsed = value.toInt();
+    return parsed > 0 ? parsed : null;
+  }
+  final parsed = int.tryParse((value ?? '').toString().trim()) ?? 0;
+  return parsed > 0 ? parsed : null;
+}
+
+String? _readString(dynamic value) {
+  final text = (value ?? '').toString().trim();
+  return text.isEmpty ? null : text;
+}
+
 class ConduceLegalidadService {
   static const String _path = '/conduce-legalidad';
 
@@ -82,6 +162,35 @@ class ConduceLegalidadService {
     );
     final body = _decodeJson(res);
     _throwIfNotOk(res, body, 'No se pudo eliminar el operativo.');
+  }
+
+  static Future<ConduceLegalidadNativeShareData> fetchOperativoNativeShareData({
+    required int operativoId,
+  }) async {
+    final res = await http.get(
+      Uri.parse(
+        '${AuthService.baseUrl}$_path/operativos/$operativoId/native-share',
+      ),
+      headers: await _headers(),
+    );
+    final body = _decodeJson(res);
+    _throwIfNotOk(res, body, 'No se pudo preparar la tarjeta del operativo.');
+    return ConduceLegalidadNativeShareData.fromJson(body);
+  }
+
+  static Future<ConduceLegalidadNativeShareData> fetchCapturaNativeShareData({
+    required int operativoId,
+    required int capturaId,
+  }) async {
+    final res = await http.get(
+      Uri.parse(
+        '${AuthService.baseUrl}$_path/operativos/$operativoId/capturas/$capturaId/native-share',
+      ),
+      headers: await _headers(),
+    );
+    final body = _decodeJson(res);
+    _throwIfNotOk(res, body, 'No se pudo preparar la tarjeta de la captura.');
+    return ConduceLegalidadNativeShareData.fromJson(body);
   }
 
   static Future<OfflineActionResult> storeCaptura({

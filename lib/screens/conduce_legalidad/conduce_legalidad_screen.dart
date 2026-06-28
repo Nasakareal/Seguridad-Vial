@@ -4,6 +4,7 @@ import '../../app/routes.dart';
 import '../../models/conduce_legalidad.dart';
 import '../../services/auth_service.dart';
 import '../../services/conduce_legalidad_service.dart';
+import '../../services/conduce_legalidad_share_service.dart';
 import '../../widgets/app_drawer.dart';
 import 'conduce_legalidad_operativo_form_screen.dart';
 
@@ -14,10 +15,12 @@ class ConduceLegalidadScreen extends StatefulWidget {
   State<ConduceLegalidadScreen> createState() => _ConduceLegalidadScreenState();
 }
 
-class _ConduceLegalidadScreenState extends State<ConduceLegalidadScreen> {
+class _ConduceLegalidadScreenState extends State<ConduceLegalidadScreen>
+    with WidgetsBindingObserver {
   bool _loading = true;
   bool _canCreateLocal = false;
   int? _deletingOperativoId;
+  int? _sharingOperativoId;
   String? _error;
   ConduceLegalidadMeta? _meta;
   List<ConduceLegalidadOperativo> _operativos = const [];
@@ -25,7 +28,21 @@ class _ConduceLegalidadScreenState extends State<ConduceLegalidadScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     WidgetsBinding.instance.addPostFrameCallback((_) => _load());
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      ConduceLegalidadShareService.onAppResumed();
+    }
   }
 
   Future<void> _load() async {
@@ -64,6 +81,26 @@ class _ConduceLegalidadScreenState extends State<ConduceLegalidadScreen> {
     );
     if (changed == true && mounted) {
       await _load();
+    }
+  }
+
+  Future<void> _shareTotals(ConduceLegalidadOperativo operativo) async {
+    if (_sharingOperativoId != null) return;
+
+    setState(() => _sharingOperativoId = operativo.id);
+    try {
+      await ConduceLegalidadShareService.compartirTotalesOperativo(
+        operativoId: operativo.id,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('No se pudo compartir: $e')));
+    } finally {
+      if (mounted) {
+        setState(() => _sharingOperativoId = null);
+      }
     }
   }
 
@@ -222,7 +259,9 @@ class _ConduceLegalidadScreenState extends State<ConduceLegalidadScreen> {
               operativo: operativo,
               canViewAll: meta?.abilities.canViewAllCapturas ?? false,
               deleting: _deletingOperativoId == operativo.id,
+              sharing: _sharingOperativoId == operativo.id,
               onTap: () => _openShow(operativo.id),
+              onShareTotals: () => _shareTotals(operativo),
               onEdit: () => _openEdit(operativo),
               onDelete: () => _confirmDeleteOperativo(operativo),
             ),
@@ -291,7 +330,9 @@ class _OperativoCard extends StatelessWidget {
   final ConduceLegalidadOperativo operativo;
   final bool canViewAll;
   final bool deleting;
+  final bool sharing;
   final VoidCallback onTap;
+  final VoidCallback onShareTotals;
   final VoidCallback onEdit;
   final VoidCallback onDelete;
 
@@ -299,7 +340,9 @@ class _OperativoCard extends StatelessWidget {
     required this.operativo,
     required this.canViewAll,
     required this.deleting,
+    required this.sharing,
     required this.onTap,
+    required this.onShareTotals,
     required this.onEdit,
     required this.onDelete,
   });
@@ -309,7 +352,7 @@ class _OperativoCard extends StatelessWidget {
     final counts = canViewAll
         ? '${operativo.totalCapturas} capturas'
         : '${operativo.misCapturas} mias';
-    final hasActions = operativo.canEdit || operativo.canDelete;
+    final hasAdminActions = operativo.canEdit || operativo.canDelete;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -356,43 +399,55 @@ class _OperativoCard extends StatelessWidget {
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            if (deleting)
+            if (deleting || sharing)
               const SizedBox(
                 width: 18,
                 height: 18,
                 child: CircularProgressIndicator(strokeWidth: 2),
               )
-            else if (hasActions)
-              PopupMenuButton<String>(
-                tooltip: 'Opciones',
-                onSelected: (value) {
-                  if (value == 'editar') {
-                    onEdit();
-                  } else if (value == 'eliminar') {
-                    onDelete();
-                  }
-                },
-                itemBuilder: (context) => [
-                  if (operativo.canEdit)
-                    const PopupMenuItem<String>(
-                      value: 'editar',
-                      child: ListTile(
-                        contentPadding: EdgeInsets.zero,
-                        leading: Icon(Icons.edit_outlined),
-                        title: Text('Editar'),
+            else ...[
+              if (canViewAll)
+                IconButton(
+                  tooltip: 'Compartir totales',
+                  onPressed: onShareTotals,
+                  visualDensity: VisualDensity.compact,
+                  icon: const Icon(Icons.share_outlined),
+                ),
+              if (hasAdminActions)
+                PopupMenuButton<String>(
+                  tooltip: 'Opciones',
+                  onSelected: (value) {
+                    if (value == 'editar') {
+                      onEdit();
+                    } else if (value == 'eliminar') {
+                      onDelete();
+                    }
+                  },
+                  itemBuilder: (context) => [
+                    if (operativo.canEdit)
+                      const PopupMenuItem<String>(
+                        value: 'editar',
+                        child: ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          leading: Icon(Icons.edit_outlined),
+                          title: Text('Editar'),
+                        ),
                       ),
-                    ),
-                  if (operativo.canDelete)
-                    const PopupMenuItem<String>(
-                      value: 'eliminar',
-                      child: ListTile(
-                        contentPadding: EdgeInsets.zero,
-                        leading: Icon(Icons.delete_outline, color: Colors.red),
-                        title: Text('Eliminar'),
+                    if (operativo.canDelete)
+                      const PopupMenuItem<String>(
+                        value: 'eliminar',
+                        child: ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          leading: Icon(
+                            Icons.delete_outline,
+                            color: Colors.red,
+                          ),
+                          title: Text('Eliminar'),
+                        ),
                       ),
-                    ),
-                ],
-              ),
+                  ],
+                ),
+            ],
             const Icon(Icons.chevron_right),
           ],
         ),

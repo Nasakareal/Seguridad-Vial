@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../app/routes.dart';
 import '../../models/conduce_legalidad.dart';
 import '../../services/conduce_legalidad_service.dart';
+import '../../services/conduce_legalidad_share_service.dart';
 import '../../widgets/safe_network_image.dart';
 
 class ConduceLegalidadShowScreen extends StatefulWidget {
@@ -15,11 +16,13 @@ class ConduceLegalidadShowScreen extends StatefulWidget {
       _ConduceLegalidadShowScreenState();
 }
 
-class _ConduceLegalidadShowScreenState
-    extends State<ConduceLegalidadShowScreen> {
+class _ConduceLegalidadShowScreenState extends State<ConduceLegalidadShowScreen>
+    with WidgetsBindingObserver {
   bool _loading = true;
   bool _updatingEstado = false;
+  bool _sharingTotals = false;
   int? _deletingCapturaId;
+  int? _sharingCapturaId;
   String? _error;
   ConduceLegalidadOperativo? _operativo;
   ConduceLegalidadMeta? _meta;
@@ -27,7 +30,21 @@ class _ConduceLegalidadShowScreenState
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     WidgetsBinding.instance.addPostFrameCallback((_) => _load());
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      ConduceLegalidadShareService.onAppResumed();
+    }
   }
 
   Future<void> _load() async {
@@ -53,6 +70,48 @@ class _ConduceLegalidadShowScreenState
         _error = e.toString();
         _loading = false;
       });
+    }
+  }
+
+  Future<void> _shareTotals() async {
+    final operativo = _operativo;
+    if (operativo == null || _sharingTotals) return;
+
+    setState(() => _sharingTotals = true);
+    try {
+      await ConduceLegalidadShareService.compartirTotalesOperativo(
+        operativoId: operativo.id,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('No se pudo compartir: $e')));
+    } finally {
+      if (mounted) {
+        setState(() => _sharingTotals = false);
+      }
+    }
+  }
+
+  Future<void> _shareCaptura(ConduceLegalidadCaptura captura) async {
+    if (_sharingCapturaId != null) return;
+
+    setState(() => _sharingCapturaId = captura.id);
+    try {
+      await ConduceLegalidadShareService.compartirCaptura(
+        operativoId: widget.operativoId,
+        capturaId: captura.id,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('No se pudo compartir: $e')));
+    } finally {
+      if (mounted) {
+        setState(() => _sharingCapturaId = null);
+      }
     }
   }
 
@@ -201,11 +260,25 @@ class _ConduceLegalidadShowScreenState
     final canClose =
         (_meta?.abilities.canManageOperativos ?? false) &&
         operativo?.estado == 'activo';
+    final canShareTotals =
+        (_meta?.abilities.canViewAllCapturas ?? false) && operativo != null;
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('Operativo'),
         actions: [
+          if (canShareTotals)
+            IconButton(
+              tooltip: 'Compartir totales',
+              onPressed: _sharingTotals ? null : _shareTotals,
+              icon: _sharingTotals
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.share),
+            ),
           if (canClose)
             PopupMenuButton<String>(
               enabled: !_loading && !_updatingEstado,
@@ -296,6 +369,8 @@ class _ConduceLegalidadShowScreenState
             (captura) => _CapturaCard(
               captura: captura,
               deleting: _deletingCapturaId == captura.id,
+              sharing: _sharingCapturaId == captura.id,
+              onShare: () => _shareCaptura(captura),
               onEdit: () => _editCaptura(captura),
               onDelete: () => _confirmDeleteCaptura(captura),
             ),
@@ -365,12 +440,16 @@ class _OperativoHeader extends StatelessWidget {
 class _CapturaCard extends StatelessWidget {
   final ConduceLegalidadCaptura captura;
   final bool deleting;
+  final bool sharing;
+  final VoidCallback onShare;
   final VoidCallback onEdit;
   final VoidCallback onDelete;
 
   const _CapturaCard({
     required this.captura,
     required this.deleting,
+    required this.sharing,
+    required this.onShare,
     required this.onEdit,
     required this.onDelete,
   });
@@ -385,7 +464,7 @@ class _CapturaCard extends StatelessWidget {
       captura.fecha,
       captura.hora,
     ].whereType<String>().where((v) => v.trim().isNotEmpty).join(' ');
-    final hasActions = captura.canEdit || captura.canDelete;
+    final hasAdminActions = captura.canEdit || captura.canDelete;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -413,7 +492,7 @@ class _CapturaCard extends StatelessWidget {
                   timestamp,
                   style: TextStyle(color: Colors.grey.shade700, fontSize: 12),
                 ),
-              if (deleting)
+              if (deleting || sharing)
                 const Padding(
                   padding: EdgeInsets.only(left: 8),
                   child: SizedBox(
@@ -422,40 +501,48 @@ class _CapturaCard extends StatelessWidget {
                     child: CircularProgressIndicator(strokeWidth: 2),
                   ),
                 )
-              else if (hasActions)
-                PopupMenuButton<String>(
-                  tooltip: 'Opciones',
-                  onSelected: (value) {
-                    if (value == 'editar') {
-                      onEdit();
-                    } else if (value == 'eliminar') {
-                      onDelete();
-                    }
-                  },
-                  itemBuilder: (context) => [
-                    if (captura.canEdit)
-                      const PopupMenuItem<String>(
-                        value: 'editar',
-                        child: ListTile(
-                          contentPadding: EdgeInsets.zero,
-                          leading: Icon(Icons.edit_outlined),
-                          title: Text('Editar'),
-                        ),
-                      ),
-                    if (captura.canDelete)
-                      const PopupMenuItem<String>(
-                        value: 'eliminar',
-                        child: ListTile(
-                          contentPadding: EdgeInsets.zero,
-                          leading: Icon(
-                            Icons.delete_outline,
-                            color: Colors.red,
-                          ),
-                          title: Text('Eliminar'),
-                        ),
-                      ),
-                  ],
+              else ...[
+                IconButton(
+                  tooltip: 'Compartir WhatsApp',
+                  onPressed: onShare,
+                  visualDensity: VisualDensity.compact,
+                  icon: const Icon(Icons.share_outlined),
                 ),
+                if (hasAdminActions)
+                  PopupMenuButton<String>(
+                    tooltip: 'Opciones',
+                    itemBuilder: (context) => [
+                      if (captura.canEdit)
+                        const PopupMenuItem<String>(
+                          value: 'editar',
+                          child: ListTile(
+                            contentPadding: EdgeInsets.zero,
+                            leading: Icon(Icons.edit_outlined),
+                            title: Text('Editar'),
+                          ),
+                        ),
+                      if (captura.canDelete)
+                        const PopupMenuItem<String>(
+                          value: 'eliminar',
+                          child: ListTile(
+                            contentPadding: EdgeInsets.zero,
+                            leading: Icon(
+                              Icons.delete_outline,
+                              color: Colors.red,
+                            ),
+                            title: Text('Eliminar'),
+                          ),
+                        ),
+                    ],
+                    onSelected: (value) {
+                      if (value == 'editar') {
+                        onEdit();
+                      } else if (value == 'eliminar') {
+                        onDelete();
+                      }
+                    },
+                  ),
+              ],
             ],
           ),
           if ((captura.lugar ?? '').trim().isNotEmpty) ...[
