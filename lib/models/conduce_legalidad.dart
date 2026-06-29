@@ -14,11 +14,13 @@ class ConduceLegalidadMeta {
   final String operativoNombre;
   final ConduceLegalidadAbilities abilities;
   final List<ConduceLegalidadFundamento> fundamentosCorralon;
+  final List<ConduceLegalidadFundamento> fundamentosPersona;
 
   const ConduceLegalidadMeta({
     required this.operativoNombre,
     required this.abilities,
     required this.fundamentosCorralon,
+    required this.fundamentosPersona,
   });
 
   factory ConduceLegalidadMeta.fromJson(Map<String, dynamic> json) {
@@ -27,12 +29,19 @@ class ConduceLegalidadMeta {
         .map((item) => ConduceLegalidadFundamento.fromJson(_map(item)))
         .where((item) => item.aplicaConduceLegalidadMotos)
         .toList();
+    final fundamentosPersonaPayload = _list(data['fundamentos_persona'])
+        .map((item) => ConduceLegalidadFundamento.fromJson(_map(item)))
+        .where((item) => item.aplicaSancionPersona)
+        .toList();
 
     return ConduceLegalidadMeta(
       operativoNombre:
           _str(data['operativo_nombre']) ?? 'Operativo conduce con legalidad',
       abilities: ConduceLegalidadAbilities.fromJson(_map(data['abilities'])),
       fundamentosCorralon: fundamentos,
+      fundamentosPersona: fundamentosPersonaPayload.isNotEmpty
+          ? fundamentosPersonaPayload
+          : fundamentos.where((item) => item.aplicaSancionPersona).toList(),
     );
   }
 }
@@ -77,12 +86,20 @@ class ConduceLegalidadFundamento {
   final String? articulo;
   final String? fraccion;
   final String? inciso;
+  final String? ambitoVehiculo;
+  final String? ambitoVehiculoTexto;
   final String? referenciaLegalCorta;
   final int puntos;
   final int? multaUmaMin;
   final int? multaUmaMax;
   final String? multaUmaTexto;
+  final bool amonestacion;
+  final bool arrestoPersona;
+  final bool suspensionLicencia;
+  final bool cancelacionLicencia;
+  final bool depositoSiSinPersonaHabilitada;
   final bool retencionVehiculo;
+  final String? sancionPersonaTexto;
   final String? resumenSanciones;
   final String? etiquetaOperativa;
   final String? textoOperativo;
@@ -97,12 +114,20 @@ class ConduceLegalidadFundamento {
     this.articulo,
     this.fraccion,
     this.inciso,
+    this.ambitoVehiculo,
+    this.ambitoVehiculoTexto,
     this.referenciaLegalCorta,
     required this.puntos,
     this.multaUmaMin,
     this.multaUmaMax,
     this.multaUmaTexto,
+    this.amonestacion = false,
+    this.arrestoPersona = false,
+    this.suspensionLicencia = false,
+    this.cancelacionLicencia = false,
+    this.depositoSiSinPersonaHabilitada = false,
     required this.retencionVehiculo,
+    this.sancionPersonaTexto,
     this.resumenSanciones,
     this.etiquetaOperativa,
     this.textoOperativo,
@@ -119,12 +144,22 @@ class ConduceLegalidadFundamento {
       articulo: _str(json['articulo']),
       fraccion: _str(json['fraccion']),
       inciso: _str(json['inciso']),
+      ambitoVehiculo: _str(json['ambito_vehiculo']),
+      ambitoVehiculoTexto: _str(json['ambito_vehiculo_texto']),
       referenciaLegalCorta: _str(json['referencia_legal_corta']),
       puntos: _asInt(json['puntos']),
       multaUmaMin: _nullableInt(json['multa_uma_min']),
       multaUmaMax: _nullableInt(json['multa_uma_max']),
       multaUmaTexto: _str(json['multa_uma_texto']),
+      amonestacion: _bool(json['amonestacion']),
+      arrestoPersona: _bool(json['arresto_persona']),
+      suspensionLicencia: _bool(json['suspension_licencia']),
+      cancelacionLicencia: _bool(json['cancelacion_licencia']),
+      depositoSiSinPersonaHabilitada: _bool(
+        json['deposito_si_sin_persona_habilitada'],
+      ),
       retencionVehiculo: _bool(json['retencion_vehiculo']),
+      sancionPersonaTexto: _str(json['sancion_persona_texto']),
       resumenSanciones: _str(json['resumen_sanciones']),
       etiquetaOperativa: _str(json['etiqueta_operativa']),
       textoOperativo: _str(json['texto_operativo']),
@@ -175,6 +210,48 @@ class ConduceLegalidadFundamento {
     }
 
     return true;
+  }
+
+  bool aplicaParaTipoGeneral(String? tipoGeneral) {
+    final tipo = (tipoGeneral ?? '').trim();
+    final ambito = (ambitoVehiculo ?? '').trim();
+    if (tipo.isEmpty || ambito.isEmpty || ambito == 'general') return true;
+
+    if (tipo == 'motocicleta') return ambito == 'motocicleta';
+    if (tipo == 'bicicleta' || tipo == 'no_motorizado') {
+      return ambito == 'no_motorizado';
+    }
+    if (tipo == 'camion' || tipo == 'remolque') {
+      return ambito == 'carga' || ambito == 'sustancias_peligrosas';
+    }
+
+    return ambito == 'automovil';
+  }
+
+  String get sancionResumen {
+    final resumen = (resumenSanciones ?? '').trim();
+    if (resumen.isNotEmpty) return resumen;
+
+    final partes = <String>[
+      if (amonestacion) 'amonestacion',
+      if (arrestoPersona) 'arresto',
+      if (suspensionLicencia) 'suspension',
+      if (cancelacionLicencia) 'cancelacion',
+      if (puntos > 0) '$puntos puntos',
+      if (retencionVehiculo) 'deposito',
+      if (!retencionVehiculo && depositoSiSinPersonaHabilitada)
+        'deposito condicional',
+    ];
+
+    return partes.isEmpty ? 'sin sancion registrada' : partes.join(' + ');
+  }
+
+  bool get aplicaSancionPersona {
+    return amonestacion ||
+        arrestoPersona ||
+        suspensionLicencia ||
+        cancelacionLicencia ||
+        puntos > 0;
   }
 
   static String _normalizeFilterText(String value) {
@@ -535,6 +612,10 @@ class ConduceLegalidadPersona {
   final String? vigenciaLicencia;
   final bool permanente;
   final String? rawLicenciaQr;
+  final int? licenciaPuntoInfraccionId;
+  final String? infraccionCodigo;
+  final String? fundamentoLegal;
+  final ConduceLegalidadFundamento? infraccion;
   final String? observaciones;
 
   const ConduceLegalidadPersona({
@@ -551,6 +632,10 @@ class ConduceLegalidadPersona {
     this.vigenciaLicencia,
     this.permanente = false,
     this.rawLicenciaQr,
+    this.licenciaPuntoInfraccionId,
+    this.infraccionCodigo,
+    this.fundamentoLegal,
+    this.infraccion,
     this.observaciones,
   });
 
@@ -569,6 +654,14 @@ class ConduceLegalidadPersona {
       vigenciaLicencia: _str(json['vigencia_licencia']),
       permanente: _bool(json['permanente']),
       rawLicenciaQr: _str(json['raw_licencia_qr']),
+      licenciaPuntoInfraccionId: _nullableInt(
+        json['licencia_punto_infraccion_id'],
+      ),
+      infraccionCodigo: _str(json['infraccion_codigo']),
+      fundamentoLegal: _str(json['fundamento_legal']),
+      infraccion: json['infraccion'] is Map
+          ? ConduceLegalidadFundamento.fromJson(_map(json['infraccion']))
+          : null,
       observaciones: _str(json['observaciones']),
     );
   }
@@ -586,6 +679,7 @@ class ConduceLegalidadPersona {
     'vigencia_licencia': permanente ? null : vigenciaLicencia,
     'permanente': permanente,
     'raw_licencia_qr': rawLicenciaQr,
+    'licencia_punto_infraccion_id': licenciaPuntoInfraccionId,
     'observaciones': observaciones,
   }..removeWhere((_, value) => value == null);
 }
@@ -594,6 +688,8 @@ class ConduceLegalidadUserRef {
   final int id;
   final String nombre;
   final String? email;
+  final String? placa;
+  final String? adscripcion;
   final int? unidadId;
   final int? delegacionId;
 
@@ -601,6 +697,8 @@ class ConduceLegalidadUserRef {
     required this.id,
     required this.nombre,
     this.email,
+    this.placa,
+    this.adscripcion,
     this.unidadId,
     this.delegacionId,
   });
@@ -614,6 +712,15 @@ class ConduceLegalidadUserRef {
       id: id,
       nombre: _str(json['name'] ?? json['nombre']) ?? 'Usuario #$id',
       email: _str(json['email']),
+      placa: _str(
+        json['placa'] ??
+            json['numero_placa'] ??
+            json['placa_agente'] ??
+            json['numero_placa_agente'],
+      ),
+      adscripcion: _str(
+        json['adscripcion'] ?? json['adscripción'] ?? json['unidad_nombre'],
+      ),
       unidadId: _nullableInt(json['unidad_id']),
       delegacionId: _nullableInt(json['delegacion_id']),
     );

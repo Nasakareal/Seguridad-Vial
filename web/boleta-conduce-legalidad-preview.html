@@ -1,0 +1,326 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Boleta Conduce con Legalidad</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #111;
+      --paper: #fff;
+      --line: #111;
+      --screen-bg: #eef1f5;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: var(--screen-bg);
+      color: var(--ink);
+      font-family: Arial, Helvetica, sans-serif;
+    }
+
+    .toolbar {
+      position: sticky;
+      top: 0;
+      z-index: 2;
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      justify-content: center;
+      padding: 12px;
+      background: #111827;
+      color: #fff;
+      box-shadow: 0 2px 12px rgb(0 0 0 / 18%);
+    }
+
+    .toolbar strong {
+      font-size: 14px;
+    }
+
+    .toolbar button {
+      border: 1px solid rgb(255 255 255 / 28%);
+      border-radius: 6px;
+      background: #fff;
+      color: #111827;
+      padding: 8px 12px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    main {
+      display: grid;
+      place-items: start center;
+      padding: 22px 12px 36px;
+    }
+
+    .ticket {
+      width: min(80mm, calc(100vw - 24px));
+      background: var(--paper);
+      border: 1px solid var(--line);
+      box-shadow: 0 12px 36px rgb(0 0 0 / 16%);
+      padding: 4mm;
+      font-family: "Courier New", Courier, monospace;
+      font-size: 11px;
+      line-height: 1.25;
+    }
+
+    .center {
+      text-align: center;
+    }
+
+    .title {
+      font-weight: 900;
+      font-size: 13px;
+      line-height: 1.15;
+      text-transform: uppercase;
+    }
+
+    .subtitle {
+      margin-top: 2px;
+      font-weight: 800;
+      text-transform: uppercase;
+    }
+
+    .divider {
+      margin: 9px 0;
+      border-top: 1px solid var(--line);
+    }
+
+    .section {
+      margin-bottom: 7px;
+      text-align: center;
+      font-weight: 900;
+      text-transform: uppercase;
+    }
+
+    .row {
+      display: grid;
+      grid-template-columns: 31mm minmax(0, 1fr);
+      gap: 2mm;
+      margin-bottom: 4px;
+    }
+
+    .label,
+    .block-label {
+      font-weight: 800;
+    }
+
+    .block {
+      margin-bottom: 8px;
+    }
+
+    .value {
+      overflow-wrap: anywhere;
+    }
+
+    .signature {
+      height: 28px;
+      border-bottom: 1px solid var(--line);
+      margin-bottom: 6px;
+    }
+
+    .footer {
+      margin-top: 8px;
+      text-align: center;
+      font-weight: 800;
+      text-transform: uppercase;
+    }
+
+    @page {
+      size: 80mm auto;
+      margin: 4mm;
+    }
+
+    @media print {
+      body {
+        background: #fff;
+      }
+
+      .toolbar {
+        display: none;
+      }
+
+      main {
+        display: block;
+        padding: 0;
+      }
+
+      .ticket {
+        width: 72mm;
+        border: 0;
+        box-shadow: none;
+        padding: 0;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="toolbar">
+    <strong>Previsualizacion local de boleta</strong>
+    <button type="button" onclick="window.print()">Imprimir</button>
+  </div>
+
+  <main>
+    <article class="ticket" aria-label="Boleta de infraccion">
+      <header class="center">
+        <div class="title">Secretaria de Seguridad Publica</div>
+        <div class="subtitle">Coordinación del Agrupamiento de Seguridad Vial</div>
+        <div class="divider"></div>
+        <div class="title">Boleta de Infraccion</div>
+        <div class="subtitle">Operativo Conduce con Legalidad</div>
+      </header>
+
+      <div class="divider"></div>
+
+      <div class="row">
+        <div class="label">Folio interno:</div>
+        <div class="value">CL-1-125</div>
+      </div>
+      <div class="row">
+        <div class="label">Municipio:</div>
+        <div class="value">Morelia</div>
+      </div>
+      <div class="row">
+        <div class="label">Fecha:</div>
+        <div class="value">2026-06-28</div>
+      </div>
+      <div class="row">
+        <div class="label">Hora:</div>
+        <div class="value">07:30</div>
+      </div>
+      <div class="block">
+        <div class="block-label">Lugar:</div>
+        <div class="value">Av. Camelinas y Ventura Puente</div>
+      </div>
+
+      <div class="divider"></div>
+      <div class="section">I. Fundamento Juridico</div>
+
+      <div class="block">
+        <div class="block-label">a) Articulo(s) que preven la infraccion:</div>
+        <div class="value">
+          Articulos 402, 700 y 702 del Reglamento de la Ley de Movilidad y
+          Seguridad Vial del Estado de Michoacan.
+        </div>
+      </div>
+
+      <div class="block">
+        <div class="block-label">b) Articulo(s) que establecen la sancion:</div>
+        <div class="value">
+          Articulos 402, 700 y 702 del Reglamento de la Ley de Movilidad y
+          Seguridad Vial del Estado de Michoacan.
+          Sancion aplicable: remision o retiro del vehiculo al deposito.
+        </div>
+      </div>
+
+      <div class="divider"></div>
+      <div class="section">II. Motivacion</div>
+
+      <div class="row">
+        <div class="label">Dia:</div>
+        <div class="value">2026-06-28</div>
+      </div>
+      <div class="row">
+        <div class="label">Hora:</div>
+        <div class="value">07:30</div>
+      </div>
+      <div class="block">
+        <div class="block-label">Lugar:</div>
+        <div class="value">Av. Camelinas y Ventura Puente</div>
+      </div>
+      <div class="block">
+        <div class="block-label">Descripcion breve de la conducta:</div>
+        <div class="value">
+          Se detecta motocicleta circulando durante operativo Conduce con
+          Legalidad; la persona conductora no exhibe licencia vigente ni
+          presenta persona habilitada inmediata.
+        </div>
+      </div>
+
+      <div class="divider"></div>
+      <div class="section">Persona Infractora</div>
+      <div class="row">
+        <div class="label">Nombre:</div>
+        <div class="value">Juan Perez Lopez</div>
+      </div>
+      <div class="block">
+        <div class="block-label">Domicilio:</div>
+        <div class="value">Calle Ejemplo 123, Morelia, Michoacan</div>
+      </div>
+
+      <div class="divider"></div>
+      <div class="section">Vehiculo</div>
+      <div class="row">
+        <div class="label">Placas/permiso:</div>
+        <div class="value">ABC1D</div>
+      </div>
+      <div class="row">
+        <div class="label">Estado placas:</div>
+        <div class="value">Michoacan</div>
+      </div>
+      <div class="block">
+        <div class="block-label">Descripcion:</div>
+        <div class="value">Italika FT150 2024 Motocicleta Negro. Serie: 3SCPFTDEMO0000001. Servicio: Particular.</div>
+      </div>
+
+      <div class="divider"></div>
+      <div class="section">Liberacion del Vehiculo</div>
+      <div class="block">
+        <div class="block-label">Tramite:</div>
+        <div class="value">
+          Para iniciar el tramite de liberacion del vehiculo, la persona
+          interesada debera acudir a la Direccion de Justicia Civica y
+          Mediacion Administrativa, de lunes a viernes de 09:00 a 16:00 horas,
+          con identificacion oficial y documentacion que acredite propiedad o
+          legitima posesion. La entrega fisica se realizara conforme al
+          deposito vehicular autorizado que corresponda.
+        </div>
+      </div>
+
+      <div class="divider"></div>
+      <div class="section">Licencia o Permiso</div>
+      <div class="row">
+        <div class="label">Tipo:</div>
+        <div class="value">Motociclista</div>
+      </div>
+      <div class="row">
+        <div class="label">Numero:</div>
+        <div class="value">No proporcionado</div>
+      </div>
+      <div class="row">
+        <div class="label">Estado:</div>
+        <div class="value">No exhibe</div>
+      </div>
+      <div class="row">
+        <div class="label">Vigencia:</div>
+        <div class="value">No capturado</div>
+      </div>
+
+      <div class="divider"></div>
+      <div class="section">Agente</div>
+      <div class="row">
+        <div class="label">Nombre:</div>
+        <div class="value">Agente de Seguridad Vial</div>
+      </div>
+      <div class="row">
+        <div class="label">No. placa:</div>
+        <div class="value">Pendiente de captura en Personal</div>
+      </div>
+      <div class="block">
+        <div class="block-label">Adscripcion:</div>
+        <div class="value">Unidad de Atencion a Siniestros</div>
+      </div>
+
+      <div class="divider"></div>
+      <div class="block-label">Firma autografa/electronica:</div>
+      <div class="signature"></div>
+      <div class="footer">Previsualizacion local</div>
+    </article>
+  </main>
+</body>
+</html>

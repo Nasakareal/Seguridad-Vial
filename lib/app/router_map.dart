@@ -86,6 +86,7 @@ import '../screens/constancias_manejo/constancia_manejo_scan_screen.dart';
 import '../screens/licencias_puntos/licencias_puntos_screen.dart';
 import '../screens/licencias_puntos/licencias_puntos_public_screen.dart';
 import '../screens/conduce_legalidad/conduce_legalidad_captura_screen.dart';
+import '../screens/conduce_legalidad/conduce_legalidad_boleta_screen.dart';
 import '../screens/conduce_legalidad/conduce_legalidad_operativo_form_screen.dart';
 import '../screens/conduce_legalidad/conduce_legalidad_screen.dart';
 import '../screens/conduce_legalidad/conduce_legalidad_show_screen.dart';
@@ -274,8 +275,31 @@ ConduceLegalidadCaptura? _readConduceLegalidadCapturaFromArgs(Object? args) {
   return null;
 }
 
+ConduceLegalidadOperativo? _readConduceLegalidadOperativoFromArgs(
+  Object? args,
+) {
+  if (args is Map && args['operativo'] is ConduceLegalidadOperativo) {
+    return args['operativo'] as ConduceLegalidadOperativo;
+  }
+  return null;
+}
+
+int? _readCapturaIdFromArgs(Object? args) {
+  if (args == null) return null;
+  if (args is int) return args;
+  if (args is String) return int.tryParse(args);
+  if (args is Map) {
+    final raw = args['capturaId'] ?? args['captura_id'];
+    if (raw is int) return raw;
+    if (raw is String) return int.tryParse(raw);
+  }
+  return null;
+}
+
 Route<dynamic>? onGenerateRoute(RouteSettings settings) {
   final name = settings.name ?? '';
+  final uri = Uri.tryParse(name);
+  final routePath = uri?.path ?? name;
 
   if (name == AppRoutes.accidentesEdit) {
     final id = _readHechoIdFromArgs(settings.arguments);
@@ -348,6 +372,36 @@ Route<dynamic>? onGenerateRoute(RouteSettings settings) {
       builder: (_) => ConduceLegalidadCapturaScreen(
         operativoId: id,
         initialCaptura: captura,
+      ),
+      settings: settings,
+    );
+  }
+
+  if (routePath == AppRoutes.conduceLegalidadBoleta) {
+    final args = settings.arguments;
+    final operativo = _readConduceLegalidadOperativoFromArgs(args);
+    final captura = _readConduceLegalidadCapturaFromArgs(args);
+    final operativoId =
+        _readOperativoIdFromArgs(args) ??
+        int.tryParse(uri?.queryParameters['operativo'] ?? '') ??
+        int.tryParse(uri?.queryParameters['operativoId'] ?? '');
+    final capturaId =
+        _readCapturaIdFromArgs(args) ??
+        int.tryParse(uri?.queryParameters['captura'] ?? '') ??
+        int.tryParse(uri?.queryParameters['capturaId'] ?? '');
+    final preview = const {
+      '1',
+      'true',
+      'si',
+    }.contains((uri?.queryParameters['preview'] ?? '').trim().toLowerCase());
+
+    return MaterialPageRoute(
+      builder: (_) => ConduceLegalidadBoletaScreen(
+        initialOperativo: operativo,
+        initialCaptura: captura,
+        operativoId: operativoId,
+        capturaId: capturaId,
+        preview: preview,
       ),
       settings: settings,
     );

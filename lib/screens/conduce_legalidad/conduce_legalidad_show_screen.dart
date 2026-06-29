@@ -1,4 +1,11 @@
+import 'dart:io';
+
+import 'package:file_saver/file_saver.dart';
 import 'package:flutter/material.dart';
+import 'package:open_filex/open_filex.dart';
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../../app/routes.dart';
 import '../../models/conduce_legalidad.dart';
@@ -23,6 +30,7 @@ class _ConduceLegalidadShowScreenState extends State<ConduceLegalidadShowScreen>
   bool _sharingTotals = false;
   int? _deletingCapturaId;
   int? _sharingCapturaId;
+  int? _downloadingIphCapturaId;
   String? _error;
   ConduceLegalidadOperativo? _operativo;
   ConduceLegalidadMeta? _meta;
@@ -135,6 +143,98 @@ class _ConduceLegalidadShowScreenState extends State<ConduceLegalidadShowScreen>
     if (changed == true && mounted) {
       await _load();
     }
+  }
+
+  Future<void> _openBoleta(ConduceLegalidadCaptura captura) async {
+    final operativo = _operativo;
+    await Navigator.pushNamed(
+      context,
+      AppRoutes.conduceLegalidadBoleta,
+      arguments: {
+        'operativoId': widget.operativoId,
+        'capturaId': captura.id,
+        if (operativo != null) 'operativo': operativo,
+        'captura': captura,
+      },
+    );
+  }
+
+  Future<void> _downloadIph(ConduceLegalidadCaptura captura) async {
+    if (_downloadingIphCapturaId != null) return;
+
+    setState(() => _downloadingIphCapturaId = captura.id);
+    try {
+      final bytes = await ConduceLegalidadService.downloadIphPuestaDisposicion(
+        operativoId: widget.operativoId,
+        capturaId: captura.id,
+      );
+
+      final fileName = _safeDocxFileName(
+        'iph_puesta_disposicion_cl_${widget.operativoId}_${captura.id}.docx',
+      );
+      final baseName = p.basenameWithoutExtension(fileName);
+      String? savedPath;
+
+      try {
+        savedPath = await FileSaver.instance.saveFile(
+          name: baseName,
+          bytes: bytes,
+          ext: 'docx',
+          mimeType: MimeType.microsoftWord,
+        );
+      } catch (_) {
+        savedPath = null;
+      }
+
+      final file = await _writeTemporaryDocx(bytes: bytes, fileName: fileName);
+      if (!mounted) return;
+
+      final savedMessage = (savedPath ?? '').trim().isNotEmpty
+          ? 'IPH guardado. Ruta: $savedPath'
+          : 'IPH descargado.';
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(savedMessage)));
+
+      final result = await OpenFilex.open(file.path);
+      if (result.type != ResultType.done) {
+        await Share.shareXFiles([
+          XFile(
+            file.path,
+            mimeType:
+                'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+          ),
+        ], text: 'Informe Policial Homologado $fileName');
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('No se pudo descargar el IPH: $e')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _downloadingIphCapturaId = null);
+      }
+    }
+  }
+
+  Future<File> _writeTemporaryDocx({
+    required List<int> bytes,
+    required String fileName,
+  }) async {
+    final dir = await getTemporaryDirectory();
+    final uniqueName =
+        '${DateTime.now().millisecondsSinceEpoch}_${p.basename(fileName)}';
+    final file = File(p.join(dir.path, uniqueName));
+    await file.writeAsBytes(bytes, flush: true);
+    return file;
+  }
+
+  String _safeDocxFileName(String value) {
+    var clean = value.trim().replaceAll(RegExp(r'[\\/:*?"<>|]'), '_');
+    if (clean.isEmpty) clean = 'iph_puesta_disposicion.docx';
+    if (!clean.toLowerCase().endsWith('.docx')) clean = '$clean.docx';
+    return clean;
   }
 
   Future<void> _confirmDeleteCaptura(ConduceLegalidadCaptura captura) async {
@@ -370,7 +470,10 @@ class _ConduceLegalidadShowScreenState extends State<ConduceLegalidadShowScreen>
               captura: captura,
               deleting: _deletingCapturaId == captura.id,
               sharing: _sharingCapturaId == captura.id,
+              downloadingIph: _downloadingIphCapturaId == captura.id,
+              onTicket: () => _openBoleta(captura),
               onShare: () => _shareCaptura(captura),
+              onDownloadIph: () => _downloadIph(captura),
               onEdit: () => _editCaptura(captura),
               onDelete: () => _confirmDeleteCaptura(captura),
             ),
@@ -441,7 +544,10 @@ class _CapturaCard extends StatelessWidget {
   final ConduceLegalidadCaptura captura;
   final bool deleting;
   final bool sharing;
+  final bool downloadingIph;
+  final VoidCallback onTicket;
   final VoidCallback onShare;
+  final VoidCallback onDownloadIph;
   final VoidCallback onEdit;
   final VoidCallback onDelete;
 
@@ -449,7 +555,10 @@ class _CapturaCard extends StatelessWidget {
     required this.captura,
     required this.deleting,
     required this.sharing,
+    required this.downloadingIph,
+    required this.onTicket,
     required this.onShare,
+    required this.onDownloadIph,
     required this.onEdit,
     required this.onDelete,
   });
@@ -464,7 +573,7 @@ class _CapturaCard extends StatelessWidget {
       captura.fecha,
       captura.hora,
     ].whereType<String>().where((v) => v.trim().isNotEmpty).join(' ');
-    final hasAdminActions = captura.canEdit || captura.canDelete;
+    final busy = deleting || sharing || downloadingIph;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -487,12 +596,7 @@ class _CapturaCard extends StatelessWidget {
                   style: const TextStyle(fontWeight: FontWeight.w900),
                 ),
               ),
-              if (timestamp.isNotEmpty)
-                Text(
-                  timestamp,
-                  style: TextStyle(color: Colors.grey.shade700, fontSize: 12),
-                ),
-              if (deleting || sharing)
+              if (busy)
                 const Padding(
                   padding: EdgeInsets.only(left: 8),
                   child: SizedBox(
@@ -503,48 +607,70 @@ class _CapturaCard extends StatelessWidget {
                 )
               else ...[
                 IconButton(
+                  tooltip: 'Boleta',
+                  onPressed: onTicket,
+                  visualDensity: VisualDensity.compact,
+                  icon: const Icon(Icons.receipt_long_outlined),
+                ),
+                IconButton(
                   tooltip: 'Compartir WhatsApp',
                   onPressed: onShare,
                   visualDensity: VisualDensity.compact,
                   icon: const Icon(Icons.share_outlined),
                 ),
-                if (hasAdminActions)
-                  PopupMenuButton<String>(
-                    tooltip: 'Opciones',
-                    itemBuilder: (context) => [
-                      if (captura.canEdit)
-                        const PopupMenuItem<String>(
-                          value: 'editar',
-                          child: ListTile(
-                            contentPadding: EdgeInsets.zero,
-                            leading: Icon(Icons.edit_outlined),
-                            title: Text('Editar'),
-                          ),
+                PopupMenuButton<String>(
+                  tooltip: 'Opciones',
+                  itemBuilder: (context) => [
+                    const PopupMenuItem<String>(
+                      value: 'iph',
+                      child: ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading: Icon(Icons.description_outlined),
+                        title: Text('Descargar IPH'),
+                      ),
+                    ),
+                    if (captura.canEdit)
+                      const PopupMenuItem<String>(
+                        value: 'editar',
+                        child: ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          leading: Icon(Icons.edit_outlined),
+                          title: Text('Editar'),
                         ),
-                      if (captura.canDelete)
-                        const PopupMenuItem<String>(
-                          value: 'eliminar',
-                          child: ListTile(
-                            contentPadding: EdgeInsets.zero,
-                            leading: Icon(
-                              Icons.delete_outline,
-                              color: Colors.red,
-                            ),
-                            title: Text('Eliminar'),
+                      ),
+                    if (captura.canDelete)
+                      const PopupMenuItem<String>(
+                        value: 'eliminar',
+                        child: ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          leading: Icon(
+                            Icons.delete_outline,
+                            color: Colors.red,
                           ),
+                          title: Text('Eliminar'),
                         ),
-                    ],
-                    onSelected: (value) {
-                      if (value == 'editar') {
-                        onEdit();
-                      } else if (value == 'eliminar') {
-                        onDelete();
-                      }
-                    },
-                  ),
+                      ),
+                  ],
+                  onSelected: (value) {
+                    if (value == 'iph') {
+                      onDownloadIph();
+                    } else if (value == 'editar') {
+                      onEdit();
+                    } else if (value == 'eliminar') {
+                      onDelete();
+                    }
+                  },
+                ),
               ],
             ],
           ),
+          if (timestamp.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Text(
+              timestamp,
+              style: TextStyle(color: Colors.grey.shade700, fontSize: 12),
+            ),
+          ],
           if ((captura.lugar ?? '').trim().isNotEmpty) ...[
             const SizedBox(height: 8),
             Text(captura.lugar!, style: TextStyle(color: Colors.grey.shade700)),
@@ -705,6 +831,13 @@ class _PersonLine extends StatelessWidget {
                   Text(
                     'Licencia ${persona.numeroLicencia}',
                     style: TextStyle(color: Colors.grey.shade700),
+                  ),
+                if (persona.infraccion != null)
+                  Text(
+                    '${persona.infraccion!.display} (${persona.infraccion!.sancionResumen})',
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(color: Color(0xFF92400E)),
                   ),
               ],
             ),

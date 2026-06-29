@@ -98,6 +98,7 @@ class AppRoutes {
   static const String conduceLegalidadCreate = '/conduce-legalidad/create';
   static const String conduceLegalidadShow = '/conduce-legalidad/show';
   static const String conduceLegalidadCaptura = '/conduce-legalidad/captura';
+  static const String conduceLegalidadBoleta = '/conduce-legalidad/boleta';
 
   static const String dispositivos = '/dispositivos';
   static const String dispositivosCreate = '/dispositivos/create';

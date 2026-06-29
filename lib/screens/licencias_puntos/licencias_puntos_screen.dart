@@ -1217,7 +1217,10 @@ class _DiscountActionCard extends StatelessWidget {
                   .map(
                     (item) => DropdownMenuItem<int>(
                       value: item.id,
-                      child: Text('${item.nombre} (-${item.puntos})'),
+                      child: Text(
+                        '${item.nombre} (${item.sancionResumen})',
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
                   )
                   .toList(),
@@ -1402,6 +1405,7 @@ class _AutomaticDiscountNotice extends StatelessWidget {
     final puntos = infraccion?.puntos ?? 0;
     final nombre = infraccion?.nombre ?? 'Selecciona una penalización';
     final fundamento = infraccion?.fundamentoLegal.trim() ?? '';
+    final sancion = infraccion?.sancionResumen.trim() ?? '';
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(12),
@@ -1421,7 +1425,7 @@ class _AutomaticDiscountNotice extends StatelessWidget {
               children: [
                 Text(
                   puntos > 0
-                      ? '$nombre resta $puntos punto${puntos == 1 ? '' : 's'} automáticamente. Ese valor viene del catálogo en Admin Settings.'
+                      ? '$nombre resta $puntos punto${puntos == 1 ? '' : 's'} automaticamente. Sancion: $sancion.'
                       : 'Selecciona la penalización. Los puntos se toman del catálogo en Admin Settings.',
                   style: const TextStyle(
                     color: Color(0xFF7F1D1D),

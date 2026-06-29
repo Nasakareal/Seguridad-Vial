@@ -478,6 +478,13 @@ class LicenciaPuntoInfraccion {
   final int puntos;
   final String descripcion;
   final String fundamentoLegal;
+  final bool amonestacion;
+  final bool arrestoPersona;
+  final bool suspensionLicencia;
+  final bool cancelacionLicencia;
+  final bool retencionVehiculo;
+  final String sancionPersonaTexto;
+  final String resumenSanciones;
 
   const LicenciaPuntoInfraccion({
     required this.id,
@@ -486,6 +493,13 @@ class LicenciaPuntoInfraccion {
     required this.puntos,
     required this.descripcion,
     required this.fundamentoLegal,
+    required this.amonestacion,
+    required this.arrestoPersona,
+    required this.suspensionLicencia,
+    required this.cancelacionLicencia,
+    required this.retencionVehiculo,
+    required this.sancionPersonaTexto,
+    required this.resumenSanciones,
   });
 
   factory LicenciaPuntoInfraccion.fromJson(Map<String, dynamic> json) {
@@ -496,7 +510,40 @@ class LicenciaPuntoInfraccion {
       puntos: LicenciaPuntosService._int(json['puntos']),
       descripcion: LicenciaPuntosService._string(json['descripcion']),
       fundamentoLegal: LicenciaPuntosService._string(json['fundamento_legal']),
+      amonestacion: LicenciaPuntosService._bool(json['amonestacion']),
+      arrestoPersona: LicenciaPuntosService._bool(json['arresto_persona']),
+      suspensionLicencia: LicenciaPuntosService._bool(
+        json['suspension_licencia'],
+      ),
+      cancelacionLicencia: LicenciaPuntosService._bool(
+        json['cancelacion_licencia'],
+      ),
+      retencionVehiculo: LicenciaPuntosService._bool(
+        json['retencion_vehiculo'],
+      ),
+      sancionPersonaTexto: LicenciaPuntosService._string(
+        json['sancion_persona_texto'],
+      ),
+      resumenSanciones: LicenciaPuntosService._string(
+        json['resumen_sanciones'],
+      ),
     );
+  }
+
+  String get sancionResumen {
+    final resumen = resumenSanciones.trim();
+    if (resumen.isNotEmpty) return resumen;
+
+    final partes = <String>[
+      if (amonestacion) 'amonestacion',
+      if (arrestoPersona) 'arresto',
+      if (suspensionLicencia) 'suspension',
+      if (cancelacionLicencia) 'cancelacion',
+      if (puntos > 0) '$puntos puntos',
+      if (retencionVehiculo) 'deposito',
+    ];
+
+    return partes.isEmpty ? 'sin sancion registrada' : partes.join(' + ');
   }
 }
 

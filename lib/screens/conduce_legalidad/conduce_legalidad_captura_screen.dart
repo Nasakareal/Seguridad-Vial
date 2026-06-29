@@ -39,6 +39,7 @@ class ConduceLegalidadCapturaScreen extends StatefulWidget {
 class _ConduceLegalidadCapturaScreenState
     extends State<ConduceLegalidadCapturaScreen> {
   final _formKey = GlobalKey<FormState>();
+  final _contentErrorKey = GlobalKey();
   final _narrativaCtrl = TextEditingController();
   final _municipioCtrl = TextEditingController(text: 'Morelia');
   final _lugarCtrl = TextEditingController();
@@ -47,6 +48,7 @@ class _ConduceLegalidadCapturaScreenState
   bool _loadingMeta = true;
   bool _saving = false;
   String? _metaError;
+  String? _contentError;
   ConduceLegalidadMeta? _meta;
   final List<ConduceLegalidadVehiculo> _vehiculos = [];
   final List<ConduceLegalidadPersona> _personas = [];
@@ -137,14 +139,22 @@ class _ConduceLegalidadCapturaScreenState
   }
 
   Future<void> _addPersona() async {
-    final persona = await showConduceLegalidadPersonaModal(context);
+    final persona = await showConduceLegalidadPersonaModal(
+      context,
+      fundamentos: _meta?.fundamentosPersona ?? const [],
+    );
     if (persona == null || !mounted) return;
     setState(() => _personas.add(persona));
   }
 
   Future<void> _submit() async {
     if (_saving) return;
-    if (!_formKey.currentState!.validate()) return;
+    setState(() => _contentError = null);
+    final valid = _formKey.currentState!.validate();
+    if (!valid) {
+      _scrollToFirstFormError(_formKey);
+      return;
+    }
 
     final hasNarrativa = _narrativaCtrl.text.trim().isNotEmpty;
     if (!hasNarrativa &&
@@ -152,13 +162,11 @@ class _ConduceLegalidadCapturaScreenState
         _personas.isEmpty &&
         _fotosExistentes.isEmpty &&
         _fotos.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Captura una narrativa o agrega vehiculos/personas/fotos.',
-          ),
-        ),
-      );
+      setState(() {
+        _contentError =
+            'Captura una narrativa o agrega vehiculos, personas o fotos.';
+      });
+      _scrollToKey(_contentErrorKey);
       return;
     }
 
@@ -252,6 +260,13 @@ class _ConduceLegalidadCapturaScreenState
                   if (_metaError != null)
                     _WarningPanel(text: _metaError!, onRetry: _loadMeta),
                   if (_metaError != null) const SizedBox(height: 12),
+                  if (_contentError != null) ...[
+                    _FormErrorPanel(
+                      key: _contentErrorKey,
+                      text: _contentError!,
+                    ),
+                    const SizedBox(height: 12),
+                  ],
                   TextFormField(
                     controller: _narrativaCtrl,
                     minLines: 5,
@@ -720,7 +735,10 @@ class _VehiculoModalState extends State<_VehiculoModal> {
   }
 
   void _submit() {
-    if (!_formKey.currentState!.validate()) return;
+    if (!_formKey.currentState!.validate()) {
+      _scrollToFirstFormError(_formKey);
+      return;
+    }
 
     final tipoServicio = VehiculoFormService.tipoServicioPlacaValue(
       _t(_tipoServicioCtrl),
@@ -829,12 +847,23 @@ class _VehiculoModalState extends State<_VehiculoModal> {
       colorSeleccionado,
     );
     final aseguradoraSeleccionada = _aseguradoraDropdownValue();
+    final fundamentosFiltrados = widget.fundamentos
+        .where((item) => item.aplicaParaTipoGeneral(_tipoGeneralSeleccionado))
+        .toList();
 
     if ((!tienePlacas || esServicioPublicoFederal) &&
         _estadoPlacasSeleccionado != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
         setState(() => _estadoPlacasSeleccionado = null);
+      });
+    }
+
+    if (_fundamento != null &&
+        !fundamentosFiltrados.any((item) => item.id == _fundamento!.id)) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _setFundamento(null);
       });
     }
 
@@ -888,6 +917,11 @@ class _VehiculoModalState extends State<_VehiculoModal> {
                   setState(() {
                     _tipoGeneralSeleccionado = value;
                     _tipoCarroceriaSeleccionada = null;
+                    if (_fundamento != null &&
+                        !_fundamento!.aplicaParaTipoGeneral(value)) {
+                      _fundamento = null;
+                      _motivoRetencionAuto = null;
+                    }
                     _syncMarcaConTipoYCarroceria();
                   });
                 },
@@ -1197,7 +1231,7 @@ class _VehiculoModalState extends State<_VehiculoModal> {
                 ),
                 selectedItemBuilder: (context) => [
                   const _DropdownSelectedText('Sin fundamento seleccionado'),
-                  ...widget.fundamentos.map(
+                  ...fundamentosFiltrados.map(
                     (item) => _DropdownSelectedText(item.display),
                   ),
                 ],
@@ -1206,10 +1240,12 @@ class _VehiculoModalState extends State<_VehiculoModal> {
                     value: null,
                     child: _DropdownMenuText('Sin fundamento seleccionado'),
                   ),
-                  ...widget.fundamentos.map(
+                  ...fundamentosFiltrados.map(
                     (item) => DropdownMenuItem<ConduceLegalidadFundamento?>(
                       value: item,
-                      child: _DropdownMenuText(item.display),
+                      child: _DropdownMenuText(
+                        '${item.display}\n${item.sancionResumen}',
+                      ),
                     ),
                   ),
                 ],
@@ -1222,6 +1258,14 @@ class _VehiculoModalState extends State<_VehiculoModal> {
                   style: const TextStyle(
                     color: Color(0xFF92400E),
                     fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Sancion: ${_fundamento!.sancionResumen}',
+                  style: const TextStyle(
+                    color: Color(0xFF7F1D1D),
+                    fontWeight: FontWeight.w900,
                   ),
                 ),
               ],
@@ -1281,18 +1325,21 @@ class _VehiculoModalState extends State<_VehiculoModal> {
 }
 
 Future<ConduceLegalidadPersona?> showConduceLegalidadPersonaModal(
-  BuildContext context,
-) {
+  BuildContext context, {
+  required List<ConduceLegalidadFundamento> fundamentos,
+}) {
   return showModalBottomSheet<ConduceLegalidadPersona>(
     context: context,
     isScrollControlled: true,
     useSafeArea: true,
-    builder: (_) => const _PersonaModal(),
+    builder: (_) => _PersonaModal(fundamentos: fundamentos),
   );
 }
 
 class _PersonaModal extends StatefulWidget {
-  const _PersonaModal();
+  final List<ConduceLegalidadFundamento> fundamentos;
+
+  const _PersonaModal({required this.fundamentos});
 
   @override
   State<_PersonaModal> createState() => _PersonaModalState();
@@ -1314,6 +1361,7 @@ class _PersonaModalState extends State<_PersonaModal> {
   DateTime? _vigencia;
   bool _permanente = false;
   String? _rawLicencia;
+  ConduceLegalidadFundamento? _fundamento;
 
   @override
   void dispose() {
@@ -1383,7 +1431,10 @@ class _PersonaModalState extends State<_PersonaModal> {
   }
 
   void _submit() {
-    if (!_formKey.currentState!.validate()) return;
+    if (!_formKey.currentState!.validate()) {
+      _scrollToFirstFormError(_formKey);
+      return;
+    }
 
     final hasIdentity =
         _nombreCtrl.text.trim().isNotEmpty ||
@@ -1412,6 +1463,10 @@ class _PersonaModalState extends State<_PersonaModal> {
             : _date(_vigencia!),
         permanente: _permanente,
         rawLicenciaQr: _rawLicencia,
+        licenciaPuntoInfraccionId: _fundamento?.id,
+        infraccionCodigo: _fundamento?.codigo,
+        fundamentoLegal: _fundamento?.fundamentoLegal,
+        infraccion: _fundamento,
         observaciones: _empty(_observacionesCtrl.text),
       ),
     );
@@ -1420,6 +1475,7 @@ class _PersonaModalState extends State<_PersonaModal> {
   @override
   Widget build(BuildContext context) {
     final licenciaWarning = _licenciaWarningText();
+    final fundamentosPersona = widget.fundamentos;
 
     return FractionallySizedBox(
       heightFactor: .92,
@@ -1521,6 +1577,44 @@ class _PersonaModalState extends State<_PersonaModal> {
                 'Numero de licencia',
                 Icons.confirmation_number_outlined,
               ),
+              DropdownButtonFormField<ConduceLegalidadFundamento?>(
+                value: _fundamento,
+                isExpanded: true,
+                decoration: const InputDecoration(
+                  labelText: 'Fundamento / sancion de persona',
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.gavel_outlined),
+                ),
+                selectedItemBuilder: (context) => [
+                  const _DropdownSelectedText('Sin fundamento seleccionado'),
+                  ...fundamentosPersona.map(
+                    (item) => _DropdownSelectedText(item.display),
+                  ),
+                ],
+                items: [
+                  const DropdownMenuItem<ConduceLegalidadFundamento?>(
+                    value: null,
+                    child: _DropdownMenuText('Sin fundamento seleccionado'),
+                  ),
+                  ...fundamentosPersona.map(
+                    (item) => DropdownMenuItem<ConduceLegalidadFundamento?>(
+                      value: item,
+                      child: _DropdownMenuText(
+                        '${item.display}\n${item.sancionResumen}',
+                      ),
+                    ),
+                  ),
+                ],
+                onChanged: (value) => setState(() => _fundamento = value),
+              ),
+              const SizedBox(height: 10),
+              if (_fundamento != null) ...[
+                _AttentionPanel(
+                  text:
+                      'Sancion de persona: ${_fundamento!.sancionResumen}. ${_fundamento!.fundamentoLegal ?? _fundamento!.display}',
+                ),
+                const SizedBox(height: 10),
+              ],
               if (licenciaWarning != null) ...[
                 _AttentionPanel(text: licenciaWarning),
                 const SizedBox(height: 10),
@@ -1955,12 +2049,20 @@ class _PersonTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final detalles = <String>[
+      if ((persona.numeroLicencia ?? '').trim().isNotEmpty)
+        'Lic. ${persona.numeroLicencia}',
+      if ((persona.tipoLicencia ?? '').trim().isNotEmpty) persona.tipoLicencia!,
+      if (persona.infraccion != null)
+        '${persona.infraccion!.display} (${persona.infraccion!.sancionResumen})',
+    ];
+
     return _CaptureTile(
       icon: Icons.badge_outlined,
       title: persona.nombre?.trim().isNotEmpty == true
           ? persona.nombre!
           : 'Persona',
-      subtitle: persona.numeroLicencia ?? persona.tipoLicencia ?? '',
+      subtitle: detalles.join(' - '),
       onRemove: onRemove,
     );
   }
@@ -2052,6 +2154,40 @@ class _AttentionPanel extends StatelessWidget {
   }
 }
 
+class _FormErrorPanel extends StatelessWidget {
+  final String text;
+
+  const _FormErrorPanel({super.key, required this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFEF2F2),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xFFDC2626)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.error_outline, color: Color(0xFFB91C1C)),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              text,
+              style: const TextStyle(
+                color: Color(0xFF7F1D1D),
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _WarningPanel extends StatelessWidget {
   final String text;
   final VoidCallback onRetry;
@@ -2081,6 +2217,57 @@ class _WarningPanel extends StatelessWidget {
       ),
     );
   }
+}
+
+void _scrollToFirstFormError(GlobalKey<FormState> formKey) {
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    final formContext = formKey.currentContext;
+    if (formContext == null) return;
+
+    BuildContext? firstErrorContext;
+
+    void visit(Element element) {
+      if (firstErrorContext != null) return;
+      if (element is StatefulElement &&
+          element.state is FormFieldState<dynamic>) {
+        final fieldState = element.state as FormFieldState<dynamic>;
+        if (fieldState.hasError) {
+          firstErrorContext = element;
+          return;
+        }
+      }
+      element.visitChildren(visit);
+    }
+
+    final element = formContext;
+    if (element is Element) {
+      visit(element);
+    }
+
+    final target = firstErrorContext;
+    if (target == null) return;
+
+    Scrollable.ensureVisible(
+      target,
+      duration: const Duration(milliseconds: 280),
+      curve: Curves.easeOutCubic,
+      alignment: 0.12,
+    );
+  });
+}
+
+void _scrollToKey(GlobalKey key) {
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    final target = key.currentContext;
+    if (target == null) return;
+
+    Scrollable.ensureVisible(
+      target,
+      duration: const Duration(milliseconds: 280),
+      curve: Curves.easeOutCubic,
+      alignment: 0.12,
+    );
+  });
 }
 
 class _ModalHeader extends StatelessWidget {

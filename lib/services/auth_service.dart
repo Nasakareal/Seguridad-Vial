@@ -749,12 +749,20 @@ class AuthService {
 
   static Future<SiniestrosShiftAccessResult>
   licensePointsSiniestrosShiftAccess({bool refresh = true}) async {
+    if (await isSuperadmin()) {
+      return const SiniestrosShiftAccessResult.allowed(applies: true);
+    }
+
     if (refresh) {
       await refreshCurrentUserAccess();
     }
 
     final unidadId = await getUnidadId();
     final payload = await getStoredUserPayload();
+    if (_payloadHasRole(payload, 'superadmin')) {
+      return const SiniestrosShiftAccessResult.allowed(applies: true);
+    }
+
     final isSiniestros = unidadId == 1 || _payloadMatchesSiniestros(payload);
     if (!isSiniestros) {
       return const SiniestrosShiftAccessResult.allowed();
@@ -1432,12 +1440,16 @@ class AuthService {
   }
 
   static Future<bool> can(String permission) async {
+    if (await isSuperadmin()) return true;
+
     final perms = await getPermissions();
     final p = permission.trim().toLowerCase();
     return perms.contains(p);
   }
 
   static Future<bool> canAny(List<String> permissions) async {
+    if (await isSuperadmin()) return true;
+
     final perms = await getPermissions();
     final set = perms.toSet();
     for (final p in permissions) {

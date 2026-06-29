@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
 
@@ -191,6 +192,35 @@ class ConduceLegalidadService {
     final body = _decodeJson(res);
     _throwIfNotOk(res, body, 'No se pudo preparar la tarjeta de la captura.');
     return ConduceLegalidadNativeShareData.fromJson(body);
+  }
+
+  static Future<Uint8List> downloadIphPuestaDisposicion({
+    required int operativoId,
+    required int capturaId,
+  }) async {
+    final res = await http
+        .get(
+          Uri.parse(
+            '${AuthService.baseUrl}$_path/operativos/$operativoId/capturas/$capturaId/iph-puesta-disposicion',
+          ),
+          headers: {
+            ...await _headers(),
+            'Accept':
+                'application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/octet-stream,application/json',
+          },
+        )
+        .timeout(const Duration(seconds: 25));
+
+    if (res.statusCode < 200 || res.statusCode >= 300) {
+      final body = _decodeJson(res);
+      _throwIfNotOk(res, body, 'No se pudo descargar el IPH.');
+    }
+
+    if (res.bodyBytes.isEmpty) {
+      throw Exception('El IPH descargado esta vacio.');
+    }
+
+    return Uint8List.fromList(res.bodyBytes);
   }
 
   static Future<OfflineActionResult> storeCaptura({
