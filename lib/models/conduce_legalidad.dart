@@ -9,6 +9,20 @@ class ConduceLegalidadMeta {
     'TRANSPORTE PUBLICO',
     'SERVICIO PUBLICO',
     'SINIESTRO',
+    'COMPETENCIAS DE VELOCIDAD',
+    'PLACAS DE DEMOSTRACION',
+    'SIN REGISTRO PREVIO EN REV',
+    'PLACAS FORANEAS SIN REGISTRO PREVIO',
+    'REGISTRO DE VISITA VENCIDO',
+    'ESTACIONAR',
+    'CERRAR U OBSTRUIR CIRCULACION',
+    'OBSTRUIR CIRCULACION',
+    'REPARACIONES A VEHICULOS',
+    'REPARAR VEHICULO',
+    'RESERVAR ESTACIONAMIENTO',
+    'REQUERIMIENTO DE RETIRO',
+    'ESPACIOS ESPECIALES DE ASCENSO',
+    'ASCENSO DESCENSO TIEMPO EXCEDIDO',
   ];
 
   final String operativoNombre;
@@ -25,14 +39,16 @@ class ConduceLegalidadMeta {
 
   factory ConduceLegalidadMeta.fromJson(Map<String, dynamic> json) {
     final data = _map(json['data'] ?? json);
-    final fundamentos = _list(data['fundamentos_corralon'])
-        .map((item) => ConduceLegalidadFundamento.fromJson(_map(item)))
-        .where((item) => item.aplicaConduceLegalidadMotos)
-        .toList();
-    final fundamentosPersonaPayload = _list(data['fundamentos_persona'])
-        .map((item) => ConduceLegalidadFundamento.fromJson(_map(item)))
-        .where((item) => item.aplicaSancionPersona)
-        .toList();
+    final fundamentos = _expandirFundamentosOperativos(
+      _list(
+        data['fundamentos_corralon'],
+      ).map((item) => ConduceLegalidadFundamento.fromJson(_map(item))),
+    ).where((item) => item.aplicaConduceLegalidadMotos).toList();
+    final fundamentosPersonaPayload = _expandirFundamentosOperativos(
+      _list(
+        data['fundamentos_persona'],
+      ).map((item) => ConduceLegalidadFundamento.fromJson(_map(item))),
+    ).where((item) => item.aplicaSancionPersona).toList();
 
     return ConduceLegalidadMeta(
       operativoNombre:
@@ -136,6 +152,65 @@ class ConduceLegalidadFundamento {
     this.narrativaSugerida,
   });
 
+  ConduceLegalidadFundamento copyWith({
+    int? id,
+    String? codigo,
+    String? nombre,
+    String? articulo,
+    String? fraccion,
+    String? inciso,
+    String? ambitoVehiculo,
+    String? ambitoVehiculoTexto,
+    String? referenciaLegalCorta,
+    int? puntos,
+    int? multaUmaMin,
+    int? multaUmaMax,
+    String? multaUmaTexto,
+    bool? amonestacion,
+    bool? arrestoPersona,
+    bool? suspensionLicencia,
+    bool? cancelacionLicencia,
+    bool? depositoSiSinPersonaHabilitada,
+    bool? retencionVehiculo,
+    String? sancionPersonaTexto,
+    String? resumenSanciones,
+    String? etiquetaOperativa,
+    String? textoOperativo,
+    String? descripcion,
+    String? fundamentoLegal,
+    String? narrativaSugerida,
+  }) {
+    return ConduceLegalidadFundamento(
+      id: id ?? this.id,
+      codigo: codigo ?? this.codigo,
+      nombre: nombre ?? this.nombre,
+      articulo: articulo ?? this.articulo,
+      fraccion: fraccion ?? this.fraccion,
+      inciso: inciso ?? this.inciso,
+      ambitoVehiculo: ambitoVehiculo ?? this.ambitoVehiculo,
+      ambitoVehiculoTexto: ambitoVehiculoTexto ?? this.ambitoVehiculoTexto,
+      referenciaLegalCorta: referenciaLegalCorta ?? this.referenciaLegalCorta,
+      puntos: puntos ?? this.puntos,
+      multaUmaMin: multaUmaMin ?? this.multaUmaMin,
+      multaUmaMax: multaUmaMax ?? this.multaUmaMax,
+      multaUmaTexto: multaUmaTexto ?? this.multaUmaTexto,
+      amonestacion: amonestacion ?? this.amonestacion,
+      arrestoPersona: arrestoPersona ?? this.arrestoPersona,
+      suspensionLicencia: suspensionLicencia ?? this.suspensionLicencia,
+      cancelacionLicencia: cancelacionLicencia ?? this.cancelacionLicencia,
+      depositoSiSinPersonaHabilitada:
+          depositoSiSinPersonaHabilitada ?? this.depositoSiSinPersonaHabilitada,
+      retencionVehiculo: retencionVehiculo ?? this.retencionVehiculo,
+      sancionPersonaTexto: sancionPersonaTexto ?? this.sancionPersonaTexto,
+      resumenSanciones: resumenSanciones ?? this.resumenSanciones,
+      etiquetaOperativa: etiquetaOperativa ?? this.etiquetaOperativa,
+      textoOperativo: textoOperativo ?? this.textoOperativo,
+      descripcion: descripcion ?? this.descripcion,
+      fundamentoLegal: fundamentoLegal ?? this.fundamentoLegal,
+      narrativaSugerida: narrativaSugerida ?? this.narrativaSugerida,
+    );
+  }
+
   factory ConduceLegalidadFundamento.fromJson(Map<String, dynamic> json) {
     return ConduceLegalidadFundamento(
       id: _asInt(json['id']),
@@ -168,6 +243,35 @@ class ConduceLegalidadFundamento {
       narrativaSugerida: _str(json['narrativa_sugerida']),
     );
   }
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'codigo': codigo,
+    'nombre': nombre,
+    'articulo': articulo,
+    'fraccion': fraccion,
+    'inciso': inciso,
+    'ambito_vehiculo': ambitoVehiculo,
+    'ambito_vehiculo_texto': ambitoVehiculoTexto,
+    'referencia_legal_corta': referenciaLegalCorta,
+    'puntos': puntos,
+    'multa_uma_min': multaUmaMin,
+    'multa_uma_max': multaUmaMax,
+    'multa_uma_texto': multaUmaTexto,
+    'amonestacion': amonestacion,
+    'arresto_persona': arrestoPersona,
+    'suspension_licencia': suspensionLicencia,
+    'cancelacion_licencia': cancelacionLicencia,
+    'deposito_si_sin_persona_habilitada': depositoSiSinPersonaHabilitada,
+    'retencion_vehiculo': retencionVehiculo,
+    'sancion_persona_texto': sancionPersonaTexto,
+    'resumen_sanciones': resumenSanciones,
+    'etiqueta_operativa': etiquetaOperativa,
+    'texto_operativo': textoOperativo,
+    'descripcion': descripcion,
+    'fundamento_legal': fundamentoLegal,
+    'narrativa_sugerida': narrativaSugerida,
+  }..removeWhere((_, value) => value == null);
 
   String get display {
     final text = (textoOperativo ?? '').trim();
@@ -530,6 +634,11 @@ class ConduceLegalidadVehiculo {
   });
 
   factory ConduceLegalidadVehiculo.fromJson(Map<String, dynamic> json) {
+    final motivoRetencion = _str(json['motivo_retencion']);
+    final infraccion = json['infraccion'] is Map
+        ? ConduceLegalidadFundamento.fromJson(_map(json['infraccion']))
+        : null;
+
     return ConduceLegalidadVehiculo(
       id: _nullableInt(json['id']),
       marca: _str(json['marca']),
@@ -562,11 +671,9 @@ class ConduceLegalidadVehiculo {
       infraccionCodigo: _str(json['infraccion_codigo']),
       fundamentoLegal: _str(json['fundamento_legal']),
       retencionVehiculo: _bool(json['retencion_vehiculo']),
-      motivoRetencion: _str(json['motivo_retencion']),
+      motivoRetencion: motivoRetencion,
       observaciones: _str(json['observaciones']),
-      infraccion: json['infraccion'] is Map
-          ? ConduceLegalidadFundamento.fromJson(_map(json['infraccion']))
-          : null,
+      infraccion: _fundamentoPorMotivoGuardado(infraccion, motivoRetencion),
     );
   }
 
@@ -784,4 +891,195 @@ bool _bool(dynamic value) {
   if (value is bool) return value;
   final text = (value ?? '').toString().trim().toLowerCase();
   return text == '1' || text == 'true' || text == 'si';
+}
+
+List<ConduceLegalidadFundamento> _expandirFundamentosOperativos(
+  Iterable<ConduceLegalidadFundamento> fundamentos,
+) {
+  final result = <ConduceLegalidadFundamento>[];
+  final seen = <String>{};
+
+  for (final fundamento in fundamentos) {
+    for (final item in _variantesFundamentoOperativo(fundamento)) {
+      final key = ConduceLegalidadFundamento._normalizeFilterText(
+        [
+          item.id.toString(),
+          item.codigo,
+          item.display,
+          item.referenciaLegalCorta,
+        ].whereType<String>().join(' '),
+      );
+      if (seen.add(key)) {
+        result.add(item);
+      }
+    }
+  }
+
+  return result;
+}
+
+ConduceLegalidadFundamento? _fundamentoPorMotivoGuardado(
+  ConduceLegalidadFundamento? fundamento,
+  String? motivoRetencion,
+) {
+  if (fundamento == null) return null;
+
+  final variantes = _variantesFundamentoOperativo(fundamento);
+  if (variantes.length <= 1) return fundamento;
+
+  final motivo = ConduceLegalidadFundamento._normalizeFilterText(
+    motivoRetencion ?? '',
+  );
+  if (motivo.isEmpty) return fundamento;
+
+  for (final variante in variantes) {
+    final display = ConduceLegalidadFundamento._normalizeFilterText(
+      variante.display,
+    );
+    final etiqueta = ConduceLegalidadFundamento._normalizeFilterText(
+      variante.etiquetaOperativa ?? '',
+    );
+    if ((display.isNotEmpty && motivo.contains(display)) ||
+        (etiqueta.isNotEmpty && motivo.contains(etiqueta))) {
+      return variante;
+    }
+  }
+
+  return fundamento;
+}
+
+List<ConduceLegalidadFundamento> _variantesFundamentoOperativo(
+  ConduceLegalidadFundamento fundamento,
+) {
+  final text = ConduceLegalidadFundamento._normalizeFilterText(
+    [
+      fundamento.codigo,
+      fundamento.nombre,
+      fundamento.etiquetaOperativa,
+      fundamento.textoOperativo,
+      fundamento.descripcion,
+      fundamento.fundamentoLegal,
+    ].whereType<String>().join(' '),
+  );
+
+  final esMotocicleta = text.contains('MOTO') || text.contains('MOTOCIC');
+  final contieneCasco = text.contains('CASCO') || text.contains('PROTECTOR');
+  final contieneMenor = text.contains('MENOR');
+  final contieneExcesoPersonas =
+      text.contains('EXCESO') &&
+      (text.contains('PERSONA') || text.contains('PASAJER'));
+  final contieneLuces = text.contains('LUCES') || text.contains('LUZ');
+
+  if (esMotocicleta && contieneCasco && contieneMenor) {
+    return <ConduceLegalidadFundamento>[
+      _varianteFundamento(
+        fundamento,
+        codigoSuffix: 'CASCO',
+        nombre: 'Motocicleta sin casco protector',
+        etiqueta: 'Sin casco protector',
+        descripcion: 'Conducir o viajar en motocicleta sin casco protector.',
+        narrativa: 'Se detecta motocicleta circulando sin casco protector.',
+      ),
+      _varianteFundamento(
+        fundamento,
+        codigoSuffix: 'MENOR',
+        nombre: 'Motocicleta con pasajero menor de edad',
+        etiqueta: 'Pasajero menor de edad',
+        descripcion: 'Transportar pasajero menor de edad en motocicleta.',
+        narrativa:
+            'Se detecta motocicleta circulando con pasajero menor de edad.',
+      ),
+    ];
+  }
+
+  if (esMotocicleta && contieneCasco && contieneExcesoPersonas) {
+    return <ConduceLegalidadFundamento>[
+      _varianteFundamento(
+        fundamento,
+        codigoSuffix: 'EXCESO_PERSONAS',
+        nombre: 'Motocicleta con exceso de personas',
+        etiqueta: 'Exceso de personas',
+        descripcion:
+            'Llevar a bordo mas personas que las senaladas en la tarjeta de circulacion.',
+        narrativa:
+            'Se detecta motocicleta circulando con exceso de personas conforme a la tarjeta de circulacion.',
+      ),
+      _varianteFundamento(
+        fundamento,
+        codigoSuffix: 'CASCO',
+        nombre: 'Motocicleta sin casco protector',
+        etiqueta: 'Sin casco protector',
+        descripcion: 'Conducir o viajar en motocicleta sin casco protector.',
+        narrativa: 'Se detecta motocicleta circulando sin casco protector.',
+      ),
+    ];
+  }
+
+  if (esMotocicleta && contieneCasco && contieneLuces) {
+    return <ConduceLegalidadFundamento>[
+      _varianteFundamento(
+        fundamento,
+        codigoSuffix: 'LUCES',
+        nombre: 'Motocicleta sin luces encendidas',
+        etiqueta: 'Sin luces encendidas',
+        descripcion:
+            'Circular en motocicleta sin luces delanteras y traseras encendidas.',
+        narrativa:
+            'Se detecta motocicleta circulando sin luces delanteras y traseras encendidas.',
+      ),
+      _varianteFundamento(
+        fundamento,
+        codigoSuffix: 'REFLEJANTES',
+        nombre: 'Motocicleta sin aditamentos luminosos o bandas reflejantes',
+        etiqueta: 'Sin reflejantes',
+        descripcion:
+            'Circular en motocicleta sin aditamentos luminosos o bandas reflejantes en horario nocturno.',
+        narrativa:
+            'Se detecta motocicleta circulando sin aditamentos luminosos o bandas reflejantes en horario nocturno.',
+      ),
+    ];
+  }
+
+  return <ConduceLegalidadFundamento>[fundamento];
+}
+
+ConduceLegalidadFundamento _varianteFundamento(
+  ConduceLegalidadFundamento source, {
+  required String codigoSuffix,
+  required String nombre,
+  required String etiqueta,
+  required String descripcion,
+  required String narrativa,
+}) {
+  final codigoBase = (source.codigo ?? 'FUND_${source.id}').trim();
+
+  return source.copyWith(
+    codigo: '${codigoBase}_$codigoSuffix',
+    nombre: nombre,
+    etiquetaOperativa: etiqueta,
+    textoOperativo: nombre,
+    descripcion: descripcion,
+    fundamentoLegal: _fundamentoLegalVariante(source, nombre),
+    narrativaSugerida: narrativa,
+  );
+}
+
+String _fundamentoLegalVariante(
+  ConduceLegalidadFundamento source,
+  String nombre,
+) {
+  final referencia = (source.referenciaLegalCorta ?? '').trim();
+  if (referencia.isNotEmpty) return '$referencia - $nombre';
+
+  final articulo = (source.articulo ?? '').trim();
+  if (articulo.isNotEmpty) {
+    final partes = <String>['Art. $articulo'];
+    final fraccion = (source.fraccion ?? '').trim();
+    final inciso = (source.inciso ?? '').trim();
+    if (fraccion.isNotEmpty) partes.add('fr. $fraccion');
+    if (inciso.isNotEmpty) partes.add('inc. $inciso');
+    return '${partes.join(', ')} - $nombre';
+  }
+
+  return nombre;
 }

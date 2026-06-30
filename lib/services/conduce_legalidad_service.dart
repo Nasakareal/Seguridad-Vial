@@ -3,9 +3,11 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/conduce_legalidad.dart';
 import 'auth_service.dart';
+import 'network_error_helper.dart';
 import 'offline_sync_service.dart';
 
 class ConduceLegalidadNativeShareData {
@@ -90,15 +92,27 @@ String? _readString(dynamic value) {
 
 class ConduceLegalidadService {
   static const String _path = '/conduce-legalidad';
+  static const String _metaCachePrefix = 'conduce_legalidad_meta_cache_v1';
 
   static Future<ConduceLegalidadMeta> fetchMeta() async {
-    final res = await http.get(
-      Uri.parse('${AuthService.baseUrl}$_path/meta'),
-      headers: await _headers(),
-    );
-    final body = _decodeJson(res);
-    _throwIfNotOk(res, body, 'No se pudo cargar el modulo.');
-    return ConduceLegalidadMeta.fromJson(body);
+    try {
+      final res = await http
+          .get(
+            Uri.parse('${AuthService.baseUrl}$_path/meta'),
+            headers: await _headers(),
+          )
+          .timeout(NetworkErrorHelper.interactiveRequestTimeout);
+      final body = _decodeJson(res);
+      _throwIfNotOk(res, body, 'No se pudo cargar el modulo.');
+      await _saveMetaCache(body);
+      return ConduceLegalidadMeta.fromJson(body);
+    } catch (_) {
+      final cached = await _loadMetaCache();
+      if (cached != null && cached.isNotEmpty) {
+        return ConduceLegalidadMeta.fromJson(cached);
+      }
+      rethrow;
+    }
   }
 
   static Future<List<ConduceLegalidadOperativo>> fetchOperativos({
@@ -331,6 +345,30 @@ class ConduceLegalidadService {
       'Authorization': 'Bearer $token',
       ...await AuthService.mobileSessionHeaders(),
     };
+  }
+
+  static Future<String> _metaCacheKey() async {
+    final owner = (await AuthService.getSessionOwnerKey())?.trim();
+    final ownerKey = owner == null || owner.isEmpty ? 'anon' : owner;
+    return '$_metaCachePrefix:$ownerKey';
+  }
+
+  static Future<void> _saveMetaCache(Map<String, dynamic> body) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(await _metaCacheKey(), jsonEncode(body));
+  }
+
+  static Future<Map<String, dynamic>?> _loadMetaCache() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(await _metaCacheKey())?.trim();
+    if (raw == null || raw.isEmpty) return null;
+
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is Map<String, dynamic>) return decoded;
+      if (decoded is Map) return _map(decoded);
+    } catch (_) {}
+    return null;
   }
 
   static Map<String, dynamic> _decodeJson(http.Response res) {

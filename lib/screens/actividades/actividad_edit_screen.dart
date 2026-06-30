@@ -274,8 +274,30 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
 
   Future<void> _loadSubcategorias(int categoriaId) async {
     try {
-      final subs = await ActividadesService.fetchSubcategorias(categoriaId);
+      final allSubs = await ActividadesService.fetchSubcategorias(categoriaId);
+      final hideHechosTransito = await AuthService.isDelegacionesUser();
       if (!mounted) return;
+
+      final visibleSubs = ActividadesService.visibleSubcategoriasForActividadUi(
+        allSubs,
+        hideHechosTransito: hideHechosTransito,
+      );
+      ActividadSubcategoria? currentHiddenSubcategoria;
+      final currentSubcategoriaId = _subcategoriaId;
+      if (hideHechosTransito && currentSubcategoriaId != null) {
+        for (final subcategoria in allSubs) {
+          if (subcategoria.id == currentSubcategoriaId &&
+              !ActividadesService.shouldShowSubcategoriaInActividadUi(
+                subcategoria,
+              )) {
+            currentHiddenSubcategoria = subcategoria;
+            break;
+          }
+        }
+      }
+      final subs = currentHiddenSubcategoria == null
+          ? visibleSubs
+          : <ActividadSubcategoria>[currentHiddenSubcategoria, ...visibleSubs];
 
       setState(() {
         _subcategorias = subs;
@@ -357,6 +379,16 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
   String? _trim(TextEditingController ctrl) {
     final value = ctrl.text.trim();
     return value.isEmpty ? null : value;
+  }
+
+  String? _trimCoordinatesText() {
+    final value = _trim(_coordenadasCtrl);
+    if (value != null) return value;
+
+    final lat = _latCtrl.text.trim();
+    final lng = _lngCtrl.text.trim();
+    if (lat.isEmpty || lng.isEmpty) return null;
+    return '$lat, $lng';
   }
 
   String? _trimMunicipio(TextEditingController ctrl) {
@@ -562,7 +594,7 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
       municipio: _trimMunicipio(_municipioCtrl),
       lat: _trim(_latCtrl),
       lng: _trim(_lngCtrl),
-      coordenadasTexto: _trim(_coordenadasCtrl),
+      coordenadasTexto: _trimCoordinatesText(),
       fuenteUbicacion: _trim(_fuenteUbicacionCtrl),
       notaGeo: _trim(_notaGeoCtrl),
       motivo: _useFomentoUserLayout ? null : _trim(_motivoCtrl),
@@ -578,6 +610,26 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
       patrullasParticipantesTexto: _trim(_patrullasCtrl),
       fomento: fomento,
     );
+  }
+
+  void _syncManualLocationFromFields() {
+    final lat = _latCtrl.text.trim();
+    final lng = _lngCtrl.text.trim();
+
+    setState(() {
+      _removeFieldError(ActividadValidationTarget.ubicacion);
+      if (lat.isNotEmpty && lng.isNotEmpty) {
+        _coordenadasCtrl.text = '$lat, $lng';
+        final fuente = _fuenteUbicacionCtrl.text.trim();
+        if (fuente.isEmpty || fuente == 'GPS_APP') {
+          _fuenteUbicacionCtrl.text = 'MANUAL';
+        }
+        final nota = _notaGeoCtrl.text.trim();
+        if (nota.isEmpty || nota.startsWith('ACC:')) {
+          _notaGeoCtrl.text = 'Coordenadas capturadas manualmente';
+        }
+      }
+    });
   }
 
   String? _fieldError(ActividadValidationTarget target) {
@@ -1322,6 +1374,7 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
                           child: _textField(
                             _latCtrl,
                             'Latitud',
+                            hint: 'Ej. 19.000000',
                             keyboardType: const TextInputType.numberWithOptions(
                               decimal: true,
                               signed: true,
@@ -1329,6 +1382,7 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
                             validationTarget:
                                 ActividadValidationTarget.ubicacion,
                             fieldKey: _latFieldKey,
+                            onChanged: (_) => _syncManualLocationFromFields(),
                           ),
                         ),
                         const SizedBox(width: 10),
@@ -1336,6 +1390,7 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
                           child: _textField(
                             _lngCtrl,
                             'Longitud',
+                            hint: 'Ej. -101.000000',
                             keyboardType: const TextInputType.numberWithOptions(
                               decimal: true,
                               signed: true,
@@ -1343,9 +1398,18 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
                             validationTarget:
                                 ActividadValidationTarget.ubicacion,
                             fieldKey: _lngFieldKey,
+                            onChanged: (_) => _syncManualLocationFromFields(),
                           ),
                         ),
                       ],
+                    ),
+                    const SizedBox(height: 8),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        'Ejemplo: 19.000000 va en Latitud; -101.000000 va en Longitud.',
+                        style: TextStyle(color: Colors.grey.shade700),
+                      ),
                     ),
                     const SizedBox(height: 12),
                     _textField(_coordenadasCtrl, 'Coordenadas texto'),

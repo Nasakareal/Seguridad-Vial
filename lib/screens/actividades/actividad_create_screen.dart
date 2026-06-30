@@ -41,11 +41,9 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
   bool _saving = false;
   bool _locating = false;
   bool _draftHydrated = false;
-  bool _redirectingToHecho = false;
   bool _canEditCaptureTimestamp = false;
   bool _captureTimestampAccessLoaded = false;
   bool _isFomentoUser = false;
-  bool _delegacionesActivityHechoRedirectUser = false;
   bool _showVialidadesDisponibles = false;
   bool _loadingVialidadesDisponibles = false;
   String? _error;
@@ -210,8 +208,6 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
     final name = await AuthService.getUserName();
     final email = await AuthService.getUserEmail();
     final isFomentoUser = await AuthService.isFomentoCulturaVialUser();
-    final delegacionesActivityHechoRedirectUser =
-        await AuthService.shouldRedirectDelegacionesActivitiesToHechos();
     final showVialidadesDisponibles =
         await AuthService.canFeedVialidadesUrbanasFromActivities();
     final isMotociclista = await AuthService.isMotociclistaRole();
@@ -230,8 +226,6 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
           : (cleanedEmail.isNotEmpty ? cleanedEmail : 'Usuario actual');
       _actividadNarrativaGrupo = narrativaGrupo;
       _isFomentoUser = isFomentoUser;
-      _delegacionesActivityHechoRedirectUser =
-          delegacionesActivityHechoRedirectUser;
       _showVialidadesDisponibles = showVialidadesDisponibles;
     });
     _applyNarrativaTemplateIfPossible();
@@ -297,7 +291,11 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
     });
 
     try {
-      final subs = await ActividadesService.fetchSubcategorias(categoriaId);
+      final hideHechosTransito = await AuthService.isDelegacionesUser();
+      final subs = ActividadesService.visibleSubcategoriasForActividadUi(
+        await ActividadesService.fetchSubcategorias(categoriaId),
+        hideHechosTransito: hideHechosTransito,
+      );
       if (!mounted) return;
       setState(() {
         _subcategorias = subs;
@@ -313,7 +311,6 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
       });
       _syncFomentoTotal();
       _applyNarrativaTemplateIfPossible();
-      _scheduleActividadHechoRedirectCheck();
     } catch (e) {
       if (!mounted) return;
       final message = ActividadesService.cleanExceptionMessage(e);
@@ -945,65 +942,6 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
     );
   }
 
-  void _scheduleActividadHechoRedirectCheck() {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      unawaited(_redirectToHechoIfNeeded());
-    });
-  }
-
-  Future<void> _redirectToHechoIfNeeded() async {
-    if (_redirectingToHecho || !mounted) return;
-    if (_isFomentoUser) return;
-
-    final userCanCaptureHechos = await AuthService.canCreateHechos();
-    if (!mounted || !userCanCaptureHechos) return;
-
-    final categoria = _selectedCategoria();
-    final subcategoria = _selectedSubcategoria();
-    if (categoria == null) return;
-    final subcategoriaNombre = subcategoria?.nombre ?? '';
-
-    final shouldRedirect =
-        ActividadesService.shouldRedirectC5iReportToHecho(
-          categoriaNombre: categoria.nombre,
-          subcategoriaNombre: subcategoriaNombre,
-          userCanCaptureHechos: userCanCaptureHechos,
-        ) ||
-        ActividadesService.shouldRedirectDelegacionesActivityToHecho(
-          categoriaNombre: categoria.nombre,
-          subcategoriaNombre: subcategoriaNombre,
-          userCanCaptureHechos: userCanCaptureHechos,
-          appliesToUser: _delegacionesActivityHechoRedirectUser,
-        );
-    if (!shouldRedirect) return;
-
-    _redirectingToHecho = true;
-    await _draft.discard();
-    if (!mounted) return;
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Ese registro debe capturarse como hecho.')),
-    );
-    Navigator.pushReplacementNamed(
-      context,
-      AppRoutes.accidentesCreate,
-      arguments: {
-        'prefill': {
-          'source': 'actividad_hecho_redirect',
-          'lugar': _lugarCtrl.text.trim(),
-          'municipio': _trimMunicipio(_municipioCtrl) ?? '',
-          'lat': _latCtrl.text.trim(),
-          'lng': _lngCtrl.text.trim(),
-          'coordenadas_texto': _coordenadasCtrl.text.trim(),
-          'fuente_ubicacion': _fuenteUbicacionCtrl.text.trim(),
-          'nota_geo': _notaGeoCtrl.text.trim(),
-          'situacion': 'REPORTE',
-        },
-      },
-    );
-  }
-
   Future<void> _pickFromGallery() async {
     setState(() {
       _error = null;
@@ -1083,6 +1021,31 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
       _notaGeoCtrl.text = geo.notaGeo ?? '';
       _locationStatus = geo.captureSummary;
       _removeFieldError(ActividadValidationTarget.ubicacion);
+    });
+    _draft.notifyChanged();
+  }
+
+  void _syncManualLocationFromFields() {
+    final lat = _latCtrl.text.trim();
+    final lng = _lngCtrl.text.trim();
+
+    setState(() {
+      _removeFieldError(ActividadValidationTarget.ubicacion);
+      if (lat.isNotEmpty && lng.isNotEmpty) {
+        _coordenadasCtrl.text = '$lat, $lng';
+        final fuente = _fuenteUbicacionCtrl.text.trim();
+        if (fuente.isEmpty || fuente == 'GPS_APP') {
+          _fuenteUbicacionCtrl.text = 'MANUAL';
+        }
+        final nota = _notaGeoCtrl.text.trim();
+        if (nota.isEmpty || nota.startsWith('ACC:')) {
+          _notaGeoCtrl.text = 'Coordenadas capturadas manualmente';
+        }
+        _locationStatus = 'Coordenadas capturadas manualmente.';
+      } else if (lat.isNotEmpty || lng.isNotEmpty) {
+        _locationStatus =
+            'Escribe latitud y longitud para completar la ubicacion manual.';
+      }
     });
     _draft.notifyChanged();
   }
@@ -1199,6 +1162,16 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
     return value.isEmpty ? null : value;
   }
 
+  String? _trimCoordinatesText() {
+    final value = _trim(_coordenadasCtrl);
+    if (value != null) return value;
+
+    final lat = _latCtrl.text.trim();
+    final lng = _lngCtrl.text.trim();
+    if (lat.isEmpty || lng.isEmpty) return null;
+    return '$lat, $lng';
+  }
+
   String? _trimMunicipio(TextEditingController ctrl) {
     final canonical = MunicipiosMichoacan.canonical(ctrl.text);
     return canonical ?? _trim(ctrl);
@@ -1225,7 +1198,7 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
       municipio: _trimMunicipio(_municipioCtrl),
       lat: _trim(_latCtrl),
       lng: _trim(_lngCtrl),
-      coordenadasTexto: _trim(_coordenadasCtrl),
+      coordenadasTexto: _trimCoordinatesText(),
       fuenteUbicacion: _trim(_fuenteUbicacionCtrl),
       notaGeo: _trim(_notaGeoCtrl),
       motivo: _useFomentoUserLayout ? null : _trim(_motivoCtrl),
@@ -1758,7 +1731,6 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
                               _applyNarrativaTemplateIfPossible();
                             }
                             _draft.notifyChanged();
-                            _scheduleActividadHechoRedirectCheck();
                           },
                     decoration: _dec(
                       'Subcategoria',
@@ -1925,6 +1897,43 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
                     ],
                   ),
                   const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _textField(
+                          _latCtrl,
+                          'Latitud',
+                          hint: 'Ej. 19.000000',
+                          keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true,
+                            signed: true,
+                          ),
+                          validationTarget: ActividadValidationTarget.ubicacion,
+                          onChanged: (_) => _syncManualLocationFromFields(),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: _textField(
+                          _lngCtrl,
+                          'Longitud',
+                          hint: 'Ej. -101.000000',
+                          keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true,
+                            signed: true,
+                          ),
+                          validationTarget: ActividadValidationTarget.ubicacion,
+                          onChanged: (_) => _syncManualLocationFromFields(),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Ejemplo: 19.000000 va en Latitud; -101.000000 va en Longitud.',
+                    style: TextStyle(color: Colors.grey.shade700),
+                  ),
+                  const SizedBox(height: 10),
                   Text(
                     _locationStatus,
                     style: TextStyle(color: Colors.grey.shade700),
@@ -1939,7 +1948,11 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(color: Colors.grey.shade300),
                       ),
-                      child: Text(_coordenadasCtrl.text),
+                      child: Text(
+                        _coordenadasCtrl.text.trim().isNotEmpty
+                            ? _coordenadasCtrl.text
+                            : '${_latCtrl.text.trim()}, ${_lngCtrl.text.trim()}',
+                      ),
                     ),
                   ],
                 ],

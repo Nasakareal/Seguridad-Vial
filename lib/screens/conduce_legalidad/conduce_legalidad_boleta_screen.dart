@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -114,17 +113,7 @@ class _ConduceLegalidadBoletaScreenState
     setState(() => _printing = true);
     try {
       if (ThermalPrinterService.supportsBluetoothPrinting) {
-        final devices = await ThermalPrinterService.getBondedPrinters();
-        if (!mounted) return;
-
-        if (devices.isEmpty) {
-          _showSnackBar(
-            'No encontre impresoras Bluetooth emparejadas. Empareja la impresora desde Android e intenta de nuevo.',
-          );
-          return;
-        }
-
-        final printer = await _selectPrinter(devices);
+        final printer = await _selectBondedPrinter();
         if (!mounted || printer == null) return;
 
         await ThermalPrinterService.printEscPos(
@@ -150,6 +139,51 @@ class _ConduceLegalidadBoletaScreenState
     } finally {
       if (mounted) setState(() => _printing = false);
     }
+  }
+
+  Future<void> _printTest() async {
+    if (_printing) return;
+
+    setState(() => _printing = true);
+    try {
+      if (!ThermalPrinterService.supportsBluetoothPrinting) {
+        _showSnackBar(
+          'La impresion termica Bluetooth esta disponible desde la app Android.',
+        );
+        return;
+      }
+
+      final printer = await _selectBondedPrinter();
+      if (!mounted || printer == null) return;
+
+      await ThermalPrinterService.printEscPos(
+        address: printer.address,
+        bytes: _buildEscPosTestTicket(),
+      );
+      if (!mounted) return;
+
+      _showSnackBar('Prueba enviada a ${printer.name}.');
+    } on ThermalPrinterException catch (e) {
+      if (mounted) _showSnackBar(e.message);
+    } catch (e) {
+      if (mounted) _showSnackBar('No se pudo imprimir la prueba: $e');
+    } finally {
+      if (mounted) setState(() => _printing = false);
+    }
+  }
+
+  Future<ThermalPrinterDevice?> _selectBondedPrinter() async {
+    final devices = await ThermalPrinterService.getBondedPrinters();
+    if (!mounted) return null;
+
+    if (devices.isEmpty) {
+      _showSnackBar(
+        'No encontre impresoras Bluetooth emparejadas. Empareja la impresora desde Android e intenta de nuevo.',
+      );
+      return null;
+    }
+
+    return _selectPrinter(devices);
   }
 
   Future<ThermalPrinterDevice?> _selectPrinter(
@@ -196,7 +230,7 @@ class _ConduceLegalidadBoletaScreenState
     return Scaffold(
       backgroundColor: const Color(0xFFF3F4F6),
       appBar: AppBar(
-        title: const Text('Boleta de infraccion'),
+        title: const Text('Boleta de infracción'),
         actions: [
           IconButton(
             tooltip: 'Imprimir',
@@ -207,6 +241,11 @@ class _ConduceLegalidadBoletaScreenState
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
                 : const Icon(Icons.print_outlined),
+          ),
+          IconButton(
+            tooltip: 'Prueba Bluetooth',
+            onPressed: _printing ? null : _printTest,
+            icon: const Icon(Icons.receipt_long_outlined),
           ),
           IconButton(
             tooltip: 'Actualizar',
@@ -351,7 +390,7 @@ class _BoletaPaper extends StatelessWidget {
             const _TicketCenter(
               children: [
                 Text(
-                  'SECRETARIA DE SEGURIDAD PUBLICA',
+                  'SECRETARÍA DE SEGURIDAD PÚBLICA',
                   textAlign: TextAlign.center,
                   style: TextStyle(fontWeight: FontWeight.w900, fontSize: 13),
                 ),
@@ -363,7 +402,7 @@ class _BoletaPaper extends StatelessWidget {
                 ),
                 SizedBox(height: 8),
                 Text(
-                  'BOLETA DE INFRACCION',
+                  'BOLETA DE NOTIFICACIÓN',
                   textAlign: TextAlign.center,
                   style: TextStyle(fontWeight: FontWeight.w900, fontSize: 15),
                 ),
@@ -382,22 +421,22 @@ class _BoletaPaper extends StatelessWidget {
             _TicketPair(label: 'Hora', value: _value(captura.hora)),
             _TicketBlock(label: 'Lugar', value: _lugar),
             const _TicketDivider(),
-            const _TicketSection('I. FUNDAMENTO JURIDICO'),
+            const _TicketSection('I. FUNDAMENTO JURÍDICO'),
             _TicketBlock(
-              label: 'a) Articulo(s) que preven la infraccion',
+              label: 'a) Artículo(s) que prevén la infracción',
               value: _fundamentoInfraccion,
             ),
             _TicketBlock(
-              label: 'b) Articulo(s) que establecen la sancion',
+              label: 'b) Artículo(s) que establecen la sanción',
               value: _fundamentoSancion,
             ),
             const _TicketDivider(),
-            const _TicketSection('II. MOTIVACION'),
-            _TicketPair(label: 'Dia', value: _value(captura.fecha)),
+            const _TicketSection('II. MOTIVACIÓN'),
+            _TicketPair(label: 'Día', value: _value(captura.fecha)),
             _TicketPair(label: 'Hora', value: _value(captura.hora)),
             _TicketBlock(label: 'Lugar', value: _lugar),
             _TicketBlock(
-              label: 'Descripcion breve de la conducta',
+              label: 'Descripción breve de la conducta',
               value: _conducta,
             ),
             const _TicketDivider(),
@@ -417,7 +456,7 @@ class _BoletaPaper extends StatelessWidget {
               ),
             ),
             const _TicketDivider(),
-            const _TicketSection('VEHICULO'),
+            const _TicketSection('VEHÍCULO'),
             _TicketPair(
               label: 'Placas/permiso',
               value: _value(vehiculo?.placas, fallback: 'No capturado'),
@@ -426,12 +465,12 @@ class _BoletaPaper extends StatelessWidget {
               label: 'Estado placas',
               value: _value(vehiculo?.estadoPlacas, fallback: 'No capturado'),
             ),
-            _TicketBlock(label: 'Descripcion', value: _vehiculoDescripcion),
+            _TicketBlock(label: 'Descripción', value: _vehiculoDescripcion),
             if (_mostrarInformacionLiberacion) ...[
               const _TicketDivider(),
-              const _TicketSection('LIBERACION DEL VEHICULO'),
+              const _TicketSection('LIBERACIÓN DEL VEHÍCULO'),
               _TicketBlock(
-                label: 'Tramite',
+                label: 'Trámite',
                 value: _informacionLiberacionVehiculo,
               ),
             ],
@@ -442,7 +481,7 @@ class _BoletaPaper extends StatelessWidget {
               value: _value(persona?.tipoLicencia, fallback: 'No capturado'),
             ),
             _TicketPair(
-              label: 'Numero',
+              label: 'Número',
               value: _value(persona?.numeroLicencia, fallback: 'No capturado'),
             ),
             _TicketPair(
@@ -450,6 +489,15 @@ class _BoletaPaper extends StatelessWidget {
               value: _value(persona?.estadoLicencia, fallback: 'No capturado'),
             ),
             _TicketPair(label: 'Vigencia', value: _vigenciaLicencia),
+            const _TicketDivider(),
+            const _TicketSection('FIRMA Y MANIFESTACIÓN'),
+            const Text('Firma de la persona infractora:'),
+            const SizedBox(height: 30),
+            const _SignatureLine(),
+            const SizedBox(height: 10),
+            const Text('Manifestación de inconformidad (opcional):'),
+            const SizedBox(height: 8),
+            const _HandwrittenLines(lines: 3),
             const _TicketDivider(),
             const _TicketSection('AGENTE'),
             _TicketPair(
@@ -459,7 +507,7 @@ class _BoletaPaper extends StatelessWidget {
             _TicketPair(label: 'No. placa', value: _placaAgente),
             _TicketBlock(label: 'Adscripcion', value: _adscripcionAgente),
             const SizedBox(height: 18),
-            const Text('Firma autografa/electronica:'),
+            const Text('Firma autógrafa/electrónica:'),
             const SizedBox(height: 30),
             const _SignatureLine(),
             const SizedBox(height: 8),
@@ -584,22 +632,64 @@ Uint8List _buildEscPosTicket(
     }
   }
 
-  final textBytes = ascii.encode(_thermalClean(writer.toString()));
+  final textBytes = _thermalEncode(writer.toString().replaceAll('\n', '\r\n'));
   return Uint8List.fromList(<int>[
     0x1B, 0x40, // Inicializa impresora.
-    0x1B, 0x4D, 0x01, // Fuente B para que quepa mejor en 58/80mm.
-    0x1B, 0x61, 0x00, // Alineacion izquierda; el centrado va en texto.
+    0x1B, 0x21, 0x00, // Modo normal.
+    0x1D, 0x21, 0x00, // Tamaño normal.
+    0x1B, 0x45, 0x00, // Negritas apagadas.
+    0x1B, 0x74, 0x02, // Tabla CP850 para acentos en español.
+    0x1B, 0x61, 0x00, // Alineación izquierda; el centrado va en texto.
     ...textBytes,
-    0x0A, 0x0A, 0x0A,
-    0x1D, 0x56, 0x42, 0x00, // Corte parcial si la impresora lo soporta.
+    0x0A,
+    0x0A,
+    0x0A,
+  ]);
+}
+
+Uint8List _buildEscPosTestTicket() {
+  final timestamp = DateTime.now().toString().split('.').first;
+  final textBytes = _thermalEncode(
+    'SEGURIDAD VIAL\r\n'
+    'PRUEBA DE IMPRESIÓN\r\n'
+    '$timestamp\r\n'
+    'Descripción, prevén, infracción\r\n'
+    'Si puedes leer esto, la impresora\r\n'
+    'recibió texto ESC/POS desde la app.\r\n',
+  );
+  return Uint8List.fromList(<int>[
+    0x1B,
+    0x40,
+    0x1B,
+    0x21,
+    0x00,
+    0x1D,
+    0x21,
+    0x00,
+    0x1B,
+    0x45,
+    0x00,
+    0x1B,
+    0x74,
+    0x02,
+    0x1B,
+    0x61,
+    0x01,
+    ...textBytes,
+    0x1B,
+    0x61,
+    0x00,
+    0x0A,
+    0x0A,
+    0x0A,
   ]);
 }
 
 void _writeThermalTicket(_ThermalTicketWriter ticket, _BoletaTicketData data) {
-  ticket.center('SECRETARIA DE SEGURIDAD PUBLICA');
+  ticket.center('SECRETARÍA DE SEGURIDAD PÚBLICA');
   ticket.center('COORDINACIÓN DEL AGRUPAMIENTO DE SEGURIDAD VIAL');
   ticket.blank();
-  ticket.center('BOLETA DE INFRACCION');
+  ticket.center('BOLETA DE NOTIFICACIÓN');
   ticket.center('OPERATIVO CONDUCE CON LEGALIDAD');
   ticket.rule();
   ticket.pair('Folio interno', data.folio);
@@ -608,21 +698,21 @@ void _writeThermalTicket(_ThermalTicketWriter ticket, _BoletaTicketData data) {
   ticket.pair('Hora', _value(data.captura.hora));
   ticket.block('Lugar', data.lugar);
   ticket.rule();
-  ticket.section('I. FUNDAMENTO JURIDICO');
+  ticket.section('I. FUNDAMENTO JURÍDICO');
   ticket.block(
-    'a) Articulo(s) que preven la infraccion',
+    'a) Artículo(s) que prevén la infracción',
     data.fundamentoInfraccion,
   );
   ticket.block(
-    'b) Articulo(s) que establecen la sancion',
+    'b) Artículo(s) que establecen la sanción',
     data.fundamentoSancion,
   );
   ticket.rule();
-  ticket.section('II. MOTIVACION');
-  ticket.pair('Dia', _value(data.captura.fecha));
+  ticket.section('II. MOTIVACIÓN');
+  ticket.pair('Día', _value(data.captura.fecha));
   ticket.pair('Hora', _value(data.captura.hora));
   ticket.block('Lugar', data.lugar);
-  ticket.block('Descripcion breve de la conducta', data.conducta);
+  ticket.block('Descripción breve de la conducta', data.conducta);
   ticket.rule();
   ticket.section('PERSONA INFRACTORA');
   ticket.pair(
@@ -634,7 +724,7 @@ void _writeThermalTicket(_ThermalTicketWriter ticket, _BoletaTicketData data) {
     _value(data.persona?.domicilio, fallback: 'No presente o no proporcionado'),
   );
   ticket.rule();
-  ticket.section('VEHICULO');
+  ticket.section('VEHÍCULO');
   ticket.pair(
     'Placas/permiso',
     _value(data.vehiculo?.placas, fallback: 'No capturado'),
@@ -643,11 +733,11 @@ void _writeThermalTicket(_ThermalTicketWriter ticket, _BoletaTicketData data) {
     'Estado placas',
     _value(data.vehiculo?.estadoPlacas, fallback: 'No capturado'),
   );
-  ticket.block('Descripcion', data.vehiculoDescripcion);
+  ticket.block('Descripción', data.vehiculoDescripcion);
   if (data.mostrarInformacionLiberacion) {
     ticket.rule();
-    ticket.section('LIBERACION DEL VEHICULO');
-    ticket.block('Tramite', data.informacionLiberacionVehiculo);
+    ticket.section('LIBERACIÓN DEL VEHÍCULO');
+    ticket.block('Trámite', data.informacionLiberacionVehiculo);
   }
   ticket.rule();
   ticket.section('LICENCIA O PERMISO');
@@ -656,7 +746,7 @@ void _writeThermalTicket(_ThermalTicketWriter ticket, _BoletaTicketData data) {
     _value(data.persona?.tipoLicencia, fallback: 'No capturado'),
   );
   ticket.pair(
-    'Numero',
+    'Número',
     _value(data.persona?.numeroLicencia, fallback: 'No capturado'),
   );
   ticket.pair(
@@ -664,6 +754,21 @@ void _writeThermalTicket(_ThermalTicketWriter ticket, _BoletaTicketData data) {
     _value(data.persona?.estadoLicencia, fallback: 'No capturado'),
   );
   ticket.pair('Vigencia', data.vigenciaLicencia);
+  ticket.rule();
+  ticket.section('FIRMA Y MANIFESTACIÓN');
+  ticket.line('Firma de la persona infractora:');
+  ticket.blank();
+  ticket.blank();
+  ticket.line(_ThermalTicketWriter.repeat('_', _ThermalTicketWriter.width));
+  ticket.blank();
+  ticket.line('Manifestación de inconformidad');
+  ticket.line('(opcional):');
+  ticket.blank();
+  ticket.line(_ThermalTicketWriter.repeat('_', _ThermalTicketWriter.width));
+  ticket.blank();
+  ticket.line(_ThermalTicketWriter.repeat('_', _ThermalTicketWriter.width));
+  ticket.blank();
+  ticket.line(_ThermalTicketWriter.repeat('_', _ThermalTicketWriter.width));
   ticket.rule();
   ticket.section('AGENTE');
   ticket.pair(
@@ -673,7 +778,7 @@ void _writeThermalTicket(_ThermalTicketWriter ticket, _BoletaTicketData data) {
   ticket.pair('No. placa', data.placaAgente);
   ticket.block('Adscripcion', data.adscripcionAgente);
   ticket.blank();
-  ticket.line('Firma autografa/electronica:');
+  ticket.line('Firma autógrafa/electrónica:');
   ticket.blank();
   ticket.blank();
   ticket.line(_ThermalTicketWriter.repeat('_', _ThermalTicketWriter.width));
@@ -781,7 +886,7 @@ class _BoletaTicketData {
 }
 
 class _ThermalTicketWriter {
-  static const int width = 42;
+  static const int width = 32;
 
   final StringBuffer _buffer = StringBuffer();
 
@@ -861,52 +966,73 @@ ConduceLegalidadPersona? _personaForTicket(
   return captura.personas.first;
 }
 
+class _BoletaInfractionEntry {
+  final String label;
+  final ConduceLegalidadFundamento? infraccion;
+  final String? fallbackLegal;
+  final ConduceLegalidadVehiculo? vehiculo;
+
+  const _BoletaInfractionEntry({
+    required this.label,
+    required this.infraccion,
+    required this.fallbackLegal,
+    this.vehiculo,
+  });
+}
+
 class _BoletaLegalText {
   static const String _normativa =
-      'del Reglamento de la Ley de Movilidad y Seguridad Vial del Estado de Michoacan';
+      'del Reglamento de la Ley de Movilidad y Seguridad Vial del Estado de Michoacán';
 
   static String fundamentoInfraccion(
     ConduceLegalidadVehiculo? vehiculo,
     ConduceLegalidadPersona? persona,
   ) {
-    final referenciaPersona = _referenciaLegal(persona?.infraccion);
-    final referenciaVehiculo = _referenciaLegal(vehiculo?.infraccion);
+    final blocks = <String>[];
+    for (final entry in _entries(vehiculo, persona)) {
+      final referencias = _referenciasLegales(entry.infraccion);
+      final fallback = referencias.isEmpty
+          ? _sanitizedFallback(entry.fallbackLegal)
+          : null;
+      final lines = <String>[...referencias, if (fallback != null) fallback];
+      if (lines.isNotEmpty) {
+        blocks.add(_entryBlock(entry.label, lines));
+      }
+    }
 
-    return _joinUnique([
-      if (referenciaPersona != null) _sentence(referenciaPersona),
-      if (referenciaVehiculo != null) _sentence(referenciaVehiculo),
-      _sanitizedFallback(persona?.fundamentoLegal),
-      _sanitizedFallback(vehiculo?.fundamentoLegal),
-    ], fallback: 'Pendiente de catalogo legal');
+    return blocks.isEmpty ? 'Pendiente de catálogo legal' : blocks.join('\n');
   }
 
   static String fundamentoSancion(
     ConduceLegalidadVehiculo? vehiculo,
     ConduceLegalidadPersona? persona,
   ) {
-    final infraccionVehiculo = vehiculo?.infraccion;
-    final infraccionPersona = persona?.infraccion;
-    final referenciaPersona = _referenciaLegal(infraccionPersona);
-    final referenciaVehiculo = _referenciaLegal(infraccionVehiculo);
-    final sancionPersona = _sancionAplicable(
-      infraccionPersona,
-      null,
-      incluirRetencion: false,
-    );
-    final sancionVehiculo = _sancionAplicable(infraccionVehiculo, vehiculo);
+    final blocks = <String>[];
+    for (final entry in _entries(vehiculo, persona)) {
+      final referencias = _referenciasLegales(entry.infraccion);
+      final sancion = _sancionAplicable(
+        entry.infraccion,
+        entry.vehiculo,
+        incluirRetencion: entry.vehiculo != null,
+      );
+      final fallback = sancion == null && referencias.isEmpty
+          ? _sanitizedFallback(entry.fallbackLegal)
+          : null;
+      final lines = <String>[
+        ...referencias,
+        if (sancion != null) sancion,
+        if (fallback != null) fallback,
+      ];
+      if (lines.isNotEmpty) {
+        blocks.add(_entryBlock(entry.label, lines));
+      }
+    }
 
-    return _joinUnique([
-      if (referenciaPersona != null) _sentence(referenciaPersona),
-      sancionPersona,
-      if (referenciaVehiculo != null) _sentence(referenciaVehiculo),
-      sancionVehiculo,
-      if (sancionPersona == null)
-        _sanitizedFallback(infraccionPersona?.fundamentoLegal),
-      if (sancionVehiculo == null)
-        _sanitizedFallback(infraccionVehiculo?.fundamentoLegal),
-      if (sancionVehiculo == null)
-        _sanitizedFallback(vehiculo?.fundamentoLegal),
-    ], fallback: 'Pendiente de catalogo legal');
+    if (blocks.isEmpty && requiereInformacionLiberacion(vehiculo)) {
+      return 'Vehículo:\n- Sanción aplicable: remisión o retiro del vehículo al depósito.';
+    }
+
+    return blocks.isEmpty ? 'Pendiente de catálogo legal' : blocks.join('\n');
   }
 
   static String conducta(
@@ -939,33 +1065,69 @@ class _BoletaLegalText {
   static String informacionLiberacion(ConduceLegalidadVehiculo? vehiculo) {
     final deposito = _cleanValue(vehiculo?.corralon);
     final retiro = deposito == null
-        ? 'La entrega fisica se realizara conforme al deposito vehicular autorizado que corresponda.'
-        : 'La entrega fisica se realizara en $deposito, previa autorizacion.';
+        ? 'La entrega física se realizará conforme al depósito vehicular autorizado que corresponda.'
+        : 'La entrega física se realizará en $deposito, previa autorización.';
 
-    return 'Para iniciar el tramite de liberacion del vehiculo, la persona interesada debera acudir a la Direccion de Justicia Civica y Mediacion Administrativa, de lunes a viernes de 09:00 a 16:00 horas, con identificacion oficial y documentacion que acredite propiedad o legitima posesion. $retiro';
+    return 'Para iniciar el trámite de liberación del vehículo, la persona interesada deberá acudir a la Dirección de Justicia Cívica y Mediación Administrativa, ubicada en Periférico Paseo de la República #5000, Colonia Sentimientos de la Nación (C.P. 58178), en Morelia, Mich., de lunes a viernes de 09:00 a 18:00 horas, con identificación oficial y documentación que acredite propiedad o legítima posesión. Informes: 4433163728. $retiro';
   }
 
-  static String? _referenciaLegal(ConduceLegalidadFundamento? infraccion) {
-    if (infraccion == null) return null;
+  static List<_BoletaInfractionEntry> _entries(
+    ConduceLegalidadVehiculo? vehiculo,
+    ConduceLegalidadPersona? persona,
+  ) {
+    return <_BoletaInfractionEntry>[
+      if (persona?.infraccion != null ||
+          _cleanValue(persona?.fundamentoLegal) != null)
+        _BoletaInfractionEntry(
+          label: 'Persona infractora',
+          infraccion: persona?.infraccion,
+          fallbackLegal: persona?.fundamentoLegal,
+        ),
+      if (vehiculo?.infraccion != null ||
+          _cleanValue(vehiculo?.fundamentoLegal) != null ||
+          (vehiculo?.retencionVehiculo ?? false))
+        _BoletaInfractionEntry(
+          label: 'Vehículo',
+          infraccion: vehiculo?.infraccion,
+          fallbackLegal: vehiculo?.fundamentoLegal,
+          vehiculo: vehiculo,
+        ),
+    ];
+  }
 
-    final articulo = _articulos(infraccion.articulo);
-    if (articulo != null) {
-      final partes = <String>[articulo];
+  static String _entryBlock(String label, List<String> lines) {
+    return '$label:\n${lines.map((line) => '- $line').join('\n')}';
+  }
+
+  static List<String> _referenciasLegales(
+    ConduceLegalidadFundamento? infraccion,
+  ) {
+    if (infraccion == null) return const <String>[];
+
+    final articulos = _numbers(infraccion.articulo);
+    if (articulos.isNotEmpty) {
       final fraccion = _fracciones(infraccion.fraccion);
       final inciso = _incisos(infraccion.inciso);
-      if (fraccion != null) partes.add(fraccion);
-      if (inciso != null) partes.add(inciso);
-      return '${partes.join(', ')} $_normativa';
+      return articulos
+          .map((articulo) {
+            final partes = <String>['Artículo $articulo'];
+            if (fraccion != null) partes.add(fraccion);
+            if (inciso != null) partes.add(inciso);
+            return '${partes.join(', ')} $_normativa.';
+          })
+          .toList(growable: false);
     }
 
     final corta = _cleanValue(infraccion.referenciaLegalCorta);
-    if (corta == null) return null;
-    if (_looksLikeInternalCode(corta)) return null;
+    if (corta == null || _looksLikeInternalCode(corta)) return const <String>[];
 
     final normalizada = corta
-        .replaceAll(RegExp(r'\bArt\.\s*'), 'Articulo ')
-        .replaceAll(RegExp(r'\bfracc\.\s*'), 'fraccion ');
-    return '$normalizada $_normativa';
+        .replaceAll(RegExp(r'\bArt\.\s*'), 'Artículo ')
+        .replaceAll(RegExp(r'\bArticulos\b'), 'Artículos')
+        .replaceAll(RegExp(r'\bArticulo\b'), 'Artículo')
+        .replaceAll(RegExp(r'\bfracc\.\s*'), 'fracción ')
+        .replaceAll(RegExp(r'\bfraccion\b'), 'fracción');
+    return <String>[_sentence('$normalizada $_normativa')];
   }
 
   static String? _sancionAplicable(
@@ -975,39 +1137,39 @@ class _BoletaLegalText {
   }) {
     if (infraccion == null) {
       return requiereInformacionLiberacion(vehiculo)
-          ? 'Sancion aplicable: remision o retiro del vehiculo al deposito.'
+          ? 'Sanción aplicable: remisión o retiro del vehículo al depósito.'
           : null;
     }
 
     final partes = <String>[
-      if (infraccion.amonestacion) 'amonestacion a la persona infractora',
+      if (infraccion.amonestacion) 'amonestación a la persona infractora',
       if (infraccion.arrestoPersona) 'arresto de la persona hasta por 36 horas',
       if (infraccion.suspensionLicencia)
-        'suspension de la licencia o permiso para conducir',
+        'suspensión de la licencia o permiso para conducir',
       if (infraccion.cancelacionLicencia)
-        'cancelacion de la licencia o permiso para conducir',
+        'cancelación de la licencia o permiso para conducir',
       if (infraccion.puntos > 0)
-        'penalizacion de ${infraccion.puntos} ${infraccion.puntos == 1 ? 'punto' : 'puntos'} en la licencia para conducir',
+        'penalización de ${infraccion.puntos} ${infraccion.puntos == 1 ? 'punto' : 'puntos'} en la licencia para conducir',
       if (_cleanValue(infraccion.multaUmaTexto) != null)
         'multa de ${_cleanValue(infraccion.multaUmaTexto)}',
       if (incluirRetencion &&
           ((vehiculo?.retencionVehiculo ?? false) ||
               infraccion.retencionVehiculo))
-        'remision o retiro del vehiculo al deposito',
+        'remisión o retiro del vehículo al depósito',
       if (incluirRetencion &&
           !(vehiculo?.retencionVehiculo ?? false) &&
           !infraccion.retencionVehiculo &&
           infraccion.depositoSiSinPersonaHabilitada)
-        'deposito del vehiculo cuando no exista persona legalmente habilitada para hacerse cargo inmediato',
+        'depósito del vehículo cuando no exista persona legalmente habilitada para hacerse cargo inmediato',
     ];
 
     if (partes.isEmpty) {
       final resumen = _cleanValue(infraccion.resumenSanciones);
-      if (resumen == null || resumen == 'sin sancion registrada') return null;
+      if (resumen == null || resumen == 'sin sanción registrada') return null;
       partes.add(resumen.replaceAll(' + ', '; '));
     }
 
-    return 'Sancion aplicable: ${_humanJoin(partes)}.';
+    return 'Sanción aplicable: ${_humanJoin(partes)}.';
   }
 
   static String? _conductaCatalogo(ConduceLegalidadFundamento? infraccion) {
@@ -1019,20 +1181,12 @@ class _BoletaLegalText {
     return 'La conducta asentada consiste en: ${_lowerFirst(texto)}.';
   }
 
-  static String? _articulos(String? raw) {
-    final values = _numbers(raw);
-    if (values.isEmpty) return null;
-    return values.length == 1
-        ? 'Articulo ${values.first}'
-        : 'Articulos ${_humanJoin(values)}';
-  }
-
   static String? _fracciones(String? raw) {
     final text = _cleanValue(raw);
     if (text == null) return null;
     final plural =
         text.contains(',') || text.contains('-') || text.contains(' y ');
-    return '${plural ? 'fracciones' : 'fraccion'} $text';
+    return '${plural ? 'fracciones' : 'fracción'} $text';
   }
 
   static String? _incisos(String? raw) {
@@ -1148,22 +1302,6 @@ List<String> _wrapText(String text, int width) {
 
 String _thermalClean(String value) {
   final replacements = <String, String>{
-    'Á': 'A',
-    'É': 'E',
-    'Í': 'I',
-    'Ó': 'O',
-    'Ú': 'U',
-    'Ü': 'U',
-    'Ñ': 'N',
-    'á': 'a',
-    'é': 'e',
-    'í': 'i',
-    'ó': 'o',
-    'ú': 'u',
-    'ü': 'u',
-    'ñ': 'n',
-    'º': 'o',
-    '°': 'o',
     '“': '"',
     '”': '"',
     '‘': "'",
@@ -1177,8 +1315,46 @@ String _thermalClean(String value) {
   for (final entry in replacements.entries) {
     text = text.replaceAll(entry.key, entry.value);
   }
-  return text.replaceAll(RegExp(r'[^\x09\x0A\x0D\x20-\x7E]'), '');
+  return text.replaceAll(
+    RegExp(r'[^\x09\x0A\x0D\x20-\x7EáéíóúÁÉÍÓÚñÑüÜ¿¡°º]'),
+    '',
+  );
 }
+
+List<int> _thermalEncode(String value) {
+  final bytes = <int>[];
+  for (final rune in _thermalClean(value).runes) {
+    if (rune <= 0x7F) {
+      bytes.add(rune);
+      continue;
+    }
+
+    final mapped = _cp850Bytes[String.fromCharCode(rune)];
+    bytes.add(mapped ?? 0x3F);
+  }
+  return bytes;
+}
+
+const Map<String, int> _cp850Bytes = <String, int>{
+  'á': 0xA0,
+  'é': 0x82,
+  'í': 0xA1,
+  'ó': 0xA2,
+  'ú': 0xA3,
+  'Á': 0xB5,
+  'É': 0x90,
+  'Í': 0xD6,
+  'Ó': 0xE0,
+  'Ú': 0xE9,
+  'ñ': 0xA4,
+  'Ñ': 0xA5,
+  'ü': 0x81,
+  'Ü': 0x9A,
+  '¿': 0xA8,
+  '¡': 0xAD,
+  '°': 0xF8,
+  'º': 0xA7,
+};
 
 class _TicketCenter extends StatelessWidget {
   final List<Widget> children;
@@ -1292,6 +1468,24 @@ class _SignatureLine extends StatelessWidget {
   }
 }
 
+class _HandwrittenLines extends StatelessWidget {
+  final int lines;
+
+  const _HandwrittenLines({required this.lines});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        for (var i = 0; i < lines; i++) ...[
+          const SizedBox(height: 18),
+          const _SignatureLine(),
+        ],
+      ],
+    );
+  }
+}
+
 class _BoletaStatusPanel extends StatelessWidget {
   final IconData icon;
   final String title;
@@ -1355,15 +1549,15 @@ class _BoletaPreviewData {
       codigo: 'OP_CL_SIN_LICENCIA_SIN_HABILITADO',
       nombre: 'Persona sin licencia y sin persona habilitada inmediata',
       articulo: '402; 700; 702',
-      referenciaLegalCorta: 'Articulos 402, 700 y 702',
+      referenciaLegalCorta: 'Artículos 402, 700 y 702',
       puntos: 0,
       multaUmaTexto: 'Conforme a UMA vigente',
       retencionVehiculo: true,
-      resumenSanciones: 'remision o retiro del vehiculo al deposito',
+      resumenSanciones: 'remisión o retiro del vehículo al depósito',
       fundamentoLegal:
-          'Fundamento operativo compuesto relativo a licencia vigente y retiro del vehiculo cuando no existe persona legalmente habilitada para hacerse cargo inmediato.',
+          'Fundamento operativo compuesto relativo a licencia vigente y retiro del vehículo cuando no existe persona legalmente habilitada para hacerse cargo inmediato.',
       narrativaSugerida:
-          'Conduce motocicleta sin licencia o permiso vigente, sin persona habilitada que pueda hacerse cargo inmediato del vehiculo.',
+          'Conduce motocicleta sin licencia o permiso vigente, sin persona habilitada que pueda hacerse cargo inmediato del vehículo.',
     );
 
     return _BoletaPreviewData(
@@ -1405,7 +1599,7 @@ class _BoletaPreviewData {
             linea: 'FT150',
             color: 'Negro',
             placas: 'ABC1D',
-            estadoPlacas: 'Michoacan',
+            estadoPlacas: 'Michoacán',
             serie: '3SCPFTDEMO0000001',
             tipoServicio: 'Particular',
             retencionVehiculo: true,
@@ -1416,7 +1610,7 @@ class _BoletaPreviewData {
         personas: const [
           ConduceLegalidadPersona(
             nombre: 'Juan Perez Lopez',
-            domicilio: 'Calle Ejemplo 123, Morelia, Michoacan',
+            domicilio: 'Calle Ejemplo 123, Morelia, Michoacán',
             tipoLicencia: 'Motociclista',
             estadoLicencia: 'No exhibe',
             numeroLicencia: 'No proporcionado',

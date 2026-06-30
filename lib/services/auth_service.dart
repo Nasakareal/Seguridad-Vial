@@ -623,14 +623,6 @@ class AuthService {
     return _payloadHasChildDelegations(payload);
   }
 
-  static Future<bool> shouldRedirectDelegacionesActivitiesToHechos() async {
-    if (!await isDelegacionesUser()) {
-      return false;
-    }
-
-    return await isPolicia() || await isDelegadoRole();
-  }
-
   static Future<int?> getFeedDelegacionFilterId() async {
     if (!await isDelegacionesUser()) {
       return null;

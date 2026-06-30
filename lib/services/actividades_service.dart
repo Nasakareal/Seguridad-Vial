@@ -504,55 +504,33 @@ class ActividadesService {
     return warnings;
   }
 
-  static bool shouldRedirectC5iReportToHecho({
-    required String categoriaNombre,
-    required String subcategoriaNombre,
-    bool userCanCaptureHechos = true,
+  static List<ActividadSubcategoria> visibleSubcategoriasForActividadUi(
+    List<ActividadSubcategoria> subcategorias, {
+    required bool hideHechosTransito,
   }) {
-    if (!userCanCaptureHechos) return false;
+    if (!hideHechosTransito) {
+      return List<ActividadSubcategoria>.from(subcategorias);
+    }
 
-    final categoria = _normalizeCatalogLabel(categoriaNombre);
-    final subcategoria = _normalizeCatalogLabel(subcategoriaNombre);
-
-    final isC5iReport =
-        categoria.contains('REPORTE') &&
-        (categoria.contains('C5I') || categoria.contains('C5'));
-    final isHechoOrSiniestro =
-        subcategoria.contains('HECHO DE TRANSITO') ||
-        subcategoria.contains('HECHOS DE TRANSITO') ||
-        subcategoria.contains('SINIESTRO');
-
-    return isC5iReport && isHechoOrSiniestro;
+    return subcategorias
+        .where(shouldShowSubcategoriaInActividadUi)
+        .toList(growable: false);
   }
 
-  static bool shouldRedirectDelegacionesActivityToHecho({
-    required String categoriaNombre,
-    required String subcategoriaNombre,
-    bool userCanCaptureHechos = true,
-    bool appliesToUser = true,
-  }) {
-    if (!userCanCaptureHechos || !appliesToUser) return false;
-
-    final categoria = _normalizeCatalogLabel(categoriaNombre);
-    final subcategoria = _normalizeCatalogLabel(subcategoriaNombre);
-    final combined = '$categoria $subcategoria';
-
-    final isC5iReport =
-        categoria.contains('REPORTE') &&
-        (categoria.contains('C5I') || categoria.contains('C5'));
-    final looksLikeHecho = _looksLikeHechoCatalogText(combined);
-    final isAbanderamiento = categoria.contains('ABANDERAMIENTO');
-
-    return (isC5iReport && looksLikeHecho) ||
-        isAbanderamiento ||
-        looksLikeHecho;
+  static bool shouldShowSubcategoriaInActividadUi(
+    ActividadSubcategoria subcategoria,
+  ) {
+    return !isHechoTransitoSubcategoria(subcategoria.nombre);
   }
 
-  static bool _looksLikeHechoCatalogText(String text) {
-    return text.contains('ACCIDENTE') ||
-        text.contains('HECHO DE TRANSITO') ||
-        text.contains('HECHOS DE TRANSITO') ||
-        text.contains('SINIESTRO');
+  static bool isHechoTransitoSubcategoria(String nombre) {
+    final label = _normalizeCatalogLabel(nombre);
+    return label == 'ACCIDENTE' ||
+        label == 'ACCIDENTES' ||
+        label == 'HECHO DE TRANSITO' ||
+        label == 'HECHOS DE TRANSITO' ||
+        label == 'SINIESTRO' ||
+        label == 'SINIESTROS';
   }
 
   static String toPublicUrl(String pathOrUrl) {
@@ -758,7 +736,7 @@ class ActividadesService {
     if (requireCoords && (latText.isEmpty || lngText.isEmpty)) {
       add(
         ActividadValidationTarget.ubicacion,
-        'Captura la ubicación con el botón "Usar mi ubicación".',
+        'Usa el botón "Usar mi ubicación" o escribe latitud y longitud manualmente.',
       );
     } else if (latText.isNotEmpty || lngText.isNotEmpty) {
       final lat = double.tryParse(latText);

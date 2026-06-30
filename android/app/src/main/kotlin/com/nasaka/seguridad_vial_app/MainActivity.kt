@@ -12,6 +12,7 @@ import io.flutter.embedding.android.FlutterFragmentActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 import java.io.IOException
+import java.io.OutputStream
 import java.util.UUID
 
 class MainActivity : FlutterFragmentActivity() {
@@ -117,7 +118,7 @@ class MainActivity : FlutterFragmentActivity() {
                     // No estamos escaneando; cancelar discovery solo mejora la conexion si esta permitido.
                 }
 
-                writeToDevice(device, bytes, insecure = false)
+                writeToDevice(device, bytes, insecure = true)
                 postSuccess(result, true)
             } catch (firstError: IOException) {
                 try {
@@ -126,7 +127,7 @@ class MainActivity : FlutterFragmentActivity() {
                         postError(result, "DEVICE_NOT_FOUND", "Impresora no emparejada.")
                         return@Thread
                     }
-                    writeToDevice(device, bytes, insecure = true)
+                    writeToDevice(device, bytes, insecure = false)
                     postSuccess(result, true)
                 } catch (_: SecurityException) {
                     postError(result, "PERMISSION_DENIED", "Permiso de Bluetooth requerido.")
@@ -160,12 +161,27 @@ class MainActivity : FlutterFragmentActivity() {
         try {
             socket.connect()
             socket.outputStream.use { output ->
-                output.write(bytes)
-                output.flush()
+                writeBytesInChunks(output, bytes)
             }
         } finally {
             closeQuietly(socket)
         }
+    }
+
+    private fun writeBytesInChunks(output: OutputStream, bytes: ByteArray) {
+        var offset = 0
+        val chunkSize = 128
+        while (offset < bytes.size) {
+            val count = minOf(chunkSize, bytes.size - offset)
+            output.write(bytes, offset, count)
+            output.flush()
+            offset += count
+            if (offset < bytes.size) {
+                Thread.sleep(25)
+            }
+        }
+        output.flush()
+        Thread.sleep(400)
     }
 
     private fun createSocket(device: BluetoothDevice, insecure: Boolean): BluetoothSocket {

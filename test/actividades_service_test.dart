@@ -24,7 +24,7 @@ void main() {
     expect(error, isNotNull);
     expect(error, contains('Selecciona una categoría.'));
     expect(error, contains('Selecciona una subcategoría.'));
-    expect(error, contains('Captura la ubicación'));
+    expect(error, contains('escribe latitud y longitud manualmente'));
     expect(error, contains('Selecciona al menos una foto.'));
     expect(error, contains('Personas alcanzadas debe ser al menos 1.'));
   });
@@ -264,104 +264,57 @@ void main() {
     expect(warnings, anyElement(contains('Personas participantes está en 0')));
   });
 
-  test('redirects C5i transit reports to hechos capture', () {
-    expect(
-      ActividadesService.shouldRedirectC5iReportToHecho(
-        categoriaNombre: 'Reportes C5i',
-        subcategoriaNombre: 'Hechos de tránsito',
-      ),
-      isTrue,
+  test('hides hechos transit subcategories from the activity UI', () {
+    final visible = ActividadesService.visibleSubcategoriasForActividadUi(
+      const <ActividadSubcategoria>[
+        ActividadSubcategoria(id: 1, nombre: 'Accidentes'),
+        ActividadSubcategoria(id: 2, nombre: 'Hechos de tránsito'),
+        ActividadSubcategoria(id: 3, nombre: 'Siniestros'),
+        ActividadSubcategoria(id: 4, nombre: 'Cortes de circulación'),
+        ActividadSubcategoria(id: 5, nombre: 'Apoyo ciudadano'),
+      ],
+      hideHechosTransito: true,
     );
-    expect(
-      ActividadesService.shouldRedirectC5iReportToHecho(
-        categoriaNombre: 'REPORTES C5I',
-        subcategoriaNombre: 'Siniestros',
-      ),
-      isTrue,
-    );
-    expect(
-      ActividadesService.shouldRedirectC5iReportToHecho(
-        categoriaNombre: 'Reportes C5i',
-        subcategoriaNombre: 'Apoyo ciudadano',
-      ),
-      isFalse,
-    );
-    expect(
-      ActividadesService.shouldRedirectC5iReportToHecho(
-        categoriaNombre: 'Reportes C5i',
-        subcategoriaNombre: 'Hechos de tránsito',
-        userCanCaptureHechos: false,
-      ),
-      isFalse,
-    );
+
+    expect(visible.map((item) => item.id), <int>[4, 5]);
   });
 
   test(
-    'redirects delegaciones accident and siniestro activities to hechos',
+    'keeps hechos transit subcategories visible outside delegaciones UI',
     () {
-      expect(
-        ActividadesService.shouldRedirectDelegacionesActivityToHecho(
-          categoriaNombre: 'Reportes de C5i',
-          subcategoriaNombre: 'Accidentes',
-        ),
-        isTrue,
+      final visible = ActividadesService.visibleSubcategoriasForActividadUi(
+        const <ActividadSubcategoria>[
+          ActividadSubcategoria(id: 1, nombre: 'Accidentes'),
+          ActividadSubcategoria(id: 2, nombre: 'Hechos de tránsito'),
+          ActividadSubcategoria(id: 3, nombre: 'Siniestros'),
+          ActividadSubcategoria(id: 4, nombre: 'Cortes de circulación'),
+        ],
+        hideHechosTransito: false,
       );
-      expect(
-        ActividadesService.shouldRedirectDelegacionesActivityToHecho(
-          categoriaNombre: 'Reportes de C5i',
-          subcategoriaNombre: 'Hechos de tránsito',
-        ),
-        isTrue,
-      );
-      expect(
-        ActividadesService.shouldRedirectDelegacionesActivityToHecho(
-          categoriaNombre: 'Servicios',
-          subcategoriaNombre: 'Siniestros',
-        ),
-        isTrue,
-      );
+
+      expect(visible.map((item) => item.id), <int>[1, 2, 3, 4]);
     },
   );
 
-  test('redirects delegaciones abanderamientos to hechos', () {
+  test('does not treat abanderamientos as hechos transit subcategory', () {
     expect(
-      ActividadesService.shouldRedirectDelegacionesActivityToHecho(
-        categoriaNombre: 'Abanderamientos',
-        subcategoriaNombre: 'Cortes de circulación',
-      ),
+      ActividadesService.isHechoTransitoSubcategoria('ACCIDENTES'),
       isTrue,
     );
     expect(
-      ActividadesService.shouldRedirectDelegacionesActivityToHecho(
-        categoriaNombre: 'Abanderamientos',
-        subcategoriaNombre: '',
-      ),
+      ActividadesService.isHechoTransitoSubcategoria('hecho de transito'),
       isTrue,
     );
-  });
-
-  test('does not redirect normal activities or users outside rule', () {
     expect(
-      ActividadesService.shouldRedirectDelegacionesActivityToHecho(
-        categoriaNombre: 'Monitoreos',
-        subcategoriaNombre: 'Periféricos',
-      ),
+      ActividadesService.isHechoTransitoSubcategoria('Siniestros'),
+      isTrue,
+    );
+    expect(
+      ActividadesService.isHechoTransitoSubcategoria('ABANDERAMIENTOS'),
       isFalse,
     );
     expect(
-      ActividadesService.shouldRedirectDelegacionesActivityToHecho(
-        categoriaNombre: 'Reportes de C5i',
-        subcategoriaNombre: 'Accidentes',
-        appliesToUser: false,
-      ),
-      isFalse,
-    );
-    expect(
-      ActividadesService.shouldRedirectDelegacionesActivityToHecho(
-        categoriaNombre: 'Reportes de C5i',
-        subcategoriaNombre: 'Accidentes',
-        userCanCaptureHechos: false,
-      ),
+      ActividadesService.isHechoTransitoSubcategoria('Cortes de circulación'),
       isFalse,
     );
   });

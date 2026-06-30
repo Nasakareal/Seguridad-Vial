@@ -15,6 +15,7 @@ import '../../core/licencias/licencia_barcode_payload.dart';
 import '../../models/conduce_legalidad.dart';
 import '../../services/conduce_legalidad_service.dart';
 import '../../services/gruas_catalog_service.dart';
+import '../../services/local_draft_service.dart';
 import '../../services/photo_picker_service.dart';
 import '../../services/vehiculo_form_service.dart';
 import '../../widgets/marca_vehiculo_dropdown.dart';
@@ -44,6 +45,7 @@ class _ConduceLegalidadCapturaScreenState
   final _municipioCtrl = TextEditingController(text: 'Morelia');
   final _lugarCtrl = TextEditingController();
   final _observacionesCtrl = TextEditingController();
+  late final LocalDraftAutosave _draft;
 
   bool _loadingMeta = true;
   bool _saving = false;
@@ -62,11 +64,22 @@ class _ConduceLegalidadCapturaScreenState
   void initState() {
     super.initState();
     _hydrateInitialCaptura();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _loadMeta());
+    _draft = LocalDraftAutosave(draftId: _draftId(), collect: _draftValues)
+      ..attachTextControllers({
+        'narrativa': _narrativaCtrl,
+        'municipio': _municipioCtrl,
+        'lugar': _lugarCtrl,
+        'observaciones': _observacionesCtrl,
+      });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      unawaited(_restoreLocalDraft());
+      unawaited(_loadMeta());
+    });
   }
 
   @override
   void dispose() {
+    _draft.dispose();
     _narrativaCtrl.dispose();
     _municipioCtrl.dispose();
     _lugarCtrl.dispose();
@@ -95,6 +108,131 @@ class _ConduceLegalidadCapturaScreenState
       ..addAll(captura.fotos);
   }
 
+  String _draftId() {
+    if (_editing) {
+      return 'conduce_legalidad:captura:${widget.operativoId}:edit:${widget.initialCaptura!.id}';
+    }
+    return 'conduce_legalidad:captura:${widget.operativoId}:create';
+  }
+
+  Future<void> _restoreLocalDraft() async {
+    final restored = await _draft.restore(_applyLocalDraft);
+    if (!mounted || !restored) return;
+    setState(() {});
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Borrador local recuperado.')));
+  }
+
+  void _applyLocalDraft(Map<String, dynamic> draft) {
+    _narrativaCtrl.text =
+        _stringValue(draft['narrativa']) ?? _narrativaCtrl.text;
+    _municipioCtrl.text =
+        _stringValue(draft['municipio']) ?? _municipioCtrl.text;
+    _lugarCtrl.text = _stringValue(draft['lugar']) ?? _lugarCtrl.text;
+    _observacionesCtrl.text =
+        _stringValue(draft['observaciones']) ?? _observacionesCtrl.text;
+
+    if (draft.containsKey('vehiculos') ||
+        draft.containsKey('vehiculos_count')) {
+      _vehiculos
+        ..clear()
+        ..addAll(_vehiculosFromDraft(draft['vehiculos']));
+    }
+    if (draft.containsKey('personas') || draft.containsKey('personas_count')) {
+      _personas
+        ..clear()
+        ..addAll(_personasFromDraft(draft['personas']));
+    }
+    if (draft.containsKey('fotos') || draft.containsKey('fotos_count')) {
+      _fotos
+        ..clear()
+        ..addAll(_filesFromDraft(draft['fotos']));
+    }
+  }
+
+  Map<String, dynamic> _draftValues() {
+    return <String, dynamic>{
+      'narrativa': _narrativaCtrl.text,
+      'municipio': _municipioCtrl.text,
+      'lugar': _lugarCtrl.text,
+      'observaciones': _observacionesCtrl.text,
+      'vehiculos': _vehiculos.map(_vehiculoDraftJson).toList(),
+      'vehiculos_count': _vehiculos.length,
+      'personas': _personas.map(_personaDraftJson).toList(),
+      'personas_count': _personas.length,
+      'fotos': _fotos.map((file) => file.path).toList(),
+      'fotos_count': _fotos.length,
+    };
+  }
+
+  Map<String, dynamic> _vehiculoDraftJson(ConduceLegalidadVehiculo vehiculo) {
+    final json = vehiculo.toJson();
+    json['retencion_vehiculo'] = vehiculo.retencionVehiculo;
+    if (vehiculo.infraccionCodigo != null) {
+      json['infraccion_codigo'] = vehiculo.infraccionCodigo;
+    }
+    if (vehiculo.fundamentoLegal != null) {
+      json['fundamento_legal'] = vehiculo.fundamentoLegal;
+    }
+    if (vehiculo.infraccion != null) {
+      json['infraccion'] = vehiculo.infraccion!.toJson();
+    }
+    return json;
+  }
+
+  Map<String, dynamic> _personaDraftJson(ConduceLegalidadPersona persona) {
+    final json = persona.toJson();
+    if (persona.infraccionCodigo != null) {
+      json['infraccion_codigo'] = persona.infraccionCodigo;
+    }
+    if (persona.fundamentoLegal != null) {
+      json['fundamento_legal'] = persona.fundamentoLegal;
+    }
+    if (persona.infraccion != null) {
+      json['infraccion'] = persona.infraccion!.toJson();
+    }
+    return json;
+  }
+
+  List<ConduceLegalidadVehiculo> _vehiculosFromDraft(dynamic raw) {
+    if (raw is! List) return const <ConduceLegalidadVehiculo>[];
+    return raw
+        .whereType<Map>()
+        .map(
+          (item) => ConduceLegalidadVehiculo.fromJson(
+            Map<String, dynamic>.from(item),
+          ),
+        )
+        .toList();
+  }
+
+  List<ConduceLegalidadPersona> _personasFromDraft(dynamic raw) {
+    if (raw is! List) return const <ConduceLegalidadPersona>[];
+    return raw
+        .whereType<Map>()
+        .map(
+          (item) =>
+              ConduceLegalidadPersona.fromJson(Map<String, dynamic>.from(item)),
+        )
+        .toList();
+  }
+
+  List<File> _filesFromDraft(dynamic raw) {
+    if (raw is! List) return const <File>[];
+    return raw
+        .map((item) => (item ?? '').toString().trim())
+        .where((path) => path.isNotEmpty)
+        .map(File.new)
+        .where((file) => file.existsSync())
+        .toList();
+  }
+
+  String? _stringValue(dynamic value) {
+    final text = (value ?? '').toString().trim();
+    return text.isEmpty ? null : text;
+  }
+
   Future<void> _loadMeta() async {
     setState(() {
       _loadingMeta = true;
@@ -106,6 +244,7 @@ class _ConduceLegalidadCapturaScreenState
       setState(() {
         _meta = meta;
         _loadingMeta = false;
+        _applyRndAvailability();
       });
     } catch (e) {
       if (!mounted) return;
@@ -125,7 +264,9 @@ class _ConduceLegalidadCapturaScreenState
     setState(() {
       _vehiculos.add(vehiculo);
       _aplicarNarrativaSugerida(vehiculo);
+      if (_rndEnabled) _prefillRndFromCaptureContext();
     });
+    _draft.notifyChanged();
   }
 
   void _aplicarNarrativaSugerida(ConduceLegalidadVehiculo vehiculo) {
@@ -144,7 +285,11 @@ class _ConduceLegalidadCapturaScreenState
       fundamentos: _meta?.fundamentosPersona ?? const [],
     );
     if (persona == null || !mounted) return;
-    setState(() => _personas.add(persona));
+    setState(() {
+      _personas.add(persona);
+      if (_rndEnabled) _prefillRndFromCaptureContext();
+    });
+    _draft.notifyChanged();
   }
 
   Future<void> _submit() async {
@@ -182,6 +327,10 @@ class _ConduceLegalidadCapturaScreenState
         'vehiculos': _vehiculos.map((item) => item.toJson()).toList(),
         'personas': _personas.map((item) => item.toJson()).toList(),
       };
+      final rndData = _currentRndData();
+      if (rndData != null) {
+        payload['rnd_data'] = rndData.toJson();
+      }
 
       final result = _editing
           ? await ConduceLegalidadService.updateCaptura(
@@ -196,6 +345,7 @@ class _ConduceLegalidadCapturaScreenState
               fotos: List<File>.from(_fotos),
             );
 
+      await _draft.discard();
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
@@ -227,6 +377,7 @@ class _ConduceLegalidadCapturaScreenState
         }
       }
     });
+    _draft.notifyChanged();
   }
 
   Future<void> _pickFromCamera() async {
@@ -242,6 +393,7 @@ class _ConduceLegalidadCapturaScreenState
         _fotos.add(file);
       }
     });
+    _draft.notifyChanged();
   }
 
   @override
@@ -313,8 +465,10 @@ class _ConduceLegalidadCapturaScreenState
                     ..._vehiculos.asMap().entries.map(
                       (entry) => _VehicleTile(
                         vehiculo: entry.value,
-                        onRemove: () =>
-                            setState(() => _vehiculos.removeAt(entry.key)),
+                        onRemove: () {
+                          setState(() => _vehiculos.removeAt(entry.key));
+                          _draft.notifyChanged();
+                        },
                       ),
                     ),
                   const SizedBox(height: 16),
@@ -332,8 +486,10 @@ class _ConduceLegalidadCapturaScreenState
                     ..._personas.asMap().entries.map(
                       (entry) => _PersonTile(
                         persona: entry.value,
-                        onRemove: () =>
-                            setState(() => _personas.removeAt(entry.key)),
+                        onRemove: () {
+                          setState(() => _personas.removeAt(entry.key));
+                          _draft.notifyChanged();
+                        },
                       ),
                     ),
                   const SizedBox(height: 12),
@@ -358,6 +514,7 @@ class _ConduceLegalidadCapturaScreenState
                     onCamera: _pickFromCamera,
                     onRemove: (index) => setState(() {
                       _fotos.removeAt(index);
+                      _draft.notifyChanged();
                     }),
                   ),
                   const SizedBox(height: 12),
@@ -372,6 +529,10 @@ class _ConduceLegalidadCapturaScreenState
                       prefixIcon: Icon(Icons.info_outline),
                     ),
                   ),
+                  if (_rndAvailable) ...[
+                    const SizedBox(height: 12),
+                    _buildRndPanel(),
+                  ],
                   const SizedBox(height: 20),
                   ElevatedButton.icon(
                     onPressed: _saving ? null : _submit,
@@ -394,6 +555,614 @@ class _ConduceLegalidadCapturaScreenState
               ),
             ),
     );
+  }
+
+  Future<void> _loadRndDefaults() async {
+    final isDelegaciones = await AuthService.isDelegacionesUser();
+    final payload = await AuthService.getStoredUserPayload();
+    final userName = await AuthService.getUserName(refreshIfMissing: false);
+    final role = await AuthService.getRole();
+
+    if (!mounted) return;
+    setState(() {
+      _isDelegacionesUser = isDelegaciones;
+      _rndUserChecked = true;
+      _applyRndAvailability();
+
+      if (_rndAvailable) {
+        _fillIfEmpty(_rndElementosNombreCtrl, userName);
+        _fillIfEmpty(_rndElementosCargoCtrl, role);
+        _fillIfEmpty(
+          _rndElementosAdscripcionCtrl,
+          _payloadAdscripcion(payload),
+        );
+        _fillIfEmpty(_rndSolicitanteNombreCtrl, userName);
+        _fillIfEmpty(_rndSolicitanteTelefonoCtrl, _payloadTelefono(payload));
+        if (_rndEnabled) _prefillRndFromCaptureContext();
+      }
+    });
+  }
+
+  void _applyRndAvailability() {
+    final metaAllows = _meta?.abilities.canUseRnd ?? true;
+    _rndAvailable = _rndUserChecked && !_isDelegacionesUser && metaAllows;
+    if (!_rndAvailable) {
+      _rndEnabled = false;
+    }
+  }
+
+  Widget _buildRndPanel() {
+    final missing = _rndMissingLabels();
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.deepPurple.shade100),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            value: _rndEnabled,
+            onChanged: _saving
+                ? null
+                : (value) {
+                    setState(() {
+                      _rndEnabled = value;
+                      if (value) _prefillRndFromCaptureContext();
+                    });
+                    _draft.notifyChanged();
+                  },
+            secondary: const Icon(Icons.assignment_ind_outlined),
+            title: const Text(
+              'Datos para RND',
+              style: TextStyle(fontWeight: FontWeight.w900),
+            ),
+            subtitle: const Text(
+              'Registro Nacional de Detenciones para faltas administrativas.',
+            ),
+          ),
+          if (_rndEnabled) ...[
+            const Divider(height: 20),
+            _rndSection('Elementos', [
+              _rndTextField(
+                _rndElementosNombreCtrl,
+                'Nombre del elemento',
+                Icons.person_outline,
+              ),
+              _rndTextField(
+                _rndElementosCargoCtrl,
+                'Cargo',
+                Icons.badge_outlined,
+              ),
+              _rndTextField(
+                _rndElementosAdscripcionCtrl,
+                'Adscripcion',
+                Icons.account_tree_outlined,
+              ),
+            ]),
+            _rndSection('Detencion', [
+              _rndTextField(
+                _rndFaltaCtrl,
+                'Falta administrativa',
+                Icons.gavel_outlined,
+                maxLines: 2,
+              ),
+              _rndTextField(
+                _rndFechaHoraCtrl,
+                'Fecha y hora',
+                Icons.schedule,
+                hint: 'Ej. 2026-06-30 14:35',
+              ),
+              _rndTextField(
+                _rndTiempoFormaCtrl,
+                'Tiempo y forma',
+                Icons.timelapse_outlined,
+                hint: 'Ej. Detencion en flagrancia durante operativo',
+                maxLines: 2,
+              ),
+              _rndTextField(
+                _rndMotivoCtrl,
+                'Motivo',
+                Icons.report_problem_outlined,
+                maxLines: 2,
+              ),
+            ]),
+            _rndSection('Lugar', [
+              _rndTextField(
+                _rndLugarMunicipioCtrl,
+                'Municipio',
+                Icons.location_city,
+              ),
+              _rndTextField(
+                _rndLugarLocalidadCtrl,
+                'Localidad',
+                Icons.map_outlined,
+              ),
+              _rndTextField(
+                _rndLugarCalleNumeroCtrl,
+                'Calle y numero',
+                Icons.signpost_outlined,
+              ),
+              _rndTextField(
+                _rndLugarReferenciaCtrl,
+                'Referencia',
+                Icons.place_outlined,
+                maxLines: 2,
+              ),
+            ]),
+            _rndSection('Detenido', [
+              _rndTextField(_rndDetenidoNombreCtrl, 'Nombre', Icons.person),
+              _rndTextField(
+                _rndDetenidoAliasCtrl,
+                'Alias',
+                Icons.alternate_email,
+              ),
+              Row(
+                children: [
+                  Expanded(
+                    child: _rndTextField(
+                      _rndDetenidoNacionalidadCtrl,
+                      'Nacionalidad',
+                      Icons.flag_outlined,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  SizedBox(
+                    width: 112,
+                    child: _rndTextField(
+                      _rndDetenidoEdadCtrl,
+                      'Edad',
+                      Icons.cake_outlined,
+                      keyboardType: TextInputType.number,
+                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                    ),
+                  ),
+                ],
+              ),
+              _rndTextField(
+                _rndDetenidoLesionesCtrl,
+                'Lesiones visibles',
+                Icons.healing_outlined,
+                hint: 'Ej. Sin lesiones visibles',
+                maxLines: 2,
+              ),
+              _rndTextField(
+                _rndDetenidoDelincuenciaCtrl,
+                'Delincuencia organizada',
+                Icons.shield_outlined,
+                hint: 'Ej. No refiere / Si refiere pertenecer a...',
+                maxLines: 2,
+              ),
+              _rndTextField(
+                _rndDetenidoComplexionCtrl,
+                'Complexion',
+                Icons.accessibility_new_outlined,
+              ),
+            ]),
+            _rndSection('Traslado', [
+              _rndTextField(
+                _rndTrasladoRutaCtrl,
+                'Ruta',
+                Icons.route_outlined,
+                maxLines: 2,
+              ),
+              _rndTextField(
+                _rndTrasladoUnidadCtrl,
+                'Unidad',
+                Icons.local_police_outlined,
+              ),
+            ]),
+            _rndSection('Contacto', [
+              _rndTextField(
+                _rndSolicitanteNombreCtrl,
+                'Usuario solicitante',
+                Icons.support_agent_outlined,
+              ),
+              _rndTextField(
+                _rndSolicitanteTelefonoCtrl,
+                'Telefono / WhatsApp',
+                Icons.phone_outlined,
+                keyboardType: TextInputType.phone,
+              ),
+            ]),
+            if (missing.isNotEmpty) ...[
+              _AttentionPanel(text: _missingRndText(missing)),
+              const SizedBox(height: 10),
+            ],
+            _rndActions(),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _rndSection(String title, List<Widget> children) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Text(
+              title,
+              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w900),
+            ),
+          ),
+          ...children,
+        ],
+      ),
+    );
+  }
+
+  Widget _rndTextField(
+    TextEditingController controller,
+    String label,
+    IconData icon, {
+    int maxLines = 1,
+    String? hint,
+    TextInputType? keyboardType,
+    List<TextInputFormatter>? inputFormatters,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: TextFormField(
+        controller: controller,
+        maxLines: maxLines,
+        keyboardType: keyboardType,
+        inputFormatters: inputFormatters,
+        textCapitalization: maxLines > 1
+            ? TextCapitalization.sentences
+            : TextCapitalization.words,
+        decoration: InputDecoration(
+          labelText: label,
+          hintText: hint,
+          border: const OutlineInputBorder(),
+          prefixIcon: Icon(icon),
+          alignLabelWithHint: maxLines > 1,
+        ),
+      ),
+    );
+  }
+
+  Widget _rndActions() {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final nativeButton = OutlinedButton.icon(
+          onPressed: _saving ? null : _sendRndNative,
+          icon: const Icon(Icons.open_in_new),
+          label: const Text('WhatsApp nativo'),
+        );
+        final chatbotButton = ElevatedButton.icon(
+          onPressed: (_saving || _sendingRndChatbot) ? null : _sendRndChatbot,
+          icon: _sendingRndChatbot
+              ? const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Icon(Icons.smart_toy_outlined),
+          label: Text(_sendingRndChatbot ? 'Enviando...' : 'Enviar chatbot'),
+        );
+
+        if (constraints.maxWidth < 430) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [nativeButton, const SizedBox(height: 8), chatbotButton],
+          );
+        }
+
+        return Row(
+          children: [
+            Expanded(child: nativeButton),
+            const SizedBox(width: 10),
+            Expanded(child: chatbotButton),
+          ],
+        );
+      },
+    );
+  }
+
+  void _applyRndData(ConduceLegalidadRndData? data) {
+    if (data == null) return;
+    _setControllerText(_rndElementosNombreCtrl, data.elementosNombre);
+    _setControllerText(_rndElementosCargoCtrl, data.elementosCargo);
+    _setControllerText(_rndElementosAdscripcionCtrl, data.elementosAdscripcion);
+    _setControllerText(_rndFaltaCtrl, data.faltaAdministrativa);
+    _setControllerText(_rndFechaHoraCtrl, data.detencionFechaHora);
+    _setControllerText(_rndTiempoFormaCtrl, data.detencionTiempoForma);
+    _setControllerText(_rndMotivoCtrl, data.detencionMotivo);
+    _setControllerText(_rndLugarMunicipioCtrl, data.lugarMunicipio);
+    _setControllerText(_rndLugarLocalidadCtrl, data.lugarLocalidad);
+    _setControllerText(_rndLugarCalleNumeroCtrl, data.lugarCalleNumero);
+    _setControllerText(_rndLugarReferenciaCtrl, data.lugarReferencia);
+    _setControllerText(_rndDetenidoNombreCtrl, data.detenidoNombre);
+    _setControllerText(_rndDetenidoAliasCtrl, data.detenidoAlias);
+    _setControllerText(_rndDetenidoNacionalidadCtrl, data.detenidoNacionalidad);
+    _setControllerText(_rndDetenidoEdadCtrl, data.detenidoEdad);
+    _setControllerText(_rndDetenidoLesionesCtrl, data.detenidoLesionesVisibles);
+    _setControllerText(
+      _rndDetenidoDelincuenciaCtrl,
+      data.detenidoDelincuenciaOrganizada,
+    );
+    _setControllerText(_rndDetenidoComplexionCtrl, data.detenidoComplexion);
+    _setControllerText(_rndTrasladoRutaCtrl, data.trasladoRuta);
+    _setControllerText(_rndTrasladoUnidadCtrl, data.trasladoUnidad);
+    _setControllerText(_rndSolicitanteNombreCtrl, data.solicitanteNombre);
+    _setControllerText(_rndSolicitanteTelefonoCtrl, data.solicitanteTelefono);
+  }
+
+  void _prefillRndFromCaptureContext() {
+    _fillIfEmpty(_rndFaltaCtrl, _primaryFaltaAdministrativa());
+    _fillIfEmpty(
+      _rndFechaHoraCtrl,
+      '${_dateForPayload()} ${_timeForPayload()}',
+    );
+    _fillIfEmpty(_rndLugarMunicipioCtrl, _municipioCtrl.text);
+    _fillIfEmpty(_rndLugarLocalidadCtrl, _municipioCtrl.text);
+    _fillIfEmpty(_rndLugarCalleNumeroCtrl, _lugarCtrl.text);
+    _fillIfEmpty(_rndLugarReferenciaCtrl, _lugarCtrl.text);
+
+    final persona = _personas.isNotEmpty ? _personas.first : null;
+    if (persona != null) {
+      _fillIfEmpty(_rndDetenidoNombreCtrl, persona.nombre);
+      _fillIfEmpty(_rndDetenidoEdadCtrl, persona.edad?.toString());
+    }
+  }
+
+  ConduceLegalidadRndData? _currentRndData() {
+    if (!_rndAvailable || !_rndEnabled) return null;
+
+    final data = ConduceLegalidadRndData(
+      elementosNombre: _emptyToNull(_rndElementosNombreCtrl.text),
+      elementosCargo: _emptyToNull(_rndElementosCargoCtrl.text),
+      elementosAdscripcion: _emptyToNull(_rndElementosAdscripcionCtrl.text),
+      faltaAdministrativa: _emptyToNull(_rndFaltaCtrl.text),
+      detencionFechaHora: _emptyToNull(_rndFechaHoraCtrl.text),
+      detencionTiempoForma: _emptyToNull(_rndTiempoFormaCtrl.text),
+      detencionMotivo: _emptyToNull(_rndMotivoCtrl.text),
+      lugarMunicipio: _emptyToNull(_rndLugarMunicipioCtrl.text),
+      lugarLocalidad: _emptyToNull(_rndLugarLocalidadCtrl.text),
+      lugarCalleNumero: _emptyToNull(_rndLugarCalleNumeroCtrl.text),
+      lugarReferencia: _emptyToNull(_rndLugarReferenciaCtrl.text),
+      detenidoNombre: _emptyToNull(_rndDetenidoNombreCtrl.text),
+      detenidoAlias: _emptyToNull(_rndDetenidoAliasCtrl.text),
+      detenidoNacionalidad: _emptyToNull(_rndDetenidoNacionalidadCtrl.text),
+      detenidoEdad: _emptyToNull(_rndDetenidoEdadCtrl.text),
+      detenidoLesionesVisibles: _emptyToNull(_rndDetenidoLesionesCtrl.text),
+      detenidoDelincuenciaOrganizada: _emptyToNull(
+        _rndDetenidoDelincuenciaCtrl.text,
+      ),
+      detenidoComplexion: _emptyToNull(_rndDetenidoComplexionCtrl.text),
+      trasladoRuta: _emptyToNull(_rndTrasladoRutaCtrl.text),
+      trasladoUnidad: _emptyToNull(_rndTrasladoUnidadCtrl.text),
+      solicitanteNombre: _emptyToNull(_rndSolicitanteNombreCtrl.text),
+      solicitanteTelefono: _emptyToNull(_rndSolicitanteTelefonoCtrl.text),
+    );
+
+    return data.isEmpty ? null : data;
+  }
+
+  Future<void> _sendRndNative() async {
+    final data = _currentRndData();
+    if (data == null) {
+      _showMessage('Captura al menos un dato RND antes de enviarlo.');
+      return;
+    }
+
+    try {
+      await ConduceLegalidadShareService.compartirRndNativo(
+        message: _rndMessage(data),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      _showMessage('No se pudo abrir WhatsApp: $e');
+    }
+  }
+
+  Future<void> _sendRndChatbot() async {
+    if (_sendingRndChatbot) return;
+    final data = _currentRndData();
+    if (data == null) {
+      _showMessage('Captura al menos un dato RND antes de enviarlo.');
+      return;
+    }
+
+    setState(() => _sendingRndChatbot = true);
+    try {
+      final message = await ConduceLegalidadService.enviarRndChatbot(
+        operativoId: widget.operativoId,
+        capturaId: widget.initialCaptura?.id,
+        rndData: data.toJson(),
+        message: _rndMessage(data),
+        solicitanteNombre: data.solicitanteNombre,
+        solicitanteTelefono: data.solicitanteTelefono,
+      );
+      if (!mounted) return;
+      _showMessage(message);
+    } catch (e) {
+      if (!mounted) return;
+      _showMessage('No se pudo enviar al chatbot: $e');
+    } finally {
+      if (mounted) {
+        setState(() => _sendingRndChatbot = false);
+      }
+    }
+  }
+
+  String _rndMessage(ConduceLegalidadRndData data) {
+    String v(String? value) {
+      final text = (value ?? '').trim();
+      return text.isEmpty ? 'SIN DATO' : text;
+    }
+
+    return [
+      'DATOS PARA RND DE FALTAS ADMINISTRATIVAS',
+      '',
+      'SOLICITANTE',
+      'Usuario: ${v(data.solicitanteNombre)}',
+      'Telefono: ${v(data.solicitanteTelefono)}',
+      '',
+      'ELEMENTOS',
+      'Nombre: ${v(data.elementosNombre)}',
+      'Cargo: ${v(data.elementosCargo)}',
+      'Adscripcion: ${v(data.elementosAdscripcion)}',
+      '',
+      'DETENCION',
+      'Falta: ${v(data.faltaAdministrativa)}',
+      'Fecha/hora: ${v(data.detencionFechaHora)}',
+      'Tiempo y forma: ${v(data.detencionTiempoForma)}',
+      'Motivo: ${v(data.detencionMotivo)}',
+      '',
+      'LUGAR',
+      'Municipio: ${v(data.lugarMunicipio)}',
+      'Localidad: ${v(data.lugarLocalidad)}',
+      'Calle/numero: ${v(data.lugarCalleNumero)}',
+      'Referencia: ${v(data.lugarReferencia)}',
+      '',
+      'DETENIDO',
+      'Nombre: ${v(data.detenidoNombre)}',
+      'Alias: ${v(data.detenidoAlias)}',
+      'Nacionalidad: ${v(data.detenidoNacionalidad)}',
+      'Edad: ${v(data.detenidoEdad)}',
+      'Lesiones visibles: ${v(data.detenidoLesionesVisibles)}',
+      'Delincuencia organizada: ${v(data.detenidoDelincuenciaOrganizada)}',
+      'Complexion: ${v(data.detenidoComplexion)}',
+      '',
+      'TRASLADO',
+      'Ruta: ${v(data.trasladoRuta)}',
+      'Unidad: ${v(data.trasladoUnidad)}',
+    ].join('\n');
+  }
+
+  List<String> _rndMissingLabels() {
+    if (!_rndEnabled) return const <String>[];
+    final missing = <String>[];
+    void need(TextEditingController controller, String label) {
+      if (controller.text.trim().isEmpty) missing.add(label);
+    }
+
+    need(_rndElementosNombreCtrl, 'elemento');
+    need(_rndElementosCargoCtrl, 'cargo');
+    need(_rndElementosAdscripcionCtrl, 'adscripcion');
+    need(_rndFaltaCtrl, 'falta');
+    need(_rndFechaHoraCtrl, 'fecha/hora');
+    need(_rndTiempoFormaCtrl, 'tiempo y forma');
+    need(_rndMotivoCtrl, 'motivo');
+    need(_rndLugarMunicipioCtrl, 'municipio');
+    need(_rndLugarLocalidadCtrl, 'localidad');
+    need(_rndLugarCalleNumeroCtrl, 'calle/numero');
+    need(_rndLugarReferenciaCtrl, 'referencia');
+    need(_rndDetenidoNombreCtrl, 'detenido');
+    need(_rndDetenidoNacionalidadCtrl, 'nacionalidad');
+    need(_rndDetenidoEdadCtrl, 'edad');
+    need(_rndDetenidoLesionesCtrl, 'lesiones');
+    need(_rndDetenidoDelincuenciaCtrl, 'delincuencia organizada');
+    need(_rndDetenidoComplexionCtrl, 'complexion');
+    need(_rndTrasladoRutaCtrl, 'ruta');
+    need(_rndTrasladoUnidadCtrl, 'unidad traslado');
+    need(_rndSolicitanteNombreCtrl, 'solicitante');
+    need(_rndSolicitanteTelefonoCtrl, 'telefono solicitante');
+    return missing;
+  }
+
+  String _missingRndText(List<String> missing) {
+    final shown = missing.take(5).join(', ');
+    final extra = missing.length > 5 ? ' y ${missing.length - 5} mas' : '';
+    return 'RND incompleto: falta $shown$extra. Puedes guardarlo asi, pero esos datos retrasan el registro.';
+  }
+
+  String? _primaryFaltaAdministrativa() {
+    for (final vehiculo in _vehiculos) {
+      final text =
+          vehiculo.infraccion?.display ??
+          vehiculo.motivoRetencion ??
+          vehiculo.fundamentoLegal;
+      if ((text ?? '').trim().isNotEmpty) return text!.trim();
+    }
+
+    for (final persona in _personas) {
+      final text = persona.infraccion?.display ?? persona.fundamentoLegal;
+      if ((text ?? '').trim().isNotEmpty) return text!.trim();
+    }
+
+    return null;
+  }
+
+  void _setControllerText(TextEditingController controller, String? value) {
+    final text = (value ?? '').trim();
+    if (text.isNotEmpty) controller.text = text;
+  }
+
+  void _fillIfEmpty(TextEditingController controller, String? value) {
+    final text = (value ?? '').trim();
+    if (text.isNotEmpty && controller.text.trim().isEmpty) {
+      controller.text = text;
+    }
+  }
+
+  bool _boolValue(dynamic value) {
+    if (value is bool) return value;
+    final text = (value ?? '').toString().trim().toLowerCase();
+    return text == '1' || text == 'true' || text == 'si';
+  }
+
+  String? _payloadAdscripcion(Map<String, dynamic>? payload) {
+    return _payloadText(payload, const [
+          'adscripcion',
+          'unidad_nombre',
+          'unidadName',
+          'unidad_label',
+          'area',
+        ]) ??
+        _valueText(payload?['unidad']) ??
+        _valueText(payload?['unidad_principal']) ??
+        _valueText(payload?['unidadPrincipal']);
+  }
+
+  String? _payloadTelefono(Map<String, dynamic>? payload) {
+    return _payloadText(payload, const [
+      'telefono',
+      'phone',
+      'celular',
+      'whatsapp',
+      'numero_telefono',
+      'telefono_contacto',
+    ]);
+  }
+
+  String? _payloadText(Map<String, dynamic>? payload, List<String> keys) {
+    if (payload == null) return null;
+    for (final key in keys) {
+      final text = _valueText(payload[key]);
+      if (text != null) return text;
+    }
+    return null;
+  }
+
+  String? _valueText(dynamic raw) {
+    if (raw == null) return null;
+    if (raw is String || raw is num) {
+      final text = raw.toString().trim();
+      return text.isEmpty ? null : text;
+    }
+    if (raw is Map) {
+      for (final key in const ['nombre', 'name', 'label', 'descripcion']) {
+        final text = _valueText(raw[key]);
+        if (text != null) return text;
+      }
+    }
+    return null;
+  }
+
+  void _showMessage(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   String? _emptyToNull(String value) {

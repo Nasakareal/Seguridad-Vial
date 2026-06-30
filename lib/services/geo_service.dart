@@ -7,8 +7,8 @@ import 'delegacion_distance_service.dart';
 const double _targetAccuracyMeters = 5.0;
 const double _goodEnoughAccuracyMeters = 10.0;
 const Duration _minimumRefinementDuration = Duration(seconds: 3);
-const Duration _manualCaptureTimeout = Duration(seconds: 10);
-const Duration _fallbackPositionTimeout = Duration(seconds: 5);
+const Duration _manualCaptureTimeout = Duration(seconds: 15);
+const Duration _fallbackPositionTimeout = Duration(seconds: 12);
 
 class GeoResult {
   final double? lat;
@@ -131,23 +131,45 @@ class GeoService {
   }
 
   static Future<Position> _getBestPosition() async {
+    final seed = await _lastKnownPosition();
+
     try {
-      final streamed = await _collectBestStreamPosition();
+      final streamed = await _collectBestStreamPosition(seed: seed);
       if (streamed != null) return streamed;
     } catch (streamError, streamStackTrace) {
-      try {
-        return await _getSinglePosition();
-      } catch (_) {}
+      final single = await _trySinglePosition();
+      if (single != null) return single;
+      if (seed != null) return seed;
 
       Error.throwWithStackTrace(streamError, streamStackTrace);
     }
 
+    final single = await _trySinglePosition();
+    if (single != null) return single;
+    if (seed != null) return seed;
+
     return _getSinglePosition();
+  }
+
+  static Future<Position?> _lastKnownPosition() async {
+    try {
+      return await Geolocator.getLastKnownPosition();
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static Future<Position?> _trySinglePosition() async {
+    try {
+      return await _getSinglePosition();
+    } catch (_) {
+      return null;
+    }
   }
 
   static Future<Position> _getSinglePosition() {
     return Geolocator.getCurrentPosition(
-      desiredAccuracy: LocationAccuracy.bestForNavigation,
+      desiredAccuracy: LocationAccuracy.high,
       timeLimit: _fallbackPositionTimeout,
     );
   }
