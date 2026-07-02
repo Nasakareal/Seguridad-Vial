@@ -577,13 +577,12 @@ class _BoletaPaper extends StatelessWidget {
   }
 
   String get _lugar {
+    final operativoDireccion = operativo.direccionCompleta;
     final parts = <String>[
       if ((captura.lugar ?? '').trim().isNotEmpty) captura.lugar!.trim(),
-      if ((operativo.lugar ?? '').trim().isNotEmpty &&
-          operativo.lugar!.trim() != captura.lugar?.trim())
-        operativo.lugar!.trim(),
-      if ((operativo.colonia ?? '').trim().isNotEmpty)
-        'Col. ${operativo.colonia!.trim()}',
+      if (operativoDireccion.trim().isNotEmpty &&
+          operativo.lugarConNumero.trim() != captura.lugar?.trim())
+        operativoDireccion.trim(),
     ];
     if (parts.isEmpty) return 'No capturado';
     return parts.join(' / ');
@@ -871,13 +870,12 @@ class _BoletaTicketData {
   }
 
   String get lugar {
+    final operativoDireccion = operativo.direccionCompleta;
     final parts = <String>[
       if ((captura.lugar ?? '').trim().isNotEmpty) captura.lugar!.trim(),
-      if ((operativo.lugar ?? '').trim().isNotEmpty &&
-          operativo.lugar!.trim() != captura.lugar?.trim())
-        operativo.lugar!.trim(),
-      if ((operativo.colonia ?? '').trim().isNotEmpty)
-        'Col. ${operativo.colonia!.trim()}',
+      if (operativoDireccion.trim().isNotEmpty &&
+          operativo.lugarConNumero.trim() != captura.lugar?.trim())
+        operativoDireccion.trim(),
     ];
     if (parts.isEmpty) return 'No capturado';
     return parts.join(' / ');

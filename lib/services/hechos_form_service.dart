@@ -471,7 +471,11 @@ class HechosFormService {
     };
 
     final unidadOrg = d.unidadOrgId.trim();
-    if (unidadOrg.isNotEmpty) fields['unidad_org_id'] = unidadOrg;
+    if (unidadOrg.isNotEmpty) {
+      fields['unidad_org_id'] = unidadOrg;
+    } else if (canUsePuestasDisposicion) {
+      fields['unidad_org_id'] = '${AuthService.unidadDelegacionesId}';
+    }
 
     final isTurnado = _isTurnado(d.situacion);
     if (canCaptureMpTurnado) {

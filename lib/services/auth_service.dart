@@ -1399,6 +1399,10 @@ class AuthService {
       return true;
     }
 
+    if (await isDelegacionesUser()) {
+      return true;
+    }
+
     final payload = await getCurrentUserPayload(refresh: false);
     return _payloadMatchesHechosCaptureRelaxedUnit(payload);
   }
@@ -2353,8 +2357,12 @@ class AuthService {
   static int? _extractUnidadId(Map<String, dynamic> payload) {
     return _readNullableInt(payload['unidad_id']) ??
         _readNullableInt(payload['unidad_org_id']) ??
+        _readNullableInt(payload['unidad_efectiva_id']) ??
+        _readNullableInt(payload['unidadEfectivaId']) ??
         _readNestedId(payload['unidad_principal']) ??
         _readNestedId(payload['unidadPrincipal']) ??
+        _readNestedId(payload['unidad_efectiva']) ??
+        _readNestedId(payload['unidadEfectiva']) ??
         _readNestedId(payload['unidad']);
   }
 
@@ -2467,7 +2475,9 @@ class AuthService {
 
     final directId =
         _readNullableInt(payload['unidad_id']) ??
-        _readNullableInt(payload['unidad_org_id']);
+        _readNullableInt(payload['unidad_org_id']) ??
+        _readNullableInt(payload['unidad_efectiva_id']) ??
+        _readNullableInt(payload['unidadEfectivaId']);
     if (directId == unidadDelegacionesId) {
       return true;
     }
@@ -2476,9 +2486,13 @@ class AuthService {
       payload['unidad'],
       payload['unidad_principal'],
       payload['unidadPrincipal'],
+      payload['unidad_efectiva'],
+      payload['unidadEfectiva'],
       payload['unidad_nombre'],
       payload['unidadName'],
       payload['unidad_label'],
+      payload['unidad_efectiva_nombre'],
+      payload['unidadEfectivaNombre'],
       payload['area'],
       payload['areas'],
       payload['unidades'],
@@ -2621,7 +2635,9 @@ class AuthService {
 
     final directId =
         _readNullableInt(payload['unidad_id']) ??
-        _readNullableInt(payload['unidad_org_id']);
+        _readNullableInt(payload['unidad_org_id']) ??
+        _readNullableInt(payload['unidad_efectiva_id']) ??
+        _readNullableInt(payload['unidadEfectivaId']);
     if (_isHechosCaptureRelaxedUnitId(directId)) {
       return true;
     }
@@ -2630,9 +2646,13 @@ class AuthService {
       payload['unidad'],
       payload['unidad_principal'],
       payload['unidadPrincipal'],
+      payload['unidad_efectiva'],
+      payload['unidadEfectiva'],
       payload['unidad_nombre'],
       payload['unidadName'],
       payload['unidad_label'],
+      payload['unidad_efectiva_nombre'],
+      payload['unidadEfectivaNombre'],
       payload['area'],
       payload['areas'],
       payload['unidades'],
@@ -2958,7 +2978,9 @@ class AuthService {
 
     final directId =
         _readNullableInt(payload['unidad_id']) ??
-        _readNullableInt(payload['unidad_org_id']);
+        _readNullableInt(payload['unidad_org_id']) ??
+        _readNullableInt(payload['unidad_efectiva_id']) ??
+        _readNullableInt(payload['unidadEfectivaId']);
     if (directId != null && unitIds.contains(directId)) {
       return true;
     }
@@ -2967,6 +2989,8 @@ class AuthService {
       payload['unidad'],
       payload['unidad_principal'],
       payload['unidadPrincipal'],
+      payload['unidad_efectiva'],
+      payload['unidadEfectiva'],
       payload['unidades'],
       payload['areas'],
     ];
@@ -2996,6 +3020,8 @@ class AuthService {
             raw['value'] ??
             raw['unidad_id'] ??
             raw['unidad_org_id'] ??
+            raw['unidad_efectiva_id'] ??
+            raw['unidadEfectivaId'] ??
             raw['unit_id'],
       );
       if (nestedId != null && unitIds.contains(nestedId)) {
@@ -3226,14 +3252,23 @@ class AuthService {
 
     if (raw is Map) {
       final unitId = _readNullableInt(
-        raw['unidad_id'] ?? raw['unidad_org_id'] ?? raw['unit_id'],
+        raw['unidad_id'] ??
+            raw['unidad_org_id'] ??
+            raw['unidad_efectiva_id'] ??
+            raw['unidadEfectivaId'] ??
+            raw['unit_id'],
       );
       if (unitId == unidadDelegacionesId) {
         return true;
       }
 
       final nestedId = _readNullableInt(
-        raw['id'] ?? raw['value'] ?? raw['unidad_id'] ?? raw['unidad_org_id'],
+        raw['id'] ??
+            raw['value'] ??
+            raw['unidad_id'] ??
+            raw['unidad_org_id'] ??
+            raw['unidad_efectiva_id'] ??
+            raw['unidadEfectivaId'],
       );
       if (nestedId == unidadDelegacionesId) {
         return true;
@@ -3246,6 +3281,8 @@ class AuthService {
         raw['descripcion'],
         raw['title'],
         raw['slug'],
+        raw['unidad_efectiva_nombre'],
+        raw['unidadEfectivaNombre'],
       ];
 
       for (final value in names) {

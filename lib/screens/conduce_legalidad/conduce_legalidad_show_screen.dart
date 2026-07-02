@@ -506,8 +506,8 @@ class _OperativoHeader extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            operativo.lugar?.trim().isNotEmpty == true
-                ? operativo.lugar!
+            operativo.lugarConNumero.trim().isNotEmpty
+                ? operativo.lugarConNumero
                 : operativo.nombre,
             style: const TextStyle(
               color: Colors.white,
@@ -522,6 +522,9 @@ class _OperativoHeader extends StatelessWidget {
               operativo.horaInicio,
               operativo.municipio,
               operativo.colonia,
+              operativo.codigoPostal == null
+                  ? null
+                  : 'CP ${operativo.codigoPostal}',
             ].whereType<String>().where((v) => v.trim().isNotEmpty).join(' | '),
             style: const TextStyle(color: Colors.white70),
           ),

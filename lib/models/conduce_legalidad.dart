@@ -383,7 +383,9 @@ class ConduceLegalidadOperativo {
   final String? horaCierre;
   final String? municipio;
   final String? lugar;
+  final String? numero;
   final String? colonia;
+  final String? codigoPostal;
   final double? lat;
   final double? lng;
   final String? coordenadasTexto;
@@ -407,7 +409,9 @@ class ConduceLegalidadOperativo {
     this.horaCierre,
     this.municipio,
     this.lugar,
+    this.numero,
     this.colonia,
+    this.codigoPostal,
     this.lat,
     this.lng,
     this.coordenadasTexto,
@@ -423,6 +427,24 @@ class ConduceLegalidadOperativo {
     this.capturas = const <ConduceLegalidadCaptura>[],
   });
 
+  String get lugarConNumero {
+    final lugarText = lugar?.trim() ?? '';
+    final numeroText = numero?.trim() ?? '';
+    if (lugarText.isEmpty) return numeroText;
+    if (numeroText.isEmpty) return lugarText;
+    return '$lugarText $numeroText';
+  }
+
+  String get direccionCompleta {
+    final parts = <String>[
+      lugarConNumero,
+      if ((colonia ?? '').trim().isNotEmpty) 'Col. ${colonia!.trim()}',
+      if ((codigoPostal ?? '').trim().isNotEmpty) 'CP ${codigoPostal!.trim()}',
+      municipio?.trim() ?? '',
+    ];
+    return parts.where((part) => part.trim().isNotEmpty).join(', ');
+  }
+
   factory ConduceLegalidadOperativo.fromJson(Map<String, dynamic> json) {
     return ConduceLegalidadOperativo(
       id: _asInt(json['id']),
@@ -433,7 +455,9 @@ class ConduceLegalidadOperativo {
       horaCierre: _str(json['hora_cierre']),
       municipio: _str(json['municipio']),
       lugar: _str(json['lugar']),
+      numero: _str(json['numero'] ?? json['numero_exterior']),
       colonia: _str(json['colonia']),
+      codigoPostal: _str(json['codigo_postal'] ?? json['codigoPostal']),
       lat: _double(json['lat']),
       lng: _double(json['lng']),
       coordenadasTexto: _str(json['coordenadas_texto']),

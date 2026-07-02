@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:seguridad_vial_app/core/hechos/hechos_catalogos.dart';
@@ -55,6 +57,28 @@ void main() {
     expect(error, isNull);
   });
 
+  test(
+    'delegaciones effective unit can turnado without foto situacion',
+    () async {
+      SharedPreferences.setMockInitialValues(<String, Object>{
+        'auth_role': 'Policia',
+        'auth_user_payload': jsonEncode(<String, Object>{
+          'id': 52,
+          'role': <String, Object>{'name': 'Policia'},
+          'unidad_efectiva_id': AuthService.unidadDelegacionesId,
+          'unidad_efectiva_nombre': 'Delegaciones',
+        }),
+      });
+
+      final error = await HechosFormService.validateBeforeSubmit(
+        data: validDelegacionesData(),
+        dictamenSelected: null,
+      );
+
+      expect(error, isNull);
+    },
+  );
+
   test('delegaciones turnado payload no longer links existing puesta', () {
     final data = validDelegacionesData()..puestaDisposicionId = 42;
 
@@ -69,6 +93,21 @@ void main() {
 
     expect(fields.containsKey('puesta_disposicion_id'), isFalse);
     expect(fields.containsKey('dictamen_id'), isFalse);
+  });
+
+  test('delegaciones payload sends unidad org when data does not have it', () {
+    final data = validDelegacionesData()..unidadOrgId = '';
+
+    final fields = HechosFormService.buildFieldsForTesting(
+      data,
+      null,
+      usesRelaxedHechosRules: true,
+      canUseDictamenes: false,
+      canUsePuestasDisposicion: true,
+      canCaptureMpTurnado: true,
+    );
+
+    expect(fields['unidad_org_id'], '${AuthService.unidadDelegacionesId}');
   });
 
   test('siniestros payload does not send puesta disposicion link', () {

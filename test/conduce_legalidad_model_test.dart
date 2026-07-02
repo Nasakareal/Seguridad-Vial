@@ -45,14 +45,22 @@ void main() {
       'nombre': 'Operativo conduce con legalidad',
       'municipio': 'Morelia',
       'lugar': 'Av. Camelinas y Ventura Puente',
+      'numero': '123',
       'colonia': 'Felix Ireta',
+      'codigo_postal': '58070',
       'lat': 19.6861,
       'lng': -101.1974,
       'estado': 'activo',
     });
 
     expect(operativo.lugar, 'Av. Camelinas y Ventura Puente');
+    expect(operativo.numero, '123');
     expect(operativo.colonia, 'Felix Ireta');
+    expect(operativo.codigoPostal, '58070');
+    expect(
+      operativo.direccionCompleta,
+      'Av. Camelinas y Ventura Puente 123, Col. Felix Ireta, CP 58070, Morelia',
+    );
   });
 
   test('meta excludes only non operative fundamentos for Conduce Legalidad', () {

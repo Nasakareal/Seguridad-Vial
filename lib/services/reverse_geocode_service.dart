@@ -8,6 +8,7 @@ import '../core/municipios_michoacan.dart';
 class ReverseGeocodeResult {
   final String? municipio;
   final String? calle;
+  final String? numero;
   final String? colonia;
   final String? ubicacionFormateada;
   final String? placeId;
@@ -15,6 +16,7 @@ class ReverseGeocodeResult {
   const ReverseGeocodeResult({
     required this.municipio,
     required this.calle,
+    required this.numero,
     required this.colonia,
     required this.ubicacionFormateada,
     required this.placeId,
@@ -23,6 +25,7 @@ class ReverseGeocodeResult {
   bool get hasUsefulAddress =>
       (municipio?.trim().isNotEmpty ?? false) ||
       (calle?.trim().isNotEmpty ?? false) ||
+      (numero?.trim().isNotEmpty ?? false) ||
       (colonia?.trim().isNotEmpty ?? false);
 }
 
@@ -90,6 +93,7 @@ class ReverseGeocodeService {
       'footway',
       'cycleway',
     ]);
+    final numero = _firstText(address, <String>['house_number']);
 
     final colonia = _extractColonia(
       address,
@@ -101,6 +105,7 @@ class ReverseGeocodeService {
     return ReverseGeocodeResult(
       municipio: municipio,
       calle: calle,
+      numero: numero,
       colonia: colonia,
       ubicacionFormateada: displayName,
       placeId: _cleanText(raw['place_id']),

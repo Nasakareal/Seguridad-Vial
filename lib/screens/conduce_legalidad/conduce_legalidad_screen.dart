@@ -133,8 +133,8 @@ class _ConduceLegalidadScreenState extends State<ConduceLegalidadScreen>
   ) async {
     if (_deletingOperativoId != null) return;
 
-    final punto = operativo.lugar?.trim().isNotEmpty == true
-        ? operativo.lugar!
+    final punto = operativo.lugarConNumero.trim().isNotEmpty
+        ? operativo.lugarConNumero
         : operativo.nombre;
     final confirmed = await showDialog<bool>(
       context: context,
@@ -377,8 +377,8 @@ class _OperativoCard extends StatelessWidget {
           child: const Icon(Icons.fact_check_outlined),
         ),
         title: Text(
-          operativo.lugar?.isNotEmpty == true
-              ? operativo.lugar!
+          operativo.lugarConNumero.trim().isNotEmpty
+              ? operativo.lugarConNumero
               : operativo.nombre,
           style: const TextStyle(fontWeight: FontWeight.w900),
         ),
@@ -389,6 +389,9 @@ class _OperativoCard extends StatelessWidget {
                   operativo.fecha,
                   operativo.municipio,
                   operativo.colonia,
+                  operativo.codigoPostal == null
+                      ? null
+                      : 'CP ${operativo.codigoPostal}',
                   counts,
                   operativo.estado.toUpperCase(),
                 ]

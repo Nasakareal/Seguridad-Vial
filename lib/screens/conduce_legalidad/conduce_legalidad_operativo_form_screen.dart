@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-
 import '../../models/conduce_legalidad.dart';
 import '../../services/conduce_legalidad_service.dart';
 import '../../services/geo_service.dart';
+import '../../services/reverse_geocode_service.dart';
 
 class ConduceLegalidadOperativoFormScreen extends StatefulWidget {
   final ConduceLegalidadOperativo? initialOperativo;
@@ -21,6 +21,7 @@ class _ConduceLegalidadOperativoFormScreenState
   final _formKey = GlobalKey<FormState>();
   final _municipioCtrl = TextEditingController(text: 'Morelia');
   final _lugarCtrl = TextEditingController();
+  final _numeroCtrl = TextEditingController();
   final _coloniaCtrl = TextEditingController();
   final _coordenadasCtrl = TextEditingController();
 
@@ -44,6 +45,7 @@ class _ConduceLegalidadOperativoFormScreenState
   void dispose() {
     _municipioCtrl.dispose();
     _lugarCtrl.dispose();
+    _numeroCtrl.dispose();
     _coloniaCtrl.dispose();
     _coordenadasCtrl.dispose();
     super.dispose();
@@ -57,6 +59,7 @@ class _ConduceLegalidadOperativoFormScreenState
         ? operativo.municipio!
         : 'Morelia';
     _lugarCtrl.text = operativo.lugar ?? '';
+    _numeroCtrl.text = operativo.numero ?? '';
     _coloniaCtrl.text = operativo.colonia ?? '';
     _fecha = _parseDate(operativo.fecha) ?? DateTime.now();
     _hora = _parseTime(operativo.horaInicio) ?? TimeOfDay.now();
@@ -117,8 +120,9 @@ class _ConduceLegalidadOperativoFormScreenState
         _lat = lat;
         _lng = lng;
         _coordenadasCtrl.text = '${_formatCoord(lat)}, ${_formatCoord(lng)}';
-        _locationStatus = geo.captureSummary;
+        _locationStatus = '${geo.captureSummary} Resolviendo direccion...';
       });
+      await _autofillAddressFromCoords(lat, lng, geo.captureSummary);
     } catch (e) {
       if (!mounted) return;
       setState(() => _locationStatus = 'Error al obtener coordenadas: $e');
@@ -127,6 +131,43 @@ class _ConduceLegalidadOperativoFormScreenState
         setState(() => _locating = false);
       }
     }
+  }
+
+  Future<void> _autofillAddressFromCoords(
+    double lat,
+    double lng,
+    String baseStatus,
+  ) async {
+    try {
+      final address = await ReverseGeocodeService.lookup(lat: lat, lng: lng);
+      if (!mounted) return;
+
+      setState(() {
+        _setControllerIfUseful(_municipioCtrl, address.municipio);
+        _setControllerIfUseful(_lugarCtrl, address.calle, overwrite: false);
+        _setControllerIfUseful(_numeroCtrl, address.numero, overwrite: false);
+        _setControllerIfUseful(_coloniaCtrl, address.colonia);
+
+        _locationStatus = '$baseStatus Direccion detectada.';
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(
+        () => _locationStatus =
+            '$baseStatus No se pudo autocompletar la direccion.',
+      );
+    }
+  }
+
+  void _setControllerIfUseful(
+    TextEditingController controller,
+    String? value, {
+    bool overwrite = true,
+  }) {
+    final text = value?.trim() ?? '';
+    if (text.isEmpty) return;
+    if (!overwrite && controller.text.trim().isNotEmpty) return;
+    controller.text = text;
   }
 
   Future<void> _submit() async {
@@ -140,6 +181,7 @@ class _ConduceLegalidadOperativoFormScreenState
         'hora_inicio': _time(_hora),
         'municipio': _emptyToNull(_municipioCtrl.text),
         'lugar': _emptyToNull(_lugarCtrl.text),
+        'numero': _emptyToNull(_numeroCtrl.text),
         'colonia': _emptyToNull(_coloniaCtrl.text),
         'lat': _lat,
         'lng': _lng,
@@ -244,6 +286,16 @@ class _ConduceLegalidadOperativoFormScreenState
               ),
               validator: (value) =>
                   (value ?? '').trim().isEmpty ? 'Captura el lugar.' : null,
+            ),
+            const SizedBox(height: 12),
+            TextFormField(
+              controller: _numeroCtrl,
+              textCapitalization: TextCapitalization.characters,
+              decoration: const InputDecoration(
+                labelText: 'Numero',
+                border: OutlineInputBorder(),
+                prefixIcon: Icon(Icons.tag),
+              ),
             ),
             const SizedBox(height: 12),
             TextFormField(
