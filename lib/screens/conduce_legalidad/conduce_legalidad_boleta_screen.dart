@@ -113,16 +113,19 @@ class _ConduceLegalidadBoletaScreenState
     setState(() => _printing = true);
     try {
       if (ThermalPrinterService.supportsBluetoothPrinting) {
+        final paperSize = await _selectPaperSize();
+        if (!mounted || paperSize == null) return;
+
         final printer = await _selectBondedPrinter();
         if (!mounted || printer == null) return;
 
         await ThermalPrinterService.printEscPos(
           address: printer.address,
-          bytes: _buildEscPosTicket(operativo, captura),
+          bytes: _buildEscPosTicket(operativo, captura, paperSize),
         );
         if (!mounted) return;
 
-        _showSnackBar('Boleta enviada a ${printer.name}.');
+        _showSnackBar('Boleta ${paperSize.label} enviada a ${printer.name}.');
         return;
       }
 
@@ -153,16 +156,19 @@ class _ConduceLegalidadBoletaScreenState
         return;
       }
 
+      final paperSize = await _selectPaperSize();
+      if (!mounted || paperSize == null) return;
+
       final printer = await _selectBondedPrinter();
       if (!mounted || printer == null) return;
 
       await ThermalPrinterService.printEscPos(
         address: printer.address,
-        bytes: _buildEscPosTestTicket(),
+        bytes: _buildEscPosTestTicket(paperSize),
       );
       if (!mounted) return;
 
-      _showSnackBar('Prueba enviada a ${printer.name}.');
+      _showSnackBar('Prueba ${paperSize.label} enviada a ${printer.name}.');
     } on ThermalPrinterException catch (e) {
       if (mounted) _showSnackBar(e.message);
     } catch (e) {
@@ -211,6 +217,35 @@ class _ConduceLegalidadBoletaScreenState
                   title: Text(device.name),
                   subtitle: Text(device.address),
                   onTap: () => Navigator.of(context).pop(device),
+                ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Future<_ThermalPaperSize?> _selectPaperSize() async {
+    return showModalBottomSheet<_ThermalPaperSize>(
+      context: context,
+      builder: (context) {
+        return SafeArea(
+          child: ListView(
+            shrinkWrap: true,
+            children: [
+              const ListTile(
+                title: Text(
+                  'Selecciona tamaño de ticket',
+                  style: TextStyle(fontWeight: FontWeight.w900),
+                ),
+                subtitle: Text('Elige el ancho del papel térmico.'),
+              ),
+              for (final size in _ThermalPaperSize.values)
+                ListTile(
+                  leading: const Icon(Icons.receipt_long_outlined),
+                  title: Text(size.label),
+                  subtitle: Text(size.description),
+                  onTap: () => Navigator.of(context).pop(size),
                 ),
             ],
           ),
@@ -518,6 +553,18 @@ class _BoletaPaper extends StatelessWidget {
               textAlign: TextAlign.center,
               style: const TextStyle(fontWeight: FontWeight.w800),
             ),
+            const SizedBox(height: 8),
+            const Text(
+              'Supervisó: Luis Eduardo Lugo Ordorica',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontWeight: FontWeight.w800),
+            ),
+            const Text(
+              'Subdirector de Vialidades Urbanas',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: 42),
           ],
         ),
       ),
@@ -535,6 +582,8 @@ class _BoletaPaper extends StatelessWidget {
       if ((operativo.lugar ?? '').trim().isNotEmpty &&
           operativo.lugar!.trim() != captura.lugar?.trim())
         operativo.lugar!.trim(),
+      if ((operativo.colonia ?? '').trim().isNotEmpty)
+        'Col. ${operativo.colonia!.trim()}',
     ];
     if (parts.isEmpty) return 'No capturado';
     return parts.join(' / ');
@@ -607,11 +656,12 @@ class _BoletaPaper extends StatelessWidget {
 Uint8List _buildEscPosTicket(
   ConduceLegalidadOperativo operativo,
   ConduceLegalidadCaptura captura,
+  _ThermalPaperSize paperSize,
 ) {
   final vehiculos = captura.vehiculos.isEmpty
       ? <ConduceLegalidadVehiculo?>[null]
       : captura.vehiculos.cast<ConduceLegalidadVehiculo?>().toList();
-  final writer = _ThermalTicketWriter();
+  final writer = _ThermalTicketWriter(width: paperSize.columns);
 
   for (var i = 0; i < vehiculos.length; i++) {
     final data = _BoletaTicketData(
@@ -641,17 +691,16 @@ Uint8List _buildEscPosTicket(
     0x1B, 0x74, 0x02, // Tabla CP850 para acentos en español.
     0x1B, 0x61, 0x00, // Alineación izquierda; el centrado va en texto.
     ...textBytes,
-    0x0A,
-    0x0A,
-    0x0A,
+    ..._thermalTicketBottomFeed,
   ]);
 }
 
-Uint8List _buildEscPosTestTicket() {
+Uint8List _buildEscPosTestTicket(_ThermalPaperSize paperSize) {
   final timestamp = DateTime.now().toString().split('.').first;
   final textBytes = _thermalEncode(
     'SEGURIDAD VIAL\r\n'
     'PRUEBA DE IMPRESIÓN\r\n'
+    'Ticket ${paperSize.label}\r\n'
     '$timestamp\r\n'
     'Descripción, prevén, infracción\r\n'
     'Si puedes leer esto, la impresora\r\n'
@@ -679,11 +728,19 @@ Uint8List _buildEscPosTestTicket() {
     0x1B,
     0x61,
     0x00,
-    0x0A,
-    0x0A,
-    0x0A,
+    ..._thermalTicketBottomFeed,
   ]);
 }
+
+const List<int> _thermalTicketBottomFeed = <int>[
+  0x0A,
+  0x0A,
+  0x0A,
+  0x0A,
+  0x0A,
+  0x0A,
+  0x0A,
+];
 
 void _writeThermalTicket(_ThermalTicketWriter ticket, _BoletaTicketData data) {
   ticket.center('SECRETARÍA DE SEGURIDAD PÚBLICA');
@@ -759,16 +816,16 @@ void _writeThermalTicket(_ThermalTicketWriter ticket, _BoletaTicketData data) {
   ticket.line('Firma de la persona infractora:');
   ticket.blank();
   ticket.blank();
-  ticket.line(_ThermalTicketWriter.repeat('_', _ThermalTicketWriter.width));
+  ticket.line(_ThermalTicketWriter.repeat('_', ticket.width));
   ticket.blank();
   ticket.line('Manifestación de inconformidad');
   ticket.line('(opcional):');
   ticket.blank();
-  ticket.line(_ThermalTicketWriter.repeat('_', _ThermalTicketWriter.width));
+  ticket.line(_ThermalTicketWriter.repeat('_', ticket.width));
   ticket.blank();
-  ticket.line(_ThermalTicketWriter.repeat('_', _ThermalTicketWriter.width));
+  ticket.line(_ThermalTicketWriter.repeat('_', ticket.width));
   ticket.blank();
-  ticket.line(_ThermalTicketWriter.repeat('_', _ThermalTicketWriter.width));
+  ticket.line(_ThermalTicketWriter.repeat('_', ticket.width));
   ticket.rule();
   ticket.section('AGENTE');
   ticket.pair(
@@ -781,11 +838,14 @@ void _writeThermalTicket(_ThermalTicketWriter ticket, _BoletaTicketData data) {
   ticket.line('Firma autógrafa/electrónica:');
   ticket.blank();
   ticket.blank();
-  ticket.line(_ThermalTicketWriter.repeat('_', _ThermalTicketWriter.width));
+  ticket.line(_ThermalTicketWriter.repeat('_', ticket.width));
   ticket.blank();
   ticket.center(
     'Captura #${data.captura.id} / Operativo #${data.operativo.id}',
   );
+  ticket.blank();
+  ticket.center('Supervisó: Luis Eduardo Lugo Ordorica');
+  ticket.center('Subdirector de Vialidades Urbanas');
 }
 
 class _BoletaTicketData {
@@ -816,6 +876,8 @@ class _BoletaTicketData {
       if ((operativo.lugar ?? '').trim().isNotEmpty &&
           operativo.lugar!.trim() != captura.lugar?.trim())
         operativo.lugar!.trim(),
+      if ((operativo.colonia ?? '').trim().isNotEmpty)
+        'Col. ${operativo.colonia!.trim()}',
     ];
     if (parts.isEmpty) return 'No capturado';
     return parts.join(' / ');
@@ -886,9 +948,11 @@ class _BoletaTicketData {
 }
 
 class _ThermalTicketWriter {
-  static const int width = 32;
+  final int width;
 
   final StringBuffer _buffer = StringBuffer();
+
+  _ThermalTicketWriter({required this.width});
 
   void center(String text) {
     for (final line in _wrapText(text, width)) {
@@ -955,6 +1019,17 @@ class _ThermalTicketWriter {
     if (count <= 0) return '';
     return List<String>.filled(count, value).join();
   }
+}
+
+enum _ThermalPaperSize {
+  paper80mm('80 mm', 'Ticket ancho actual', 48),
+  paper58mm('58 mm', 'Medida anterior', 32);
+
+  final String label;
+  final String description;
+  final int columns;
+
+  const _ThermalPaperSize(this.label, this.description, this.columns);
 }
 
 ConduceLegalidadPersona? _personaForTicket(
@@ -1568,6 +1643,7 @@ class _BoletaPreviewData {
         horaInicio: hour,
         municipio: 'Morelia',
         lugar: 'Av. Camelinas y Ventura Puente',
+        colonia: 'Félix Ireta',
         estado: 'activo',
         totalCapturas: 1,
         misCapturas: 1,

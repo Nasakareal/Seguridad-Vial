@@ -276,19 +276,22 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
     try {
       final allSubs = await ActividadesService.fetchSubcategorias(categoriaId);
       final hideHechosTransito = await AuthService.isDelegacionesUser();
+      final hideOtherSubcategorias =
+          await AuthService.shouldHideDelegacionesOtherSubcategorias();
       if (!mounted) return;
 
       final visibleSubs = ActividadesService.visibleSubcategoriasForActividadUi(
         allSubs,
         hideHechosTransito: hideHechosTransito,
+        hideOtherSubcategorias: hideOtherSubcategorias,
       );
       ActividadSubcategoria? currentHiddenSubcategoria;
       final currentSubcategoriaId = _subcategoriaId;
       if (hideHechosTransito && currentSubcategoriaId != null) {
         for (final subcategoria in allSubs) {
           if (subcategoria.id == currentSubcategoriaId &&
-              !ActividadesService.shouldShowSubcategoriaInActividadUi(
-                subcategoria,
+              ActividadesService.isHechoTransitoSubcategoria(
+                subcategoria.nombre,
               )) {
             currentHiddenSubcategoria = subcategoria;
             break;

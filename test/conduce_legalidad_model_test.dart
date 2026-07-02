@@ -2,6 +2,59 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:seguridad_vial_app/models/conduce_legalidad.dart';
 
 void main() {
+  test(
+    'person physical description fields round trip outside observations',
+    () {
+      const persona = ConduceLegalidadPersona(
+        nombre: 'Persona detenida',
+        edad: 30,
+        nacionalidad: 'Mexico',
+        edadAproximada: '25 a 34 anos',
+        complexion: 'Media',
+        estatura: 'Alta',
+        tez: 'Morena',
+        cabello: 'Corto',
+        prendaSuperior: 'Playera',
+        colorSuperior: 'Negro',
+        prendaInferior: 'Pantalon de mezclilla',
+        colorInferior: 'Azul',
+        calzado: 'Tenis',
+        colorCalzado: 'Blanco',
+        rasgosVisibles: <String>['Barba', 'Tatuajes'],
+      );
+
+      final json = persona.toJson();
+
+      expect(json['observaciones'], isNull);
+      expect(json['nacionalidad'], 'Mexico');
+      expect(json['edad_aproximada'], '25 a 34 anos');
+      expect(json['prenda_superior'], 'Playera');
+      expect(json['rasgos_visibles'], <String>['Barba', 'Tatuajes']);
+
+      final restored = ConduceLegalidadPersona.fromJson(json);
+      expect(restored.nacionalidad, 'Mexico');
+      expect(restored.hasDescripcionFisica, isTrue);
+      expect(restored.colorCalzado, 'Blanco');
+      expect(restored.rasgosVisibles, <String>['Barba', 'Tatuajes']);
+    },
+  );
+
+  test('operative parses colonia separately from lugar', () {
+    final operativo = ConduceLegalidadOperativo.fromJson({
+      'id': 7,
+      'nombre': 'Operativo conduce con legalidad',
+      'municipio': 'Morelia',
+      'lugar': 'Av. Camelinas y Ventura Puente',
+      'colonia': 'Felix Ireta',
+      'lat': 19.6861,
+      'lng': -101.1974,
+      'estado': 'activo',
+    });
+
+    expect(operativo.lugar, 'Av. Camelinas y Ventura Puente');
+    expect(operativo.colonia, 'Felix Ireta');
+  });
+
   test('meta excludes only non operative fundamentos for Conduce Legalidad', () {
     final meta = ConduceLegalidadMeta.fromJson({
       'data': {

@@ -13,6 +13,7 @@ import '../../core/vehiculos/marcas_vehiculo.dart';
 import '../../core/vehiculos/vehiculo_taxonomia.dart';
 import '../../core/licencias/licencia_barcode_payload.dart';
 import '../../models/conduce_legalidad.dart';
+import '../../services/conduce_legalidad_persona_descriptor.dart';
 import '../../services/conduce_legalidad_service.dart';
 import '../../services/gruas_catalog_service.dart';
 import '../../services/local_draft_service.dart';
@@ -1499,17 +1500,28 @@ class _PersonaModalState extends State<_PersonaModal> {
   final _telefonoCtrl = TextEditingController();
   final _domicilioCtrl = TextEditingController();
   final _ocupacionCtrl = TextEditingController();
-  final _edadCtrl = TextEditingController();
   final _tipoLicenciaCtrl = TextEditingController();
   final _estadoLicenciaCtrl = TextEditingController();
   final _numeroLicenciaCtrl = TextEditingController();
-  final _observacionesCtrl = TextEditingController();
 
   String? _sexo;
+  String? _edadAproximada;
+  String? _complexion;
+  String? _estatura;
+  String? _tez;
+  String? _cabello;
+  String? _prendaSuperior;
+  String? _colorSuperior;
+  String? _prendaInferior;
+  String? _colorInferior;
+  String? _calzado;
+  String? _colorCalzado;
+  final Set<String> _rasgos = <String>{};
   DateTime? _vigencia;
   bool _permanente = false;
   String? _rawLicencia;
   ConduceLegalidadFundamento? _fundamento;
+  String? _nacionalidad;
 
   @override
   void dispose() {
@@ -1517,11 +1529,9 @@ class _PersonaModalState extends State<_PersonaModal> {
     _telefonoCtrl.dispose();
     _domicilioCtrl.dispose();
     _ocupacionCtrl.dispose();
-    _edadCtrl.dispose();
     _tipoLicenciaCtrl.dispose();
     _estadoLicenciaCtrl.dispose();
     _numeroLicenciaCtrl.dispose();
-    _observacionesCtrl.dispose();
     super.dispose();
   }
 
@@ -1584,12 +1594,15 @@ class _PersonaModalState extends State<_PersonaModal> {
       return;
     }
 
+    final descripcion = _descripcionPersona();
     final hasIdentity =
         _nombreCtrl.text.trim().isNotEmpty ||
         _numeroLicenciaCtrl.text.trim().isNotEmpty;
-    if (!hasIdentity) {
+    if (!hasIdentity && descripcion == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Captura nombre o numero de licencia.')),
+        const SnackBar(
+          content: Text('Captura nombre, numero de licencia o descripcion.'),
+        ),
       );
       return;
     }
@@ -1601,8 +1614,11 @@ class _PersonaModalState extends State<_PersonaModal> {
         telefono: _empty(_telefonoCtrl.text),
         domicilio: _empty(_domicilioCtrl.text),
         sexo: _sexo,
+        nacionalidad: _nacionalidad,
         ocupacion: _empty(_ocupacionCtrl.text),
-        edad: int.tryParse(_edadCtrl.text.trim()),
+        edad: ConduceLegalidadPersonaDescriptor.edadAproximadaToInt(
+          _edadAproximada,
+        ),
         tipoLicencia: _empty(_tipoLicenciaCtrl.text),
         estadoLicencia: _empty(_estadoLicenciaCtrl.text),
         numeroLicencia: _empty(_numeroLicenciaCtrl.text),
@@ -1615,8 +1631,36 @@ class _PersonaModalState extends State<_PersonaModal> {
         infraccionCodigo: _fundamento?.codigo,
         fundamentoLegal: _fundamento?.fundamentoLegal,
         infraccion: _fundamento,
-        observaciones: _empty(_observacionesCtrl.text),
+        edadAproximada: _edadAproximada,
+        complexion: _complexion,
+        estatura: _estatura,
+        tez: _tez,
+        cabello: _cabello,
+        prendaSuperior: _prendaSuperior,
+        colorSuperior: _colorSuperior,
+        prendaInferior: _prendaInferior,
+        colorInferior: _colorInferior,
+        calzado: _calzado,
+        colorCalzado: _colorCalzado,
+        rasgosVisibles: _rasgos.toList(),
       ),
+    );
+  }
+
+  String? _descripcionPersona() {
+    return ConduceLegalidadPersonaDescriptor.buildDescription(
+      edadAproximada: _edadAproximada,
+      complexion: _complexion,
+      estatura: _estatura,
+      tez: _tez,
+      cabello: _cabello,
+      prendaSuperior: _prendaSuperior,
+      colorSuperior: _colorSuperior,
+      prendaInferior: _prendaInferior,
+      colorInferior: _colorInferior,
+      calzado: _calzado,
+      colorCalzado: _colorCalzado,
+      rasgos: _rasgos,
     );
   }
 
@@ -1665,6 +1709,14 @@ class _PersonaModalState extends State<_PersonaModal> {
                 validator: VehiculoFormService.validateTelefono,
               ),
               _text(_domicilioCtrl, 'Domicilio', Icons.home),
+              _select(
+                label: 'Nacionalidad',
+                icon: Icons.public_outlined,
+                value: _nacionalidad,
+                options: ConduceLegalidadPersonaDescriptor.nacionalidadOptions,
+                isRequired: true,
+                onChanged: (value) => setState(() => _nacionalidad = value),
+              ),
               DropdownButtonFormField<String>(
                 value: _sexo,
                 decoration: const InputDecoration(
@@ -1679,19 +1731,21 @@ class _PersonaModalState extends State<_PersonaModal> {
                     child: Text('MASCULINO'),
                   ),
                   DropdownMenuItem(value: 'FEMENINO', child: Text('FEMENINO')),
-                  DropdownMenuItem(value: 'OTRO', child: Text('OTRO')),
                 ],
                 onChanged: (value) => setState(() => _sexo = value),
               ),
               const SizedBox(height: 10),
               _text(_ocupacionCtrl, 'Ocupacion', Icons.work_outline),
-              _text(
-                _edadCtrl,
-                'Edad',
-                Icons.numbers,
-                keyboardType: TextInputType.number,
-                validator: VehiculoFormService.validateEdad,
+              _select(
+                label: 'Edad aproximada',
+                icon: Icons.cake_outlined,
+                value: _edadAproximada,
+                options:
+                    ConduceLegalidadPersonaDescriptor.edadAproximadaOptions,
+                isRequired: true,
+                onChanged: (value) => setState(() => _edadAproximada = value),
               ),
+              _descripcionFisicaSection(),
               SwitchListTile(
                 title: const Text('Licencia permanente'),
                 value: _permanente,
@@ -1767,12 +1821,7 @@ class _PersonaModalState extends State<_PersonaModal> {
                 _AttentionPanel(text: licenciaWarning),
                 const SizedBox(height: 10),
               ],
-              _text(
-                _observacionesCtrl,
-                'Observaciones',
-                Icons.info_outline,
-                maxLines: 3,
-              ),
+              _descripcionPreview(),
               const SizedBox(height: 12),
               ElevatedButton.icon(
                 onPressed: _submit,
@@ -1782,6 +1831,214 @@ class _PersonaModalState extends State<_PersonaModal> {
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _descripcionFisicaSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const _FormSectionLabel('Vestimenta'),
+        _select(
+          label: 'Prenda superior',
+          icon: Icons.checkroom_outlined,
+          value: _prendaSuperior,
+          options: ConduceLegalidadPersonaDescriptor.prendaSuperiorOptions,
+          isRequired: true,
+          onChanged: (value) => setState(() => _prendaSuperior = value),
+        ),
+        _select(
+          label: 'Color superior',
+          icon: Icons.palette_outlined,
+          value: _colorSuperior,
+          options: ConduceLegalidadPersonaDescriptor.colorOptions,
+          isRequired: true,
+          onChanged: (value) => setState(() => _colorSuperior = value),
+        ),
+        _select(
+          label: 'Prenda inferior',
+          icon: Icons.checkroom_outlined,
+          value: _prendaInferior,
+          options: ConduceLegalidadPersonaDescriptor.prendaInferiorOptions,
+          isRequired: true,
+          onChanged: (value) => setState(() => _prendaInferior = value),
+        ),
+        _select(
+          label: 'Color inferior',
+          icon: Icons.palette_outlined,
+          value: _colorInferior,
+          options: ConduceLegalidadPersonaDescriptor.colorOptions,
+          isRequired: true,
+          onChanged: (value) => setState(() => _colorInferior = value),
+        ),
+        _select(
+          label: 'Calzado',
+          icon: Icons.directions_walk_outlined,
+          value: _calzado,
+          options: ConduceLegalidadPersonaDescriptor.calzadoOptions,
+          isRequired: true,
+          onChanged: (value) => setState(() => _calzado = value),
+        ),
+        _select(
+          label: 'Color calzado',
+          icon: Icons.palette_outlined,
+          value: _colorCalzado,
+          options: ConduceLegalidadPersonaDescriptor.colorOptions,
+          isRequired: true,
+          onChanged: (value) => setState(() => _colorCalzado = value),
+        ),
+        const _FormSectionLabel('Rasgos visibles'),
+        _rasgosSelector(),
+        const _FormSectionLabel('Media filiacion'),
+        _select(
+          label: 'Complexion',
+          icon: Icons.accessibility_new_outlined,
+          value: _complexion,
+          options: ConduceLegalidadPersonaDescriptor.complexionOptions,
+          onChanged: (value) => setState(() => _complexion = value),
+        ),
+        _select(
+          label: 'Estatura',
+          icon: Icons.height_outlined,
+          value: _estatura,
+          options: ConduceLegalidadPersonaDescriptor.estaturaOptions,
+          onChanged: (value) => setState(() => _estatura = value),
+        ),
+        _select(
+          label: 'Tez',
+          icon: Icons.face_retouching_natural_outlined,
+          value: _tez,
+          options: ConduceLegalidadPersonaDescriptor.tezOptions,
+          onChanged: (value) => setState(() => _tez = value),
+        ),
+        _select(
+          label: 'Cabello',
+          icon: Icons.face_outlined,
+          value: _cabello,
+          options: ConduceLegalidadPersonaDescriptor.cabelloOptions,
+          onChanged: (value) => setState(() => _cabello = value),
+        ),
+      ],
+    );
+  }
+
+  Widget _select({
+    required String label,
+    required IconData icon,
+    required String? value,
+    required List<String> options,
+    required ValueChanged<String?> onChanged,
+    bool isRequired = false,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: DropdownButtonFormField<String>(
+        value: value,
+        isExpanded: true,
+        decoration: InputDecoration(
+          labelText: label,
+          border: const OutlineInputBorder(),
+          prefixIcon: Icon(icon),
+        ),
+        items: [
+          const DropdownMenuItem<String>(
+            value: null,
+            child: Text('Seleccionar'),
+          ),
+          ...options.map(
+            (option) => DropdownMenuItem<String>(
+              value: option,
+              child: Text(option, overflow: TextOverflow.ellipsis),
+            ),
+          ),
+        ],
+        validator: isRequired
+            ? (selected) {
+                final text = (selected ?? '').trim();
+                return text.isEmpty ? 'Selecciona una opcion.' : null;
+              }
+            : null,
+        onChanged: onChanged,
+      ),
+    );
+  }
+
+  Widget _rasgosSelector() {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: FormField<Set<String>>(
+        initialValue: _rasgos,
+        validator: (_) =>
+            _rasgos.isEmpty ? 'Selecciona al menos una opcion.' : null,
+        builder: (field) {
+          return InputDecorator(
+            decoration: InputDecoration(
+              border: const OutlineInputBorder(),
+              prefixIcon: const Icon(Icons.visibility_outlined),
+              errorText: field.errorText,
+            ),
+            child: Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: ConduceLegalidadPersonaDescriptor.rasgosOptions.map((
+                option,
+              ) {
+                final selected = _rasgos.contains(option);
+                return FilterChip(
+                  label: Text(option),
+                  selected: selected,
+                  onSelected: (_) {
+                    setState(() => _toggleRasgo(option));
+                    field.didChange(Set<String>.from(_rasgos));
+                  },
+                );
+              }).toList(),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  void _toggleRasgo(String option) {
+    const exclusive = <String>{
+      ConduceLegalidadPersonaDescriptor.rasgoSinRasgos,
+      ConduceLegalidadPersonaDescriptor.rasgoNoApreciable,
+    };
+
+    if (exclusive.contains(option)) {
+      _rasgos
+        ..clear()
+        ..add(option);
+      return;
+    }
+
+    _rasgos.removeAll(exclusive);
+    if (!_rasgos.add(option)) {
+      _rasgos.remove(option);
+    }
+  }
+
+  Widget _descripcionPreview() {
+    final descripcion = _descripcionPersona() ?? 'Descripcion pendiente.';
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade50,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Descripcion generada',
+            style: TextStyle(fontWeight: FontWeight.w800),
+          ),
+          const SizedBox(height: 6),
+          Text(descripcion),
+        ],
       ),
     );
   }
@@ -1847,6 +2104,20 @@ class _PersonaModalState extends State<_PersonaModal> {
         ),
         validator: validator,
       ),
+    );
+  }
+}
+
+class _FormSectionLabel extends StatelessWidget {
+  final String text;
+
+  const _FormSectionLabel(this.text);
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 4, bottom: 8),
+      child: Text(text, style: const TextStyle(fontWeight: FontWeight.w900)),
     );
   }
 }
@@ -2198,11 +2469,16 @@ class _PersonTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final detalles = <String>[
+      if ((persona.edadAproximada ?? '').trim().isNotEmpty)
+        persona.edadAproximada!
+      else if (persona.edad != null)
+        '${persona.edad} anos aprox.',
       if ((persona.numeroLicencia ?? '').trim().isNotEmpty)
         'Lic. ${persona.numeroLicencia}',
       if ((persona.tipoLicencia ?? '').trim().isNotEmpty) persona.tipoLicencia!,
       if (persona.infraccion != null)
         '${persona.infraccion!.display} (${persona.infraccion!.sancionResumen})',
+      if (persona.hasDescripcionFisica) 'Descripcion fisica capturada',
     ];
 
     return _CaptureTile(

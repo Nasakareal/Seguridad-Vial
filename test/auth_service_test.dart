@@ -429,6 +429,49 @@ void main() {
     },
   );
 
+  test(
+    'delegaciones limited roles hide other activity subcategories',
+    () async {
+      for (final role in <String>['Policia', 'Delegado', 'Administrativo']) {
+        SharedPreferences.setMockInitialValues(<String, Object>{
+          'auth_role': role,
+          'auth_unidad_id': AuthService.unidadDelegacionesId,
+          'auth_user_payload': jsonEncode(<String, Object>{
+            'id': 40,
+            'role': <String, Object>{'name': role},
+            'unidad_id': AuthService.unidadDelegacionesId,
+          }),
+        });
+
+        expect(
+          await AuthService.shouldHideDelegacionesOtherSubcategorias(),
+          isTrue,
+          reason: role,
+        );
+      }
+    },
+  );
+
+  test(
+    'delegaciones subdelegado keeps other activity subcategories visible',
+    () async {
+      SharedPreferences.setMockInitialValues(<String, Object>{
+        'auth_role': 'Subdelegado',
+        'auth_unidad_id': AuthService.unidadDelegacionesId,
+        'auth_user_payload': jsonEncode(<String, Object>{
+          'id': 41,
+          'role': <String, Object>{'name': 'Subdelegado'},
+          'unidad_id': AuthService.unidadDelegacionesId,
+        }),
+      });
+
+      expect(
+        await AuthService.shouldHideDelegacionesOtherSubcategorias(),
+        isFalse,
+      );
+    },
+  );
+
   test('delegaciones policia feed is scoped to own delegacion', () async {
     SharedPreferences.setMockInitialValues(<String, Object>{
       'auth_role': 'Policia',

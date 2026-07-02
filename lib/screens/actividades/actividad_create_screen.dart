@@ -292,9 +292,12 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
 
     try {
       final hideHechosTransito = await AuthService.isDelegacionesUser();
+      final hideOtherSubcategorias =
+          await AuthService.shouldHideDelegacionesOtherSubcategorias();
       final subs = ActividadesService.visibleSubcategoriasForActividadUi(
         await ActividadesService.fetchSubcategorias(categoriaId),
         hideHechosTransito: hideHechosTransito,
+        hideOtherSubcategorias: hideOtherSubcategorias,
       );
       if (!mounted) return;
       setState(() {
@@ -304,7 +307,7 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
           _subcategoriaId = targetSubcategoriaId;
         } else if (subs.length == 1) {
           _subcategoriaId = subs.first.id;
-        } else if (preferredSubcategoriaId == null) {
+        } else {
           _subcategoriaId = null;
         }
         _ensureFomentoProgramValid();

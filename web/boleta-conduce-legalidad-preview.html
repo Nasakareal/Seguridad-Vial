@@ -63,7 +63,7 @@
       background: var(--paper);
       border: 1px solid var(--line);
       box-shadow: 0 12px 36px rgb(0 0 0 / 16%);
-      padding: 4mm;
+      padding: 4mm 4mm 14mm;
       font-family: "Courier New", Courier, monospace;
       font-size: 11px;
       line-height: 1.25;
@@ -131,9 +131,15 @@
       text-transform: uppercase;
     }
 
+    .supervisor {
+      margin-top: 8px;
+      text-align: center;
+      font-weight: 800;
+    }
+
     @page {
       size: 80mm auto;
-      margin: 4mm;
+      margin: 0;
     }
 
     @media print {
@@ -151,10 +157,10 @@
       }
 
       .ticket {
-        width: 72mm;
+        width: 80mm;
         border: 0;
         box-shadow: none;
-        padding: 0;
+        padding: 4mm 4mm 14mm;
       }
     }
   </style>
@@ -320,6 +326,10 @@
       <div class="block-label">Firma autografa/electronica:</div>
       <div class="signature"></div>
       <div class="footer">Previsualizacion local</div>
+      <div class="supervisor">
+        <div>Supervisó: Luis Eduardo Lugo Ordorica</div>
+        <div>Subdirector de Vialidades Urbanas</div>
+      </div>
     </article>
   </main>
 </body>

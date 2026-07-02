@@ -623,6 +623,16 @@ class AuthService {
     return _payloadHasChildDelegations(payload);
   }
 
+  static Future<bool> shouldHideDelegacionesOtherSubcategorias() async {
+    if (!await isDelegacionesUser()) {
+      return false;
+    }
+
+    return await isPolicia() ||
+        await isDelegadoRole() ||
+        await isAdministrativoRole();
+  }
+
   static Future<int?> getFeedDelegacionFilterId() async {
     if (!await isDelegacionesUser()) {
       return null;

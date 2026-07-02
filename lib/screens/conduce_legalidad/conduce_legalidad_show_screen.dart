@@ -521,6 +521,7 @@ class _OperativoHeader extends StatelessWidget {
               operativo.fecha,
               operativo.horaInicio,
               operativo.municipio,
+              operativo.colonia,
             ].whereType<String>().where((v) => v.trim().isNotEmpty).join(' | '),
             style: const TextStyle(color: Colors.white70),
           ),

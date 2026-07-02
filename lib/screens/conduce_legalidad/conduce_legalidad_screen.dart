@@ -388,6 +388,7 @@ class _OperativoCard extends StatelessWidget {
             [
                   operativo.fecha,
                   operativo.municipio,
+                  operativo.colonia,
                   counts,
                   operativo.estado.toUpperCase(),
                 ]

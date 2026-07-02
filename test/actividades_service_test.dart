@@ -280,6 +280,25 @@ void main() {
   });
 
   test(
+    'hides other catch-all subcategories from restricted delegaciones UI',
+    () {
+      final visible = ActividadesService.visibleSubcategoriasForActividadUi(
+        const <ActividadSubcategoria>[
+          ActividadSubcategoria(id: 1, nombre: 'OTROS TIPOS'),
+          ActividadSubcategoria(id: 2, nombre: 'OTRAS (Especificar)'),
+          ActividadSubcategoria(id: 3, nombre: 'OTRO'),
+          ActividadSubcategoria(id: 4, nombre: 'APOYO A OTRAS DEPENDENCIAS'),
+          ActividadSubcategoria(id: 5, nombre: 'Cortes de circulación'),
+        ],
+        hideHechosTransito: false,
+        hideOtherSubcategorias: true,
+      );
+
+      expect(visible.map((item) => item.id), <int>[4, 5]);
+    },
+  );
+
+  test(
     'keeps hechos transit subcategories visible outside delegaciones UI',
     () {
       final visible = ActividadesService.visibleSubcategoriasForActividadUi(
@@ -315,6 +334,24 @@ void main() {
     );
     expect(
       ActividadesService.isHechoTransitoSubcategoria('Cortes de circulación'),
+      isFalse,
+    );
+  });
+
+  test('detects only other catch-all subcategory labels', () {
+    expect(ActividadesService.isOtherCatchAllSubcategoria('OTRO'), isTrue);
+    expect(
+      ActividadesService.isOtherCatchAllSubcategoria('OTROS REPORTES'),
+      isTrue,
+    );
+    expect(
+      ActividadesService.isOtherCatchAllSubcategoria('OTRAS (Especificar)'),
+      isTrue,
+    );
+    expect(
+      ActividadesService.isOtherCatchAllSubcategoria(
+        'APOYOS A OTRAS DEPENDENCIAS',
+      ),
       isFalse,
     );
   });

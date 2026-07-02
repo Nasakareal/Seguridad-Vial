@@ -507,20 +507,37 @@ class ActividadesService {
   static List<ActividadSubcategoria> visibleSubcategoriasForActividadUi(
     List<ActividadSubcategoria> subcategorias, {
     required bool hideHechosTransito,
+    bool hideOtherSubcategorias = false,
   }) {
-    if (!hideHechosTransito) {
+    if (!hideHechosTransito && !hideOtherSubcategorias) {
       return List<ActividadSubcategoria>.from(subcategorias);
     }
 
     return subcategorias
-        .where(shouldShowSubcategoriaInActividadUi)
+        .where(
+          (subcategoria) => shouldShowSubcategoriaInActividadUi(
+            subcategoria,
+            hideHechosTransito: hideHechosTransito,
+            hideOtherSubcategorias: hideOtherSubcategorias,
+          ),
+        )
         .toList(growable: false);
   }
 
   static bool shouldShowSubcategoriaInActividadUi(
-    ActividadSubcategoria subcategoria,
-  ) {
-    return !isHechoTransitoSubcategoria(subcategoria.nombre);
+    ActividadSubcategoria subcategoria, {
+    bool hideHechosTransito = true,
+    bool hideOtherSubcategorias = false,
+  }) {
+    if (hideHechosTransito &&
+        isHechoTransitoSubcategoria(subcategoria.nombre)) {
+      return false;
+    }
+    if (hideOtherSubcategorias &&
+        isOtherCatchAllSubcategoria(subcategoria.nombre)) {
+      return false;
+    }
+    return true;
   }
 
   static bool isHechoTransitoSubcategoria(String nombre) {
@@ -531,6 +548,11 @@ class ActividadesService {
         label == 'HECHOS DE TRANSITO' ||
         label == 'SINIESTRO' ||
         label == 'SINIESTROS';
+  }
+
+  static bool isOtherCatchAllSubcategoria(String nombre) {
+    final label = _normalizeCatalogLabel(nombre);
+    return RegExp(r'^OTR[OA]S?(\b|[^A-Z0-9])').hasMatch(label);
   }
 
   static String toPublicUrl(String pathOrUrl) {

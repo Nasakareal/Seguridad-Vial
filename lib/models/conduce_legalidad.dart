@@ -383,6 +383,7 @@ class ConduceLegalidadOperativo {
   final String? horaCierre;
   final String? municipio;
   final String? lugar;
+  final String? colonia;
   final double? lat;
   final double? lng;
   final String? coordenadasTexto;
@@ -406,6 +407,7 @@ class ConduceLegalidadOperativo {
     this.horaCierre,
     this.municipio,
     this.lugar,
+    this.colonia,
     this.lat,
     this.lng,
     this.coordenadasTexto,
@@ -431,6 +433,7 @@ class ConduceLegalidadOperativo {
       horaCierre: _str(json['hora_cierre']),
       municipio: _str(json['municipio']),
       lugar: _str(json['lugar']),
+      colonia: _str(json['colonia']),
       lat: _double(json['lat']),
       lng: _double(json['lng']),
       coordenadasTexto: _str(json['coordenadas_texto']),
@@ -711,6 +714,7 @@ class ConduceLegalidadPersona {
   final String? telefono;
   final String? domicilio;
   final String? sexo;
+  final String? nacionalidad;
   final String? ocupacion;
   final int? edad;
   final String? tipoLicencia;
@@ -723,6 +727,18 @@ class ConduceLegalidadPersona {
   final String? infraccionCodigo;
   final String? fundamentoLegal;
   final ConduceLegalidadFundamento? infraccion;
+  final String? edadAproximada;
+  final String? complexion;
+  final String? estatura;
+  final String? tez;
+  final String? cabello;
+  final String? prendaSuperior;
+  final String? colorSuperior;
+  final String? prendaInferior;
+  final String? colorInferior;
+  final String? calzado;
+  final String? colorCalzado;
+  final List<String> rasgosVisibles;
   final String? observaciones;
 
   const ConduceLegalidadPersona({
@@ -731,6 +747,7 @@ class ConduceLegalidadPersona {
     this.telefono,
     this.domicilio,
     this.sexo,
+    this.nacionalidad,
     this.ocupacion,
     this.edad,
     this.tipoLicencia,
@@ -743,6 +760,18 @@ class ConduceLegalidadPersona {
     this.infraccionCodigo,
     this.fundamentoLegal,
     this.infraccion,
+    this.edadAproximada,
+    this.complexion,
+    this.estatura,
+    this.tez,
+    this.cabello,
+    this.prendaSuperior,
+    this.colorSuperior,
+    this.prendaInferior,
+    this.colorInferior,
+    this.calzado,
+    this.colorCalzado,
+    this.rasgosVisibles = const <String>[],
     this.observaciones,
   });
 
@@ -753,6 +782,7 @@ class ConduceLegalidadPersona {
       telefono: _str(json['telefono']),
       domicilio: _str(json['domicilio']),
       sexo: _str(json['sexo']),
+      nacionalidad: _str(json['nacionalidad']),
       ocupacion: _str(json['ocupacion']),
       edad: _nullableInt(json['edad']),
       tipoLicencia: _str(json['tipo_licencia']),
@@ -769,15 +799,45 @@ class ConduceLegalidadPersona {
       infraccion: json['infraccion'] is Map
           ? ConduceLegalidadFundamento.fromJson(_map(json['infraccion']))
           : null,
+      edadAproximada: _str(json['edad_aproximada']),
+      complexion: _str(json['complexion']),
+      estatura: _str(json['estatura']),
+      tez: _str(json['tez']),
+      cabello: _str(json['cabello']),
+      prendaSuperior: _str(json['prenda_superior']),
+      colorSuperior: _str(json['color_superior']),
+      prendaInferior: _str(json['prenda_inferior']),
+      colorInferior: _str(json['color_inferior']),
+      calzado: _str(json['calzado']),
+      colorCalzado: _str(json['color_calzado']),
+      rasgosVisibles: _list(json['rasgos_visibles'])
+          .map((item) => item.toString().trim())
+          .where((item) => item.isNotEmpty)
+          .toList(),
       observaciones: _str(json['observaciones']),
     );
   }
+
+  bool get hasDescripcionFisica =>
+      edadAproximada != null ||
+      complexion != null ||
+      estatura != null ||
+      tez != null ||
+      cabello != null ||
+      prendaSuperior != null ||
+      colorSuperior != null ||
+      prendaInferior != null ||
+      colorInferior != null ||
+      calzado != null ||
+      colorCalzado != null ||
+      rasgosVisibles.isNotEmpty;
 
   Map<String, dynamic> toJson() => {
     'nombre': nombre,
     'telefono': telefono,
     'domicilio': domicilio,
     'sexo': sexo,
+    'nacionalidad': nacionalidad,
     'ocupacion': ocupacion,
     'edad': edad,
     'tipo_licencia': tipoLicencia,
@@ -787,6 +847,18 @@ class ConduceLegalidadPersona {
     'permanente': permanente,
     'raw_licencia_qr': rawLicenciaQr,
     'licencia_punto_infraccion_id': licenciaPuntoInfraccionId,
+    'edad_aproximada': edadAproximada,
+    'complexion': complexion,
+    'estatura': estatura,
+    'tez': tez,
+    'cabello': cabello,
+    'prenda_superior': prendaSuperior,
+    'color_superior': colorSuperior,
+    'prenda_inferior': prendaInferior,
+    'color_inferior': colorInferior,
+    'calzado': calzado,
+    'color_calzado': colorCalzado,
+    'rasgos_visibles': rasgosVisibles.isEmpty ? null : rasgosVisibles,
     'observaciones': observaciones,
   }..removeWhere((_, value) => value == null);
 }

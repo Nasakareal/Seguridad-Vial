@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../models/conduce_legalidad.dart';
 import '../../services/conduce_legalidad_service.dart';
+import '../../services/geo_service.dart';
 
 class ConduceLegalidadOperativoFormScreen extends StatefulWidget {
   final ConduceLegalidadOperativo? initialOperativo;
@@ -20,10 +21,16 @@ class _ConduceLegalidadOperativoFormScreenState
   final _formKey = GlobalKey<FormState>();
   final _municipioCtrl = TextEditingController(text: 'Morelia');
   final _lugarCtrl = TextEditingController();
+  final _coloniaCtrl = TextEditingController();
+  final _coordenadasCtrl = TextEditingController();
 
   DateTime _fecha = DateTime.now();
   TimeOfDay _hora = TimeOfDay.now();
   bool _saving = false;
+  bool _locating = false;
+  double? _lat;
+  double? _lng;
+  String _locationStatus = 'Aun no se han capturado coordenadas.';
 
   bool get _editing => widget.initialOperativo != null;
 
@@ -37,6 +44,8 @@ class _ConduceLegalidadOperativoFormScreenState
   void dispose() {
     _municipioCtrl.dispose();
     _lugarCtrl.dispose();
+    _coloniaCtrl.dispose();
+    _coordenadasCtrl.dispose();
     super.dispose();
   }
 
@@ -48,8 +57,19 @@ class _ConduceLegalidadOperativoFormScreenState
         ? operativo.municipio!
         : 'Morelia';
     _lugarCtrl.text = operativo.lugar ?? '';
+    _coloniaCtrl.text = operativo.colonia ?? '';
     _fecha = _parseDate(operativo.fecha) ?? DateTime.now();
     _hora = _parseTime(operativo.horaInicio) ?? TimeOfDay.now();
+    _lat = operativo.lat;
+    _lng = operativo.lng;
+    _coordenadasCtrl.text =
+        operativo.coordenadasTexto ??
+        (_lat != null && _lng != null
+            ? '${_formatCoord(_lat!)}, ${_formatCoord(_lng!)}'
+            : '');
+    if (_coordenadasCtrl.text.trim().isNotEmpty) {
+      _locationStatus = 'Coordenadas cargadas del operativo.';
+    }
   }
 
   Future<void> _pickFecha() async {
@@ -71,6 +91,44 @@ class _ConduceLegalidadOperativoFormScreenState
     }
   }
 
+  Future<void> _captureLocation() async {
+    if (_saving || _locating) return;
+
+    setState(() {
+      _locating = true;
+      _locationStatus = 'Obteniendo coordenadas...';
+    });
+
+    try {
+      final geo = await GeoService.getCurrent();
+      if (!mounted) return;
+
+      final lat = geo.lat;
+      final lng = geo.lng;
+      if (lat == null || lng == null) {
+        setState(() {
+          _locationStatus =
+              geo.notaGeo ?? 'No se pudieron obtener las coordenadas.';
+        });
+        return;
+      }
+
+      setState(() {
+        _lat = lat;
+        _lng = lng;
+        _coordenadasCtrl.text = '${_formatCoord(lat)}, ${_formatCoord(lng)}';
+        _locationStatus = geo.captureSummary;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _locationStatus = 'Error al obtener coordenadas: $e');
+    } finally {
+      if (mounted) {
+        setState(() => _locating = false);
+      }
+    }
+  }
+
   Future<void> _submit() async {
     if (_saving) return;
     if (!_formKey.currentState!.validate()) return;
@@ -82,6 +140,10 @@ class _ConduceLegalidadOperativoFormScreenState
         'hora_inicio': _time(_hora),
         'municipio': _emptyToNull(_municipioCtrl.text),
         'lugar': _emptyToNull(_lugarCtrl.text),
+        'colonia': _emptyToNull(_coloniaCtrl.text),
+        'lat': _lat,
+        'lng': _lng,
+        'coordenadas_texto': _emptyToNull(_coordenadasCtrl.text),
       };
 
       if (_editing) {
@@ -176,13 +238,53 @@ class _ConduceLegalidadOperativoFormScreenState
               controller: _lugarCtrl,
               textCapitalization: TextCapitalization.sentences,
               decoration: const InputDecoration(
-                labelText: 'Punto o lugar',
+                labelText: 'Lugar *',
                 border: OutlineInputBorder(),
                 prefixIcon: Icon(Icons.place),
               ),
               validator: (value) =>
-                  (value ?? '').trim().isEmpty ? 'Captura el punto.' : null,
+                  (value ?? '').trim().isEmpty ? 'Captura el lugar.' : null,
             ),
+            const SizedBox(height: 12),
+            TextFormField(
+              controller: _coloniaCtrl,
+              textCapitalization: TextCapitalization.words,
+              decoration: const InputDecoration(
+                labelText: 'Colonia *',
+                border: OutlineInputBorder(),
+                prefixIcon: Icon(Icons.location_city_outlined),
+              ),
+              validator: (value) =>
+                  (value ?? '').trim().isEmpty ? 'Captura la colonia.' : null,
+            ),
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              onPressed: (_saving || _locating) ? null : _captureLocation,
+              icon: _locating
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.my_location),
+              label: Text(_locating ? 'Obteniendo...' : 'Obtener coordenadas'),
+            ),
+            const SizedBox(height: 12),
+            TextFormField(
+              controller: _coordenadasCtrl,
+              readOnly: true,
+              decoration: const InputDecoration(
+                labelText: 'Coordenadas *',
+                border: OutlineInputBorder(),
+                prefixIcon: Icon(Icons.pin_drop_outlined),
+              ),
+              validator: (value) =>
+                  _lat == null || _lng == null || (value ?? '').trim().isEmpty
+                  ? 'Obtén las coordenadas del operativo.'
+                  : null,
+            ),
+            const SizedBox(height: 8),
+            Text(_locationStatus, style: Theme.of(context).textTheme.bodySmall),
             const SizedBox(height: 20),
             ElevatedButton.icon(
               onPressed: _saving ? null : _submit,
@@ -242,4 +344,6 @@ class _ConduceLegalidadOperativoFormScreenState
     final m = time.minute.toString().padLeft(2, '0');
     return '$h:$m';
   }
+
+  String _formatCoord(double value) => value.toStringAsFixed(7);
 }
