@@ -26,6 +26,10 @@ class PushService {
 
     try {
       final logged = await AuthService.isLoggedIn();
+      if (logged && await AuthService.shouldSuppressPushNotifications()) {
+        await _deleteFcmTokenSafely();
+        return;
+      }
       if (logged && await AuthService.isVialidadesUrbanasNoWazeRole()) {
         return;
       }
@@ -71,6 +75,11 @@ class PushService {
     try {
       final logged = await AuthService.isLoggedIn();
       if (!logged) return;
+
+      if (await AuthService.shouldSuppressPushNotifications()) {
+        await _deleteFcmTokenSafely();
+        return;
+      }
 
       if (await AuthService.isVialidadesUrbanasNoWazeRole()) return;
 
@@ -142,6 +151,22 @@ class PushService {
     if (Platform.isWindows) return 'windows';
     if (Platform.isLinux) return 'linux';
     return 'unknown';
+  }
+
+  static Future<void> _deleteFcmTokenSafely() async {
+    if (!isSupportedPlatform) return;
+
+    try {
+      await FirebaseMessaging.instance.setAutoInitEnabled(false);
+    } catch (_) {}
+
+    try {
+      await FirebaseMessaging.instance.deleteToken();
+      _lastSuccessAt = null;
+      _lastAttemptAt = null;
+      _lastSubmittedToken = null;
+      _lastSubmittedOwnerKey = null;
+    } catch (_) {}
   }
 
   static Future<String?> _getFcmTokenSafely({required Duration maxWait}) async {

@@ -641,6 +641,169 @@ void main() {
   );
 
   test(
+    'siniestros evaluador teorico is limited to constancias without push or location',
+    () async {
+      SharedPreferences.setMockInitialValues(<String, Object>{
+        'auth_role': 'Evaluador Teórico',
+        'auth_unidad_id': 1,
+        'auth_user_payload': jsonEncode(<String, Object>{
+          'id': 64,
+          'role': <String, Object>{'name': 'Evaluador Teórico'},
+          'unidad_id': 1,
+        }),
+        'auth_perms': <String>[
+          'ver modulo examenes',
+          'editar modulo examenes',
+          'ver hechos',
+          'crear hechos',
+          'ver mapa',
+          'ver conduce legalidad',
+          'ver puntos licencias',
+          'ver sustento legal',
+        ],
+      });
+
+      expect(await AuthService.isEvaluadorTeoricoConstanciasOnly(), isTrue);
+      expect(await AuthService.canUseConstanciasManejo(), isTrue);
+      expect(await AuthService.canEditConstanciasManejo(), isTrue);
+      expect(await AuthService.canCreateHechos(), isFalse);
+      expect(await AuthService.canUseLicensePointsModule(), isFalse);
+      expect(await AuthService.canAccessConduceLegalidad(), isFalse);
+      expect(await AuthService.canShareLocationTracking(), isFalse);
+      expect(await AuthService.shouldAskLocation(), isFalse);
+      expect(await AuthService.shouldSuppressPushNotifications(), isTrue);
+
+      final permissions = await AuthService.getPermissions();
+      expect(permissions, contains('ver modulo examenes'));
+      expect(permissions, contains('editar modulo examenes'));
+      expect(permissions, contains('ver sustento legal'));
+      expect(permissions, isNot(contains('ver hechos')));
+      expect(permissions, isNot(contains('crear hechos')));
+      expect(permissions, isNot(contains('ver mapa')));
+      expect(permissions, isNot(contains('ver conduce legalidad')));
+      expect(permissions, isNot(contains('ver puntos licencias')));
+    },
+  );
+
+  test(
+    'siniestros evaluador teorico constancias follows monday friday schedule',
+    () async {
+      SharedPreferences.setMockInitialValues(<String, Object>{
+        'auth_role': 'Evaluador Teórico',
+        'auth_unidad_id': 1,
+        'auth_user_payload': jsonEncode(<String, Object>{
+          'id': 66,
+          'role': <String, Object>{'name': 'Evaluador Teórico'},
+          'unidad_id': 1,
+        }),
+      });
+
+      final allowed = await AuthService.constanciasManejoHorarioAccess(
+        now: DateTime(2026, 7, 3, 14, 59),
+      );
+      expect(allowed.applies, isTrue);
+      expect(allowed.allowed, isTrue);
+
+      final fridayAfternoon = await AuthService.constanciasManejoHorarioAccess(
+        now: DateTime(2026, 7, 3, 15),
+      );
+      expect(fridayAfternoon.allowed, isFalse);
+      expect(fridayAfternoon.nextAvailableAt, DateTime.utc(2026, 7, 6, 8));
+      expect(fridayAfternoon.message, contains('lunes 06/07/2026 a las 08:00'));
+
+      final saturday = await AuthService.constanciasManejoHorarioAccess(
+        now: DateTime(2026, 7, 4, 10),
+      );
+      expect(saturday.allowed, isFalse);
+      expect(saturday.nextAvailableAt, DateTime.utc(2026, 7, 6, 8));
+
+      final mondayMorning = await AuthService.constanciasManejoHorarioAccess(
+        now: DateTime(2026, 7, 6, 7, 30),
+      );
+      expect(mondayMorning.allowed, isFalse);
+      expect(mondayMorning.nextAvailableAt, DateTime.utc(2026, 7, 6, 8));
+      expect(mondayMorning.message, contains('lunes 06/07/2026 a las 08:00'));
+    },
+  );
+
+  test(
+    'superadmin administrador and subdirector bypass evaluador constancias schedule',
+    () async {
+      SharedPreferences.setMockInitialValues(<String, Object>{
+        'auth_role': 'Superadmin',
+        'auth_role_id': 1,
+        'auth_unidad_id': 1,
+        'auth_user_payload': jsonEncode(<String, Object>{
+          'id': 66,
+          'role': <String, Object>{'id': 1, 'name': 'Superadmin'},
+          'unidad_id': 1,
+        }),
+      });
+
+      var access = await AuthService.constanciasManejoHorarioAccess(
+        now: DateTime(2026, 7, 4, 10),
+      );
+      expect(access.applies, isFalse);
+      expect(access.allowed, isTrue);
+
+      SharedPreferences.setMockInitialValues(<String, Object>{
+        'auth_role': 'Administrador',
+        'auth_role_id': 3,
+        'auth_unidad_id': 1,
+        'auth_user_payload': jsonEncode(<String, Object>{
+          'id': 67,
+          'role': <String, Object>{'id': 3, 'name': 'Administrador'},
+          'unidad_id': 1,
+        }),
+      });
+
+      access = await AuthService.constanciasManejoHorarioAccess(
+        now: DateTime(2026, 7, 4, 10),
+      );
+      expect(access.applies, isFalse);
+      expect(access.allowed, isTrue);
+
+      SharedPreferences.setMockInitialValues(<String, Object>{
+        'auth_role': 'Subdirector',
+        'auth_role_id': 2,
+        'auth_unidad_id': 1,
+        'auth_user_payload': jsonEncode(<String, Object>{
+          'id': 68,
+          'role': <String, Object>{'id': 2, 'name': 'Subdirector'},
+          'unidad_id': 1,
+        }),
+      });
+
+      access = await AuthService.constanciasManejoHorarioAccess(
+        now: DateTime(2026, 7, 4, 10),
+      );
+      expect(access.applies, isFalse);
+      expect(access.allowed, isTrue);
+    },
+  );
+
+  test(
+    'evaluador teorico outside siniestros does not get constancias exception',
+    () async {
+      SharedPreferences.setMockInitialValues(<String, Object>{
+        'auth_role': 'Evaluador Teorico',
+        'auth_unidad_id': AuthService.unidadSeguridadVialId,
+        'auth_user_payload': jsonEncode(<String, Object>{
+          'id': 65,
+          'role': <String, Object>{'name': 'Evaluador Teorico'},
+          'unidad_id': AuthService.unidadSeguridadVialId,
+        }),
+        'auth_perms': <String>['ver modulo examenes', 'editar modulo examenes'],
+      });
+
+      expect(await AuthService.isEvaluadorTeoricoConstanciasOnly(), isFalse);
+      expect(await AuthService.canUseConstanciasManejo(), isFalse);
+      expect(await AuthService.canEditConstanciasManejo(), isFalse);
+      expect(await AuthService.shouldSuppressPushNotifications(), isFalse);
+    },
+  );
+
+  test(
     'instructor role in fomento unit keeps fomento and license points access',
     () async {
       SharedPreferences.setMockInitialValues(<String, Object>{

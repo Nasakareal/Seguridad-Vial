@@ -213,7 +213,22 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     return '${two(d.day)}/${two(d.month)}/${d.year}';
   }
 
-  void _openFeedItem(FeedItem item) {
+  Future<void> _openFeedItem(FeedItem item) async {
+    final constanciasOnly =
+        await AuthService.isEvaluadorTeoricoConstanciasOnly();
+    if (!mounted) return;
+
+    if (constanciasOnly) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Este rol solo puede consultar el feed y capturar constancias.',
+          ),
+        ),
+      );
+      return;
+    }
+
     if (item.type == FeedItemType.hecho) {
       Navigator.pushNamed(
         context,
@@ -271,16 +286,30 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     return ValueListenableBuilder<bool>(
       valueListenable: _permsCtrl.loading,
       builder: (context, loadingPerms, _) {
+        final constanciasOnly =
+            !loadingPerms && _permsCtrl.constanciasOnly.value;
         final canBuscar =
             !loadingPerms &&
+            !constanciasOnly &&
             _permsCtrl.allowed(HomePermissionsController.permBusqueda);
         final canHechos =
             !loadingPerms &&
+            !constanciasOnly &&
             _permsCtrl.allowed(HomePermissionsController.permHechos);
         final canMapa =
             !loadingPerms &&
+            !constanciasOnly &&
             (_permsCtrl.allowed(HomePermissionsController.permMapa) ||
                 _permsCtrl.canViewMapaPatrullas.value);
+        final canConstanciasQuick =
+            !loadingPerms &&
+            constanciasOnly &&
+            _permsCtrl.canUseConstanciasManejo.value;
+        final hasQuickActions = canHechos || canMapa || canConstanciasQuick;
+        final showTrackingStatus =
+            !loadingPerms &&
+            !constanciasOnly &&
+            _permsCtrl.canShareLocationTracking.value;
         return ValueListenableBuilder<bool>(
           valueListenable: _trackingCtrl.trackingOn,
           builder: (context, trackingOn, __) {
@@ -314,42 +343,56 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              HeaderCard(trackingOn: trackingOn),
+                              HeaderCard(
+                                trackingOn: trackingOn,
+                                showTrackingStatus: showTrackingStatus,
+                              ),
                               const SizedBox(height: 12),
                               const OfflineSyncStatusCard(),
-                              const SizedBox(height: 16),
-                              Text(
-                                'Accesos rápidos',
-                                style: theme.textTheme.titleMedium?.copyWith(
-                                  fontWeight: FontWeight.w800,
-                                  color: const Color(0xFF0F172A),
-                                ),
-                              ),
-                              const SizedBox(height: 12),
-                              QuickActionsGrid(
-                                canAccidentes: canHechos,
-                                canMapa: canMapa,
-                                onAccidentes: () =>
-                                    _go(context, AppRoutes.accidentes),
-                                onMapa: () => _go(context, AppRoutes.mapa),
-                              ),
-                              const SizedBox(height: 14),
-                              Container(
-                                padding: const EdgeInsets.all(12),
-                                decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(16),
-                                  color: Colors.blue.withValues(alpha: 0.06),
-                                  border: Border.all(
-                                    color: Colors.blue.withValues(alpha: 0.18),
+                              if (hasQuickActions) ...[
+                                const SizedBox(height: 16),
+                                Text(
+                                  'Accesos rápidos',
+                                  style: theme.textTheme.titleMedium?.copyWith(
+                                    fontWeight: FontWeight.w800,
+                                    color: const Color(0xFF0F172A),
                                   ),
                                 ),
-                                child: Text(
-                                  trackingOn
-                                      ? 'Ubicación activa (enviando ubicación en segundo plano).'
-                                      : 'Ubicación inactiva (puede activarse desde el mapa de patrullas).',
-                                  style: TextStyle(color: Colors.blue.shade900),
+                                const SizedBox(height: 12),
+                                QuickActionsGrid(
+                                  canAccidentes: canHechos,
+                                  canMapa: canMapa,
+                                  canConstancias: canConstanciasQuick,
+                                  onAccidentes: () =>
+                                      _go(context, AppRoutes.accidentes),
+                                  onMapa: () => _go(context, AppRoutes.mapa),
+                                  onConstancias: () =>
+                                      _go(context, AppRoutes.constanciasManejo),
                                 ),
-                              ),
+                              ],
+                              if (showTrackingStatus) ...[
+                                const SizedBox(height: 14),
+                                Container(
+                                  padding: const EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(16),
+                                    color: Colors.blue.withValues(alpha: 0.06),
+                                    border: Border.all(
+                                      color: Colors.blue.withValues(
+                                        alpha: 0.18,
+                                      ),
+                                    ),
+                                  ),
+                                  child: Text(
+                                    trackingOn
+                                        ? 'Ubicación activa (enviando ubicación en segundo plano).'
+                                        : 'Ubicación inactiva (puede activarse desde el mapa de patrullas).',
+                                    style: TextStyle(
+                                      color: Colors.blue.shade900,
+                                    ),
+                                  ),
+                                ),
+                              ],
                               const SizedBox(height: 18),
                               Row(
                                 children: [

@@ -3,6 +3,10 @@ import 'auth_service.dart';
 
 class HomeResolverService {
   static Future<bool> _isAvailable(String path) async {
+    if (await AuthService.isEvaluadorTeoricoConstanciasOnly()) {
+      return false;
+    }
+
     final token = await AuthService.getToken();
     if (token == null || token.trim().isEmpty) return false;
 

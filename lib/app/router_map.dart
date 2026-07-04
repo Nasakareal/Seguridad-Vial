@@ -103,6 +103,7 @@ import '../screens/vialidades_urbanas/vialidades_urbanas_screen.dart';
 
 import '../screens/pendientes/pendientes_cortes_screen.dart';
 import '../screens/pendientes/pendiente_corte_show_screen.dart';
+import '../widgets/constancias_manejo_schedule_guard.dart';
 
 final Map<String, WidgetBuilder> appRoutesMap = {
   AppRoutes.login: (context) => const LoginScreen(),
@@ -205,11 +206,14 @@ final Map<String, WidgetBuilder> appRoutesMap = {
   AppRoutes.culturaVial: (context) => const CulturaVialHomeScreen(),
   AppRoutes.culturaVialSala: (context) => const CulturaVialSalaScreen(),
   AppRoutes.culturaVialJoin: (context) => const CulturaVialJoinScreen(),
-  AppRoutes.constanciasManejo: (context) => const ConstanciasManejoScreen(),
+  AppRoutes.constanciasManejo: (context) =>
+      const ConstanciasManejoScheduleGuard(child: ConstanciasManejoScreen()),
   AppRoutes.constanciasManejoScanner: (context) =>
-      const ConstanciaManejoScanScreen(),
+      const ConstanciasManejoScheduleGuard(child: ConstanciaManejoScanScreen()),
   AppRoutes.constanciasManejoDetalle: (context) =>
-      const ConstanciaManejoDetailScreen(),
+      const ConstanciasManejoScheduleGuard(
+        child: ConstanciaManejoDetailScreen(),
+      ),
   AppRoutes.licenciasPuntos: (context) => const LicenciasPuntosScreen(),
   AppRoutes.licenciasPuntosPublica: (context) =>
       const LicenciasPuntosPublicScreen(),

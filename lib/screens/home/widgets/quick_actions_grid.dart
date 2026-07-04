@@ -3,16 +3,20 @@ import 'package:flutter/material.dart';
 class QuickActionsGrid extends StatelessWidget {
   final bool canAccidentes;
   final bool canMapa;
+  final bool canConstancias;
 
   final VoidCallback onAccidentes;
   final VoidCallback onMapa;
+  final VoidCallback? onConstancias;
 
   const QuickActionsGrid({
     super.key,
     required this.canAccidentes,
     required this.canMapa,
+    this.canConstancias = false,
     required this.onAccidentes,
     required this.onMapa,
+    this.onConstancias,
   });
 
   @override
@@ -44,6 +48,22 @@ class QuickActionsGrid extends StatelessWidget {
             title: 'Siniestros',
             subtitle: 'Listado y registros',
             onTap: onAccidentes,
+          ),
+        ),
+      );
+    }
+
+    if (canConstancias && onConstancias != null) {
+      if (actions.isNotEmpty) {
+        actions.add(const SizedBox(width: 12));
+      }
+      actions.add(
+        Expanded(
+          child: _QuickCard(
+            icon: Icons.badge,
+            title: 'Constancias de manejo',
+            subtitle: 'Alta y captura',
+            onTap: onConstancias!,
           ),
         ),
       );

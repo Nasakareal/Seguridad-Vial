@@ -10,6 +10,11 @@ class ConstanciasManejoService {
   static String get _base => '${AuthService.baseUrl}/constancias-manejo';
 
   static Future<Map<String, String>> authHeaders({bool json = true}) async {
+    final scheduleAccess = await AuthService.constanciasManejoHorarioAccess();
+    if (!scheduleAccess.allowed) {
+      throw Exception(scheduleAccess.message);
+    }
+
     final token = await AuthService.getToken();
     if (token == null || token.trim().isEmpty) {
       throw Exception('Sesion invalida. Vuelve a iniciar sesion.');

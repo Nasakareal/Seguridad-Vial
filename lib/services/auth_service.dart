@@ -56,6 +56,23 @@ class SiniestrosShiftAccessResult {
     : this(applies: applies, allowed: true, message: '');
 }
 
+class ConstanciasManejoHorarioAccess {
+  final bool applies;
+  final bool allowed;
+  final String message;
+  final DateTime? nextAvailableAt;
+
+  const ConstanciasManejoHorarioAccess({
+    required this.applies,
+    required this.allowed,
+    required this.message,
+    this.nextAvailableAt,
+  });
+
+  const ConstanciasManejoHorarioAccess.allowed({bool applies = false})
+    : this(applies: applies, allowed: true, message: '');
+}
+
 class AuthService {
   static const String _baseUrl = 'https://seguridadvial-mich.com/api';
 
@@ -84,6 +101,13 @@ class AuthService {
   static const String locationTrackingIntervalVialidadesUrbanas =
       'vialidades_urbanas';
   static const String locationTrackingIntervalHourly = 'hourly';
+  static const Duration _constanciasManejoServerUtcOffset = Duration(hours: -6);
+  static const Duration _constanciasManejoServerClockCacheTtl = Duration(
+    minutes: 2,
+  );
+
+  static DateTime? _constanciasManejoServerClockSnapshot;
+  static Stopwatch? _constanciasManejoServerClockStopwatch;
 
   static String get baseUrl => _baseUrl;
 
@@ -573,6 +597,76 @@ class AuthService {
     return hasRoleName('jefe de grupo');
   }
 
+  static Future<bool> isEvaluadorTeoricoConstanciasOnly({
+    bool refresh = false,
+  }) async {
+    if (refresh) {
+      await refreshCurrentUserAccess();
+    }
+
+    if (await isSuperadmin()) {
+      return false;
+    }
+
+    final role = await getRole();
+    final payload = await getStoredUserPayload();
+    final hasRole =
+        _roleTextMatches(role, 'evaluador teorico') ||
+        _payloadHasRole(payload, 'evaluador teorico');
+    if (!hasRole) {
+      return false;
+    }
+
+    final unidadId = await getUnidadId();
+    return unidadId == 1 || _payloadMatchesSiniestros(payload);
+  }
+
+  static Future<bool> shouldSuppressPushNotifications({bool refresh = false}) {
+    return isEvaluadorTeoricoConstanciasOnly(refresh: refresh);
+  }
+
+  static Future<ConstanciasManejoHorarioAccess> constanciasManejoHorarioAccess({
+    DateTime? now,
+    bool refresh = false,
+  }) async {
+    if (!await isEvaluadorTeoricoConstanciasOnly(refresh: refresh)) {
+      return const ConstanciasManejoHorarioAccess.allowed();
+    }
+
+    final trustedNow = now == null
+        ? await _trustedConstanciasManejoServerNow(refresh: refresh)
+        : _asConstanciasManejoWallClock(now);
+    if (trustedNow == null) {
+      return const ConstanciasManejoHorarioAccess(
+        applies: true,
+        allowed: false,
+        message:
+            'Modulo bloqueado por horario. No se pudo confirmar la hora del servidor; por seguridad, el turno LICENCIAS L-V permanece bloqueado. Intenta nuevamente con conexion a internet.',
+      );
+    }
+
+    final current = trustedNow;
+    final start = DateTime.utc(current.year, current.month, current.day, 8);
+    final end = DateTime.utc(current.year, current.month, current.day, 15);
+    final isWorkday =
+        current.weekday >= DateTime.monday &&
+        current.weekday <= DateTime.friday;
+
+    if (isWorkday && !current.isBefore(start) && current.isBefore(end)) {
+      return const ConstanciasManejoHorarioAccess.allowed(applies: true);
+    }
+
+    final next = _nextConstanciasManejoHorarioStart(current);
+    final nextLabel = _formatConstanciasManejoHorarioDateTime(next);
+    return ConstanciasManejoHorarioAccess(
+      applies: true,
+      allowed: false,
+      nextAvailableAt: next,
+      message:
+          'Modulo bloqueado por horario. El turno LICENCIAS L-V solo permite activar constancias de lunes a viernes de 08:00 a 15:00. Podras activar constancias el $nextLabel.',
+    );
+  }
+
   static Future<bool> isAdministrativoRole() async {
     final roleId = await getRoleId();
     if (roleId == 5) return true;
@@ -873,6 +967,10 @@ class AuthService {
       return true;
     }
 
+    if (await isEvaluadorTeoricoConstanciasOnly()) {
+      return true;
+    }
+
     if (!await can('ver modulo examenes')) {
       return false;
     }
@@ -889,6 +987,10 @@ class AuthService {
   static Future<bool> canUseLicensePointsModule({bool refresh = false}) async {
     if (refresh) {
       await refreshCurrentUserAccess();
+    }
+
+    if (await isEvaluadorTeoricoConstanciasOnly()) {
+      return false;
     }
 
     if (await isSuperadmin() || await hasFullOperationalAccess()) {
@@ -909,6 +1011,10 @@ class AuthService {
   static Future<bool> canAccessConduceLegalidad({bool refresh = false}) async {
     if (refresh) {
       await refreshCurrentUserAccess();
+    }
+
+    if (await isEvaluadorTeoricoConstanciasOnly()) {
+      return false;
     }
 
     return isLoggedIn();
@@ -976,6 +1082,10 @@ class AuthService {
       return true;
     }
 
+    if (await isEvaluadorTeoricoConstanciasOnly()) {
+      return true;
+    }
+
     if (!await canUseConstanciasManejo()) {
       return false;
     }
@@ -984,6 +1094,10 @@ class AuthService {
   }
 
   static Future<bool> canShareLocationTracking() async {
+    if (await isEvaluadorTeoricoConstanciasOnly()) {
+      return false;
+    }
+
     final unidadId = await getUnidadId();
     final payload = await getStoredUserPayload();
 
@@ -1339,6 +1453,10 @@ class AuthService {
 
     if (await isSuperadmin()) {
       return true;
+    }
+
+    if (await isEvaluadorTeoricoConstanciasOnly()) {
+      return false;
     }
 
     final unidadId = await getUnidadId();
@@ -2682,6 +2800,15 @@ class AuthService {
     }
 
     final unidadId = await getUnidadId();
+    if (await isEvaluadorTeoricoConstanciasOnly()) {
+      const allowed = <String>{
+        'ver modulo examenes',
+        'editar modulo examenes',
+        'ver sustento legal',
+      };
+      return normalized.where(allowed.contains).toList();
+    }
+
     final isPeritoUser = await isPerito() || _payloadHasRole(payload, 'perito');
     final excludeHechos =
         !isPeritoUser &&
@@ -3691,6 +3818,178 @@ class AuthService {
   static int? _readNullableInt(dynamic value) {
     final parsed = int.tryParse('${value ?? ''}');
     return parsed != null && parsed > 0 ? parsed : null;
+  }
+
+  static Future<DateTime?> _trustedConstanciasManejoServerNow({
+    bool refresh = false,
+  }) async {
+    final snapshot = _constanciasManejoServerClockSnapshot;
+    final stopwatch = _constanciasManejoServerClockStopwatch;
+    if (!refresh &&
+        snapshot != null &&
+        stopwatch != null &&
+        stopwatch.elapsed <= _constanciasManejoServerClockCacheTtl) {
+      return snapshot.add(stopwatch.elapsed);
+    }
+
+    final serverNow = await _fetchConstanciasManejoServerNow();
+    if (serverNow == null) {
+      return null;
+    }
+
+    final nextStopwatch = Stopwatch()..start();
+    _constanciasManejoServerClockSnapshot = serverNow;
+    _constanciasManejoServerClockStopwatch = nextStopwatch;
+    return serverNow;
+  }
+
+  static Future<DateTime?> _fetchConstanciasManejoServerNow() async {
+    final token = await getToken();
+    if (token == null || token.trim().isEmpty) {
+      return null;
+    }
+
+    try {
+      final response = await http
+          .get(
+            Uri.parse('$_baseUrl/me'),
+            headers: {
+              'Authorization': 'Bearer $token',
+              'Accept': 'application/json',
+              ...await mobileSessionHeaders(),
+            },
+          )
+          .timeout(const Duration(seconds: 10));
+
+      if (_isInvalidSessionStatus(response.statusCode)) {
+        await _clearLocalSession();
+        return null;
+      }
+
+      return _serverDateHeaderToConstanciasManejoWallClock(
+        response.headers['date'],
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static DateTime? _serverDateHeaderToConstanciasManejoWallClock(String? raw) {
+    final utc = _parseHttpDateUtc(raw);
+    if (utc == null) return null;
+
+    final shifted = utc.add(_constanciasManejoServerUtcOffset);
+    return DateTime.utc(
+      shifted.year,
+      shifted.month,
+      shifted.day,
+      shifted.hour,
+      shifted.minute,
+      shifted.second,
+      shifted.millisecond,
+      shifted.microsecond,
+    );
+  }
+
+  static DateTime _asConstanciasManejoWallClock(DateTime value) {
+    return DateTime.utc(
+      value.year,
+      value.month,
+      value.day,
+      value.hour,
+      value.minute,
+      value.second,
+      value.millisecond,
+      value.microsecond,
+    );
+  }
+
+  static DateTime? _parseHttpDateUtc(String? raw) {
+    final value = raw?.trim() ?? '';
+    if (value.isEmpty) return null;
+
+    final parsed = DateTime.tryParse(value);
+    if (parsed != null) return parsed.toUtc();
+
+    final match = RegExp(
+      r'^(?:[A-Za-z]{3},\s*)?(\d{1,2})\s+([A-Za-z]{3})\s+(\d{4})\s+(\d{2}):(\d{2}):(\d{2})\s+GMT$',
+    ).firstMatch(value);
+    if (match == null) return null;
+
+    const months = <String, int>{
+      'jan': 1,
+      'feb': 2,
+      'mar': 3,
+      'apr': 4,
+      'may': 5,
+      'jun': 6,
+      'jul': 7,
+      'aug': 8,
+      'sep': 9,
+      'oct': 10,
+      'nov': 11,
+      'dec': 12,
+    };
+
+    final day = int.tryParse(match.group(1) ?? '');
+    final month = months[(match.group(2) ?? '').toLowerCase()];
+    final year = int.tryParse(match.group(3) ?? '');
+    final hour = int.tryParse(match.group(4) ?? '');
+    final minute = int.tryParse(match.group(5) ?? '');
+    final second = int.tryParse(match.group(6) ?? '');
+    if (day == null ||
+        month == null ||
+        year == null ||
+        hour == null ||
+        minute == null ||
+        second == null) {
+      return null;
+    }
+
+    return DateTime.utc(year, month, day, hour, minute, second);
+  }
+
+  static DateTime _nextConstanciasManejoHorarioStart(DateTime current) {
+    final todayStart = DateTime.utc(
+      current.year,
+      current.month,
+      current.day,
+      8,
+    );
+    final isWorkday =
+        current.weekday >= DateTime.monday &&
+        current.weekday <= DateTime.friday;
+
+    if (isWorkday && current.isBefore(todayStart)) {
+      return todayStart;
+    }
+
+    var nextDay = DateTime.utc(
+      current.year,
+      current.month,
+      current.day,
+    ).add(const Duration(days: 1));
+    while (nextDay.weekday > DateTime.friday) {
+      nextDay = nextDay.add(const Duration(days: 1));
+    }
+
+    return DateTime.utc(nextDay.year, nextDay.month, nextDay.day, 8);
+  }
+
+  static String _formatConstanciasManejoHorarioDateTime(DateTime value) {
+    const days = <int, String>{
+      DateTime.monday: 'lunes',
+      DateTime.tuesday: 'martes',
+      DateTime.wednesday: 'miercoles',
+      DateTime.thursday: 'jueves',
+      DateTime.friday: 'viernes',
+      DateTime.saturday: 'sabado',
+      DateTime.sunday: 'domingo',
+    };
+
+    String two(int x) => x.toString().padLeft(2, '0');
+    final day = days[value.weekday] ?? 'dia habil';
+    return '$day ${two(value.day)}/${two(value.month)}/${value.year} a las ${two(value.hour)}:${two(value.minute)}';
   }
 
   static String _buildSessionOwnerKey({

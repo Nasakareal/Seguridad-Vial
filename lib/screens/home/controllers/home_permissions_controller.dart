@@ -16,6 +16,13 @@ class HomePermissionsController {
   final ValueNotifier<bool> loading = ValueNotifier<bool>(true);
   final ValueNotifier<bool> fullOperationalAccess = ValueNotifier<bool>(false);
   final ValueNotifier<bool> canViewMapaPatrullas = ValueNotifier<bool>(false);
+  final ValueNotifier<bool> canUseConstanciasManejo = ValueNotifier<bool>(
+    false,
+  );
+  final ValueNotifier<bool> canShareLocationTracking = ValueNotifier<bool>(
+    false,
+  );
+  final ValueNotifier<bool> constanciasOnly = ValueNotifier<bool>(false);
 
   bool _fetching = false;
   Timer? _timer;
@@ -43,6 +50,12 @@ class HomePermissionsController {
       fullOperationalAccess.value =
           await AuthService.hasFullOperationalAccess();
       canViewMapaPatrullas.value = await AuthService.canViewMapaPatrullas();
+      canUseConstanciasManejo.value =
+          await AuthService.canUseConstanciasManejo();
+      canShareLocationTracking.value =
+          await AuthService.canShareLocationTracking();
+      constanciasOnly.value =
+          await AuthService.isEvaluadorTeoricoConstanciasOnly();
       loading.value = false;
     } catch (_) {
       loading.value = false;
@@ -69,5 +82,8 @@ class HomePermissionsController {
     loading.dispose();
     fullOperationalAccess.dispose();
     canViewMapaPatrullas.dispose();
+    canUseConstanciasManejo.dispose();
+    canShareLocationTracking.dispose();
+    constanciasOnly.dispose();
   }
 }

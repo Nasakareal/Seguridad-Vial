@@ -27,6 +27,19 @@ class AppDrawer extends StatelessWidget {
   static const String permPuntosLicencias = 'ver puntos licencias';
   static const String permConduceLegalidad = 'ver conduce legalidad';
 
+  static bool _constanciasOnlyAllowsRoute(String route) {
+    return route == AppRoutes.home ||
+        route == AppRoutes.constanciasManejo ||
+        route == AppRoutes.constanciasManejoScanner ||
+        route == AppRoutes.constanciasManejoDetalle ||
+        route == AppRoutes.herramientasVelocidadFrenado ||
+        route == AppRoutes.herramientasVelocidadDeformacion ||
+        route == AppRoutes.sustentoLegal ||
+        route == AppRoutes.sustentoLegalCategoria ||
+        route == AppRoutes.sustentoLegalDetalle ||
+        route == AppRoutes.sustentoLegalBuscar;
+  }
+
   Future<void> _nav(
     BuildContext context,
     String route, {
@@ -39,6 +52,19 @@ class AppDrawer extends StatelessWidget {
     final current = ModalRoute.of(context)?.settings.name;
 
     Navigator.pop(context);
+
+    final constanciasOnly =
+        await AuthService.isEvaluadorTeoricoConstanciasOnly();
+    if (constanciasOnly && !_constanciasOnlyAllowsRoute(route)) {
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Este rol solo tiene acceso a Constancias, Herramientas y Sustento Legal.',
+          ),
+        ),
+      );
+      return;
+    }
 
     if (requiredPerm != null && requiredPerm.trim().isNotEmpty) {
       var ok =
@@ -77,6 +103,11 @@ class AppDrawer extends StatelessWidget {
     if (current == route) return;
 
     if (route == AppRoutes.home) {
+      if (constanciasOnly) {
+        navigator.pushNamedAndRemoveUntil(AppRoutes.home, (_) => false);
+        return;
+      }
+
       final motociclistaHomeAvailable =
           await HomeResolverService.isMotociclistaHomeAvailable();
       final fenixHomeAvailable =
@@ -153,6 +184,7 @@ class AppDrawer extends StatelessWidget {
     var canUseCulturaVial = await AuthService.isFomentoCulturaVialUser();
     var canAccessConduceLegalidad =
         await AuthService.canAccessConduceLegalidad();
+    var constanciasOnly = await AuthService.isEvaluadorTeoricoConstanciasOnly();
 
     if (permissions.isEmpty) {
       await AuthService.refreshCurrentUserAccess();
@@ -169,6 +201,7 @@ class AppDrawer extends StatelessWidget {
       canUseLicensePointsModule = await AuthService.canUseLicensePointsModule();
       canUseCulturaVial = await AuthService.isFomentoCulturaVialUser();
       canAccessConduceLegalidad = await AuthService.canAccessConduceLegalidad();
+      constanciasOnly = await AuthService.isEvaluadorTeoricoConstanciasOnly();
     }
 
     return _DrawerAccess(
@@ -184,6 +217,7 @@ class AppDrawer extends StatelessWidget {
       canUseLicensePointsModule: canUseLicensePointsModule,
       canUseCulturaVial: canUseCulturaVial,
       canAccessConduceLegalidad: canAccessConduceLegalidad,
+      constanciasOnly: constanciasOnly,
     );
   }
 
@@ -199,14 +233,21 @@ class AppDrawer extends StatelessWidget {
       backgroundColor: const Color(0xFFF6F7FB),
       child: Column(
         children: [
-          DrawerHeaderPanel(
-            icon: Icons.shield_outlined,
-            title: 'Seguridad Vial',
-            subtitle: '',
-            chips: <String>[
-              trackingOn ? 'Ubicación activa' : 'Ubicación inactiva',
-              'Menú principal',
-            ],
+          FutureBuilder<bool>(
+            future: AuthService.isEvaluadorTeoricoConstanciasOnly(),
+            builder: (context, snapshot) {
+              final constanciasOnly = snapshot.data == true;
+              return DrawerHeaderPanel(
+                icon: Icons.shield_outlined,
+                title: 'Seguridad Vial',
+                subtitle: '',
+                chips: <String>[
+                  if (!constanciasOnly)
+                    trackingOn ? 'Ubicación activa' : 'Ubicación inactiva',
+                  'Menú principal',
+                ],
+              );
+            },
           ),
           Expanded(
             child: FutureBuilder<_DrawerAccess>(
@@ -254,6 +295,7 @@ class AppDrawer extends StatelessWidget {
                     (_allowed(perms, permDictamenes) && unidadId == 1);
                 final canSeeConstanciasManejo =
                     snap.data?.canUseConstanciasManejo ?? false;
+                final constanciasOnly = snap.data?.constanciasOnly ?? false;
                 final canBypassEstadisticasPerm =
                     hasFullOperationalAccess || isSuperadmin;
                 final canSeeEstadisticasGlobales =
@@ -284,6 +326,62 @@ class AppDrawer extends StatelessWidget {
                 final canSeeConduceLegalidad =
                     snap.data?.canAccessConduceLegalidad ??
                     _allowed(perms, permConduceLegalidad, all: isSuperadmin);
+
+                if (constanciasOnly) {
+                  return ListView(
+                    padding: drawerScrollablePadding(context),
+                    children: [
+                      const DrawerSectionLabel(label: 'General'),
+                      _DrawerItem(
+                        icon: Icons.home,
+                        label: 'Inicio',
+                        subtitle: 'Volver al feed',
+                        onTap: () => _nav(context, AppRoutes.home),
+                      ),
+                      if (canSeeConstanciasManejo)
+                        _DrawerItem(
+                          icon: Icons.badge,
+                          label: 'Constancias de manejo',
+                          subtitle: 'Alta y captura de constancias',
+                          onTap: () =>
+                              _nav(context, AppRoutes.constanciasManejo),
+                        ),
+                      const SizedBox(height: 12),
+                      const DrawerSectionLabel(label: 'Consulta'),
+                      _DrawerGroup(
+                        icon: Icons.handyman,
+                        label: 'Herramientas',
+                        subtitle: 'Calculadoras de apoyo',
+                        children: [
+                          _DrawerSubItem(
+                            icon: Icons.tire_repair,
+                            label: 'Huella de frenado',
+                            subtitle: 'Calcular velocidad por huella',
+                            onTap: () => _nav(
+                              context,
+                              AppRoutes.herramientasVelocidadFrenado,
+                            ),
+                          ),
+                          _DrawerSubItem(
+                            icon: Icons.car_repair,
+                            label: 'Deformación de láminas',
+                            subtitle: 'Calcular EES/EBS',
+                            onTap: () => _nav(
+                              context,
+                              AppRoutes.herramientasVelocidadDeformacion,
+                            ),
+                          ),
+                        ],
+                      ),
+                      _DrawerItem(
+                        icon: Icons.gavel,
+                        label: 'Sustento Legal',
+                        subtitle: 'Fundamento legal de consulta',
+                        onTap: () => _nav(context, AppRoutes.sustentoLegal),
+                      ),
+                    ],
+                  );
+                }
 
                 return ListView(
                   padding: drawerScrollablePadding(context),
@@ -645,6 +743,7 @@ class _DrawerAccess {
   final bool canUseLicensePointsModule;
   final bool canUseCulturaVial;
   final bool canAccessConduceLegalidad;
+  final bool constanciasOnly;
 
   const _DrawerAccess({
     required this.perms,
@@ -659,6 +758,7 @@ class _DrawerAccess {
     required this.canUseLicensePointsModule,
     required this.canUseCulturaVial,
     required this.canAccessConduceLegalidad,
+    required this.constanciasOnly,
   });
 }
 

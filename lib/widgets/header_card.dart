@@ -2,8 +2,13 @@ import 'package:flutter/material.dart';
 
 class HeaderCard extends StatelessWidget {
   final bool trackingOn;
+  final bool showTrackingStatus;
 
-  const HeaderCard({super.key, required this.trackingOn});
+  const HeaderCard({
+    super.key,
+    required this.trackingOn,
+    this.showTrackingStatus = true,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -21,7 +26,7 @@ class HeaderCard extends StatelessWidget {
           BoxShadow(
             blurRadius: 18,
             offset: const Offset(0, 10),
-            color: Colors.black.withOpacity(.12),
+            color: Colors.black.withValues(alpha: .12),
           ),
         ],
       ),
@@ -32,7 +37,7 @@ class HeaderCard extends StatelessWidget {
             width: 46,
             height: 46,
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(.18),
+              color: Colors.white.withValues(alpha: .18),
               borderRadius: BorderRadius.circular(14),
             ),
             child: const Icon(Icons.shield, color: Colors.white, size: 28),
@@ -51,26 +56,27 @@ class HeaderCard extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 4),
-                Row(
-                  children: [
-                    Container(
-                      width: 9,
-                      height: 9,
-                      decoration: BoxDecoration(
-                        color: statusColor,
-                        shape: BoxShape.circle,
+                if (showTrackingStatus)
+                  Row(
+                    children: [
+                      Container(
+                        width: 9,
+                        height: 9,
+                        decoration: BoxDecoration(
+                          color: statusColor,
+                          shape: BoxShape.circle,
+                        ),
                       ),
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      trackingOn ? 'Ubicación ACTIVA' : 'Ubicación NO ACTIVA',
-                      style: TextStyle(
-                        color: Colors.white.withOpacity(.92),
-                        fontWeight: FontWeight.w600,
+                      const SizedBox(width: 8),
+                      Text(
+                        trackingOn ? 'Ubicación ACTIVA' : 'Ubicación NO ACTIVA',
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: .92),
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
-                    ),
-                  ],
-                ),
+                    ],
+                  ),
               ],
             ),
           ),
