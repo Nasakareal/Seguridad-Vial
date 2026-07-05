@@ -958,6 +958,44 @@ class AuthService {
     return _payloadMatchesDelegaciones(payload);
   }
 
+  static Future<bool> canUseDelegacionesActividadesFisicas({
+    bool refresh = false,
+  }) async {
+    if (refresh) {
+      await refreshCurrentUserAccess();
+    }
+
+    if (await isSuperadmin()) {
+      return true;
+    }
+
+    return isDelegacionesUser();
+  }
+
+  static Future<bool> canManageDelegacionesActividadesFisicas({
+    bool refresh = false,
+  }) async {
+    if (refresh) {
+      await refreshCurrentUserAccess();
+    }
+
+    if (await isSuperadmin()) {
+      return true;
+    }
+
+    if (!await isDelegacionesUser()) {
+      return false;
+    }
+
+    final roleId = await getRoleId();
+    if (roleId == 2 || roleId == 3) {
+      return true;
+    }
+
+    return await hasRoleName('administrador') ||
+        await hasRoleName('subdirector');
+  }
+
   static Future<bool> canUseConstanciasManejo({bool refresh = false}) async {
     if (refresh) {
       await refreshCurrentUserAccess();

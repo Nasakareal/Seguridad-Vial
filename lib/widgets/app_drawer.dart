@@ -182,6 +182,8 @@ class AppDrawer extends StatelessWidget {
     var canUseLicensePointsModule =
         await AuthService.canUseLicensePointsModule();
     var canUseCulturaVial = await AuthService.isFomentoCulturaVialUser();
+    var canUseDelegacionesActividadesFisicas =
+        await AuthService.canUseDelegacionesActividadesFisicas();
     var canAccessConduceLegalidad =
         await AuthService.canAccessConduceLegalidad();
     var constanciasOnly = await AuthService.isEvaluadorTeoricoConstanciasOnly();
@@ -200,6 +202,8 @@ class AppDrawer extends StatelessWidget {
       canViewMapaPatrullas = await AuthService.canViewMapaPatrullas();
       canUseLicensePointsModule = await AuthService.canUseLicensePointsModule();
       canUseCulturaVial = await AuthService.isFomentoCulturaVialUser();
+      canUseDelegacionesActividadesFisicas =
+          await AuthService.canUseDelegacionesActividadesFisicas();
       canAccessConduceLegalidad = await AuthService.canAccessConduceLegalidad();
       constanciasOnly = await AuthService.isEvaluadorTeoricoConstanciasOnly();
     }
@@ -216,6 +220,8 @@ class AppDrawer extends StatelessWidget {
       canViewMapaPatrullas: canViewMapaPatrullas,
       canUseLicensePointsModule: canUseLicensePointsModule,
       canUseCulturaVial: canUseCulturaVial,
+      canUseDelegacionesActividadesFisicas:
+          canUseDelegacionesActividadesFisicas,
       canAccessConduceLegalidad: canAccessConduceLegalidad,
       constanciasOnly: constanciasOnly,
     );
@@ -323,6 +329,8 @@ class AppDrawer extends StatelessWidget {
                 );
                 final canSeeLicenciasPuntos =
                     snap.data?.canUseLicensePointsModule ?? false;
+                final canUseDelegacionesActividadesFisicas =
+                    snap.data?.canUseDelegacionesActividadesFisicas ?? false;
                 final canSeeConduceLegalidad =
                     snap.data?.canAccessConduceLegalidad ??
                     _allowed(perms, permConduceLegalidad, all: isSuperadmin);
@@ -536,6 +544,17 @@ class AppDrawer extends StatelessWidget {
                         ),
                       ),
 
+                    if (canUseDelegacionesActividadesFisicas)
+                      _DrawerItem(
+                        icon: Icons.fitness_center_outlined,
+                        label: 'Ejercicios Delegaciones',
+                        subtitle: 'Subir foto y participantes',
+                        onTap: () => _nav(
+                          context,
+                          AppRoutes.delegacionesActividadesFisicas,
+                        ),
+                      ),
+
                     if (canSeeConstanciasManejo)
                       _DrawerGroup(
                         icon: Icons.fact_check,
@@ -742,6 +761,7 @@ class _DrawerAccess {
   final bool canViewMapaPatrullas;
   final bool canUseLicensePointsModule;
   final bool canUseCulturaVial;
+  final bool canUseDelegacionesActividadesFisicas;
   final bool canAccessConduceLegalidad;
   final bool constanciasOnly;
 
@@ -757,6 +777,7 @@ class _DrawerAccess {
     required this.canViewMapaPatrullas,
     required this.canUseLicensePointsModule,
     required this.canUseCulturaVial,
+    required this.canUseDelegacionesActividadesFisicas,
     required this.canAccessConduceLegalidad,
     required this.constanciasOnly,
   });

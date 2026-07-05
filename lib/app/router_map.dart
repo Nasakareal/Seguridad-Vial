@@ -95,6 +95,7 @@ import '../screens/dispositivos/dispositivo_create_screen.dart';
 import '../screens/dispositivos/dispositivo_show_screen.dart';
 import '../screens/dispositivos/dispositivos_revision_screen.dart';
 import '../screens/dispositivos/dispositivos_screen.dart';
+import '../screens/delegaciones/delegaciones_actividades_fisicas_screen.dart';
 import '../screens/delegaciones/delegaciones_excel_revision_screen.dart';
 import '../screens/vialidades_urbanas/vialidades_urbanas_create_screen.dart';
 import '../screens/vialidades_urbanas/vialidades_urbanas_dispositivo_form_screen.dart';
@@ -234,6 +235,8 @@ final Map<String, WidgetBuilder> appRoutesMap = {
   AppRoutes.pendientesCorteShow: (context) => const PendienteCorteShowScreen(),
   AppRoutes.delegacionesExcelRevision: (context) =>
       const DelegacionesExcelRevisionScreen(),
+  AppRoutes.delegacionesActividadesFisicas: (context) =>
+      const DelegacionesActividadesFisicasScreen(),
 };
 
 int? _readHechoIdFromArgs(Object? args) {

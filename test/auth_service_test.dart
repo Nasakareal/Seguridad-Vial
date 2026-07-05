@@ -85,6 +85,82 @@ void main() {
     },
   );
 
+  test('delegaciones users can upload physical activities', () async {
+    SharedPreferences.setMockInitialValues(<String, Object>{
+      'auth_role': 'Policia',
+      'auth_role_id': 10,
+      'auth_unidad_id': AuthService.unidadDelegacionesId,
+      'auth_user_payload': jsonEncode(<String, Object>{
+        'id': 118,
+        'role': <String, Object>{'id': 10, 'name': 'Policia'},
+        'unidad_id': AuthService.unidadDelegacionesId,
+      }),
+    });
+
+    expect(await AuthService.canUseDelegacionesActividadesFisicas(), isTrue);
+    expect(
+      await AuthService.canManageDelegacionesActividadesFisicas(),
+      isFalse,
+    );
+  });
+
+  test('superadmin can upload physical activities from any unit', () async {
+    SharedPreferences.setMockInitialValues(<String, Object>{
+      'auth_role': 'Superadmin',
+      'auth_role_id': 1,
+      'auth_unidad_id': AuthService.unidadVialidadesUrbanasId,
+      'auth_user_payload': jsonEncode(<String, Object>{
+        'id': 119,
+        'role': <String, Object>{'id': 1, 'name': 'Superadmin'},
+        'unidad_id': AuthService.unidadVialidadesUrbanasId,
+      }),
+    });
+
+    expect(await AuthService.canUseDelegacionesActividadesFisicas(), isTrue);
+    expect(await AuthService.canManageDelegacionesActividadesFisicas(), isTrue);
+  });
+
+  test('non delegaciones users cannot upload physical activities', () async {
+    SharedPreferences.setMockInitialValues(<String, Object>{
+      'auth_role': 'Administrador',
+      'auth_role_id': 3,
+      'auth_unidad_id': AuthService.unidadVialidadesUrbanasId,
+      'auth_user_payload': jsonEncode(<String, Object>{
+        'id': 120,
+        'role': <String, Object>{'id': 3, 'name': 'Administrador'},
+        'unidad_id': AuthService.unidadVialidadesUrbanasId,
+      }),
+    });
+
+    expect(await AuthService.canUseDelegacionesActividadesFisicas(), isFalse);
+    expect(
+      await AuthService.canManageDelegacionesActividadesFisicas(),
+      isFalse,
+    );
+  });
+
+  test(
+    'delegaciones administrador can manage physical activity fields',
+    () async {
+      SharedPreferences.setMockInitialValues(<String, Object>{
+        'auth_role': 'Administrador',
+        'auth_role_id': 3,
+        'auth_unidad_id': AuthService.unidadDelegacionesId,
+        'auth_user_payload': jsonEncode(<String, Object>{
+          'id': 121,
+          'role': <String, Object>{'id': 3, 'name': 'Administrador'},
+          'unidad_id': AuthService.unidadDelegacionesId,
+        }),
+      });
+
+      expect(await AuthService.canUseDelegacionesActividadesFisicas(), isTrue);
+      expect(
+        await AuthService.canManageDelegacionesActividadesFisicas(),
+        isTrue,
+      );
+    },
+  );
+
   test('vialidades administrativo still cannot create hechos', () async {
     SharedPreferences.setMockInitialValues(<String, Object>{
       'auth_role': 'Administrativo',

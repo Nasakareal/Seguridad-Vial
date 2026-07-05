@@ -121,4 +121,6 @@ class AppRoutes {
 
   static const String delegacionesExcelRevision =
       '/delegaciones/excel-revision';
+  static const String delegacionesActividadesFisicas =
+      '/delegaciones/actividades-fisicas';
 }
