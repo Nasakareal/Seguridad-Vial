@@ -1,15 +1,20 @@
 import 'package:flutter/material.dart';
 
-import '../../app/routes.dart';
 import '../../models/conduce_legalidad.dart';
 import '../../services/auth_service.dart';
 import '../../services/conduce_legalidad_service.dart';
 import '../../services/conduce_legalidad_share_service.dart';
 import '../../widgets/app_drawer.dart';
+import 'conduce_legalidad_module.dart';
 import 'conduce_legalidad_operativo_form_screen.dart';
 
 class ConduceLegalidadScreen extends StatefulWidget {
-  const ConduceLegalidadScreen({super.key});
+  final ConduceLegalidadModule module;
+
+  const ConduceLegalidadScreen({
+    super.key,
+    this.module = ConduceLegalidadModule.conduceLegalidad,
+  });
 
   @override
   State<ConduceLegalidadScreen> createState() => _ConduceLegalidadScreenState();
@@ -54,15 +59,18 @@ class _ConduceLegalidadScreenState extends State<ConduceLegalidadScreen>
 
     try {
       final canCreate = await AuthService.canCreateConduceLegalidad();
-      final meta = await ConduceLegalidadService.fetchMeta();
-      final operativos = await ConduceLegalidadService.fetchOperativos(
-        incluirCerrados: meta.abilities.canManageOperativos,
+      final rawMeta = await ConduceLegalidadService.fetchMeta(
+        filterConduceLegalidadMotos: !widget.module.isAlcoholimetria,
       );
+      final meta = widget.module.applyMeta(rawMeta);
+      final operativos = (await ConduceLegalidadService.fetchOperativos(
+        incluirCerrados: rawMeta.abilities.canManageOperativos,
+      )).where(widget.module.ownsOperativo);
       if (!mounted) return;
       setState(() {
         _canCreateLocal = canCreate;
         _meta = meta;
-        _operativos = operativos;
+        _operativos = operativos.toList();
         _loading = false;
       });
     } catch (e) {
@@ -77,7 +85,7 @@ class _ConduceLegalidadScreenState extends State<ConduceLegalidadScreen>
   Future<void> _openCreate() async {
     final changed = await Navigator.pushNamed(
       context,
-      AppRoutes.conduceLegalidadCreate,
+      widget.module.createRoute,
     );
     if (changed == true && mounted) {
       await _load();
@@ -108,8 +116,10 @@ class _ConduceLegalidadScreenState extends State<ConduceLegalidadScreen>
     final changed = await Navigator.push<bool>(
       context,
       MaterialPageRoute(
-        builder: (_) =>
-            ConduceLegalidadOperativoFormScreen(initialOperativo: operativo),
+        builder: (_) => ConduceLegalidadOperativoFormScreen(
+          initialOperativo: operativo,
+          module: widget.module,
+        ),
       ),
     );
     if (changed == true && mounted) {
@@ -120,7 +130,7 @@ class _ConduceLegalidadScreenState extends State<ConduceLegalidadScreen>
   Future<void> _openShow(int id) async {
     final changed = await Navigator.pushNamed(
       context,
-      AppRoutes.conduceLegalidadShow,
+      widget.module.showRoute,
       arguments: id,
     );
     if (changed == true && mounted) {
@@ -189,7 +199,7 @@ class _ConduceLegalidadScreenState extends State<ConduceLegalidadScreen>
     return Scaffold(
       drawer: const AppDrawer(trackingOn: false),
       appBar: AppBar(
-        title: const Text('Conduce legalidad'),
+        title: Text(widget.module.title),
         actions: [
           IconButton(
             tooltip: 'Actualizar',
@@ -235,17 +245,16 @@ class _ConduceLegalidadScreenState extends State<ConduceLegalidadScreen>
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 92),
       children: [
-        _Header(meta: meta),
+        _Header(meta: meta, module: widget.module),
         const SizedBox(height: 14),
-        if ((meta?.fundamentosCorralon.length ?? 0) == 0)
-          const _StatusPanel(
+        if (!widget.module.hasFundamentos(meta))
+          _StatusPanel(
             icon: Icons.gavel_outlined,
             title: 'Catalogo legal sin registros',
             message:
-                'No se recibieron fundamentos activos con retiro de vehiculo. Revisa el catalogo del sistema antes de operar corralon.',
+                'No se recibieron fundamentos activos para ${widget.module.title}. Revisa el catalogo del sistema antes de operar.',
           ),
-        if ((meta?.fundamentosCorralon.length ?? 0) == 0)
-          const SizedBox(height: 14),
+        if (!widget.module.hasFundamentos(meta)) const SizedBox(height: 14),
         if (_operativos.isEmpty)
           const _StatusPanel(
             icon: Icons.fact_check_outlined,
@@ -273,14 +282,15 @@ class _ConduceLegalidadScreenState extends State<ConduceLegalidadScreen>
 
 class _Header extends StatelessWidget {
   final ConduceLegalidadMeta? meta;
+  final ConduceLegalidadModule module;
 
-  const _Header({required this.meta});
+  const _Header({required this.meta, required this.module});
 
   @override
   Widget build(BuildContext context) {
     final abilities =
         meta?.abilities ?? const ConduceLegalidadAbilities.empty();
-    final fundamentos = meta?.fundamentosCorralon.length ?? 0;
+    final fundamentos = module.fundamentosCount(meta);
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -291,8 +301,8 @@ class _Header extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Operativo conduce con legalidad',
+          Text(
+            module.operativoNombre,
             style: TextStyle(
               color: Colors.white,
               fontSize: 22,

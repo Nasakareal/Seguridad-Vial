@@ -46,6 +46,7 @@ import '../screens/sustento_legal/sustento_legal_detalle_screen.dart';
 import '../screens/sustento_legal/sustento_legal_busqueda_screen.dart';
 import '../screens/herramientas/velocidad_huella_frenado_screen.dart';
 import '../screens/herramientas/velocidad_deformacion_laminas_screen.dart';
+import '../screens/herramientas/rnd_faltas_administrativas_screen.dart';
 
 import '../screens/mapa/mapa_patrullas_screen.dart';
 import '../screens/mapa/mapa_incidencias_screen.dart';
@@ -87,10 +88,12 @@ import '../screens/licencias_puntos/licencias_puntos_screen.dart';
 import '../screens/licencias_puntos/licencias_puntos_public_screen.dart';
 import '../screens/conduce_legalidad/conduce_legalidad_captura_screen.dart';
 import '../screens/conduce_legalidad/conduce_legalidad_boleta_screen.dart';
+import '../screens/conduce_legalidad/conduce_legalidad_module.dart';
 import '../screens/conduce_legalidad/conduce_legalidad_operativo_form_screen.dart';
 import '../screens/conduce_legalidad/conduce_legalidad_screen.dart';
 import '../screens/conduce_legalidad/conduce_legalidad_show_screen.dart';
 import '../screens/modulo_examenes_diarios/modulo_examenes_diarios_screen.dart';
+import '../screens/operativos/operativos_screen.dart';
 import '../screens/dispositivos/dispositivo_create_screen.dart';
 import '../screens/dispositivos/dispositivo_show_screen.dart';
 import '../screens/dispositivos/dispositivos_revision_screen.dart';
@@ -170,6 +173,8 @@ final Map<String, WidgetBuilder> appRoutesMap = {
       const VelocidadHuellaFrenadoScreen(),
   AppRoutes.herramientasVelocidadDeformacion: (context) =>
       const VelocidadDeformacionLaminasScreen(),
+  AppRoutes.herramientasRndFaltas: (context) =>
+      const RndFaltasAdministrativasScreen(),
 
   AppRoutes.controlUbicacion: (context) => const ControlUbicacionScreen(),
   AppRoutes.gruas: (context) => const GruasScreen(),
@@ -218,9 +223,17 @@ final Map<String, WidgetBuilder> appRoutesMap = {
   AppRoutes.licenciasPuntos: (context) => const LicenciasPuntosScreen(),
   AppRoutes.licenciasPuntosPublica: (context) =>
       const LicenciasPuntosPublicScreen(),
+  AppRoutes.operativos: (context) => const OperativosScreen(),
   AppRoutes.conduceLegalidad: (context) => const ConduceLegalidadScreen(),
   AppRoutes.conduceLegalidadCreate: (context) =>
       const ConduceLegalidadOperativoFormScreen(),
+  AppRoutes.alcoholimetria: (context) => const ConduceLegalidadScreen(
+    module: ConduceLegalidadModule.alcoholimetria,
+  ),
+  AppRoutes.alcoholimetriaCreate: (context) =>
+      const ConduceLegalidadOperativoFormScreen(
+        module: ConduceLegalidadModule.alcoholimetria,
+      ),
   AppRoutes.moduloExamenesDiarios: (context) =>
       const ModuloExamenesDiariosScreen(),
   AppRoutes.dispositivos: (context) => const DispositivosScreen(),
@@ -344,12 +357,13 @@ Route<dynamic>? onGenerateRoute(RouteSettings settings) {
     );
   }
 
-  if (name == AppRoutes.conduceLegalidadShow) {
+  if (name == AppRoutes.conduceLegalidadShow ||
+      name == AppRoutes.alcoholimetriaShow) {
     final id = _readOperativoIdFromArgs(settings.arguments);
     if (id == null) {
       return MaterialPageRoute(
         builder: (_) => const _UnknownArgsScreen(
-          routeName: '/conduce-legalidad/show',
+          routeName: '/operativo/show',
           message: 'sin operativoId',
         ),
         settings: settings,
@@ -357,18 +371,24 @@ Route<dynamic>? onGenerateRoute(RouteSettings settings) {
     }
 
     return MaterialPageRoute(
-      builder: (_) => ConduceLegalidadShowScreen(operativoId: id),
+      builder: (_) => ConduceLegalidadShowScreen(
+        operativoId: id,
+        module: name == AppRoutes.alcoholimetriaShow
+            ? ConduceLegalidadModule.alcoholimetria
+            : ConduceLegalidadModule.conduceLegalidad,
+      ),
       settings: settings,
     );
   }
 
-  if (name == AppRoutes.conduceLegalidadCaptura) {
+  if (name == AppRoutes.conduceLegalidadCaptura ||
+      name == AppRoutes.alcoholimetriaCaptura) {
     final id = _readOperativoIdFromArgs(settings.arguments);
     final captura = _readConduceLegalidadCapturaFromArgs(settings.arguments);
     if (id == null) {
       return MaterialPageRoute(
         builder: (_) => const _UnknownArgsScreen(
-          routeName: '/conduce-legalidad/captura',
+          routeName: '/operativo/captura',
           message: 'sin operativoId',
         ),
         settings: settings,
@@ -379,12 +399,16 @@ Route<dynamic>? onGenerateRoute(RouteSettings settings) {
       builder: (_) => ConduceLegalidadCapturaScreen(
         operativoId: id,
         initialCaptura: captura,
+        module: name == AppRoutes.alcoholimetriaCaptura
+            ? ConduceLegalidadModule.alcoholimetria
+            : ConduceLegalidadModule.conduceLegalidad,
       ),
       settings: settings,
     );
   }
 
-  if (routePath == AppRoutes.conduceLegalidadBoleta) {
+  if (routePath == AppRoutes.conduceLegalidadBoleta ||
+      routePath == AppRoutes.alcoholimetriaBoleta) {
     final args = settings.arguments;
     final operativo = _readConduceLegalidadOperativoFromArgs(args);
     final captura = _readConduceLegalidadCapturaFromArgs(args);
@@ -409,6 +433,9 @@ Route<dynamic>? onGenerateRoute(RouteSettings settings) {
         operativoId: operativoId,
         capturaId: capturaId,
         preview: preview,
+        module: routePath == AppRoutes.alcoholimetriaBoleta
+            ? ConduceLegalidadModule.alcoholimetria
+            : ConduceLegalidadModule.conduceLegalidad,
       ),
       settings: settings,
     );

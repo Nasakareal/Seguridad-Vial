@@ -22,15 +22,18 @@ import '../../services/vehiculo_form_service.dart';
 import '../../widgets/marca_vehiculo_dropdown.dart';
 import '../../widgets/safe_network_image.dart';
 import '../../widgets/tarjeta_circulacion_scanner_screen.dart';
+import 'conduce_legalidad_module.dart';
 
 class ConduceLegalidadCapturaScreen extends StatefulWidget {
   final int operativoId;
   final ConduceLegalidadCaptura? initialCaptura;
+  final ConduceLegalidadModule module;
 
   const ConduceLegalidadCapturaScreen({
     super.key,
     required this.operativoId,
     this.initialCaptura,
+    this.module = ConduceLegalidadModule.conduceLegalidad,
   });
 
   @override
@@ -111,9 +114,9 @@ class _ConduceLegalidadCapturaScreenState
 
   String _draftId() {
     if (_editing) {
-      return 'conduce_legalidad:captura:${widget.operativoId}:edit:${widget.initialCaptura!.id}';
+      return '${widget.module.id}:captura:${widget.operativoId}:edit:${widget.initialCaptura!.id}';
     }
-    return 'conduce_legalidad:captura:${widget.operativoId}:create';
+    return '${widget.module.id}:captura:${widget.operativoId}:create';
   }
 
   Future<void> _restoreLocalDraft() async {
@@ -240,7 +243,11 @@ class _ConduceLegalidadCapturaScreenState
       _metaError = null;
     });
     try {
-      final meta = await ConduceLegalidadService.fetchMeta();
+      final meta = widget.module.applyMeta(
+        await ConduceLegalidadService.fetchMeta(
+          filterConduceLegalidadMotos: !widget.module.isAlcoholimetria,
+        ),
+      );
       if (!mounted) return;
       setState(() {
         _meta = meta;
@@ -392,7 +399,11 @@ class _ConduceLegalidadCapturaScreenState
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(_editing ? 'Editar captura' : 'Agregar captura'),
+        title: Text(
+          _editing
+              ? 'Editar captura ${widget.module.title}'
+              : 'Agregar captura ${widget.module.title}',
+        ),
       ),
       body: _loadingMeta
           ? const Center(child: CircularProgressIndicator())

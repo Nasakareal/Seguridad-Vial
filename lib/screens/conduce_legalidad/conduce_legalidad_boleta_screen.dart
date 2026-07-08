@@ -6,6 +6,7 @@ import '../../models/conduce_legalidad.dart';
 import '../../services/browser_print_service.dart';
 import '../../services/conduce_legalidad_service.dart';
 import '../../services/thermal_printer_service.dart';
+import 'conduce_legalidad_module.dart';
 
 class ConduceLegalidadBoletaScreen extends StatefulWidget {
   final ConduceLegalidadOperativo? initialOperativo;
@@ -13,6 +14,7 @@ class ConduceLegalidadBoletaScreen extends StatefulWidget {
   final int? operativoId;
   final int? capturaId;
   final bool preview;
+  final ConduceLegalidadModule module;
 
   const ConduceLegalidadBoletaScreen({
     super.key,
@@ -21,6 +23,7 @@ class ConduceLegalidadBoletaScreen extends StatefulWidget {
     this.operativoId,
     this.capturaId,
     this.preview = false,
+    this.module = ConduceLegalidadModule.conduceLegalidad,
   });
 
   @override

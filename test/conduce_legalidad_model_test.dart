@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:seguridad_vial_app/models/conduce_legalidad.dart';
+import 'package:seguridad_vial_app/screens/conduce_legalidad/conduce_legalidad_module.dart';
 
 void main() {
   test(
@@ -227,6 +228,78 @@ void main() {
       'Narrativa juridica sugerida.',
     );
   });
+
+  test(
+    'alcoholimetria meta keeps alcohol fundamentos for all vehicle scopes',
+    () {
+      final rawMeta = ConduceLegalidadMeta.fromJson({
+        'data': {
+          'operativo_nombre': 'Operativo conduce con legalidad',
+          'abilities': {'can_feed': true},
+          'fundamentos_corralon': [
+            {
+              'id': 40,
+              'codigo': 'ART508_FI_ALCOHOL_DROGAS_CONDUCTOR',
+              'nombre': 'Conducir vehiculo con alcoholemia superior al limite',
+              'articulo': '508',
+              'fraccion': 'I',
+              'retencion_vehiculo': false,
+              'ambito_vehiculo': 'automovil',
+              'arresto_persona': true,
+            },
+            {
+              'id': 41,
+              'codigo': 'ART508_FII_ALCOHOL_MOTOCICLETA',
+              'nombre':
+                  'Conducir motocicleta con alcoholemia superior al limite',
+              'articulo': '508',
+              'fraccion': 'II',
+              'retencion_vehiculo': true,
+              'ambito_vehiculo': 'motocicleta',
+              'arresto_persona': true,
+            },
+            {
+              'id': 42,
+              'codigo': 'ART420_MOTO_CASCO',
+              'nombre': 'Motocicleta sin casco protector',
+              'retencion_vehiculo': true,
+              'ambito_vehiculo': 'motocicleta',
+            },
+          ],
+          'fundamentos_persona': [
+            {
+              'id': 43,
+              'codigo': 'ART508_FIV_ALCOHOL_DROGAS_OPERADOR',
+              'nombre':
+                  'Operador de transporte publico con alcohol o sustancias',
+              'articulo': '508',
+              'fraccion': 'IV',
+              'retencion_vehiculo': false,
+              'ambito_vehiculo': 'transporte_publico',
+              'suspension_licencia': true,
+            },
+          ],
+        },
+      }, filterConduceLegalidadMotos: false);
+
+      final meta = ConduceLegalidadModule.alcoholimetria.applyMeta(rawMeta);
+      final codigosCorralon = meta.fundamentosCorralon.map(
+        (item) => item.codigo,
+      );
+      final codigosPersona = meta.fundamentosPersona.map((item) => item.codigo);
+
+      expect(
+        codigosCorralon,
+        containsAll([
+          'ART508_FI_ALCOHOL_DROGAS_CONDUCTOR',
+          'ART508_FII_ALCOHOL_MOTOCICLETA',
+          'ART508_FIV_ALCOHOL_DROGAS_OPERADOR',
+        ]),
+      );
+      expect(codigosCorralon, isNot(contains('ART420_MOTO_CASCO')));
+      expect(codigosPersona.toList(), codigosCorralon.toList());
+    },
+  );
 
   test('meta separates combined motorcycle helmet and minor fundamentos', () {
     final meta = ConduceLegalidadMeta.fromJson({

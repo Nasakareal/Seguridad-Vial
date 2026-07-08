@@ -94,7 +94,9 @@ class ConduceLegalidadService {
   static const String _path = '/conduce-legalidad';
   static const String _metaCachePrefix = 'conduce_legalidad_meta_cache_v1';
 
-  static Future<ConduceLegalidadMeta> fetchMeta() async {
+  static Future<ConduceLegalidadMeta> fetchMeta({
+    bool filterConduceLegalidadMotos = true,
+  }) async {
     try {
       final res = await http
           .get(
@@ -105,11 +107,17 @@ class ConduceLegalidadService {
       final body = _decodeJson(res);
       _throwIfNotOk(res, body, 'No se pudo cargar el modulo.');
       await _saveMetaCache(body);
-      return ConduceLegalidadMeta.fromJson(body);
+      return ConduceLegalidadMeta.fromJson(
+        body,
+        filterConduceLegalidadMotos: filterConduceLegalidadMotos,
+      );
     } catch (_) {
       final cached = await _loadMetaCache();
       if (cached != null && cached.isNotEmpty) {
-        return ConduceLegalidadMeta.fromJson(cached);
+        return ConduceLegalidadMeta.fromJson(
+          cached,
+          filterConduceLegalidadMotos: filterConduceLegalidadMotos,
+        );
       }
       rethrow;
     }

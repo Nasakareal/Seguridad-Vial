@@ -53,6 +53,8 @@ class AppRoutes {
       '/herramientas/velocidad-huella-frenado';
   static const String herramientasVelocidadDeformacion =
       '/herramientas/velocidad-deformacion-laminas';
+  static const String herramientasRndFaltas =
+      '/herramientas/solicitar-rnd-faltas';
 
   static const String controlUbicacion = '/control-ubicacion';
   static const String gruas = '/gruas';
@@ -83,6 +85,7 @@ class AppRoutes {
   static const String actividadesShow = '/actividades/show';
   static const String actividadesEdit = '/actividades/edit';
 
+  static const String operativos = '/operativos';
   static const String culturaVial = '/cultura-vial';
   static const String culturaVialSala = '/cultura-vial/sala';
   static const String culturaVialJoin = '/cultura-vial/join';
@@ -99,6 +102,12 @@ class AppRoutes {
   static const String conduceLegalidadShow = '/conduce-legalidad/show';
   static const String conduceLegalidadCaptura = '/conduce-legalidad/captura';
   static const String conduceLegalidadBoleta = '/conduce-legalidad/boleta';
+
+  static const String alcoholimetria = '/alcoholimetria';
+  static const String alcoholimetriaCreate = '/alcoholimetria/create';
+  static const String alcoholimetriaShow = '/alcoholimetria/show';
+  static const String alcoholimetriaCaptura = '/alcoholimetria/captura';
+  static const String alcoholimetriaBoleta = '/alcoholimetria/boleta';
 
   static const String dispositivos = '/dispositivos';
   static const String dispositivosCreate = '/dispositivos/create';

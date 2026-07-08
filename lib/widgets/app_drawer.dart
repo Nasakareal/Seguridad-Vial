@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../app/routes.dart';
 import '../services/auth_service.dart';
 import '../services/home_resolver_service.dart';
+import '../screens/conduce_legalidad/conduce_legalidad_module.dart';
 import 'drawer_ui.dart';
 
 class AppDrawer extends StatelessWidget {
@@ -34,6 +35,7 @@ class AppDrawer extends StatelessWidget {
         route == AppRoutes.constanciasManejoDetalle ||
         route == AppRoutes.herramientasVelocidadFrenado ||
         route == AppRoutes.herramientasVelocidadDeformacion ||
+        route == AppRoutes.herramientasRndFaltas ||
         route == AppRoutes.sustentoLegal ||
         route == AppRoutes.sustentoLegalCategoria ||
         route == AppRoutes.sustentoLegalDetalle ||
@@ -334,6 +336,8 @@ class AppDrawer extends StatelessWidget {
                 final canSeeConduceLegalidad =
                     snap.data?.canAccessConduceLegalidad ??
                     _allowed(perms, permConduceLegalidad, all: isSuperadmin);
+                final canSeeOperativosGroup = canSeeConduceLegalidad;
+                final canSeeRndTool = unidadId != 2;
 
                 if (constanciasOnly) {
                   return ListView(
@@ -361,6 +365,16 @@ class AppDrawer extends StatelessWidget {
                         label: 'Herramientas',
                         subtitle: 'Calculadoras de apoyo',
                         children: [
+                          if (canSeeRndTool)
+                            _DrawerSubItem(
+                              icon: Icons.app_registration,
+                              label: 'Solicitar RND',
+                              subtitle: 'Mensaje para faltas administrativas',
+                              onTap: () => _nav(
+                                context,
+                                AppRoutes.herramientasRndFaltas,
+                              ),
+                            ),
                           _DrawerSubItem(
                             icon: Icons.tire_repair,
                             label: 'Huella de frenado',
@@ -586,12 +600,43 @@ class AppDrawer extends StatelessWidget {
                         onTap: () => _nav(context, AppRoutes.licenciasPuntos),
                       ),
 
-                    if (canSeeConduceLegalidad)
-                      _DrawerItem(
-                        icon: Icons.fact_check_outlined,
-                        label: 'Conduce legalidad',
-                        subtitle: 'Operativos, capturas y fundamentos',
-                        onTap: () => _nav(context, AppRoutes.conduceLegalidad),
+                    if (canSeeOperativosGroup)
+                      _DrawerGroup(
+                        icon: Icons.assignment_turned_in_outlined,
+                        label: 'Operativos',
+                        subtitle:
+                            'Conduce con legalidad, alcoholimetría y listados',
+                        children: [
+                          if (canSeeConduceLegalidad)
+                            _DrawerSubItem(
+                              icon:
+                                  ConduceLegalidadModule.conduceLegalidad.icon,
+                              label:
+                                  ConduceLegalidadModule.conduceLegalidad.title,
+                              subtitle: ConduceLegalidadModule
+                                  .conduceLegalidad
+                                  .listSubtitle,
+                              onTap: () =>
+                                  _nav(context, AppRoutes.conduceLegalidad),
+                            ),
+                          if (canSeeConduceLegalidad)
+                            _DrawerSubItem(
+                              icon: ConduceLegalidadModule.alcoholimetria.icon,
+                              label:
+                                  ConduceLegalidadModule.alcoholimetria.title,
+                              subtitle: ConduceLegalidadModule
+                                  .alcoholimetria
+                                  .listSubtitle,
+                              onTap: () =>
+                                  _nav(context, AppRoutes.alcoholimetria),
+                            ),
+                          _DrawerSubItem(
+                            icon: Icons.list_alt,
+                            label: 'Listado de operativos',
+                            subtitle: 'Elegir el módulo operativo',
+                            onTap: () => _nav(context, AppRoutes.operativos),
+                          ),
+                        ],
                       ),
 
                     if (canSeeCulturaVial)
@@ -704,6 +749,14 @@ class AppDrawer extends StatelessWidget {
                       label: 'Herramientas',
                       subtitle: 'Calculadoras de apoyo pericial',
                       children: [
+                        if (canSeeRndTool)
+                          _DrawerSubItem(
+                            icon: Icons.app_registration,
+                            label: 'Solicitar RND',
+                            subtitle: 'Mensaje para faltas administrativas',
+                            onTap: () =>
+                                _nav(context, AppRoutes.herramientasRndFaltas),
+                          ),
                         _DrawerSubItem(
                           icon: Icons.tire_repair,
                           label: 'Huella de frenado',

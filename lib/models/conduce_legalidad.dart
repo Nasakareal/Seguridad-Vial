@@ -37,13 +37,21 @@ class ConduceLegalidadMeta {
     required this.fundamentosPersona,
   });
 
-  factory ConduceLegalidadMeta.fromJson(Map<String, dynamic> json) {
+  factory ConduceLegalidadMeta.fromJson(
+    Map<String, dynamic> json, {
+    bool filterConduceLegalidadMotos = true,
+  }) {
     final data = _map(json['data'] ?? json);
-    final fundamentos = _expandirFundamentosOperativos(
+    final fundamentosExpanded = _expandirFundamentosOperativos(
       _list(
         data['fundamentos_corralon'],
       ).map((item) => ConduceLegalidadFundamento.fromJson(_map(item))),
-    ).where((item) => item.aplicaConduceLegalidadMotos).toList();
+    );
+    final fundamentos = filterConduceLegalidadMotos
+        ? fundamentosExpanded
+              .where((item) => item.aplicaConduceLegalidadMotos)
+              .toList()
+        : fundamentosExpanded.toList();
     final fundamentosPersonaPayload = _expandirFundamentosOperativos(
       _list(
         data['fundamentos_persona'],

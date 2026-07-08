@@ -3,11 +3,17 @@ import '../../models/conduce_legalidad.dart';
 import '../../services/conduce_legalidad_service.dart';
 import '../../services/geo_service.dart';
 import '../../services/reverse_geocode_service.dart';
+import 'conduce_legalidad_module.dart';
 
 class ConduceLegalidadOperativoFormScreen extends StatefulWidget {
   final ConduceLegalidadOperativo? initialOperativo;
+  final ConduceLegalidadModule module;
 
-  const ConduceLegalidadOperativoFormScreen({super.key, this.initialOperativo});
+  const ConduceLegalidadOperativoFormScreen({
+    super.key,
+    this.initialOperativo,
+    this.module = ConduceLegalidadModule.conduceLegalidad,
+  });
 
   @override
   State<ConduceLegalidadOperativoFormScreen> createState() =>
@@ -16,8 +22,6 @@ class ConduceLegalidadOperativoFormScreen extends StatefulWidget {
 
 class _ConduceLegalidadOperativoFormScreenState
     extends State<ConduceLegalidadOperativoFormScreen> {
-  static const _operativoNombre = 'Operativo conduce con legalidad';
-
   final _formKey = GlobalKey<FormState>();
   final _municipioCtrl = TextEditingController(text: 'Morelia');
   final _lugarCtrl = TextEditingController();
@@ -186,6 +190,7 @@ class _ConduceLegalidadOperativoFormScreenState
         'lat': _lat,
         'lng': _lng,
         'coordenadas_texto': _emptyToNull(_coordenadasCtrl.text),
+        ...widget.module.operativoPayloadFields(),
       };
 
       if (_editing) {
@@ -241,8 +246,8 @@ class _ConduceLegalidadOperativoFormScreenState
                 border: OutlineInputBorder(),
                 prefixIcon: Icon(Icons.fact_check_outlined),
               ),
-              child: const Text(
-                _operativoNombre,
+              child: Text(
+                widget.module.operativoNombre,
                 style: TextStyle(fontWeight: FontWeight.w600),
               ),
             ),

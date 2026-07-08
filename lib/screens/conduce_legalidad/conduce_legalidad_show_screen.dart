@@ -7,16 +7,21 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
-import '../../app/routes.dart';
 import '../../models/conduce_legalidad.dart';
 import '../../services/conduce_legalidad_service.dart';
 import '../../services/conduce_legalidad_share_service.dart';
 import '../../widgets/safe_network_image.dart';
+import 'conduce_legalidad_module.dart';
 
 class ConduceLegalidadShowScreen extends StatefulWidget {
   final int operativoId;
+  final ConduceLegalidadModule module;
 
-  const ConduceLegalidadShowScreen({super.key, required this.operativoId});
+  const ConduceLegalidadShowScreen({
+    super.key,
+    required this.operativoId,
+    this.module = ConduceLegalidadModule.conduceLegalidad,
+  });
 
   @override
   State<ConduceLegalidadShowScreen> createState() =>
@@ -62,7 +67,11 @@ class _ConduceLegalidadShowScreenState extends State<ConduceLegalidadShowScreen>
     });
 
     try {
-      final meta = await ConduceLegalidadService.fetchMeta();
+      final meta = widget.module.applyMeta(
+        await ConduceLegalidadService.fetchMeta(
+          filterConduceLegalidadMotos: !widget.module.isAlcoholimetria,
+        ),
+      );
       final operativo = await ConduceLegalidadService.fetchOperativo(
         widget.operativoId,
       );
@@ -126,7 +135,7 @@ class _ConduceLegalidadShowScreenState extends State<ConduceLegalidadShowScreen>
   Future<void> _addCaptura() async {
     final changed = await Navigator.pushNamed(
       context,
-      AppRoutes.conduceLegalidadCaptura,
+      widget.module.capturaRoute,
       arguments: widget.operativoId,
     );
     if (changed == true && mounted) {
@@ -137,7 +146,7 @@ class _ConduceLegalidadShowScreenState extends State<ConduceLegalidadShowScreen>
   Future<void> _editCaptura(ConduceLegalidadCaptura captura) async {
     final changed = await Navigator.pushNamed(
       context,
-      AppRoutes.conduceLegalidadCaptura,
+      widget.module.capturaRoute,
       arguments: {'operativoId': widget.operativoId, 'captura': captura},
     );
     if (changed == true && mounted) {
@@ -149,7 +158,7 @@ class _ConduceLegalidadShowScreenState extends State<ConduceLegalidadShowScreen>
     final operativo = _operativo;
     await Navigator.pushNamed(
       context,
-      AppRoutes.conduceLegalidadBoleta,
+      widget.module.boletaRoute,
       arguments: {
         'operativoId': widget.operativoId,
         'capturaId': captura.id,
@@ -170,7 +179,7 @@ class _ConduceLegalidadShowScreenState extends State<ConduceLegalidadShowScreen>
       );
 
       final fileName = _safeDocxFileName(
-        'iph_puesta_disposicion_cl_${widget.operativoId}_${captura.id}.docx',
+        'iph_puesta_disposicion_${widget.module.id}_${widget.operativoId}_${captura.id}.docx',
       );
       final baseName = p.basenameWithoutExtension(fileName);
       String? savedPath;
@@ -365,7 +374,7 @@ class _ConduceLegalidadShowScreenState extends State<ConduceLegalidadShowScreen>
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Operativo'),
+        title: Text(widget.module.title),
         actions: [
           if (canShareTotals)
             IconButton(
