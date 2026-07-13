@@ -93,4 +93,37 @@ void main() {
       isNull,
     );
   });
+
+  test('sin placas no reutiliza el estado de placas', () {
+    expect(
+      VehiculoFormService.estadoPlacasParaPayload(
+        placas: '',
+        tipoServicio: 'PARTICULAR',
+        estadoPlacas: 'MICHOACAN',
+      ),
+      isNull,
+    );
+  });
+
+  test('normaliza teléfonos mexicanos sin depender de la lada', () {
+    expect(VehiculoFormService.normalizeTelefonoMx('4434765057'), '4434765057');
+    expect(VehiculoFormService.normalizeTelefonoMx('3541234567'), '3541234567');
+    expect(
+      VehiculoFormService.normalizeTelefonoMx('+52 354 123 4567'),
+      '3541234567',
+    );
+    expect(
+      VehiculoFormService.normalizeTelefonoMx('5213541234567'),
+      '3541234567',
+    );
+    expect(
+      VehiculoFormService.normalizeTelefonoMx('0443541234567'),
+      '3541234567',
+    );
+    expect(
+      VehiculoFormService.normalizeTelefonoMx('013541234567'),
+      '3541234567',
+    );
+    expect(VehiculoFormService.validateTelefono('+52 354 123 4567'), isNull);
+  });
 }

@@ -447,12 +447,33 @@ class VehiculoFormService {
   }
 
   static String? validateTelefono(String? value) {
-    final text = (value ?? '').trim();
-    if (text.isEmpty) return null;
-    if (!RegExp(r'^\d{10}$').hasMatch(text)) {
+    final raw = (value ?? '').trim();
+    if (raw.isEmpty) return null;
+    final normalized = normalizeTelefonoMx(raw);
+    if (!RegExp(r'^\d{10}$').hasMatch(normalized)) {
       return 'El teléfono debe tener 10 dígitos.';
     }
     return null;
+  }
+
+  static String normalizeTelefonoMx(String value) {
+    var digits = value.replaceAll(RegExp(r'\D+'), '');
+
+    if (digits.length == 13 && digits.startsWith('521')) {
+      return digits.substring(3);
+    }
+    if (digits.length == 12 && digits.startsWith('52')) {
+      return digits.substring(2);
+    }
+    if (digits.length == 13 &&
+        (digits.startsWith('044') || digits.startsWith('045'))) {
+      return digits.substring(3);
+    }
+    if (digits.length == 12 && digits.startsWith('01')) {
+      return digits.substring(2);
+    }
+
+    return digits;
   }
 
   static String? validateEdad(String? value) {

@@ -1049,6 +1049,7 @@ class OfflineSyncService {
       'folio_c5i': 'Folio C5i',
       'foto': 'Foto',
       'foto_lugar': 'Foto del hecho',
+      'foto_lugar_2': 'Foto 2 del hecho',
       'foto_situacion': 'Foto de la situación',
       'fotos': 'Fotos',
       'hora': 'Hora',

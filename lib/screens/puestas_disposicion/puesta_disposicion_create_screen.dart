@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../../services/puestas_disposicion_service.dart';
 import '../../services/local_draft_service.dart';
@@ -21,6 +22,8 @@ class PuestaDisposicionCreateScreen extends StatefulWidget {
 class _PuestaDisposicionCreateScreenState
     extends State<PuestaDisposicionCreateScreen> {
   static const int _maxPdfBytes = 20 * 1024 * 1024;
+  static const int _maxFotoBytes = 5 * 1024 * 1024;
+  static const int _maxFotos = 10;
 
   final _formKey = GlobalKey<FormState>();
   final _service = PuestasDisposicionService();
@@ -48,6 +51,7 @@ class _PuestaDisposicionCreateScreenState
 
   File? _pdf;
   String? _pdfName;
+  final List<File> _fotos = <File>[];
 
   final _personas = <_PersonaFields>[];
   final _vehiculos = <_VehiculoFields>[];
@@ -470,6 +474,7 @@ class _PuestaDisposicionCreateScreenState
       'observaciones': _observaciones.text,
       'pdf_path': _pdf?.path,
       'pdf_name': _pdfName,
+      'fotos_paths': _fotos.map((foto) => foto.path).toList(),
       'personas': _personas.map(_personaToJson).toList(),
       'vehiculos': _vehiculos.map(_vehiculoToJson).toList(),
       'objetos': _objetos.map(_objetoToJson).toList(),
@@ -515,6 +520,17 @@ class _PuestaDisposicionCreateScreenState
         }
       }
     }
+
+    _fotos
+      ..clear()
+      ..addAll(
+        (draft['fotos_paths'] is List
+                ? draft['fotos_paths'] as List
+                : const <dynamic>[])
+            .map((path) => File(path.toString()))
+            .where((file) => file.existsSync())
+            .take(_maxFotos),
+      );
 
     _personas
       ..forEach((item) => item.dispose())
@@ -828,6 +844,67 @@ class _PuestaDisposicionCreateScreenState
     }
   }
 
+  Future<void> _pickFotos() async {
+    final source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.photo_camera_outlined),
+              title: const Text('Tomar foto'),
+              onTap: () => Navigator.pop(context, ImageSource.camera),
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library_outlined),
+              title: const Text('Elegir de galería'),
+              subtitle: const Text('Puedes seleccionar varias'),
+              onTap: () => Navigator.pop(context, ImageSource.gallery),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (source == null || !mounted) return;
+
+    try {
+      final disponibles = _maxFotos - _fotos.length;
+      if (disponibles <= 0) {
+        throw Exception('Puedes agregar máximo $_maxFotos fotos.');
+      }
+
+      final picker = ImagePicker();
+      final selected = source == ImageSource.camera
+          ? <XFile>[
+              if (await picker.pickImage(source: source, imageQuality: 92)
+                  case final image?)
+                image,
+            ]
+          : await picker.pickMultiImage(imageQuality: 92);
+      if (selected.isEmpty) return;
+
+      final nuevas = <File>[];
+      for (final image in selected.take(disponibles)) {
+        final file = File(image.path);
+        if (!await file.exists()) continue;
+        if (await file.length() > _maxFotoBytes) {
+          throw Exception('La foto ${image.name} es muy pesada (máximo 5 MB).');
+        }
+        nuevas.add(file);
+      }
+
+      if (!mounted || nuevas.isEmpty) return;
+      setState(() => _fotos.addAll(nuevas));
+      _markDraftChanged();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
+      );
+    }
+  }
+
   Future<void> _pickUsoFuerzaPdf(_PersonaFields item) async {
     try {
       final selected = await FilePicker.platform.pickFiles(
@@ -1008,6 +1085,9 @@ class _PuestaDisposicionCreateScreenState
 
     var index = 0;
     final archivosExtra = <PuestaUploadFile>[];
+    for (final foto in _fotos) {
+      archivosExtra.add(PuestaUploadFile(field: 'fotos[]', file: foto));
+    }
     for (final item in personasIncluidas) {
       item.write(fields, index++);
       final usoFuerzaPdf = item.usoFuerzaPdf;
@@ -1308,6 +1388,76 @@ class _PuestaDisposicionCreateScreenState
                             ),
                         ],
                       ),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  _Section(
+                    title: 'Fotos de la puesta',
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              _fotos.isEmpty
+                                  ? 'Sin fotos seleccionadas'
+                                  : '${_fotos.length} de $_maxFotos fotos',
+                            ),
+                          ),
+                          OutlinedButton.icon(
+                            onPressed: _saving || _fotos.length >= _maxFotos
+                                ? null
+                                : _pickFotos,
+                            icon: const Icon(Icons.add_a_photo_outlined),
+                            label: const Text('Agregar'),
+                          ),
+                        ],
+                      ),
+                      if (_fotos.isNotEmpty) ...[
+                        const SizedBox(height: 12),
+                        SizedBox(
+                          height: 92,
+                          child: ListView.separated(
+                            scrollDirection: Axis.horizontal,
+                            itemCount: _fotos.length,
+                            separatorBuilder: (_, __) =>
+                                const SizedBox(width: 10),
+                            itemBuilder: (context, index) {
+                              return Stack(
+                                clipBehavior: Clip.none,
+                                children: [
+                                  ClipRRect(
+                                    borderRadius: BorderRadius.circular(12),
+                                    child: Image.file(
+                                      _fotos[index],
+                                      width: 92,
+                                      height: 92,
+                                      fit: BoxFit.cover,
+                                    ),
+                                  ),
+                                  Positioned(
+                                    right: -7,
+                                    top: -7,
+                                    child: IconButton.filled(
+                                      visualDensity: VisualDensity.compact,
+                                      iconSize: 16,
+                                      tooltip: 'Quitar foto',
+                                      onPressed: _saving
+                                          ? null
+                                          : () {
+                                              setState(
+                                                () => _fotos.removeAt(index),
+                                              );
+                                              _markDraftChanged();
+                                            },
+                                      icon: const Icon(Icons.close),
+                                    ),
+                                  ),
+                                ],
+                              );
+                            },
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                   const SizedBox(height: 14),

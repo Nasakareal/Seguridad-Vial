@@ -24,12 +24,14 @@ class HechoForm extends StatefulWidget {
   final HechoFormMode mode;
   final HechoFormData data;
   final File? initialFotoLugar;
+  final File? initialFotoLugar2;
   final File? initialFotoSituacion;
   final String? draftId;
   final Future<OfflineActionResult> Function({
     required HechoFormData data,
     required DictamenItem? dictamenSelected,
     required File? fotoLugar,
+    required File? fotoLugar2,
     required File? fotoSituacion,
   })
   onSubmit;
@@ -41,6 +43,7 @@ class HechoForm extends StatefulWidget {
     required this.mode,
     required this.data,
     this.initialFotoLugar,
+    this.initialFotoLugar2,
     this.initialFotoSituacion,
     this.draftId,
     required this.onSubmit,
@@ -56,6 +59,7 @@ class _HechoFormState extends State<HechoForm> {
   final _horaFieldKey = GlobalKey();
   final _fechaFieldKey = GlobalKey();
   final _fotoLugarKey = GlobalKey();
+  final _fotoLugar2Key = GlobalKey();
   final _fotoSituacionKey = GlobalKey();
   final _danosKey = GlobalKey();
   final _folioFieldKey = GlobalKey();
@@ -89,6 +93,7 @@ class _HechoFormState extends State<HechoForm> {
 
   final _picker = ImagePicker();
   File? _fotoLugar;
+  File? _fotoLugar2;
   File? _fotoSituacion;
 
   DictamenItem? _dictamenSelected;
@@ -139,6 +144,7 @@ class _HechoFormState extends State<HechoForm> {
     _montoCtrl.text = d.montoDanos;
 
     _fotoLugar ??= widget.initialFotoLugar;
+    _fotoLugar2 ??= widget.initialFotoLugar2;
     _fotoSituacion ??= widget.initialFotoSituacion;
   }
 
@@ -323,6 +329,11 @@ class _HechoFormState extends State<HechoForm> {
       final file = File(fotoLugarPath);
       if (file.existsSync()) _fotoLugar = file;
     }
+    final fotoLugar2Path = _blankToNull(draft['foto_lugar_2_path']);
+    if (fotoLugar2Path != null) {
+      final file = File(fotoLugar2Path);
+      if (file.existsSync()) _fotoLugar2 = file;
+    }
     final fotoSituacionPath = _blankToNull(draft['foto_situacion_path']);
     if (fotoSituacionPath != null) {
       final file = File(fotoSituacionPath);
@@ -378,6 +389,7 @@ class _HechoFormState extends State<HechoForm> {
       'place_id': d.placeId,
       'dictamen_id': d.dictamenId,
       'foto_lugar_path': _fotoLugar?.path,
+      'foto_lugar_2_path': _fotoLugar2?.path,
       'foto_situacion_path': _fotoSituacion?.path,
     };
   }
@@ -554,19 +566,24 @@ class _HechoFormState extends State<HechoForm> {
     _markDraftChanged();
   }
 
-  Future<void> _pickPhoto(bool isLugar) async {
+  Future<void> _pickPhoto({
+    required bool cropLandscape,
+    int? lugarIndex,
+  }) async {
     final f = await PhotoPickerService.pickAndCropImage(
       context,
       _picker,
       source: ImageSource.gallery,
-      cropLandscape: isLugar,
+      cropLandscape: cropLandscape,
     );
     if (f == null) return;
     if (!mounted) return;
 
     setState(() {
-      if (isLugar) {
+      if (lugarIndex == 1) {
         _fotoLugar = f;
+      } else if (lugarIndex == 2) {
+        _fotoLugar2 = f;
       } else {
         _fotoSituacion = f;
       }
@@ -686,6 +703,7 @@ class _HechoFormState extends State<HechoForm> {
       data: d,
       dictamenSelected: _dictamenSelected,
       fotoLugar: _fotoLugar,
+      fotoLugar2: _fotoLugar2,
       fotoSituacion: _fotoSituacion,
       requireCoords: widget.mode == HechoFormMode.create,
     );
@@ -769,6 +787,7 @@ class _HechoFormState extends State<HechoForm> {
         data: widget.data,
         dictamenSelected: _dictamenSelected,
         fotoLugar: _fotoLugar,
+        fotoLugar2: _fotoLugar2,
         fotoSituacion: _fotoSituacion,
       );
 
@@ -884,12 +903,23 @@ class _HechoFormState extends State<HechoForm> {
 
           PhotoCard(
             key: _fotoLugarKey,
-            title: 'Foto del hecho (opcional)',
+            title: 'Foto 1 del hecho (opcional)',
             file: _fotoLugar,
             disabled: _submitting,
-            onPick: () => _pickPhoto(true),
+            onPick: () => _pickPhoto(cropLandscape: true, lugarIndex: 1),
             onClear: () {
               setState(() => _fotoLugar = null);
+              _markDraftChanged();
+            },
+          ),
+          PhotoCard(
+            key: _fotoLugar2Key,
+            title: 'Foto 2 del hecho (opcional)',
+            file: _fotoLugar2,
+            disabled: _submitting,
+            onPick: () => _pickPhoto(cropLandscape: true, lugarIndex: 2),
+            onClear: () {
+              setState(() => _fotoLugar2 = null);
               _markDraftChanged();
             },
           ),
@@ -898,7 +928,7 @@ class _HechoFormState extends State<HechoForm> {
             title: 'Foto de la situación (opcional)',
             file: _fotoSituacion,
             disabled: _submitting,
-            onPick: () => _pickPhoto(false),
+            onPick: () => _pickPhoto(cropLandscape: false),
             onClear: () {
               setState(() => _fotoSituacion = null);
               _markDraftChanged();

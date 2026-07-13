@@ -14,6 +14,7 @@ class HechoCard extends StatelessWidget {
   final String ubicacion;
 
   final String fotoHecho;
+  final String fotoHecho2;
   final String fotoSituacion;
   final List<String> fotosVehiculos;
   final String fotoConvenio;
@@ -39,6 +40,7 @@ class HechoCard extends StatelessWidget {
     required this.perito,
     required this.ubicacion,
     required this.fotoHecho,
+    required this.fotoHecho2,
     required this.fotoSituacion,
     required this.fotosVehiculos,
     required this.fotoConvenio,
@@ -134,7 +136,8 @@ class HechoCard extends StatelessWidget {
                     if (delegacion.isNotEmpty) Text('Delegación: $delegacion'),
                     if (responsable.isNotEmpty)
                       Text('Responsable: $responsable'),
-                    PhotoBlock(label: 'Foto del hecho', url: fotoHecho),
+                    PhotoBlock(label: 'Foto 1 del hecho', url: fotoHecho),
+                    PhotoBlock(label: 'Foto 2 del hecho', url: fotoHecho2),
                     PhotoBlock(
                       label: 'Foto de la situacion',
                       url: fotoSituacion,

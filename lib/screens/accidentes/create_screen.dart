@@ -24,6 +24,7 @@ class CreateHechoScreen extends StatefulWidget {
 class _CreateHechoScreenState extends State<CreateHechoScreen> {
   HechoFormData _data = HechoFormData();
   File? _initialFotoLugar;
+  File? _initialFotoLugar2;
   File? _initialFotoSituacion;
   int _formResetNonce = 0;
   bool _draftHydrated = false;
@@ -135,6 +136,7 @@ class _CreateHechoScreenState extends State<CreateHechoScreen> {
     _data.placeId = _blankToNull(fields['place_id']);
     _data.dictamenId = int.tryParse((fields['dictamen_id'] ?? '').trim());
     _initialFotoLugar = _fileForField(files, 'foto_lugar');
+    _initialFotoLugar2 = _fileForField(files, 'foto_lugar_2');
     _initialFotoSituacion = _fileForField(files, 'foto_situacion');
   }
 
@@ -180,6 +182,7 @@ class _CreateHechoScreenState extends State<CreateHechoScreen> {
       _draftSuspendedForReset = true;
       _data = HechoFormData();
       _initialFotoLugar = null;
+      _initialFotoLugar2 = null;
       _initialFotoSituacion = null;
       _captureTotalsReady = false;
       _captureTotalsPromptScheduled = false;
@@ -498,6 +501,7 @@ class _CreateHechoScreenState extends State<CreateHechoScreen> {
           mode: HechoFormMode.create,
           data: _data,
           initialFotoLugar: _initialFotoLugar,
+          initialFotoLugar2: _initialFotoLugar2,
           initialFotoSituacion: _initialFotoSituacion,
           draftId: _usingOfflineDraft || _draftSuspendedForReset
               ? null
@@ -507,12 +511,14 @@ class _CreateHechoScreenState extends State<CreateHechoScreen> {
                 required data,
                 required dictamenSelected,
                 required fotoLugar,
+                required fotoLugar2,
                 required fotoSituacion,
               }) {
                 return HechosFormService.create(
                   data: data,
                   dictamenSelected: dictamenSelected,
                   fotoLugar: fotoLugar,
+                  fotoLugar2: fotoLugar2,
                   fotoSituacion: fotoSituacion,
                 );
               },

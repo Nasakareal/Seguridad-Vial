@@ -188,6 +188,18 @@ class HechoShowHelpers {
     return raw.isEmpty ? '' : toPublicUrl(raw);
   }
 
+  static String fotoLugar2Url(Map<String, dynamic>? hecho) {
+    final h = hecho ?? {};
+    final raw =
+        (h['foto_lugar_2_url'] ??
+                h['foto_lugar_2_path'] ??
+                h['foto_lugar_2'] ??
+                '')
+            .toString()
+            .trim();
+    return raw.isEmpty ? '' : toPublicUrl(raw);
+  }
+
   static String fotoSituacionUrl(Map<String, dynamic>? hecho) {
     final h = hecho ?? {};
     final raw =

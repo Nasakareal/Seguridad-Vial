@@ -69,25 +69,6 @@ class _VehiculosScreenState extends State<VehiculosScreen> {
         _inventarioPath(vehiculo) != null;
   }
 
-  String _fotoUrlFromPath(String path) {
-    final p = path.startsWith('/') ? path.substring(1) : path;
-    return 'https://seguridadvial-mich.com/storage/$p';
-  }
-
-  String _fotoUrl(Map<String, dynamic> vehiculo) {
-    final path = _fotoPath(vehiculo);
-    if (path == null) return '';
-    if (path.startsWith('http://') || path.startsWith('https://')) return path;
-    return _fotoUrlFromPath(path);
-  }
-
-  String _inventarioUrl(Map<String, dynamic> vehiculo) {
-    final path = _inventarioPath(vehiculo);
-    if (path == null) return '';
-    if (path.startsWith('http://') || path.startsWith('https://')) return path;
-    return _fotoUrlFromPath(path);
-  }
-
   Future<Map<String, String>> _headersJson() async {
     final token = await AuthService.getToken();
     final headers = <String, String>{'Accept': 'application/json'};
@@ -217,13 +198,36 @@ class _VehiculosScreenState extends State<VehiculosScreen> {
     final vehiculoId = _safeInt(vehiculo['id']);
     if (vehiculoId <= 0) return;
 
+    final tiene = _tieneFoto(vehiculo);
+    var url = '';
+
+    if (tiene) {
+      if (!mounted) return;
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => const Center(child: CircularProgressIndicator()),
+      );
+
+      try {
+        url = await _consultarFotoUrl(vehiculoId: vehiculoId);
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('No se pudo consultar la foto: $e')),
+          );
+        }
+      } finally {
+        if (mounted) Navigator.pop(context);
+      }
+    }
+
+    if (!mounted) return;
+
     await showModalBottomSheet(
       context: context,
       showDragHandle: true,
       builder: (_) {
-        final tiene = _tieneFoto(vehiculo);
-        final url = _fotoUrl(vehiculo);
-
         return SafeArea(
           child: Padding(
             padding: const EdgeInsets.all(16),
@@ -237,7 +241,7 @@ class _VehiculosScreenState extends State<VehiculosScreen> {
                     fontWeight: FontWeight.bold,
                   ),
                 ),
-                if (tiene)
+                if (tiene && url.isNotEmpty)
                   ClipRRect(
                     borderRadius: BorderRadius.circular(12),
                     child: AspectRatio(
@@ -251,8 +255,12 @@ class _VehiculosScreenState extends State<VehiculosScreen> {
                       ),
                     ),
                   )
-                else
+                else if (!tiene)
                   const Text('Este vehículo no tiene foto todavía.'),
+                if (tiene && url.isEmpty)
+                  const Text(
+                    'La foto existe, pero no se pudo obtener su enlace seguro.',
+                  ),
                 Row(
                   children: [
                     Expanded(
@@ -293,6 +301,27 @@ class _VehiculosScreenState extends State<VehiculosScreen> {
     );
 
     await _cargarVehiculos();
+  }
+
+  Future<String> _consultarFotoUrl({required int vehiculoId}) async {
+    final headers = await _headersJson();
+    final res = await http.get(_fotoApiUri(vehiculoId), headers: headers);
+
+    if (res.statusCode != 200) {
+      throw Exception('HTTP ${res.statusCode}: ${res.body}');
+    }
+
+    final raw = jsonDecode(res.body);
+    final data = raw is Map<String, dynamic> && raw['data'] is Map
+        ? Map<String, dynamic>.from(raw['data'] as Map)
+        : raw is Map<String, dynamic>
+        ? raw
+        : const <String, dynamic>{};
+    final url = (data['url'] ?? '').toString().trim();
+    if (url.isEmpty) {
+      throw Exception('El backend no devolvió una URL para la foto.');
+    }
+    return url;
   }
 
   Future<void> _seleccionarYSubirFoto({required int vehiculoId}) async {
@@ -451,9 +480,7 @@ class _VehiculosScreenState extends State<VehiculosScreen> {
     File? selectedFile;
     var saving = false;
 
-    final currentUrl = (inventario['url'] ?? '').toString().trim().isNotEmpty
-        ? inventario['url'].toString().trim()
-        : _inventarioUrl(vehiculo);
+    final currentUrl = (inventario['url'] ?? '').toString().trim();
     final hasCurrentInventory =
         numeroCtrl.text.trim().isNotEmpty || currentUrl.trim().isNotEmpty;
 
@@ -742,6 +769,7 @@ class _VehiculosScreenState extends State<VehiculosScreen> {
                 final marca = _safeText(v['marca']);
                 final linea = _safeText(v['linea']);
                 final placas = _safeText(v['placas']);
+                final permisoCircular = _safeText(v['permiso_circular']);
                 final modelo = _safeText(v['modelo']);
                 final conductor = _conductorNombre(v);
                 final tieneFoto = _tieneFoto(v);
@@ -775,7 +803,9 @@ class _VehiculosScreenState extends State<VehiculosScreen> {
                         title: Text('$marca $linea'),
                         subtitle: Text(
                           [
-                            'Placas: $placas  •  Modelo: $modelo',
+                            placas == '—'
+                                ? 'Permiso: $permisoCircular  •  Modelo: $modelo'
+                                : 'Placas: $placas  •  Modelo: $modelo',
                             'Conductor: $conductor',
                             if ((inventario ?? '').isNotEmpty)
                               'Inventario: $inventario',

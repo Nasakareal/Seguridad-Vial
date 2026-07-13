@@ -38,6 +38,7 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
   final _lineaCtrl = TextEditingController();
   final _colorCtrl = TextEditingController();
   final _placasCtrl = TextEditingController();
+  final _permisoCircularCtrl = TextEditingController();
   final _serieCtrl = TextEditingController();
   final _capacidadCtrl = TextEditingController(text: '5');
   final _tipoServicioCtrl = TextEditingController(text: 'PARTICULAR');
@@ -107,6 +108,7 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
     _lineaCtrl.dispose();
     _colorCtrl.dispose();
     _placasCtrl.dispose();
+    _permisoCircularCtrl.dispose();
     _serieCtrl.dispose();
     _capacidadCtrl.dispose();
     _tipoServicioCtrl.dispose();
@@ -272,6 +274,7 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
         'linea': _lineaCtrl,
         'color': _colorCtrl,
         'placas': _placasCtrl,
+        'permiso_circular': _permisoCircularCtrl,
         'serie': _serieCtrl,
         'capacidad': _capacidadCtrl,
         'tipo_servicio': _tipoServicioCtrl,
@@ -320,6 +323,7 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
     _lineaCtrl.text = (body['linea'] ?? '').toString();
     _colorCtrl.text = (body['color'] ?? '').toString();
     _placasCtrl.text = (body['placas'] ?? '').toString();
+    _permisoCircularCtrl.text = (body['permiso_circular'] ?? '').toString();
     _serieCtrl.text = (body['serie'] ?? '').toString();
     _capacidadCtrl.text = (body['capacidad_personas'] ?? '5').toString();
     final tipoServicio = VehiculoFormService.tipoServicioPlacaValue(
@@ -371,6 +375,7 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
       'linea': _lineaCtrl.text,
       'color': _colorCtrl.text,
       'placas': _placasCtrl.text,
+      'permiso_circular': _permisoCircularCtrl.text,
       'estado_placas':
           VehiculoFormService.isTipoServicioPublicoFederal(tipoServicio)
           ? null
@@ -701,6 +706,9 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
         'color': _t(_colorCtrl),
         'placas': placasClean.isEmpty ? null : placasClean,
         'estado_placas': estadoPlacasPayload,
+        'permiso_circular': _t(_permisoCircularCtrl).isEmpty
+            ? null
+            : _t(_permisoCircularCtrl),
         'serie': VehiculoFormService.normalizeSerie(_t(_serieCtrl)),
         'capacidad_personas': _toIntOrNull(_t(_capacidadCtrl)) ?? 0,
         'tipo_servicio': tipoServicio,
@@ -992,6 +1000,26 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
                   _markDraftChanged();
                 },
               ),
+              if (!tienePlacas) ...[
+                const SizedBox(height: 10),
+                TextFormField(
+                  controller: _permisoCircularCtrl,
+                  textCapitalization: TextCapitalization.characters,
+                  decoration: const InputDecoration(
+                    labelText:
+                        'Permiso para circular: estado o asociación (opcional)',
+                    hintText: 'Ej. MICHOACÁN o UDC',
+                    prefixIcon: Icon(Icons.description),
+                  ),
+                  validator: (value) =>
+                      VehiculoFormService.validateOptionalText(
+                        value,
+                        max: 60,
+                        label: 'Permiso para circular',
+                      ),
+                  onChanged: (_) => _markDraftChanged(),
+                ),
+              ],
               const SizedBox(height: 10),
               DropdownButtonFormField<String>(
                 isExpanded: true,

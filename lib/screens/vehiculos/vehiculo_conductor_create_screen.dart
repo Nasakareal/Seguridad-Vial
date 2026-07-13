@@ -77,16 +77,6 @@ class _VehiculoConductorCreateScreenState
     return s == '1' || s == 'true' || s == 'si' || s == 'sí';
   }
 
-  String _telefonoMx10(String raw) {
-    var digits = raw.replaceAll(RegExp(r'\D+'), '');
-    if (digits.length == 13 && digits.startsWith('521')) {
-      digits = digits.substring(3);
-    } else if (digits.length == 12 && digits.startsWith('52')) {
-      digits = digits.substring(2);
-    }
-    return digits;
-  }
-
   Future<Map<String, String>> _headers() async {
     final token = await AuthService.getToken();
     final h = <String, String>{
@@ -308,7 +298,7 @@ class _VehiculoConductorCreateScreenState
         'numero_licencia': numero,
         'titular_nombre': _nombreCtrl.text.trim(),
         'tipo_licencia': _tipoLicenciaCtrl.text.trim(),
-        'telefono': _telefonoMx10(_telefonoCtrl.text),
+        'telefono': VehiculoFormService.normalizeTelefonoMx(_telefonoCtrl.text),
         'hecho_id': hechoId,
         'vehiculo_id': vehiculoId,
       },
@@ -319,7 +309,9 @@ class _VehiculoConductorCreateScreenState
     if (_guardando) return;
     if (!_formKey.currentState!.validate()) return;
 
-    final telefono = _telefonoMx10(_telefonoCtrl.text);
+    final telefono = VehiculoFormService.normalizeTelefonoMx(
+      _telefonoCtrl.text,
+    );
     final validationError = VehiculoFormService.validateConductorBeforeSubmit(
       nombre: _nombreCtrl.text.trim(),
       telefono: telefono,
@@ -607,11 +599,12 @@ class _VehiculoConductorCreateScreenState
                       keyboardType: TextInputType.phone,
                       inputFormatters: [
                         FilteringTextInputFormatter.digitsOnly,
-                        LengthLimitingTextInputFormatter(10),
+                        LengthLimitingTextInputFormatter(13),
                       ],
                       decoration: const InputDecoration(
                         labelText: 'Teléfono (10 dígitos)',
-                        helperText: 'Ejemplo: 4434765057. No escribas 521.',
+                        helperText:
+                            'Puedes escribir 4434765057 o pegarlo con +52.',
                         prefixIcon: Icon(Icons.phone),
                       ),
                       validator: VehiculoFormService.validateTelefono,

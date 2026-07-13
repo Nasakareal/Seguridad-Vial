@@ -5,7 +5,12 @@ import '../../../widgets/safe_network_image.dart';
 
 class PhotosStrip extends StatelessWidget {
   final List<String> urls;
-  const PhotosStrip({super.key, required this.urls});
+  final String titlePrefix;
+  const PhotosStrip({
+    super.key,
+    required this.urls,
+    this.titlePrefix = 'Foto de vehículo',
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -28,7 +33,7 @@ class PhotosStrip extends StatelessWidget {
                 child: InkWell(
                   onTap: () => showPhotoViewer(
                     context: context,
-                    title: 'Foto de vehiculo ${i + 1}',
+                    title: '$titlePrefix ${i + 1}',
                     photoUrl: u,
                   ),
                   child: SafeNetworkImage(

@@ -63,6 +63,7 @@ void main() {
                     required data,
                     required dictamenSelected,
                     required fotoLugar,
+                    required fotoLugar2,
                     required fotoSituacion,
                   }) async {
                     submitted = true;
@@ -75,6 +76,8 @@ void main() {
     );
 
     await tester.pumpAndSettle();
+    expect(find.text('Foto 1 del hecho (opcional)'), findsOneWidget);
+    expect(find.text('Foto 2 del hecho (opcional)'), findsOneWidget);
     await tester.ensureVisible(find.text('TURNADO').last);
     await tester.tap(find.text('TURNADO').last);
     await tester.pumpAndSettle();
@@ -117,6 +120,7 @@ void main() {
                     required data,
                     required dictamenSelected,
                     required fotoLugar,
+                    required fotoLugar2,
                     required fotoSituacion,
                   }) async {
                     return const OfflineActionResult.synced();
@@ -156,6 +160,7 @@ void main() {
                     required data,
                     required dictamenSelected,
                     required fotoLugar,
+                    required fotoLugar2,
                     required fotoSituacion,
                   }) async {
                     return const OfflineActionResult.synced();

@@ -510,6 +510,19 @@ class _AccidentesScreenState extends State<AccidentesScreen>
     return '';
   }
 
+  String _fotoHecho2Url(Map<String, dynamic> hecho) {
+    const candidates = [
+      'foto_lugar_2_url',
+      'foto_lugar_2_path',
+      'foto_lugar_2',
+    ];
+    for (final key in candidates) {
+      final raw = (hecho[key] ?? '').toString().trim();
+      if (raw.isNotEmpty) return _toPublicUrl(raw);
+    }
+    return '';
+  }
+
   String _fotoSituacionUrl(Map<String, dynamic> hecho) {
     final candidates = [
       'foto_situacion_url',
@@ -1046,6 +1059,7 @@ class _AccidentesScreenState extends State<AccidentesScreen>
                     final delegacionLabel = _delegacionLabel(hecho);
 
                     final fotoHecho = _fotoHechoUrl(hecho);
+                    final fotoHecho2 = _fotoHecho2Url(hecho);
                     final fotoSituacion = _fotoSituacionUrl(hecho);
                     final fotosVehiculos = _fotosDeVehiculos(hecho);
                     final fotoConvenio = _fotoConvenioUrl(hecho);
@@ -1067,6 +1081,7 @@ class _AccidentesScreenState extends State<AccidentesScreen>
                       perito: perito,
                       ubicacion: _ubicacion(hecho),
                       fotoHecho: fotoHecho,
+                      fotoHecho2: fotoHecho2,
                       fotoSituacion: fotoSituacion,
                       fotosVehiculos: fotosVehiculos,
                       fotoConvenio: fotoConvenio,

@@ -4,6 +4,7 @@ import '../../app/routes.dart';
 import '../../services/auth_service.dart';
 import '../../services/pdf_document_service.dart';
 import '../../services/puestas_disposicion_service.dart';
+import '../accidentes/widgets/photos_strip.dart';
 
 class PuestaDisposicionShowScreen extends StatefulWidget {
   const PuestaDisposicionShowScreen({super.key});
@@ -226,6 +227,10 @@ class _PuestaDisposicionShowScreenState
     final hechoId = _hechoId(p);
     final pdfUrl = _puestaPdfUrl(p);
     final pdfFileName = _puestaPdfFileName(p);
+    final fotos = _list('fotos')
+        .map((foto) => _rawText(foto['url'] ?? foto['foto_url']))
+        .where((url) => url.isNotEmpty)
+        .toList();
 
     return Scaffold(
       backgroundColor: const Color(0xFFF6F7FB),
@@ -344,6 +349,16 @@ class _PuestaDisposicionShowScreenState
                           ],
                         ),
                       ],
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                ],
+                if (fotos.isNotEmpty) ...[
+                  _card(
+                    title: 'Fotos',
+                    child: PhotosStrip(
+                      urls: fotos,
+                      titlePrefix: 'Foto de puesta',
                     ),
                   ),
                   const SizedBox(height: 12),

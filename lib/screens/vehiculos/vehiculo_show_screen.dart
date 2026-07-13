@@ -317,6 +317,7 @@ class _VehiculoShowScreenState extends State<VehiculoShowScreen> {
                   _kv('Color', _v('color')),
                   _kv('Placas', _v('placas')),
                   _kv('Estado placas', _v('estado_placas')),
+                  _kv('Permiso para circular', _v('permiso_circular')),
                   _kv('NIV/Serie', _v('serie')),
                   _kv('Capacidad', _v('capacidad_personas')),
                   _kv('Tipo servicio', _v('tipo_servicio')),

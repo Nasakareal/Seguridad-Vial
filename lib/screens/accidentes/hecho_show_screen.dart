@@ -682,6 +682,7 @@ class _HechoShowScreenState extends State<HechoShowScreen>
     })();
 
     final fotoHecho = HechoShowHelpers.fotoLugarUrl(_hecho);
+    final fotoHecho2 = HechoShowHelpers.fotoLugar2Url(_hecho);
     final fotoSituacion = HechoShowHelpers.fotoSituacionUrl(_hecho);
     final fotosVehiculos = HechoShowHelpers.fotosVehiculosFromHecho(_hecho);
 
@@ -869,6 +870,7 @@ class _HechoShowScreenState extends State<HechoShowScreen>
                       perito: perito,
                       ubicacion: ubicacion,
                       fotoHecho: fotoHecho,
+                      fotoHecho2: fotoHecho2,
                       fotoSituacion: fotoSituacion,
                       fotosVehiculos: fotosVehiculos,
                       fotoConvenio: fotoConvenio,

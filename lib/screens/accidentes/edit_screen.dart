@@ -510,6 +510,7 @@ class _EditHechoScreenState extends State<EditHechoScreen> {
                           required data,
                           required dictamenSelected,
                           required fotoLugar,
+                          required fotoLugar2,
                           required fotoSituacion,
                         }) {
                           return HechosFormService.update(
@@ -517,6 +518,7 @@ class _EditHechoScreenState extends State<EditHechoScreen> {
                             data: data,
                             dictamenSelected: dictamenSelected,
                             fotoLugar: fotoLugar,
+                            fotoLugar2: fotoLugar2,
                             fotoSituacion: fotoSituacion,
                             requestId: _offlineDraftIdFromArgs(),
                           );

@@ -157,6 +157,7 @@ class HechosFormService {
     required HechoFormData data,
     required DictamenItem? dictamenSelected,
     File? fotoLugar,
+    File? fotoLugar2,
     File? fotoSituacion,
     bool requireCoords = true,
   }) async {
@@ -308,6 +309,12 @@ class HechosFormService {
     );
     if (fotoLugarError != null) return fotoLugarError;
 
+    final fotoLugar2Error = await _validateImageFile(
+      file: fotoLugar2,
+      label: 'La foto 2 del lugar',
+    );
+    if (fotoLugar2Error != null) return fotoLugar2Error;
+
     final fotoSituacionError = await _validateImageFile(
       file: fotoSituacion,
       label: 'La foto de situación',
@@ -321,6 +328,7 @@ class HechosFormService {
     required HechoFormData data,
     required DictamenItem? dictamenSelected,
     File? fotoLugar,
+    File? fotoLugar2,
     File? fotoSituacion,
   }) async {
     final clientUuid = _ensureClientUuid(data);
@@ -350,6 +358,9 @@ class HechosFormService {
     final landscapeFotoLugar = fotoLugar == null
         ? null
         : await PhotoOrientationService.forceLandscape(fotoLugar);
+    final landscapeFotoLugar2 = fotoLugar2 == null
+        ? null
+        : await PhotoOrientationService.forceLandscape(fotoLugar2);
 
     final result = await OfflineSyncService.submitMultipart(
       label: 'Hecho',
@@ -359,6 +370,11 @@ class HechosFormService {
       files: <OfflineUploadFile>[
         if (landscapeFotoLugar != null)
           OfflineUploadFile(field: 'foto_lugar', path: landscapeFotoLugar.path),
+        if (landscapeFotoLugar2 != null)
+          OfflineUploadFile(
+            field: 'foto_lugar_2',
+            path: landscapeFotoLugar2.path,
+          ),
         if (fotoSituacion != null)
           OfflineUploadFile(field: 'foto_situacion', path: fotoSituacion.path),
       ],
@@ -378,6 +394,7 @@ class HechosFormService {
     required HechoFormData data,
     required DictamenItem? dictamenSelected,
     File? fotoLugar,
+    File? fotoLugar2,
     File? fotoSituacion,
     String? requestId,
   }) async {
@@ -398,6 +415,9 @@ class HechosFormService {
     final landscapeFotoLugar = fotoLugar == null
         ? null
         : await PhotoOrientationService.forceLandscape(fotoLugar);
+    final landscapeFotoLugar2 = fotoLugar2 == null
+        ? null
+        : await PhotoOrientationService.forceLandscape(fotoLugar2);
 
     return OfflineSyncService.submitMultipart(
       label: 'Hecho',
@@ -407,6 +427,11 @@ class HechosFormService {
       files: <OfflineUploadFile>[
         if (landscapeFotoLugar != null)
           OfflineUploadFile(field: 'foto_lugar', path: landscapeFotoLugar.path),
+        if (landscapeFotoLugar2 != null)
+          OfflineUploadFile(
+            field: 'foto_lugar_2',
+            path: landscapeFotoLugar2.path,
+          ),
         if (fotoSituacion != null)
           OfflineUploadFile(field: 'foto_situacion', path: fotoSituacion.path),
       ],
