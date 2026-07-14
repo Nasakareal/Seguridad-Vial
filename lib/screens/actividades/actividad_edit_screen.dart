@@ -488,7 +488,7 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
       lugar: _lugarCtrl.text,
       municipio: _municipioCtrl.text,
       operationalGroupLabel: _actividadNarrativaGrupo,
-      requiereFomentoCulturaVial: _showFomentoPanel,
+      usarNarrativaFomentoCulturaVial: _useFomentoUserLayout,
     );
 
     if (_narrativaCtrl.text == template) {

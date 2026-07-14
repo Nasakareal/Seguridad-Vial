@@ -25,4 +25,37 @@ void main() {
       contains('/img/croquis/iconos/street-light.png'),
     );
   });
+
+  test('catalogo movil incluye todas las motocicletas del backend', () {
+    final motocicletas = CroquisCatalog.vehicleCategories.firstWhere(
+      (category) => category.key == 'motocicleta',
+    );
+    final byFile = <String>{
+      for (final item in motocicletas.items)
+        Uri.parse(item.src).pathSegments.last,
+    };
+
+    expect(
+      byFile,
+      containsAll(<String>[
+        'AdvAc.png',
+        'ATV.png',
+        'CafeRacerAc.png',
+        'CrossAc.png',
+        'Cruisier.png',
+        'Delivery.png',
+        'DeliveryAc.png',
+        'DeportivaAc.png',
+        'MotoTaxi.png',
+        'MotoTaxiAc.png',
+        'Patrulla.png',
+        'Pista.png',
+        'PoliciaAc.png',
+        'Sobrecarga.png',
+        'Trabajo.png',
+        'Volteada.png',
+      ]),
+    );
+    expect(motocicletas.items, hasLength(16));
+  });
 }

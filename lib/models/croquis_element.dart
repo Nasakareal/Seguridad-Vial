@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:math' as math;
 
 class CroquisElement {
   CroquisElement({
@@ -28,6 +29,16 @@ class CroquisElement {
     this.largoBrazo,
     this.radioIsla,
     this.largoAcceso,
+    this.bordeIzquierdo,
+    this.bordeDerecho,
+    this.inicioX,
+    this.inicioY,
+    this.control1X,
+    this.control1Y,
+    this.control2X,
+    this.control2Y,
+    this.finX,
+    this.finY,
   });
 
   final String id;
@@ -57,6 +68,16 @@ class CroquisElement {
   double? largoBrazo;
   double? radioIsla;
   double? largoAcceso;
+  String? bordeIzquierdo;
+  String? bordeDerecho;
+  double? inicioX;
+  double? inicioY;
+  double? control1X;
+  double? control1Y;
+  double? control2X;
+  double? control2Y;
+  double? finX;
+  double? finY;
 
   CroquisElement copy() {
     return CroquisElement(
@@ -86,6 +107,16 @@ class CroquisElement {
       largoBrazo: largoBrazo,
       radioIsla: radioIsla,
       largoAcceso: largoAcceso,
+      bordeIzquierdo: bordeIzquierdo,
+      bordeDerecho: bordeDerecho,
+      inicioX: inicioX,
+      inicioY: inicioY,
+      control1X: control1X,
+      control1Y: control1Y,
+      control2X: control2X,
+      control2Y: control2Y,
+      finX: finX,
+      finY: finY,
     );
   }
 
@@ -127,27 +158,46 @@ class CroquisElement {
       put('largo', largo);
       put('anchoCarril', anchoCarril);
       put('carriles', carriles);
+      put('bordeIzquierdo', bordeIzquierdo);
+      put('bordeDerecho', bordeDerecho);
     } else if (tipo == 'curva') {
-      put('radioInterno', radioInterno);
       put('anchoCarril', anchoCarril);
       put('carriles', carriles);
-      put('angulo', angulo);
+      put('bordeIzquierdo', bordeIzquierdo);
+      put('bordeDerecho', bordeDerecho);
+      put('inicioX', inicioX);
+      put('inicioY', inicioY);
+      put('control1X', control1X);
+      put('control1Y', control1Y);
+      put('control2X', control2X);
+      put('control2Y', control2Y);
+      put('finX', finX);
+      put('finY', finY);
+    } else if (tipo == 'camellon' || tipo == 'banqueta') {
+      put('largo', largo);
+      put('ancho', ancho);
     } else if (tipo == 'cruce') {
       put('largo', largo);
       put('largoHorizontal', largoHorizontal);
       put('largoVertical', largoVertical);
       put('anchoCarril', anchoCarril);
       put('carriles', carriles);
+      put('bordeIzquierdo', bordeIzquierdo);
+      put('bordeDerecho', bordeDerecho);
     } else if (tipo == 'entronque') {
       put('largoBase', largoBase);
       put('largoBrazo', largoBrazo);
       put('anchoCarril', anchoCarril);
       put('carriles', carriles);
+      put('bordeIzquierdo', bordeIzquierdo);
+      put('bordeDerecho', bordeDerecho);
     } else if (tipo == 'glorieta') {
       put('radioIsla', radioIsla);
       put('anchoCarril', anchoCarril);
       put('carriles', carriles);
       put('largoAcceso', largoAcceso);
+      put('bordeIzquierdo', bordeIzquierdo);
+      put('bordeDerecho', bordeDerecho);
     }
 
     return json;
@@ -265,11 +315,47 @@ class CroquisModels {
       tipo: 'curva',
       x: x,
       y: y,
-      radioInterno: 45,
       anchoCarril: 28,
       carriles: 1,
-      angulo: 90,
+      inicioX: -130,
+      inicioY: 55,
+      control1X: -80,
+      control1Y: -70,
+      control2X: 80,
+      control2Y: -70,
+      finX: 130,
+      finY: 55,
     );
+  }
+
+  static CroquisElement camellon({double x = 300, double y = 250}) {
+    return CroquisElement(
+      id: _uid(),
+      tipo: 'camellon',
+      x: x,
+      y: y,
+      largo: 240,
+      ancho: 34,
+    );
+  }
+
+  static CroquisElement banqueta({double x = 300, double y = 250}) {
+    return CroquisElement(
+      id: _uid(),
+      tipo: 'banqueta',
+      x: x,
+      y: y,
+      largo: 240,
+      ancho: 26,
+    );
+  }
+
+  static CroquisElement duplicate(CroquisElement source, {double offset = 24}) {
+    final raw = source.toJson()
+      ..['id'] = _uid()
+      ..['x'] = source.x + offset
+      ..['y'] = source.y + offset;
+    return normalize(raw)!;
   }
 
   static CroquisElement cruce({double x = 320, double y = 240}) {
@@ -392,14 +478,49 @@ class CroquisModels {
       base.largo = _toDouble(raw['largo'] ?? raw['w'], 260);
       base.anchoCarril = _toDouble(raw['anchoCarril'], 28);
       base.carriles = _toInt(raw['carriles'], 1).clamp(1, 12).toInt();
+      _readRoadEdges(base, raw);
       return base;
     }
 
     if (tipo == 'curva') {
-      base.radioInterno = _toDouble(raw['radioInterno'] ?? raw['radio'], 45);
       base.anchoCarril = _toDouble(raw['anchoCarril'], 28);
       base.carriles = _toInt(raw['carriles'], 1).clamp(1, 12).toInt();
-      base.angulo = _toDouble(raw['angulo'], 90).clamp(30, 180).toDouble();
+      _readRoadEdges(base, raw);
+
+      const bezierKeys = <String>[
+        'inicioX',
+        'inicioY',
+        'control1X',
+        'control1Y',
+        'control2X',
+        'control2Y',
+        'finX',
+        'finY',
+      ];
+      final hasBezier = bezierKeys.every((key) => _isFiniteNumber(raw[key]));
+      final points = hasBezier
+          ? raw
+          : _legacyCurvePoints(raw, base.anchoCarril!, base.carriles!);
+      base.inicioX = _toDouble(points['inicioX'], -130);
+      base.inicioY = _toDouble(points['inicioY'], 55);
+      base.control1X = _toDouble(points['control1X'], -80);
+      base.control1Y = _toDouble(points['control1Y'], -70);
+      base.control2X = _toDouble(points['control2X'], 80);
+      base.control2Y = _toDouble(points['control2Y'], -70);
+      base.finX = _toDouble(points['finX'], 130);
+      base.finY = _toDouble(points['finY'], 55);
+      return base;
+    }
+
+    if (tipo == 'camellon' || tipo == 'banqueta') {
+      base.largo = _toDouble(
+        raw['largo'] ?? raw['w'],
+        240,
+      ).clamp(20, 5000).toDouble();
+      base.ancho = _toDouble(
+        raw['ancho'] ?? raw['h'],
+        tipo == 'camellon' ? 34 : 26,
+      ).clamp(8, 1000).toDouble();
       return base;
     }
 
@@ -425,6 +546,7 @@ class CroquisModels {
       base.largoVertical = largoVertical;
       base.anchoCarril = _toDouble(raw['anchoCarril'], 28);
       base.carriles = _toInt(raw['carriles'], 1).clamp(1, 12).toInt();
+      _readRoadEdges(base, raw);
       return base;
     }
 
@@ -433,6 +555,7 @@ class CroquisModels {
       base.largoBrazo = _toDouble(raw['largoBrazo'], 140);
       base.anchoCarril = _toDouble(raw['anchoCarril'], 28);
       base.carriles = _toInt(raw['carriles'], 1).clamp(1, 12).toInt();
+      _readRoadEdges(base, raw);
       return base;
     }
 
@@ -441,6 +564,7 @@ class CroquisModels {
       base.anchoCarril = _toDouble(raw['anchoCarril'], 24);
       base.carriles = _toInt(raw['carriles'], 1).clamp(1, 12).toInt();
       base.largoAcceso = _toDouble(raw['largoAcceso'], 140);
+      _readRoadEdges(base, raw);
       return base;
     }
 
@@ -450,6 +574,52 @@ class CroquisModels {
   static double _toDouble(dynamic value, double fallback) {
     if (value is num) return value.toDouble();
     return double.tryParse((value ?? '').toString()) ?? fallback;
+  }
+
+  static void _readRoadEdges(CroquisElement element, Map<String, dynamic> raw) {
+    element.bordeIzquierdo = _roadEdge(raw['bordeIzquierdo']);
+    element.bordeDerecho = _roadEdge(raw['bordeDerecho']);
+  }
+
+  static String? _roadEdge(dynamic value) {
+    final normalized = (value ?? '').toString().trim().toLowerCase();
+    return const <String>{'banqueta', 'camellon'}.contains(normalized)
+        ? normalized
+        : null;
+  }
+
+  static bool _isFiniteNumber(dynamic value) {
+    final parsed = value is num
+        ? value.toDouble()
+        : double.tryParse((value ?? '').toString());
+    return parsed != null && parsed.isFinite;
+  }
+
+  static Map<String, dynamic> _legacyCurvePoints(
+    Map<String, dynamic> raw,
+    double anchoCarril,
+    int carriles,
+  ) {
+    final inner = _toDouble(raw['radioInterno'] ?? raw['radio'], 45);
+    final angle =
+        _toDouble(raw['angulo'], 90).clamp(5, 180).toDouble() *
+        3.141592653589793 /
+        180;
+    final radius = inner + ((anchoCarril * carriles) / 2);
+    final tangent = (4 / 3) * math.tan(angle / 4) * radius;
+    final endX = math.cos(angle) * radius;
+    final endY = math.sin(angle) * radius;
+
+    return <String, dynamic>{
+      'inicioX': radius,
+      'inicioY': 0,
+      'control1X': radius,
+      'control1Y': tangent,
+      'control2X': endX + (math.sin(angle) * tangent),
+      'control2Y': endY - (math.cos(angle) * tangent),
+      'finX': endX,
+      'finY': endY,
+    };
   }
 
   static int _toInt(dynamic value, int fallback) {

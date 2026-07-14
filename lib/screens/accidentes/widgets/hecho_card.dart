@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../screens/accidentes/widgets/photo_block.dart';
 import '../../../screens/accidentes/widgets/photos_strip.dart';
+import 'hecho_photos_carousel.dart';
 
 class HechoCard extends StatelessWidget {
   final Map<String, dynamic> hecho;
@@ -136,8 +137,10 @@ class HechoCard extends StatelessWidget {
                     if (delegacion.isNotEmpty) Text('Delegación: $delegacion'),
                     if (responsable.isNotEmpty)
                       Text('Responsable: $responsable'),
-                    PhotoBlock(label: 'Foto 1 del hecho', url: fotoHecho),
-                    PhotoBlock(label: 'Foto 2 del hecho', url: fotoHecho2),
+                    HechoPhotosCarousel(
+                      primaryUrl: fotoHecho,
+                      secondaryUrl: fotoHecho2,
+                    ),
                     PhotoBlock(
                       label: 'Foto de la situacion',
                       url: fotoSituacion,

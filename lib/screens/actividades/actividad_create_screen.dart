@@ -814,6 +814,17 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
     _draft.notifyChanged();
   }
 
+  void _clearNarrativa() {
+    if (_narrativaCtrl.text.isEmpty) return;
+
+    setState(() {
+      _narrativaCtrl.clear();
+      _lastAutoNarrativa = null;
+      _narrativaEditadaPorUsuario = false;
+    });
+    _draft.notifyChanged();
+  }
+
   void _applyNarrativaTemplateIfPossible() {
     final categoria = _selectedCategoria();
     final subcategoria = _selectedSubcategoria();
@@ -830,7 +841,7 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
       lugar: _lugarCtrl.text,
       municipio: _municipioCtrl.text,
       operationalGroupLabel: _actividadNarrativaGrupo,
-      requiereFomentoCulturaVial: _showFomentoPanel,
+      usarNarrativaFomentoCulturaVial: _useFomentoUserLayout,
     );
 
     if (_narrativaCtrl.text == template) {
@@ -2014,6 +2025,14 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
                     'Narrativa',
                     maxLines: 6,
                     onChanged: _handleNarrativaChanged,
+                  ),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton.icon(
+                      onPressed: _saving ? null : _clearNarrativa,
+                      icon: const Icon(Icons.cleaning_services_outlined),
+                      label: const Text('Limpiar'),
+                    ),
                   ),
                   if (_useFomentoUserLayout) ...[
                     const SizedBox(height: 12),

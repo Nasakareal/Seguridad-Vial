@@ -21,6 +21,13 @@ class CroquisScreen extends StatefulWidget {
 
 class _CroquisScreenState extends State<CroquisScreen> {
   static const Size _canvasSize = Size(1200, 700);
+  static const Set<String> _roadTypes = <String>{
+    'calle',
+    'curva',
+    'cruce',
+    'entronque',
+    'glorieta',
+  };
 
   final TransformationController _transformationController =
       TransformationController();
@@ -315,6 +322,73 @@ class _CroquisScreenState extends State<CroquisScreen> {
     setState(() {});
   }
 
+  void _duplicateSelected() {
+    final selected = _selected;
+    if (selected == null) return;
+    _addElement(CroquisModels.duplicate(selected));
+  }
+
+  void _setSelectedRoadEdge(String side, String? type) {
+    final selected = _selected;
+    if (selected == null || !_roadTypes.contains(selected.tipo)) return;
+    final normalized = const <String>{'banqueta', 'camellon'}.contains(type)
+        ? type
+        : null;
+    if (side == 'izquierdo') {
+      selected.bordeIzquierdo = normalized;
+    } else {
+      selected.bordeDerecho = normalized;
+    }
+    setState(() {});
+  }
+
+  Future<void> _showRoadEdgeMenu(String side) async {
+    final selected = _selected;
+    if (selected == null || !_roadTypes.contains(selected.tipo)) return;
+    final label = side == 'izquierdo' ? 'izquierdo' : 'derecho';
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            ListTile(
+              title: Text(
+                'Lateral $label',
+                style: const TextStyle(fontWeight: FontWeight.w900),
+              ),
+            ),
+            ListTile(
+              leading: const Icon(Icons.border_outer),
+              title: const Text('Añadir banqueta'),
+              onTap: () {
+                Navigator.pop(sheetContext);
+                _setSelectedRoadEdge(side, 'banqueta');
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.park_outlined),
+              title: const Text('Añadir camellón'),
+              onTap: () {
+                Navigator.pop(sheetContext);
+                _setSelectedRoadEdge(side, 'camellon');
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.remove_circle_outline),
+              title: const Text('Quitar lateral'),
+              onTap: () {
+                Navigator.pop(sheetContext);
+                _setSelectedRoadEdge(side, null);
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Future<void> _showRoadMenu() async {
     await showModalBottomSheet<void>(
       context: context,
@@ -334,6 +408,12 @@ class _CroquisScreenState extends State<CroquisScreen> {
             }),
             _roadTile('Curva', Icons.roundabout_left, () {
               _addElement(CroquisModels.curva(x: 260, y: 220));
+            }),
+            _roadTile('Camellón libre', Icons.park_outlined, () {
+              _addElement(CroquisModels.camellon(x: 300, y: 260));
+            }),
+            _roadTile('Banqueta libre', Icons.border_outer, () {
+              _addElement(CroquisModels.banqueta(x: 300, y: 260));
             }),
             _roadTile('Cruce', Icons.add_road, () {
               _addElement(CroquisModels.cruce(x: 260, y: 220));
@@ -605,11 +685,29 @@ class _CroquisScreenState extends State<CroquisScreen> {
       return;
     }
 
-    if (_activeMode == 'curve' && selected.tipo == 'curva') {
+    if ((_activeMode?.startsWith('curve') ?? false) &&
+        selected.tipo == 'curva') {
       final local = _toLocal(selected, pos);
-      var angle = math.atan2(math.max(0, local.dy), math.max(0, local.dx));
-      angle = (angle * 180) / math.pi;
-      selected.angulo = angle.clamp(30, 180).toDouble();
+      final fields = <String, (void Function(double), void Function(double))>{
+        'curveStart': (
+          (value) => selected.inicioX = value,
+          (value) => selected.inicioY = value,
+        ),
+        'curveControl1': (
+          (value) => selected.control1X = value,
+          (value) => selected.control1Y = value,
+        ),
+        'curveControl2': (
+          (value) => selected.control2X = value,
+          (value) => selected.control2Y = value,
+        ),
+        'curveEnd': (
+          (value) => selected.finX = value,
+          (value) => selected.finY = value,
+        ),
+      }[_activeMode];
+      fields?.$1(local.dx);
+      fields?.$2(local.dy);
       setState(() {});
     }
   }
@@ -679,14 +777,23 @@ class _CroquisScreenState extends State<CroquisScreen> {
         CroquisGeometry.totalRoadWidth(original) + localDy,
       );
     } else if (selected.tipo == 'curva') {
-      selected.radioInterno = math.max(
-        15,
-        (original.radioInterno ?? 45) + localDx,
+      final bounds = CroquisGeometry.getBounds(original);
+      final factor = math.max(
+        .15,
+        1.0 +
+            math.max(
+              localDx / math.max(20.0, bounds.w / 2),
+              localDy / math.max(20.0, bounds.h / 2),
+            ),
       );
+      _scaleCurve(selected, original, factor);
       _setTotalRoadWidth(
         selected,
-        CroquisGeometry.totalRoadWidth(original) + localDy,
+        CroquisGeometry.totalRoadWidth(original) * factor,
       );
+    } else if (selected.tipo == 'camellon' || selected.tipo == 'banqueta') {
+      selected.largo = math.max(20, (original.largo ?? 240) + localDx);
+      selected.ancho = math.max(8, (original.ancho ?? 26) + localDy);
     } else if (selected.tipo == 'cruce') {
       selected.largoHorizontal = math.max(
         100,
@@ -720,6 +827,21 @@ class _CroquisScreenState extends State<CroquisScreen> {
     el.anchoCarril = math.max(minWidth.toDouble(), totalWidth) / carriles;
   }
 
+  void _scaleCurve(
+    CroquisElement target,
+    CroquisElement source,
+    double factor,
+  ) {
+    target.inicioX = (source.inicioX ?? -130) * factor;
+    target.inicioY = (source.inicioY ?? 55) * factor;
+    target.control1X = (source.control1X ?? -80) * factor;
+    target.control1Y = (source.control1Y ?? -70) * factor;
+    target.control2X = (source.control2X ?? 80) * factor;
+    target.control2Y = (source.control2Y ?? -70) * factor;
+    target.finX = (source.finX ?? 130) * factor;
+    target.finY = (source.finY ?? 55) * factor;
+  }
+
   Offset _toLocal(CroquisElement el, Offset point) {
     final dx = point.dx - el.x;
     final dy = point.dy - el.y;
@@ -736,8 +858,18 @@ class _CroquisScreenState extends State<CroquisScreen> {
     if ((local - handles.rotate).distance <= 34) return 'rotate';
     if ((local - handles.resize).distance <= 34) return 'resize';
 
-    final curve = handles.curve;
-    if (curve != null && (local - curve).distance <= 32) return 'curve';
+    final curveHandles = <String, Offset?>{
+      'curveStart': handles.curveStart,
+      'curveControl1': handles.curveControl1,
+      'curveControl2': handles.curveControl2,
+      'curveEnd': handles.curveEnd,
+    };
+    for (final entry in curveHandles.entries) {
+      final handle = entry.value;
+      if (handle != null && (local - handle).distance <= 24) {
+        return entry.key;
+      }
+    }
     return null;
   }
 
@@ -752,34 +884,46 @@ class _CroquisScreenState extends State<CroquisScreen> {
     final local = _toLocal(el, pos);
     const touchSlop = 24.0;
 
-    if (<String>['carro', 'vehiculo', 'icono', 'texto'].contains(el.tipo)) {
+    if (<String>[
+      'carro',
+      'vehiculo',
+      'icono',
+      'texto',
+      'camellon',
+      'banqueta',
+    ].contains(el.tipo)) {
       final bounds = CroquisGeometry.getBounds(el);
       return local.dx.abs() <= (bounds.w / 2) + touchSlop &&
           local.dy.abs() <= (bounds.h / 2) + touchSlop;
     }
 
     if (el.tipo == 'calle') {
-      final h = CroquisGeometry.totalRoadWidth(el);
+      final h =
+          CroquisGeometry.totalRoadWidth(el) +
+          (CroquisGeometry.maxAttachedWidth(el) * 2);
       return local.dx.abs() <= ((el.largo ?? 260) / 2) + touchSlop &&
           local.dy.abs() <= (h / 2) + touchSlop;
     }
 
     if (el.tipo == 'curva') {
-      final outer =
-          (el.radioInterno ?? 45) + CroquisGeometry.totalRoadWidth(el);
-      final dist = local.distance;
-      final angle = math.atan2(local.dy, local.dx);
-      final limit = ((el.angulo ?? 90) * math.pi) / 180;
-      return local.dx >= 0 &&
-          local.dy >= 0 &&
-          angle >= 0 &&
-          angle <= limit &&
-          dist >= ((el.radioInterno ?? 45) - touchSlop) &&
-          dist <= outer + touchSlop;
+      final points = CroquisGeometry.curvePolyline(el, steps: 64);
+      final tolerance =
+          (CroquisGeometry.totalRoadWidth(el) / 2) +
+          CroquisGeometry.maxAttachedWidth(el) +
+          touchSlop;
+      for (var index = 1; index < points.length; index += 1) {
+        if (_distanceToSegment(local, points[index - 1], points[index]) <=
+            tolerance) {
+          return true;
+        }
+      }
+      return false;
     }
 
     if (el.tipo == 'cruce') {
-      final roadW = CroquisGeometry.totalRoadWidth(el);
+      final roadW =
+          CroquisGeometry.totalRoadWidth(el) +
+          (CroquisGeometry.maxAttachedWidth(el) * 2);
       final insideH =
           local.dx.abs() <=
               (CroquisGeometry.crossHorizontalLength(el) / 2) + touchSlop &&
@@ -792,7 +936,9 @@ class _CroquisScreenState extends State<CroquisScreen> {
     }
 
     if (el.tipo == 'entronque') {
-      final roadW = CroquisGeometry.totalRoadWidth(el);
+      final roadW =
+          CroquisGeometry.totalRoadWidth(el) +
+          (CroquisGeometry.maxAttachedWidth(el) * 2);
       final base =
           local.dx.abs() <= ((el.largoBase ?? 220) / 2) + touchSlop &&
           local.dy.abs() <= (roadW / 2) + touchSlop;
@@ -804,13 +950,32 @@ class _CroquisScreenState extends State<CroquisScreen> {
     }
 
     if (el.tipo == 'glorieta') {
-      final outer = (el.radioIsla ?? 40) + CroquisGeometry.totalRoadWidth(el);
+      final inner = math.max(
+        0,
+        (el.radioIsla ?? 40) - CroquisGeometry.attachedWidth(el.bordeIzquierdo),
+      );
+      final outer =
+          (el.radioIsla ?? 40) +
+          CroquisGeometry.totalRoadWidth(el) +
+          CroquisGeometry.attachedWidth(el.bordeDerecho);
       final dist = local.distance;
-      return dist >= ((el.radioIsla ?? 40) - touchSlop) &&
-          dist <= outer + touchSlop;
+      return dist >= inner - touchSlop && dist <= outer + touchSlop;
     }
 
     return false;
+  }
+
+  double _distanceToSegment(Offset point, Offset start, Offset end) {
+    final delta = end - start;
+    final lengthSquared = delta.dx * delta.dx + delta.dy * delta.dy;
+    if (lengthSquared == 0) return (point - start).distance;
+    final projected =
+        (((point.dx - start.dx) * delta.dx) +
+            ((point.dy - start.dy) * delta.dy)) /
+        lengthSquared;
+    final t = projected.clamp(0.0, 1.0);
+    return (point - Offset(start.dx + delta.dx * t, start.dy + delta.dy * t))
+        .distance;
   }
 
   void _onPointerSignal(PointerSignalEvent event) {
@@ -832,14 +997,6 @@ class _CroquisScreenState extends State<CroquisScreen> {
       return;
     }
 
-    if (keyboard.isAltPressed && selected.tipo == 'curva') {
-      selected.angulo = ((selected.angulo ?? 90) + (delta * 5))
-          .clamp(30, 180)
-          .toDouble();
-      setState(() {});
-      return;
-    }
-
     _resizeByWheel(selected, delta);
     setState(() {});
   }
@@ -856,8 +1013,13 @@ class _CroquisScreenState extends State<CroquisScreen> {
       el.largo = math.max(80, (el.largo ?? 260) + (delta * 12));
       _setTotalRoadWidth(el, CroquisGeometry.totalRoadWidth(el) + (delta * 4));
     } else if (el.tipo == 'curva') {
-      el.radioInterno = math.max(15, (el.radioInterno ?? 45) + (delta * 8));
-      _setTotalRoadWidth(el, CroquisGeometry.totalRoadWidth(el) + (delta * 4));
+      final original = el.copy();
+      final factor = delta > 0 ? 1.06 : .94;
+      _scaleCurve(el, original, factor);
+      _setTotalRoadWidth(el, CroquisGeometry.totalRoadWidth(original) * factor);
+    } else if (el.tipo == 'camellon' || el.tipo == 'banqueta') {
+      el.largo = math.max(20, (el.largo ?? 240) + (delta * 12));
+      el.ancho = math.max(8, (el.ancho ?? 26) + (delta * 3));
     } else if (el.tipo == 'cruce') {
       el.largoHorizontal = math.max(
         100,
@@ -894,10 +1056,16 @@ class _CroquisScreenState extends State<CroquisScreen> {
   KeyEventResult _onKeyEvent(FocusNode node, KeyEvent event) {
     if (event is! KeyDownEvent) return KeyEventResult.ignored;
     if (_textFocusNode.hasFocus) return KeyEventResult.ignored;
+    final key = event.logicalKey;
+    final keyboard = HardwareKeyboard.instance;
+    if ((keyboard.isControlPressed || keyboard.isMetaPressed) &&
+        key == LogicalKeyboardKey.keyD) {
+      _duplicateSelected();
+      return KeyEventResult.handled;
+    }
     final selected = _selected;
     if (selected == null) return KeyEventResult.ignored;
 
-    final key = event.logicalKey;
     if (key == LogicalKeyboardKey.delete ||
         key == LogicalKeyboardKey.backspace) {
       _deleteSelected();
@@ -922,10 +1090,6 @@ class _CroquisScreenState extends State<CroquisScreen> {
         key == LogicalKeyboardKey.numpadSubtract) {
       _changeSelectedLanes(-1);
       return KeyEventResult.handled;
-    } else if (selected.tipo == 'curva' && key == LogicalKeyboardKey.keyQ) {
-      selected.angulo = math.max(30, (selected.angulo ?? 90) - 5);
-    } else if (selected.tipo == 'curva' && key == LogicalKeyboardKey.keyE) {
-      selected.angulo = math.min(180, (selected.angulo ?? 90) + 5);
     } else {
       return KeyEventResult.ignored;
     }
@@ -1035,6 +1199,11 @@ class _CroquisScreenState extends State<CroquisScreen> {
               onPressed: () => _openTextPanel(initial: 'Texto'),
             ),
             _ToolButton(
+              icon: Icons.copy_all_outlined,
+              label: 'Duplicar',
+              onPressed: _duplicateSelected,
+            ),
+            _ToolButton(
               icon: Icons.cleaning_services,
               label: 'Limpiar',
               onPressed: _confirmClear,
@@ -1135,12 +1304,12 @@ class _CroquisScreenState extends State<CroquisScreen> {
     if (selected == null) {
       return const _HelpBar(
         text:
-            'Toca una pieza para seleccionarla. Rojo: girar. Naranja: cambiar tamaño. Morado: abrir/cerrar curva.',
+            'Toca una pieza para seleccionarla. Rojo: girar. Naranja: tamaño. En curvas, morado mueve extremos y verde deforma libremente.',
       );
     }
 
     final canLanes = selected.carriles != null;
-    final isCurve = selected.tipo == 'curva';
+    final isRoad = _roadTypes.contains(selected.tipo);
     final isText = selected.tipo == 'texto';
 
     return Material(
@@ -1223,26 +1392,17 @@ class _CroquisScreenState extends State<CroquisScreen> {
                   label: 'Carril',
                   onPressed: () => _changeSelectedLanes(1),
                 ),
-              if (isCurve)
+              if (isRoad)
                 _SmallAction(
-                  icon: Icons.keyboard_arrow_left,
-                  label: 'Cerrar',
-                  onPressed: () {
-                    selected.angulo = math.max(30, (selected.angulo ?? 90) - 5);
-                    setState(() {});
-                  },
+                  icon: Icons.border_left,
+                  label: 'Lateral izq.',
+                  onPressed: () => _showRoadEdgeMenu('izquierdo'),
                 ),
-              if (isCurve)
+              if (isRoad)
                 _SmallAction(
-                  icon: Icons.keyboard_arrow_right,
-                  label: 'Abrir',
-                  onPressed: () {
-                    selected.angulo = math.min(
-                      180,
-                      (selected.angulo ?? 90) + 5,
-                    );
-                    setState(() {});
-                  },
+                  icon: Icons.border_right,
+                  label: 'Lateral der.',
+                  onPressed: () => _showRoadEdgeMenu('derecho'),
                 ),
               if (isText)
                 _SmallAction(
@@ -1250,6 +1410,11 @@ class _CroquisScreenState extends State<CroquisScreen> {
                   label: 'Texto',
                   onPressed: () => _openTextPanel(editing: selected),
                 ),
+              _SmallAction(
+                icon: Icons.copy_all_outlined,
+                label: 'Duplicar',
+                onPressed: _duplicateSelected,
+              ),
               _SmallAction(
                 icon: Icons.delete,
                 label: 'Borrar',

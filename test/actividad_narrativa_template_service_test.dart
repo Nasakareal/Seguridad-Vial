@@ -35,13 +35,35 @@ void main() {
         categoriaNombre: 'CAPACITACIONES',
         subcategoriaNombre: 'Taller de educacion vial',
         municipio: 'PATZCUARO',
-        requiereFomentoCulturaVial: true,
+        usarNarrativaFomentoCulturaVial: true,
       );
 
       expect(narrativa, contains('fomento a la cultura vial'));
       expect(narrativa, contains('educacion vial'));
       expect(narrativa, contains('poblacion atendida'));
       expect(narrativa, contains('PATZCUARO'));
+    });
+
+    test('does not use fomento wording for a non-fomento user', () {
+      final narrativa = ActividadNarrativaTemplateService.build(
+        categoriaNombre: 'SINIESTROS',
+        subcategoriaNombre: 'Concientizacion',
+        usarNarrativaFomentoCulturaVial: false,
+      );
+
+      expect(narrativa, isNot(contains('fomento a la cultura vial')));
+      expect(narrativa, isNot(contains('poblacion atendida')));
+      expect(narrativa, contains('concientizacion'));
+    });
+
+    test('keeps fomento templates exclusive to fomento users', () {
+      final narrativa = ActividadNarrativaTemplateService.build(
+        categoriaNombre: 'CAPACITACIONES',
+        subcategoriaNombre: 'Taller de educacion vial',
+      );
+
+      expect(narrativa, isNot(contains('fomento a la cultura vial')));
+      expect(narrativa, isNot(contains('poblacion atendida')));
     });
 
     test('varies the narrative when the subcategory changes', () {
@@ -67,6 +89,16 @@ void main() {
 
       expect(narrativa, contains('dispositivo de vialidad'));
       expect(narrativa, isNot(contains('fomento a la cultura vial')));
+    });
+
+    test('prioritizes patrullaje over its generic device category', () {
+      final narrativa = ActividadNarrativaTemplateService.build(
+        categoriaNombre: 'DISPOSITIVOS DE SEGURIDAD VIAL',
+        subcategoriaNombre: 'Patrullajes',
+      );
+
+      expect(narrativa, contains('monitoreo y recorrido preventivo'));
+      expect(narrativa, isNot(contains('apoyo al paso peatonal')));
     });
 
     test('prioritizes road work wording before generic device wording', () {
