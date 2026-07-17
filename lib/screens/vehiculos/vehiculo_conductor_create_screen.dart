@@ -371,6 +371,10 @@ class _VehiculoConductorCreateScreenState
         'monto_danos': _vehiculo['monto_danos'] ?? 0,
         'partes_danadas': (_vehiculo['partes_danadas'] ?? '').toString(),
         'antecedente_vehiculo': _toBool(_vehiculo['antecedente_vehiculo']),
+        // El alta del conductor reutiliza el endpoint de actualización del
+        // vehículo. Conserva este valor para no perderlo ni provocar una
+        // validación en las instalaciones que ya lo exigen.
+        'reporte_robo': _toBool(_vehiculo['reporte_robo']),
 
         // ===== CONDUCTOR =====
         'conductor_nombre': _nombreCtrl.text.trim(),
