@@ -660,6 +660,9 @@ class _HechoShowScreenState extends State<HechoShowScreen>
 
     final h = _hecho ?? {};
     final puedeEditar = _hecho != null && _puedeEditarHecho(_hecho!);
+    final esHechoDelegaciones = HechoShowHelpers.esHechoDelegaciones(h);
+    final hayVehiculoConReporteRobo =
+        HechoShowHelpers.hayVehiculoConReporteRobo(h);
 
     final folio = HechoShowHelpers.safeText(h['folio_c5i']);
     final fecha = HechoShowHelpers.safeText(h['fecha']);
@@ -883,6 +886,53 @@ class _HechoShowScreenState extends State<HechoShowScreen>
                           ? () => _compartirWhatsapp(hechoId)
                           : null,
                     ),
+                    if (esHechoDelegaciones) ...[
+                      const SizedBox(height: 12),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 14,
+                        ),
+                        decoration: BoxDecoration(
+                          color: hayVehiculoConReporteRobo
+                              ? Colors.red.shade50
+                              : Colors.green.shade50,
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(
+                            color: hayVehiculoConReporteRobo
+                                ? Colors.red.shade700
+                                : Colors.green.shade700,
+                            width: 2,
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              hayVehiculoConReporteRobo
+                                  ? Icons.warning_amber_rounded
+                                  : Icons.check_circle_outline_rounded,
+                              color: hayVehiculoConReporteRobo
+                                  ? Colors.red.shade800
+                                  : Colors.green.shade800,
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                hayVehiculoConReporteRobo
+                                    ? 'Hay al menos un vehículo con reporte de robo.'
+                                    : 'Ningún vehículo tiene reporte de robo.',
+                                style: TextStyle(
+                                  color: hayVehiculoConReporteRobo
+                                      ? Colors.red.shade900
+                                      : Colors.green.shade900,
+                                  fontWeight: FontWeight.w900,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
 
                     if (pdfDocuments.isNotEmpty) ...[
                       _pdfDocumentsCard(pdfDocuments),

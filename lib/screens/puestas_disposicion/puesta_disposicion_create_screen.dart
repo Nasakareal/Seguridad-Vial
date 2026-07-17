@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../services/puestas_disposicion_service.dart';
+import '../../services/auth_service.dart';
 import '../../services/local_draft_service.dart';
 import '../../services/vehiculo_form_service.dart';
 import '../../widgets/tarjeta_circulacion_scanner_screen.dart';
@@ -21,7 +22,7 @@ class PuestaDisposicionCreateScreen extends StatefulWidget {
 
 class _PuestaDisposicionCreateScreenState
     extends State<PuestaDisposicionCreateScreen> {
-  static const int _maxPdfBytes = 20 * 1024 * 1024;
+  static const int _maxPdfBytes = 50 * 1024 * 1024;
   static const int _maxFotoBytes = 5 * 1024 * 1024;
   static const int _maxFotos = 10;
 
@@ -40,10 +41,12 @@ class _PuestaDisposicionCreateScreenState
 
   bool _saving = false;
   bool _loadingUnidades = true;
+  bool _canCreate = false;
   int? _unidadId;
   DateTime _fecha = DateTime.now();
   TimeOfDay? _hora;
   String _tipoPuesta = 'PERSONA';
+  String _motivoOpcion = PuestaDisposicionCatalog.motivos.first;
   List<PuestaUnidad> _unidades = <PuestaUnidad>[];
   int? _hechoId;
   String? _hechoClientUuid;
@@ -118,9 +121,20 @@ class _PuestaDisposicionCreateScreenState
 
   Future<void> _loadUnidades() async {
     try {
+      final canCreate = await AuthService.can('crear puestas a disposicion');
+      if (!mounted) return;
+      if (!canCreate) {
+        setState(() {
+          _canCreate = false;
+          _loadingUnidades = false;
+        });
+        return;
+      }
+
       final unidades = await _service.unidadesParaCrear();
       if (!mounted) return;
       setState(() {
+        _canCreate = true;
         _unidades = unidades;
         _unidadId = unidades.isNotEmpty ? unidades.first.id : null;
         _loadingUnidades = false;
@@ -146,6 +160,22 @@ class _PuestaDisposicionCreateScreenState
 
   String? _required(String? value) {
     return (value ?? '').trim().isEmpty ? 'Campo requerido' : null;
+  }
+
+  String get _motivoFinal =>
+      _motivoOpcion == PuestaDisposicionCatalog.motivoOtro
+      ? _motivo.text.trim()
+      : _motivoOpcion;
+
+  void _applyMotivo(String value) {
+    final clean = value.trim().toUpperCase();
+    if (PuestaDisposicionCatalog.esMotivoCatalogado(clean)) {
+      _motivoOpcion = clean;
+      if (clean != PuestaDisposicionCatalog.motivoOtro) _motivo.clear();
+    } else if (clean.isNotEmpty) {
+      _motivoOpcion = PuestaDisposicionCatalog.motivoOtro;
+      _motivo.text = clean;
+    }
   }
 
   void _put(Map<String, String> fields, String key, String value) {
@@ -211,7 +241,7 @@ class _PuestaDisposicionCreateScreenState
       _requiredVehiculosCount = vehiculosMp;
 
       final motivo = text('motivo');
-      if (motivo.isNotEmpty) _motivo.text = motivo;
+      if (motivo.isNotEmpty) _applyMotivo(motivo);
 
       final lugar = text('lugar');
       if (lugar.isNotEmpty) _lugar.text = lugar;
@@ -456,6 +486,7 @@ class _PuestaDisposicionCreateScreenState
   Map<String, dynamic> _draftValues() {
     return <String, dynamic>{
       'tipo_puesta': _tipoPuesta,
+      'motivo_opcion': _motivoOpcion,
       'unidad_id': _unidadId,
       'hecho_id': _hechoId,
       'hecho_client_uuid': _hechoClientUuid,
@@ -463,7 +494,7 @@ class _PuestaDisposicionCreateScreenState
       'hora': _hora == null
           ? null
           : '${_hora!.hour.toString().padLeft(2, '0')}:${_hora!.minute.toString().padLeft(2, '0')}',
-      'motivo': _motivo.text,
+      'motivo': _motivoFinal,
       'lugar': _lugar.text,
       'policia': _policia.text,
       'mp': _mp.text,
@@ -499,7 +530,13 @@ class _PuestaDisposicionCreateScreenState
     if ((_hechoClientUuid ?? '').isEmpty) _hechoClientUuid = null;
     _fecha = DateTime.tryParse((draft['fecha'] ?? '').toString()) ?? _fecha;
     _hora = _parseTime(draft['hora']) ?? _hora;
-    _motivo.text = (draft['motivo'] ?? '').toString();
+    final motivoDraft = (draft['motivo'] ?? '').toString();
+    final motivoOpcionDraft = (draft['motivo_opcion'] ?? '').toString();
+    _applyMotivo(
+      motivoOpcionDraft == PuestaDisposicionCatalog.motivoOtro
+          ? motivoDraft
+          : (motivoOpcionDraft.isEmpty ? motivoDraft : motivoOpcionDraft),
+    );
     _lugar.text = (draft['lugar'] ?? '').toString();
     _policia.text = (draft['policia'] ?? '').toString();
     _mp.text = (draft['mp'] ?? '').toString();
@@ -794,6 +831,54 @@ class _PuestaDisposicionCreateScreenState
     }
   }
 
+  DateTime _initialBirthDate(String value) {
+    final raw = value.trim();
+    DateTime? parsed = DateTime.tryParse(raw);
+    if (parsed == null && raw.isNotEmpty) {
+      final parts = raw.split(RegExp(r'[/.-]'));
+      if (parts.length == 3) {
+        final day = int.tryParse(parts[0]);
+        final month = int.tryParse(parts[1]);
+        final year = int.tryParse(parts[2]);
+        if (day != null && month != null && year != null) {
+          final candidate = DateTime(year, month, day);
+          if (candidate.year == year &&
+              candidate.month == month &&
+              candidate.day == day) {
+            parsed = candidate;
+          }
+        }
+      }
+    }
+
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final firstDate = DateTime(1900);
+    if (parsed == null || parsed.isBefore(firstDate) || parsed.isAfter(today)) {
+      return DateTime(today.year - 25, today.month, today.day);
+    }
+    return parsed;
+  }
+
+  Future<void> _pickBirthDate(_PersonaFields item) async {
+    final now = DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _initialBirthDate(item.fechaNacimiento.text),
+      firstDate: DateTime(1900),
+      lastDate: DateTime(now.year, now.month, now.day),
+      initialDatePickerMode: DatePickerMode.year,
+      initialEntryMode: DatePickerEntryMode.calendarOnly,
+      helpText: 'FECHA DE NACIMIENTO',
+      cancelText: 'CANCELAR',
+      confirmText: 'ACEPTAR',
+    );
+
+    if (picked == null || !mounted) return;
+    setState(() => item.fechaNacimiento.text = _ymd(picked));
+    _markDraftChanged();
+  }
+
   Future<void> _pickTime() async {
     final picked = await showTimePicker(
       context: context,
@@ -827,7 +912,7 @@ class _PuestaDisposicionCreateScreenState
         throw Exception('No se encontró el PDF seleccionado.');
       }
       if (await file.length() > _maxPdfBytes) {
-        throw Exception('El PDF es muy pesado (máximo 20 MB).');
+        throw Exception('El PDF es muy pesado (máximo 50 MB).');
       }
 
       if (!mounted) return;
@@ -926,7 +1011,7 @@ class _PuestaDisposicionCreateScreenState
         throw Exception('No se encontró el PDF seleccionado.');
       }
       if (await file.length() > _maxPdfBytes) {
-        throw Exception('El PDF es muy pesado (máximo 20 MB).');
+        throw Exception('El PDF es muy pesado (máximo 50 MB).');
       }
 
       if (!mounted) return;
@@ -937,7 +1022,9 @@ class _PuestaDisposicionCreateScreenState
       _markDraftChanged();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
+      );
     }
   }
 
@@ -1033,19 +1120,14 @@ class _PuestaDisposicionCreateScreenState
         .where((item) => item.isIncluded)
         .toList(growable: false);
     for (var i = 0; i < personasIncluidas.length; i += 1) {
-      final persona = personasIncluidas[i];
-      if (persona.usoFuerzaPdf == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'Agrega el PDF de uso de fuerza en Persona ${i + 1}.',
-            ),
-          ),
-        );
-        return;
-      }
+      if (personasIncluidas[i].usoFuerzaPdf != null) continue;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Agrega el PDF de uso de fuerza en Persona ${i + 1}.'),
+        ),
+      );
+      return;
     }
-
     final vehiculosIncluidos = _vehiculos
         .where((item) => item.isIncluded)
         .toList(growable: false);
@@ -1056,7 +1138,7 @@ class _PuestaDisposicionCreateScreenState
     final fields = <String, String>{
       'unidad_id': _unidadId.toString(),
       'tipo_puesta': _tipoPuesta,
-      'motivo': _motivo.text.trim(),
+      'motivo': _motivoFinal,
       'estatus': 'ACTIVA',
       'nombre_policia': _policia.text.trim(),
       'fecha_puesta': _ymd(_fecha),
@@ -1090,15 +1172,12 @@ class _PuestaDisposicionCreateScreenState
     }
     for (final item in personasIncluidas) {
       item.write(fields, index++);
-      final usoFuerzaPdf = item.usoFuerzaPdf;
-      if (usoFuerzaPdf != null) {
-        archivosExtra.add(
-          PuestaUploadFile(
-            field: 'personas[${index - 1}][archivo_uso_fuerza]',
-            file: usoFuerzaPdf,
-          ),
-        );
-      }
+      archivosExtra.add(
+        PuestaUploadFile(
+          field: 'personas[${index - 1}][archivo_uso_fuerza]',
+          file: item.usoFuerzaPdf!,
+        ),
+      );
     }
 
     index = 0;
@@ -1234,6 +1313,16 @@ class _PuestaDisposicionCreateScreenState
       ),
       body: _loadingUnidades
           ? const Center(child: CircularProgressIndicator())
+          : !_canCreate
+          ? const Center(
+              child: Padding(
+                padding: EdgeInsets.all(24),
+                child: Text(
+                  'No tienes permiso para crear puestas a disposición.',
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            )
           : Form(
               key: _formKey,
               autovalidateMode: AutovalidateMode.onUserInteraction,
@@ -1280,7 +1369,40 @@ class _PuestaDisposicionCreateScreenState
                               },
                       ),
                       const SizedBox(height: 12),
-                      _field(_motivo, 'Motivo', validator: _required),
+                      DropdownButtonFormField<String>(
+                        value: _motivoOpcion,
+                        isExpanded: true,
+                        decoration: _decoration('Motivo'),
+                        items: [
+                          for (final motivo in PuestaDisposicionCatalog.motivos)
+                            DropdownMenuItem(
+                              value: motivo,
+                              child: Text(
+                                motivo,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                        ],
+                        onChanged: _saving
+                            ? null
+                            : (value) {
+                                setState(
+                                  () => _motivoOpcion =
+                                      value ??
+                                      PuestaDisposicionCatalog.motivos.first,
+                                );
+                                _markDraftChanged();
+                              },
+                      ),
+                      if (_motivoOpcion ==
+                          PuestaDisposicionCatalog.motivoOtro) ...[
+                        const SizedBox(height: 12),
+                        _field(
+                          _motivo,
+                          'Especifique otro motivo',
+                          validator: _required,
+                        ),
+                      ],
                       const SizedBox(height: 12),
                       _readonly('Estatus', 'ACTIVA'),
                     ],
@@ -1358,6 +1480,10 @@ class _PuestaDisposicionCreateScreenState
                   _Section(
                     title: 'Archivo PDF',
                     children: [
+                      const Text(
+                        'PDF de hasta 50 MB. El servidor intentará comprimirlo automáticamente.',
+                      ),
+                      const SizedBox(height: 10),
                       Row(
                         children: [
                           const Icon(Icons.picture_as_pdf_outlined),
@@ -1606,7 +1732,18 @@ class _PuestaDisposicionCreateScreenState
         const SizedBox(height: 10),
         _field(item.sexo, 'Sexo'),
         const SizedBox(height: 10),
-        _field(item.fechaNacimiento, 'Fecha de Nacimiento (AAAA-MM-DD)'),
+        TextFormField(
+          controller: item.fechaNacimiento,
+          readOnly: true,
+          showCursor: false,
+          enableInteractiveSelection: false,
+          decoration: _decoration('Fecha de Nacimiento').copyWith(
+            hintText: 'Selecciona una fecha',
+            helperText: 'Toca el campo para abrir el calendario',
+            suffixIcon: const Icon(Icons.calendar_month_outlined),
+          ),
+          onTap: _saving ? null : () => _pickBirthDate(item),
+        ),
         const SizedBox(height: 10),
         _field(item.curp, 'CURP'),
         const SizedBox(height: 10),
@@ -1655,6 +1792,7 @@ class _PuestaDisposicionCreateScreenState
             )
           else
             IconButton(
+              tooltip: 'Quitar PDF',
               onPressed: _saving
                   ? null
                   : () {
@@ -1909,10 +2047,8 @@ class _PersonaFields {
   void restoreUsoFuerzaPdf(String path, String name) {
     final cleanPath = path.trim();
     if (cleanPath.isEmpty) return;
-
     final file = File(cleanPath);
     if (!file.existsSync()) return;
-
     usoFuerzaPdf = file;
     usoFuerzaPdfName = name.trim().isEmpty
         ? cleanPath.split(Platform.pathSeparator).last

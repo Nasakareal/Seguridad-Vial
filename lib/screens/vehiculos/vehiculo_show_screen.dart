@@ -21,6 +21,7 @@ class _VehiculoShowScreenState extends State<VehiculoShowScreen> {
   int _vehiculoId = 0;
   bool _argsOk = false;
   bool _inicializo = false;
+  bool _isDelegaciones = false;
 
   Map<String, dynamic> _vehiculo = {};
   List<Map<String, dynamic>> _conductores = [];
@@ -118,9 +119,16 @@ class _VehiculoShowScreenState extends State<VehiculoShowScreen> {
     });
 
     try {
+      var isDelegaciones = false;
+      try {
+        isDelegaciones = await AuthService.isDelegacionesUser();
+      } catch (_) {}
       await Future.wait([_loadVehiculo(), _loadFoto()]);
       if (!mounted) return;
-      setState(() => _loading = false);
+      setState(() {
+        _isDelegaciones = isDelegaciones;
+        _loading = false;
+      });
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -331,6 +339,11 @@ class _VehiculoShowScreenState extends State<VehiculoShowScreen> {
                     'Antecedente',
                     _boolText(_vehiculo['antecedente_vehiculo']),
                   ),
+                  if (_isDelegaciones)
+                    _kv(
+                      'Reporte de robo',
+                      _boolText(_vehiculo['reporte_robo']),
+                    ),
                   _sectionTitle('Conductor(es)'),
                   if (_conductores.isEmpty)
                     const Text('Sin conductor registrado.')

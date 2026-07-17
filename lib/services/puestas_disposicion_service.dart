@@ -14,6 +14,48 @@ class PuestaUnidad {
   const PuestaUnidad({required this.id, required this.nombre});
 }
 
+class PuestaDisposicionCatalog {
+  static const String motivoOtro = 'OTRO';
+
+  static const List<String> tipos = <String>[
+    'PERSONA',
+    'VEHICULO',
+    'OBJETO',
+    'MIXTA',
+  ];
+
+  static const List<String> motivos = <String>[
+    'PERSONA DETENIDA',
+    'FALTA ADMINISTRATIVA',
+    'ALTERAR EL ORDEN PUBLICO',
+    'AGRESIONES',
+    'AMENAZAS',
+    'VIOLENCIA FAMILIAR',
+    'POSESION DE SUSTANCIAS PROHIBIDAS',
+    'POSESION DE ARMA DE FUEGO',
+    'POSESION DE ARMA BLANCA',
+    'ROBO',
+    'ROBO A COMERCIO',
+    'ROBO A CASA HABITACION',
+    'ROBO DE VEHICULO',
+    'VEHICULO RECUPERADO',
+    'VEHICULO CON REPORTE DE ROBO',
+    'VEHICULO ABANDONADO',
+    'VEHICULO ALTERADO',
+    'DAÑOS',
+    'LESIONES',
+    'OBJETO ASEGURADO',
+    'MERCANCIA ASEGURADA',
+    'MANDAMIENTO JUDICIAL',
+    'ORDEN DE APREHENSION',
+    'HECHO DE TRANSITO',
+    'HECHO DE TRANSITO TURNADO',
+    motivoOtro,
+  ];
+
+  static bool esMotivoCatalogado(String value) => motivos.contains(value);
+}
+
 class PuestaUploadFile {
   final String field;
   final File file;
@@ -36,9 +78,19 @@ class PuestasDisposicionService {
     };
   }
 
-  Future<List<Map<String, dynamic>>> index({int? anio}) async {
+  Future<List<Map<String, dynamic>>> index({
+    int? anio,
+    String? tipoPuesta,
+    String? motivo,
+  }) async {
+    final query = <String, dynamic>{
+      if (anio != null) 'anio': anio,
+      if ((tipoPuesta ?? '').trim().isNotEmpty)
+        'tipo_puesta': tipoPuesta!.trim(),
+      if ((motivo ?? '').trim().isNotEmpty) 'motivo': motivo!.trim(),
+    };
     final response = await http.get(
-      _uri('/puestas-disposicion', anio == null ? null : {'anio': anio}),
+      _uri('/puestas-disposicion', query.isEmpty ? null : query),
       headers: await _headers(),
     );
 
@@ -127,6 +179,45 @@ class PuestasDisposicionService {
     if (decoded is Map<String, dynamic>) return decoded;
     if (decoded is Map) return Map<String, dynamic>.from(decoded);
     return <String, dynamic>{};
+  }
+
+  Future<void> destroy(int id) async {
+    final response = await http.delete(
+      _uri('/puestas-disposicion/$id'),
+      headers: await _headers(),
+    );
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception('Error HTTP ${response.statusCode}: ${response.body}');
+    }
+  }
+
+  Future<Map<String, dynamic>> updateBasic({
+    required int id,
+    required String tipoPuesta,
+    required String motivo,
+    required String nombrePolicia,
+  }) async {
+    final headers = await _headers();
+    headers['Content-Type'] = 'application/json';
+    final response = await http.put(
+      _uri('/puestas-disposicion/$id'),
+      headers: headers,
+      body: json.encode(<String, String>{
+        'tipo_puesta': tipoPuesta,
+        'motivo': motivo,
+        'nombre_policia': nombrePolicia,
+      }),
+    );
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception('Error HTTP ${response.statusCode}: ${response.body}');
+    }
+
+    final decoded = json.decode(response.body);
+    return decoded is Map
+        ? Map<String, dynamic>.from(decoded)
+        : <String, dynamic>{};
   }
 
   Future<List<PuestaUnidad>> unidadesParaCrear() async {

@@ -47,6 +47,7 @@ import '../screens/sustento_legal/sustento_legal_busqueda_screen.dart';
 import '../screens/herramientas/velocidad_huella_frenado_screen.dart';
 import '../screens/herramientas/velocidad_deformacion_laminas_screen.dart';
 import '../screens/herramientas/rnd_faltas_administrativas_screen.dart';
+import '../screens/herramientas/reconstructor_transito_2d_screen.dart';
 
 import '../screens/mapa/mapa_patrullas_screen.dart';
 import '../screens/mapa/mapa_incidencias_screen.dart';
@@ -175,6 +176,8 @@ final Map<String, WidgetBuilder> appRoutesMap = {
       const VelocidadDeformacionLaminasScreen(),
   AppRoutes.herramientasRndFaltas: (context) =>
       const RndFaltasAdministrativasScreen(),
+  AppRoutes.herramientasReconstructorTransito2d: (context) =>
+      const ReconstructorTransito2dScreen(),
 
   AppRoutes.controlUbicacion: (context) => const ControlUbicacionScreen(),
   AppRoutes.gruas: (context) => const GruasScreen(),

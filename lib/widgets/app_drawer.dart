@@ -291,13 +291,13 @@ class AppDrawer extends StatelessWidget {
                 final isSuperadmin = snap.data?.isSuperadmin ?? false;
                 final canSeeAllButtons = hasFullOperationalAccess;
                 final canSeePuestas =
-                    _allowed(
-                      perms,
-                      permPuestasDisposicion,
-                      all: canSeeAllButtons,
-                    ) ||
+                    canSeeAllButtons ||
                     isSuperadmin ||
-                    unidadId != null;
+                    _allowed(perms, permPuestasDisposicion);
+                final canCreatePuestas =
+                    canSeeAllButtons ||
+                    isSuperadmin ||
+                    perms.contains('crear puestas a disposicion');
                 final canSeeDictamenes =
                     canSeeAllButtons ||
                     (_allowed(perms, permDictamenes) && unidadId == 1);
@@ -479,10 +479,13 @@ class AppDrawer extends StatelessWidget {
                               icon: Icons.folder_open,
                               label: 'Listado de puestas',
                               subtitle: 'Consultar registros capturados',
-                              onTap: () =>
-                                  _nav(context, AppRoutes.puestasDisposicion),
+                              onTap: () => _nav(
+                                context,
+                                AppRoutes.puestasDisposicion,
+                                requiredPerm: permPuestasDisposicion,
+                              ),
                             ),
-                          if (canSeePuestas)
+                          if (canCreatePuestas)
                             _DrawerSubItem(
                               icon: Icons.add_circle_outline,
                               label: 'Crear puesta',
@@ -490,6 +493,7 @@ class AppDrawer extends StatelessWidget {
                               onTap: () => _nav(
                                 context,
                                 AppRoutes.puestasDisposicionCreate,
+                                requiredPerm: 'crear puestas a disposicion',
                               ),
                             ),
                           if (canSeeDictamenes)
@@ -775,6 +779,15 @@ class AppDrawer extends StatelessWidget {
                           onTap: () => _nav(
                             context,
                             AppRoutes.herramientasVelocidadDeformacion,
+                          ),
+                        ),
+                        _DrawerSubItem(
+                          icon: Icons.route,
+                          label: 'Reconstructor de tránsito 2D',
+                          subtitle: 'Escenas, trayectorias y secuencias',
+                          onTap: () => _nav(
+                            context,
+                            AppRoutes.herramientasReconstructorTransito2d,
                           ),
                         ),
                       ],

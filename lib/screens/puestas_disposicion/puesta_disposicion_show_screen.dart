@@ -424,6 +424,54 @@ class _PuestaDisposicionShowScreenState
                     emptyText: 'Sin personas registradas.',
                     items: _list('personas'),
                     titleBuilder: (item) => _text(item['nombre_completo']),
+                    actionBuilder: (item) {
+                      final url = _rawText(
+                        item['archivo_uso_fuerza_url'] ??
+                            item['uso_fuerza_pdf_url'],
+                      );
+                      if (url.isEmpty) {
+                        return Text(
+                          'Sin PDF de uso de fuerza.',
+                          style: TextStyle(color: Colors.red.shade700),
+                        );
+                      }
+
+                      final personaId = _toInt(item['id']);
+                      final fileName =
+                          'uso_fuerza_persona_${personaId > 0 ? personaId : 'puesta_$numero'}.pdf';
+                      return Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          OutlinedButton.icon(
+                            onPressed: _pdfBusy
+                                ? null
+                                : () => _runPdfTask(
+                                    () => PdfDocumentService.openFromUrl(
+                                      url: url,
+                                      fileName: fileName,
+                                    ),
+                                  ),
+                            icon: const Icon(Icons.visibility_outlined),
+                            label: const Text('Ver uso de fuerza'),
+                          ),
+                          OutlinedButton.icon(
+                            onPressed: _pdfBusy
+                                ? null
+                                : () => _runPdfTask(
+                                    () => PdfDocumentService.saveAndShareFromUrl(
+                                      url: url,
+                                      fileName: fileName,
+                                      shareText:
+                                          'Uso de fuerza de ${_text(item['nombre_completo'])}',
+                                    ),
+                                  ),
+                            icon: const Icon(Icons.ios_share),
+                            label: const Text('Compartir'),
+                          ),
+                        ],
+                      );
+                    },
                     linesBuilder: (item) => [
                       if (_text(item['alias'], '').isNotEmpty)
                         'Alias: ${_text(item['alias'])}',
@@ -439,13 +487,6 @@ class _PuestaDisposicionShowScreenState
                         'Mandamiento: ${_text(item['mandamiento_judicial'])}',
                       if (_text(item['observaciones'], '').isNotEmpty)
                         'Obs: ${_text(item['observaciones'])}',
-                      if (_text(
-                        item['archivo_uso_fuerza_url'] ??
-                            item['uso_fuerza_pdf_url'] ??
-                            item['archivo_uso_fuerza'],
-                        '',
-                      ).isNotEmpty)
-                        'PDF uso de fuerza: cargado',
                     ],
                   ),
                 ),
@@ -586,6 +627,7 @@ class _PuestaDisposicionShowScreenState
     required List<Map<String, dynamic>> items,
     required String Function(Map<String, dynamic>) titleBuilder,
     required List<String> Function(Map<String, dynamic>) linesBuilder,
+    Widget Function(Map<String, dynamic>)? actionBuilder,
   }) {
     if (items.isEmpty) return Text(emptyText);
 
@@ -619,6 +661,10 @@ class _PuestaDisposicionShowScreenState
                   lines.join('\n'),
                   style: TextStyle(color: Colors.grey.shade800, height: 1.35),
                 ),
+              ],
+              if (actionBuilder != null) ...[
+                const SizedBox(height: 10),
+                actionBuilder(item),
               ],
             ],
           ),

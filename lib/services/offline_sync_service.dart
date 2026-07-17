@@ -1061,6 +1061,7 @@ class OfflineSyncService {
       'personas_mp': 'Personas MP',
       'personas_participantes': 'Personas participantes',
       'puesta_disposicion_id': 'Puesta a disposicion',
+      'reporte_robo': 'Reporte de robo del vehículo',
       'vehiculos_mp': 'Vehículos MP',
     };
 

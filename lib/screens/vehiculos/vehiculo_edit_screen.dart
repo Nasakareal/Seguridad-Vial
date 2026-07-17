@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
@@ -13,6 +14,7 @@ import '../../services/offline_sync_service.dart';
 import '../../services/vehiculo_form_service.dart';
 import '../../widgets/antecedente_highlight_tile.dart';
 import '../../widgets/marca_vehiculo_dropdown.dart';
+import '../../widgets/reporte_robo_selector.dart';
 
 class VehiculoEditScreen extends StatefulWidget {
   const VehiculoEditScreen({super.key});
@@ -41,6 +43,10 @@ class _VehiculoEditScreenState extends State<VehiculoEditScreen> {
   final _montoDanosCtrl = TextEditingController();
   final _partesDanadasCtrl = TextEditingController();
   bool _antecedenteVehiculo = false;
+  bool? _reporteRobo;
+  bool _isDelegaciones = false;
+  bool _roleLoaded = false;
+  bool _roleResolved = false;
 
   String? _estadoPlacasSeleccionado;
 
@@ -70,6 +76,10 @@ class _VehiculoEditScreenState extends State<VehiculoEditScreen> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+    if (!_roleLoaded) {
+      _roleLoaded = true;
+      unawaited(_loadRoleFlags());
+    }
     if (_inicializo) return;
 
     final args = ModalRoute.of(context)?.settings.arguments;
@@ -110,6 +120,18 @@ class _VehiculoEditScreenState extends State<VehiculoEditScreen> {
         _cargandoGruas = false;
       });
     }
+  }
+
+  Future<void> _loadRoleFlags() async {
+    var isDelegaciones = false;
+    try {
+      isDelegaciones = await AuthService.isDelegacionesUser();
+    } catch (_) {}
+    if (!mounted) return;
+    setState(() {
+      _isDelegaciones = isDelegaciones;
+      _roleResolved = true;
+    });
   }
 
   @override
@@ -187,6 +209,11 @@ class _VehiculoEditScreenState extends State<VehiculoEditScreen> {
         text == 'si' ||
         text == 'sí' ||
         text == 'yes';
+  }
+
+  bool? _toNullableBool(dynamic value) {
+    if (value == null || value.toString().trim().isEmpty) return null;
+    return _toBool(value);
   }
 
   String _limpiaPlacas(String s) => VehiculoFormService.normalizePlacas(s);
@@ -522,6 +549,7 @@ class _VehiculoEditScreenState extends State<VehiculoEditScreen> {
     _montoDanosCtrl.text = (body['monto_danos'] ?? '').toString();
     _partesDanadasCtrl.text = (body['partes_danadas'] ?? '').toString();
     _antecedenteVehiculo = _toBool(body['antecedente_vehiculo']);
+    _reporteRobo = _toNullableBool(body['reporte_robo']);
 
     final carroceriaRaw = (body['tipo'] ?? '').toString().trim();
     final carroceria = VehiculoTaxonomia.normalizeCarroceria(carroceriaRaw);
@@ -657,6 +685,7 @@ class _VehiculoEditScreenState extends State<VehiculoEditScreen> {
     _montoDanosCtrl.text = (data['monto_danos'] ?? '').toString();
     _partesDanadasCtrl.text = (data['partes_danadas'] ?? '').toString();
     _antecedenteVehiculo = _toBool(data['antecedente_vehiculo']);
+    _reporteRobo = _toNullableBool(data['reporte_robo']);
 
     final tipoGeneralApi = (data['tipo_general'] ?? '').toString().trim();
     final carroceriaApiRaw = (data['tipo'] ?? '').toString().trim();
@@ -888,6 +917,7 @@ class _VehiculoEditScreenState extends State<VehiculoEditScreen> {
         'monto_danos': _toDoubleOrNull(_t(_montoDanosCtrl)) ?? 0,
         'partes_danadas': _t(_partesDanadasCtrl),
         'antecedente_vehiculo': _antecedenteVehiculo,
+        if (_isDelegaciones) 'reporte_robo': _reporteRobo,
       };
 
       final result = await OfflineSyncService.submitJson(
@@ -1363,9 +1393,18 @@ class _VehiculoEditScreenState extends State<VehiculoEditScreen> {
                       onChanged: (v) =>
                           setState(() => _antecedenteVehiculo = v),
                     ),
+                    if (_isDelegaciones) ...[
+                      const SizedBox(height: 12),
+                      ReporteRoboSelector(
+                        value: _reporteRobo,
+                        onChanged: _saving
+                            ? null
+                            : (value) => setState(() => _reporteRobo = value),
+                      ),
+                    ],
                     const SizedBox(height: 18),
                     ElevatedButton.icon(
-                      onPressed: _saving ? null : _guardar,
+                      onPressed: _saving || !_roleResolved ? null : _guardar,
                       icon: _saving
                           ? const SizedBox(
                               width: 18,
@@ -1374,7 +1413,11 @@ class _VehiculoEditScreenState extends State<VehiculoEditScreen> {
                             )
                           : const Icon(Icons.save),
                       label: Text(
-                        _saving ? 'Guardando...' : 'Actualizar vehículo',
+                        !_roleResolved
+                            ? 'Verificando unidad...'
+                            : (_saving
+                                  ? 'Guardando...'
+                                  : 'Actualizar vehículo'),
                       ),
                     ),
                   ],

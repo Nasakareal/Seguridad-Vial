@@ -64,6 +64,29 @@ class HechoShowHelpers {
     return s;
   }
 
+  static bool boolValue(dynamic value) {
+    if (value is bool) return value;
+    if (value is num) return value != 0;
+    final text = (value ?? '').toString().trim().toLowerCase();
+    return text == '1' || text == 'true' || text == 'sí' || text == 'si';
+  }
+
+  static bool esHechoDelegaciones(Map<String, dynamic> hecho) {
+    final unidadRaw =
+        hecho['unidad_org_id'] ??
+        hecho['unidad_efectiva_id'] ??
+        hecho['unidad_id'] ??
+        (hecho['unidad'] is Map ? hecho['unidad']['id'] : null);
+    return int.tryParse((unidadRaw ?? '').toString()) ==
+        AuthService.unidadDelegacionesId;
+  }
+
+  static bool hayVehiculoConReporteRobo(Map<String, dynamic> hecho) {
+    return vehiculosFromHecho(
+      hecho,
+    ).any((vehiculo) => boolValue(vehiculo['reporte_robo']));
+  }
+
   static String normalizeSector(String raw) {
     final s = raw.trim();
     if (s.isEmpty) return '';

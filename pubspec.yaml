@@ -1,7 +1,7 @@
 name: seguridad_vial_app
 description: App móvil para captura de hechos y monitoreo de patrullas
 publish_to: 'none'
-version: 1.27.82+131
+version: 1.28.83+132
 
 environment:
   sdk: ">=3.8.0 <4.0.0"

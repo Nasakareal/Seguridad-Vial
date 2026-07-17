@@ -55,6 +55,8 @@ class AppRoutes {
       '/herramientas/velocidad-deformacion-laminas';
   static const String herramientasRndFaltas =
       '/herramientas/solicitar-rnd-faltas';
+  static const String herramientasReconstructorTransito2d =
+      '/herramientas/reconstructor-transito-2d';
 
   static const String controlUbicacion = '/control-ubicacion';
   static const String gruas = '/gruas';
