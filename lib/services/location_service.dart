@@ -74,6 +74,9 @@ class LocationService {
         'lat': pos.latitude,
         'lng': pos.longitude,
         'accuracy': acc,
+        // El backend usa la hora real de captura para ignorar reintentos
+        // atrasados y calcular permanencias sin contar tiempo en la cola offline.
+        'captured_at': pos.timestamp.toUtc().toIso8601String(),
         if (pos.speed.isFinite && pos.speed >= 0) 'speed': pos.speed,
         if (pos.heading.isFinite) 'heading': pos.heading,
       };

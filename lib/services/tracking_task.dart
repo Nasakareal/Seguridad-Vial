@@ -10,6 +10,7 @@ import 'location_service.dart';
 import 'location_flag_service.dart';
 import 'tracking_guard_constants.dart';
 import 'tracking_guard_notification_service.dart';
+import 'suspicious_place_local_tracker.dart';
 
 class TrackingTaskHandler extends TaskHandler {
   TrackingTaskHandler(this.apiBase);
@@ -130,6 +131,14 @@ class TrackingTaskHandler extends TaskHandler {
         lng: pos.longitude,
         accuracyMeters: pos.accuracy,
         capturedAt: pos.timestamp,
+      );
+
+      await SuspiciousPlaceLocalTracker.processPosition(
+        lat: pos.latitude,
+        lng: pos.longitude,
+        accuracyMeters: pos.accuracy,
+        capturedAt: pos.timestamp,
+        apiBase: apiBase,
       );
 
       final intervalProfile =

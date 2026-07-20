@@ -6,6 +6,7 @@ import 'package:image_picker/image_picker.dart';
 
 import '../core/globals.dart';
 import '../widgets/landscape_photo_crop_screen.dart';
+import 'photo_orientation_service.dart';
 
 class PhotoPickerService {
   static const int defaultImageQuality = 85;
@@ -29,19 +30,23 @@ class PhotoPickerService {
       );
       if (picked == null || !context.mounted) return null;
 
-      final file = File(picked.path);
+      final file = await _preparePickedFile(File(picked.path));
+      if (!context.mounted) return null;
       if (!cropLandscape) return file;
       return await cropIfNeeded(context, file);
     } on PlatformException catch (e, st) {
       _reportPickerError(e, st);
+      if (!context.mounted) return null;
       _showPickerError(context, e, source);
       return null;
     } on MissingPluginException catch (e, st) {
       _reportPickerError(e, st);
+      if (!context.mounted) return null;
       _showPickerError(context, e, source);
       return null;
     } catch (e, st) {
       _reportPickerError(e, st);
+      if (!context.mounted) return null;
       _showPickerError(context, e, source);
       return null;
     }
@@ -64,21 +69,26 @@ class PhotoPickerService {
 
       final files = <File>[];
       for (final item in picked) {
-        final file = await cropIfNeeded(context, File(item.path));
+        final prepared = await _preparePickedFile(File(item.path));
+        if (!context.mounted) return files;
+        final file = await cropIfNeeded(context, prepared);
         if (!context.mounted) return files;
         if (file != null) files.add(file);
       }
       return files;
     } on PlatformException catch (e, st) {
       _reportPickerError(e, st);
+      if (!context.mounted) return const <File>[];
       _showPickerError(context, e, ImageSource.gallery);
       return const <File>[];
     } on MissingPluginException catch (e, st) {
       _reportPickerError(e, st);
+      if (!context.mounted) return const <File>[];
       _showPickerError(context, e, ImageSource.gallery);
       return const <File>[];
     } catch (e, st) {
       _reportPickerError(e, st);
+      if (!context.mounted) return const <File>[];
       _showPickerError(context, e, ImageSource.gallery);
       return const <File>[];
     }
@@ -99,6 +109,22 @@ class PhotoPickerService {
     }
   }
 
+  static Future<File> _preparePickedFile(File file) async {
+    if (PhotoOrientationService.isRawInput(file)) {
+      throw const PhotoFormatException(
+        'La foto está en formato RAW/DNG. Expórtala como JPG desde la '
+        'galería antes de subirla.',
+      );
+    }
+    if (!PhotoOrientationService.isAcceptedInput(file)) {
+      throw const PhotoFormatException(
+        'Formato de foto no compatible. Usa JPG, JPEG, PNG, WEBP, HEIC, '
+        'HEIF o AVIF.',
+      );
+    }
+    return PhotoOrientationService.normalizeForUpload(file);
+  }
+
   static void _showPickerError(
     BuildContext context,
     Object error,
@@ -111,6 +137,8 @@ class PhotoPickerService {
   }
 
   static String _friendlyMessage(Object error, ImageSource source) {
+    if (error is PhotoFormatException) return error.message;
+
     if (error is PlatformException) {
       switch (error.code) {
         case 'camera_access_denied':

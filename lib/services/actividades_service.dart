@@ -831,12 +831,12 @@ class ActividadesService {
         continue;
       }
 
-      final ext = path.split('.').last.toLowerCase();
-      const allowed = <String>{'jpg', 'jpeg', 'png', 'webp'};
-      if (!allowed.contains(ext)) {
+      if (!PhotoOrientationService.isAcceptedInput(file)) {
         add(
           ActividadValidationTarget.fotos,
-          '$label debe ser JPG, JPEG, PNG o WEBP.',
+          PhotoOrientationService.isRawInput(file)
+              ? '$label está en RAW/DNG; expórtala como JPG antes de subirla.'
+              : '$label debe ser JPG, JPEG, PNG, WEBP, HEIC, HEIF o AVIF.',
         );
       }
 

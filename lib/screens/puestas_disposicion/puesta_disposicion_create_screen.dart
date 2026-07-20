@@ -9,6 +9,7 @@ import 'package:image_picker/image_picker.dart';
 import '../../services/puestas_disposicion_service.dart';
 import '../../services/auth_service.dart';
 import '../../services/local_draft_service.dart';
+import '../../services/photo_picker_service.dart';
 import '../../services/vehiculo_form_service.dart';
 import '../../widgets/tarjeta_circulacion_scanner_screen.dart';
 
@@ -22,7 +23,6 @@ class PuestaDisposicionCreateScreen extends StatefulWidget {
 
 class _PuestaDisposicionCreateScreenState
     extends State<PuestaDisposicionCreateScreen> {
-  static const int _maxPdfBytes = 50 * 1024 * 1024;
   static const int _maxFotoBytes = 5 * 1024 * 1024;
   static const int _maxFotos = 10;
 
@@ -911,9 +911,10 @@ class _PuestaDisposicionCreateScreenState
       if (!await file.exists()) {
         throw Exception('No se encontró el PDF seleccionado.');
       }
-      if (await file.length() > _maxPdfBytes) {
-        throw Exception('El PDF es muy pesado (máximo 50 MB).');
-      }
+      final inspection = await PuestasDisposicionService.inspectPdf(
+        file,
+        label: 'El PDF de la puesta',
+      );
 
       if (!mounted) return;
       setState(() {
@@ -921,6 +922,13 @@ class _PuestaDisposicionCreateScreenState
         _pdfName = picked.name;
       });
       _markDraftChanged();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            PuestasDisposicionService.pdfPreparationMessage(inspection),
+          ),
+        ),
+      );
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -960,21 +968,32 @@ class _PuestaDisposicionCreateScreenState
       }
 
       final picker = ImagePicker();
-      final selected = source == ImageSource.camera
-          ? <XFile>[
-              if (await picker.pickImage(source: source, imageQuality: 92)
-                  case final image?)
-                image,
-            ]
-          : await picker.pickMultiImage(imageQuality: 92);
-      if (selected.isEmpty) return;
+      final List<File> selected;
+      if (source == ImageSource.camera) {
+        if (!mounted) return;
+        final image = await PhotoPickerService.pickAndCropImage(
+          context,
+          picker,
+          source: source,
+        );
+        selected = image == null ? const <File>[] : <File>[image];
+      } else {
+        if (!mounted) return;
+        selected = await PhotoPickerService.pickAndCropMultiImage(
+          context,
+          picker,
+        );
+      }
+      if (!mounted || selected.isEmpty) return;
 
       final nuevas = <File>[];
-      for (final image in selected.take(disponibles)) {
-        final file = File(image.path);
+      for (final file in selected.take(disponibles)) {
         if (!await file.exists()) continue;
         if (await file.length() > _maxFotoBytes) {
-          throw Exception('La foto ${image.name} es muy pesada (máximo 5 MB).');
+          throw Exception(
+            'La foto ${file.path.split(Platform.pathSeparator).last} es muy '
+            'pesada (máximo 5 MB).',
+          );
         }
         nuevas.add(file);
       }
@@ -1010,9 +1029,10 @@ class _PuestaDisposicionCreateScreenState
       if (!await file.exists()) {
         throw Exception('No se encontró el PDF seleccionado.');
       }
-      if (await file.length() > _maxPdfBytes) {
-        throw Exception('El PDF es muy pesado (máximo 50 MB).');
-      }
+      final inspection = await PuestasDisposicionService.inspectPdf(
+        file,
+        label: 'El PDF de uso de fuerza',
+      );
 
       if (!mounted) return;
       setState(() {
@@ -1020,6 +1040,13 @@ class _PuestaDisposicionCreateScreenState
         item.usoFuerzaPdfName = picked.name;
       });
       _markDraftChanged();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            PuestasDisposicionService.pdfPreparationMessage(inspection),
+          ),
+        ),
+      );
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1642,7 +1669,9 @@ class _PuestaDisposicionCreateScreenState
                             child: CircularProgressIndicator(strokeWidth: 2),
                           )
                         : const Icon(Icons.check),
-                    label: Text(_saving ? 'Guardando' : 'Registrar'),
+                    label: Text(
+                      _saving ? 'Enviando y procesando…' : 'Registrar',
+                    ),
                     style: ElevatedButton.styleFrom(
                       minimumSize: const Size.fromHeight(50),
                     ),

@@ -13,6 +13,7 @@ import 'location_service.dart';
 import 'tracking_guard_constants.dart';
 import 'tracking_guard_notification_service.dart';
 import 'tracking_task.dart';
+import 'suspicious_place_local_tracker.dart';
 
 class TrackingService {
   static const String notificationTitle = trackingGuardNotificationTitle;
@@ -264,6 +265,14 @@ class TrackingService {
       lng: pos.longitude,
       accuracyMeters: pos.accuracy,
       capturedAt: pos.timestamp,
+    );
+
+    await SuspiciousPlaceLocalTracker.processPosition(
+      lat: pos.latitude,
+      lng: pos.longitude,
+      accuracyMeters: pos.accuracy,
+      capturedAt: pos.timestamp,
+      apiBase: _apiBase,
     );
 
     final intervalProfile =

@@ -1,11 +1,13 @@
-import 'dart:io';
+import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:path/path.dart' as p;
 
 import 'auth_service.dart';
+import 'photo_orientation_service.dart';
 
 class PuestaUnidad {
   final int id;
@@ -63,7 +65,80 @@ class PuestaUploadFile {
   const PuestaUploadFile({required this.field, required this.file});
 }
 
+class PuestaPdfInspection {
+  final int bytes;
+  final bool hasDigitalSignature;
+
+  const PuestaPdfInspection({
+    required this.bytes,
+    required this.hasDigitalSignature,
+  });
+
+  bool get serverWillTryCompression =>
+      bytes >= PuestasDisposicionService.pdfCompressionMinBytes &&
+      !hasDigitalSignature;
+}
+
 class PuestasDisposicionService {
+  static const int maxPdfBytes = 50 * 1024 * 1024;
+  static const int pdfCompressionMinBytes = 1024 * 1024;
+  static const int maxPhotoBytes = 5 * 1024 * 1024;
+  static const Duration uploadTimeout = Duration(minutes: 5);
+
+  static Future<PuestaPdfInspection> inspectPdf(
+    File file, {
+    String label = 'El PDF',
+  }) async {
+    if (!await file.exists()) {
+      throw Exception('$label ya no existe en el dispositivo.');
+    }
+
+    final bytes = await file.length();
+    if (bytes <= 0) {
+      throw Exception('$label está vacío.');
+    }
+    if (bytes > maxPdfBytes) {
+      throw Exception('$label es muy pesado (máximo 50 MB).');
+    }
+
+    final handle = await file.open();
+    try {
+      final header = await handle.read(5);
+      if (header.length != 5 ||
+          ascii.decode(header, allowInvalid: true) != '%PDF-') {
+        throw Exception('$label no contiene un PDF válido.');
+      }
+    } finally {
+      await handle.close();
+    }
+
+    var carry = '';
+    var signed = false;
+    await for (final chunk in file.openRead()) {
+      final content = carry + latin1.decode(chunk, allowInvalid: true);
+      if (content.contains('/ByteRange')) {
+        signed = true;
+        break;
+      }
+      carry = content.length <= 9
+          ? content
+          : content.substring(content.length - 9);
+    }
+
+    return PuestaPdfInspection(bytes: bytes, hasDigitalSignature: signed);
+  }
+
+  static String pdfPreparationMessage(PuestaPdfInspection inspection) {
+    if (inspection.hasDigitalSignature) {
+      return 'El PDF tiene firma digital: se enviará sin modificar para '
+          'conservarla.';
+    }
+    if (inspection.serverWillTryCompression) {
+      return 'El servidor intentará comprimir este PDF automáticamente al guardarlo.';
+    }
+    return 'El PDF ya es pequeño y no necesita compresión.';
+  }
+
   Uri _uri(String path, [Map<String, dynamic>? query]) {
     return Uri.parse('${AuthService.baseUrl}$path').replace(
       queryParameters: query?.map((key, value) => MapEntry(key, '$value')),
@@ -132,6 +207,41 @@ class PuestasDisposicionService {
     File? archivoPuesta,
     List<PuestaUploadFile> archivosExtra = const <PuestaUploadFile>[],
   }) async {
+    if (archivoPuesta != null) {
+      await inspectPdf(archivoPuesta, label: 'El PDF de la puesta');
+    }
+
+    final preparedExtras = <PuestaUploadFile>[];
+    for (final extra in archivosExtra) {
+      if (extra.field.contains('[archivo_uso_fuerza]')) {
+        await inspectPdf(extra.file, label: 'El PDF de uso de fuerza');
+        preparedExtras.add(extra);
+        continue;
+      }
+
+      if (extra.field == 'fotos[]') {
+        if (!PhotoOrientationService.isAcceptedInput(extra.file)) {
+          throw Exception(
+            PhotoOrientationService.isRawInput(extra.file)
+                ? 'Una foto está en RAW/DNG; expórtala como JPG antes de subirla.'
+                : 'Una foto tiene un formato no compatible.',
+          );
+        }
+        final normalized = await PhotoOrientationService.forceLandscape(
+          extra.file,
+        );
+        if (await normalized.length() > maxPhotoBytes) {
+          throw Exception('Cada foto debe pesar máximo 5 MB.');
+        }
+        preparedExtras.add(
+          PuestaUploadFile(field: extra.field, file: normalized),
+        );
+        continue;
+      }
+
+      preparedExtras.add(extra);
+    }
+
     final request = http.MultipartRequest('POST', _uri('/puestas-disposicion'));
     request.headers.addAll(await _headers());
     request.fields.addAll(fields);
@@ -146,7 +256,7 @@ class PuestasDisposicionService {
       );
     }
 
-    for (final extra in archivosExtra) {
+    for (final extra in preparedExtras) {
       request.files.add(
         await http.MultipartFile.fromPath(
           extra.field,
@@ -162,8 +272,21 @@ class PuestasDisposicionService {
       );
     }
 
-    final streamed = await request.send();
-    final response = await http.Response.fromStream(streamed);
+    final http.Response response;
+    try {
+      final streamed = await request.send().timeout(uploadTimeout);
+      response = await http.Response.fromStream(streamed);
+    } on TimeoutException {
+      throw Exception(
+        'El servidor tardó más de 5 minutos procesando los PDF. '
+        'Antes de reintentar, revisa la lista por si la puesta sí se guardó.',
+      );
+    } on SocketException {
+      throw Exception(
+        'Se perdió la conexión mientras se enviaban los archivos. '
+        'Revisa la lista antes de volver a registrar la puesta.',
+      );
+    }
 
     if (kDebugMode) {
       debugPrint(

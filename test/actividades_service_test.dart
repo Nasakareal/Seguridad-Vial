@@ -59,6 +59,63 @@ void main() {
     expect(error, isNull);
   });
 
+  test('accepts modern phone photo formats before JPEG conversion', () async {
+    final dir = await Directory.systemTemp.createTemp('actividad_heic_test_');
+    addTearDown(() async {
+      if (await dir.exists()) {
+        await dir.delete(recursive: true);
+      }
+    });
+
+    final foto = File('${dir.path}${Platform.pathSeparator}foto.heic');
+    await foto.writeAsBytes(<int>[1, 2, 3]);
+
+    final error = await ActividadesService.validateBeforeSubmit(
+      data: const ActividadUpsertData(
+        actividadCategoriaId: 1,
+        actividadSubcategoriaId: 2,
+        municipio: 'MORELIA',
+        personasAlcanzadas: '1',
+        personasParticipantes: '0',
+        personasDetenidas: '0',
+      ),
+      fotos: <File>[foto],
+      requireCoords: false,
+      requireTimestamp: false,
+    );
+
+    expect(error, isNull);
+  });
+
+  test('explains that RAW activity photos must be exported', () async {
+    final dir = await Directory.systemTemp.createTemp('actividad_raw_test_');
+    addTearDown(() async {
+      if (await dir.exists()) {
+        await dir.delete(recursive: true);
+      }
+    });
+
+    final foto = File('${dir.path}${Platform.pathSeparator}foto.dng');
+    await foto.writeAsBytes(<int>[1, 2, 3]);
+
+    final error = await ActividadesService.validateBeforeSubmit(
+      data: const ActividadUpsertData(
+        actividadCategoriaId: 1,
+        actividadSubcategoriaId: 2,
+        municipio: 'MORELIA',
+        personasAlcanzadas: '1',
+        personasParticipantes: '0',
+        personasDetenidas: '0',
+      ),
+      fotos: <File>[foto],
+      requireCoords: false,
+      requireTimestamp: false,
+    );
+
+    expect(error, contains('RAW/DNG'));
+    expect(error, contains('expórtala como JPG'));
+  });
+
   test('sends zero detained people when the field is left empty', () {
     const emptyTextData = ActividadUpsertData(
       actividadCategoriaId: 1,
