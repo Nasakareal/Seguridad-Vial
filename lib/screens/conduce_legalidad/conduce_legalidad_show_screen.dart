@@ -835,11 +835,20 @@ class _PersonLine extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  persona.nombre?.trim().isNotEmpty == true
-                      ? persona.nombre!
-                      : 'Persona',
+                  persona.nombreCompleto ?? 'Persona',
                   style: const TextStyle(fontWeight: FontWeight.w800),
                 ),
+                if ((persona.edadTexto ?? '').trim().isNotEmpty ||
+                    (persona.estadoCivil ?? '').trim().isNotEmpty)
+                  Text(
+                    <String>[
+                      if ((persona.edadTexto ?? '').trim().isNotEmpty)
+                        'Edad: ${persona.edadTexto}',
+                      if ((persona.estadoCivil ?? '').trim().isNotEmpty)
+                        'Estado civil: ${persona.estadoCivil}',
+                    ].join(' · '),
+                    style: TextStyle(color: Colors.grey.shade700),
+                  ),
                 if ((persona.numeroLicencia ?? '').trim().isNotEmpty)
                   Text(
                     'Licencia ${persona.numeroLicencia}',

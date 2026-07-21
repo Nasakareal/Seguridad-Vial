@@ -266,6 +266,9 @@ class _ConduceLegalidadCapturaScreenState
     final vehiculo = await showConduceLegalidadVehiculoModal(
       context,
       fundamentos: _meta?.fundamentosCorralon ?? const [],
+      initialTipoGeneral: widget.module.isAlcoholimetria
+          ? 'automovil'
+          : 'motocicleta',
     );
     if (vehiculo == null || !mounted) return;
     setState(() {
@@ -289,6 +292,7 @@ class _ConduceLegalidadCapturaScreenState
     final persona = await showConduceLegalidadPersonaModal(
       context,
       fundamentos: _meta?.fundamentosPersona ?? const [],
+      isAlcoholimetria: widget.module.isAlcoholimetria,
     );
     if (persona == null || !mounted) return;
     setState(() => _personas.add(persona));
@@ -592,19 +596,27 @@ class _ConduceLegalidadCapturaScreenState
 Future<ConduceLegalidadVehiculo?> showConduceLegalidadVehiculoModal(
   BuildContext context, {
   required List<ConduceLegalidadFundamento> fundamentos,
+  required String initialTipoGeneral,
 }) {
   return showModalBottomSheet<ConduceLegalidadVehiculo>(
     context: context,
     isScrollControlled: true,
     useSafeArea: true,
-    builder: (_) => _VehiculoModal(fundamentos: fundamentos),
+    builder: (_) => _VehiculoModal(
+      fundamentos: fundamentos,
+      initialTipoGeneral: initialTipoGeneral,
+    ),
   );
 }
 
 class _VehiculoModal extends StatefulWidget {
   final List<ConduceLegalidadFundamento> fundamentos;
+  final String initialTipoGeneral;
 
-  const _VehiculoModal({required this.fundamentos});
+  const _VehiculoModal({
+    required this.fundamentos,
+    required this.initialTipoGeneral,
+  });
 
   @override
   State<_VehiculoModal> createState() => _VehiculoModalState();
@@ -625,7 +637,7 @@ class _VehiculoModalState extends State<_VehiculoModal> {
   final _motivoCtrl = TextEditingController();
   final _observacionesCtrl = TextEditingController();
 
-  String? _tipoGeneralSeleccionado = 'motocicleta';
+  late String? _tipoGeneralSeleccionado;
   String? _tipoCarroceriaSeleccionada;
   String? _estadoPlacasSeleccionado;
   ConduceLegalidadFundamento? _fundamento;
@@ -640,6 +652,7 @@ class _VehiculoModalState extends State<_VehiculoModal> {
   @override
   void initState() {
     super.initState();
+    _tipoGeneralSeleccionado = widget.initialTipoGeneral;
     WidgetsBinding.instance.addPostFrameCallback((_) => _cargarGruas());
   }
 
@@ -1487,19 +1500,27 @@ class _VehiculoModalState extends State<_VehiculoModal> {
 Future<ConduceLegalidadPersona?> showConduceLegalidadPersonaModal(
   BuildContext context, {
   required List<ConduceLegalidadFundamento> fundamentos,
+  required bool isAlcoholimetria,
 }) {
   return showModalBottomSheet<ConduceLegalidadPersona>(
     context: context,
     isScrollControlled: true,
     useSafeArea: true,
-    builder: (_) => _PersonaModal(fundamentos: fundamentos),
+    builder: (_) => _PersonaModal(
+      fundamentos: fundamentos,
+      isAlcoholimetria: isAlcoholimetria,
+    ),
   );
 }
 
 class _PersonaModal extends StatefulWidget {
   final List<ConduceLegalidadFundamento> fundamentos;
+  final bool isAlcoholimetria;
 
-  const _PersonaModal({required this.fundamentos});
+  const _PersonaModal({
+    required this.fundamentos,
+    required this.isAlcoholimetria,
+  });
 
   @override
   State<_PersonaModal> createState() => _PersonaModalState();
@@ -1508,6 +1529,10 @@ class _PersonaModal extends StatefulWidget {
 class _PersonaModalState extends State<_PersonaModal> {
   final _formKey = GlobalKey<FormState>();
   final _nombreCtrl = TextEditingController();
+  final _nombresCtrl = TextEditingController();
+  final _apellidoPaternoCtrl = TextEditingController();
+  final _apellidoMaternoCtrl = TextEditingController();
+  final _edadLibreCtrl = TextEditingController();
   final _telefonoCtrl = TextEditingController();
   final _domicilioCtrl = TextEditingController();
   final _ocupacionCtrl = TextEditingController();
@@ -1533,10 +1558,15 @@ class _PersonaModalState extends State<_PersonaModal> {
   String? _rawLicencia;
   ConduceLegalidadFundamento? _fundamento;
   String? _nacionalidad;
+  String? _estadoCivil;
 
   @override
   void dispose() {
     _nombreCtrl.dispose();
+    _nombresCtrl.dispose();
+    _apellidoPaternoCtrl.dispose();
+    _apellidoMaternoCtrl.dispose();
+    _edadLibreCtrl.dispose();
     _telefonoCtrl.dispose();
     _domicilioCtrl.dispose();
     _ocupacionCtrl.dispose();
@@ -1567,7 +1597,15 @@ class _PersonaModalState extends State<_PersonaModal> {
     setState(() {
       _rawLicencia = parsed.rawText;
       if (setText(_numeroLicenciaCtrl, parsed.numeroLicencia)) applied += 1;
-      if (setText(_nombreCtrl, parsed.nombre)) applied += 1;
+      if (widget.isAlcoholimetria) {
+        if (setText(_nombresCtrl, parsed.nombre)) applied += 1;
+        final edad = _edadDesdeFecha(parsed.fechaNacimiento);
+        if (edad != null && setText(_edadLibreCtrl, edad.toString())) {
+          applied += 1;
+        }
+      } else if (setText(_nombreCtrl, parsed.nombre)) {
+        applied += 1;
+      }
       if (setText(_tipoLicenciaCtrl, parsed.tipoLicencia)) applied += 1;
       if (parsed.permanente) {
         _permanente = true;
@@ -1606,9 +1644,9 @@ class _PersonaModalState extends State<_PersonaModal> {
     }
 
     final descripcion = _descripcionPersona();
+    final nombreCompleto = _nombreCompletoCapturado();
     final hasIdentity =
-        _nombreCtrl.text.trim().isNotEmpty ||
-        _numeroLicenciaCtrl.text.trim().isNotEmpty;
+        nombreCompleto.isNotEmpty || _numeroLicenciaCtrl.text.trim().isNotEmpty;
     if (!hasIdentity && descripcion == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -1621,15 +1659,26 @@ class _PersonaModalState extends State<_PersonaModal> {
     Navigator.pop(
       context,
       ConduceLegalidadPersona(
-        nombre: _empty(_nombreCtrl.text),
+        nombre: _empty(nombreCompleto),
+        nombres: widget.isAlcoholimetria ? _empty(_nombresCtrl.text) : null,
+        apellidoPaterno: widget.isAlcoholimetria
+            ? _empty(_apellidoPaternoCtrl.text)
+            : null,
+        apellidoMaterno: widget.isAlcoholimetria
+            ? _empty(_apellidoMaternoCtrl.text)
+            : null,
         telefono: _empty(_telefonoCtrl.text),
         domicilio: _empty(_domicilioCtrl.text),
         sexo: _sexo,
         nacionalidad: _nacionalidad,
         ocupacion: _empty(_ocupacionCtrl.text),
-        edad: ConduceLegalidadPersonaDescriptor.edadAproximadaToInt(
-          _edadAproximada,
-        ),
+        edad: widget.isAlcoholimetria
+            ? _edadNumerica(_edadLibreCtrl.text)
+            : ConduceLegalidadPersonaDescriptor.edadAproximadaToInt(
+                _edadAproximada,
+              ),
+        edadTexto: widget.isAlcoholimetria ? _empty(_edadLibreCtrl.text) : null,
+        estadoCivil: widget.isAlcoholimetria ? _estadoCivil : null,
         tipoLicencia: _empty(_tipoLicenciaCtrl.text),
         estadoLicencia: _empty(_estadoLicenciaCtrl.text),
         numeroLicencia: _empty(_numeroLicenciaCtrl.text),
@@ -1660,7 +1709,7 @@ class _PersonaModalState extends State<_PersonaModal> {
 
   String? _descripcionPersona() {
     return ConduceLegalidadPersonaDescriptor.buildDescription(
-      edadAproximada: _edadAproximada,
+      edadAproximada: widget.isAlcoholimetria ? null : _edadAproximada,
       complexion: _complexion,
       estatura: _estatura,
       tez: _tez,
@@ -1673,6 +1722,37 @@ class _PersonaModalState extends State<_PersonaModal> {
       colorCalzado: _colorCalzado,
       rasgos: _rasgos,
     );
+  }
+
+  String _nombreCompletoCapturado() {
+    if (!widget.isAlcoholimetria) return _nombreCtrl.text.trim();
+    return <String>[
+      _nombresCtrl.text.trim(),
+      _apellidoPaternoCtrl.text.trim(),
+      _apellidoMaternoCtrl.text.trim(),
+    ].where((value) => value.isNotEmpty).join(' ');
+  }
+
+  int? _edadNumerica(String value) {
+    final match = RegExp(r'\d{1,3}').firstMatch(value);
+    final edad = match == null ? null : int.tryParse(match.group(0)!);
+    if (edad == null || edad < 0 || edad > 120) return null;
+    return edad;
+  }
+
+  int? _edadDesdeFecha(DateTime? fechaNacimiento) {
+    if (fechaNacimiento == null) return null;
+    final now = DateTime.now();
+    var edad = now.year - fechaNacimiento.year;
+    if (now.month < fechaNacimiento.month ||
+        (now.month == fechaNacimiento.month && now.day < fechaNacimiento.day)) {
+      edad -= 1;
+    }
+    return edad >= 0 && edad <= 120 ? edad : null;
+  }
+
+  String? _requiredText(String? value) {
+    return (value ?? '').trim().isEmpty ? 'Captura este dato.' : null;
   }
 
   @override
@@ -1707,7 +1787,27 @@ class _PersonaModalState extends State<_PersonaModal> {
                 ),
               ),
               const SizedBox(height: 12),
-              _text(_nombreCtrl, 'Nombre', Icons.person),
+              if (widget.isAlcoholimetria) ...[
+                const _FormSectionLabel('Datos solicitados por Salud'),
+                _text(
+                  _nombresCtrl,
+                  'Nombre(s) *',
+                  Icons.person,
+                  validator: _requiredText,
+                ),
+                _text(
+                  _apellidoPaternoCtrl,
+                  'Apellido paterno *',
+                  Icons.person_outline,
+                  validator: _requiredText,
+                ),
+                _text(
+                  _apellidoMaternoCtrl,
+                  'Apellido materno',
+                  Icons.person_outline,
+                ),
+              ] else
+                _text(_nombreCtrl, 'Nombre', Icons.person),
               _text(
                 _telefonoCtrl,
                 'Telefono',
@@ -1746,16 +1846,39 @@ class _PersonaModalState extends State<_PersonaModal> {
                 onChanged: (value) => setState(() => _sexo = value),
               ),
               const SizedBox(height: 10),
+              if (widget.isAlcoholimetria)
+                _select(
+                  label: 'Estado civil *',
+                  icon: Icons.people_outline,
+                  value: _estadoCivil,
+                  options: const <String>[
+                    'SOLTERO(A)',
+                    'CASADO(A)',
+                    'VIUDO(A)',
+                    'DIVORCIADO(A)',
+                  ],
+                  isRequired: true,
+                  onChanged: (value) => setState(() => _estadoCivil = value),
+                ),
               _text(_ocupacionCtrl, 'Ocupacion', Icons.work_outline),
-              _select(
-                label: 'Edad aproximada',
-                icon: Icons.cake_outlined,
-                value: _edadAproximada,
-                options:
-                    ConduceLegalidadPersonaDescriptor.edadAproximadaOptions,
-                isRequired: true,
-                onChanged: (value) => setState(() => _edadAproximada = value),
-              ),
+              if (widget.isAlcoholimetria)
+                _text(
+                  _edadLibreCtrl,
+                  'Edad *',
+                  Icons.cake_outlined,
+                  keyboardType: TextInputType.text,
+                  validator: _requiredText,
+                )
+              else
+                _select(
+                  label: 'Edad aproximada',
+                  icon: Icons.cake_outlined,
+                  value: _edadAproximada,
+                  options:
+                      ConduceLegalidadPersonaDescriptor.edadAproximadaOptions,
+                  isRequired: true,
+                  onChanged: (value) => setState(() => _edadAproximada = value),
+                ),
               _descripcionFisicaSection(),
               SwitchListTile(
                 title: const Text('Licencia permanente'),
@@ -2480,10 +2603,13 @@ class _PersonTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final detalles = <String>[
-      if ((persona.edadAproximada ?? '').trim().isNotEmpty)
+      if ((persona.edadTexto ?? '').trim().isNotEmpty)
+        '${persona.edadTexto} años'
+      else if ((persona.edadAproximada ?? '').trim().isNotEmpty)
         persona.edadAproximada!
       else if (persona.edad != null)
         '${persona.edad} anos aprox.',
+      if ((persona.estadoCivil ?? '').trim().isNotEmpty) persona.estadoCivil!,
       if ((persona.numeroLicencia ?? '').trim().isNotEmpty)
         'Lic. ${persona.numeroLicencia}',
       if ((persona.tipoLicencia ?? '').trim().isNotEmpty) persona.tipoLicencia!,
@@ -2494,9 +2620,7 @@ class _PersonTile extends StatelessWidget {
 
     return _CaptureTile(
       icon: Icons.badge_outlined,
-      title: persona.nombre?.trim().isNotEmpty == true
-          ? persona.nombre!
-          : 'Persona',
+      title: persona.nombreCompleto ?? 'Persona',
       subtitle: detalles.join(' - '),
       onRemove: onRemove,
     );

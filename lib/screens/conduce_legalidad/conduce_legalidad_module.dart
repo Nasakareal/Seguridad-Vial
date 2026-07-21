@@ -70,6 +70,11 @@ class ConduceLegalidadModule {
   }
 
   bool ownsOperativo(ConduceLegalidadOperativo operativo) {
+    final tipo = (operativo.tipoOperativo ?? '').trim().toLowerCase();
+    if (tipo == 'alcoholimetria' || tipo == 'conduce_legalidad') {
+      return tipo == id;
+    }
+
     final text = _normalize(
       [
         operativo.nombre,
@@ -87,9 +92,12 @@ class ConduceLegalidadModule {
   }
 
   Map<String, dynamic> operativoPayloadFields() {
-    if (!isAlcoholimetria) return const <String, dynamic>{};
+    if (!isAlcoholimetria) {
+      return const <String, dynamic>{'tipo_operativo': 'conduce_legalidad'};
+    }
 
     return const <String, dynamic>{
+      'tipo_operativo': 'alcoholimetria',
       'nombre': 'Operativo Alcoholimetría',
       'objetivo': 'Alcoholimetría',
     };

@@ -402,13 +402,13 @@ class _BoletaPaper extends StatelessWidget {
     final baseStyle = const TextStyle(
       color: Colors.black,
       fontFamily: 'monospace',
-      fontSize: 12,
-      height: 1.28,
+      fontSize: 10,
+      height: 1.15,
     );
 
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 18),
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 14),
       decoration: BoxDecoration(
         color: Colors.white,
         border: Border.all(color: Colors.black, width: 1.1),
@@ -430,21 +430,21 @@ class _BoletaPaper extends StatelessWidget {
                 Text(
                   'SECRETARÍA DE SEGURIDAD PÚBLICA',
                   textAlign: TextAlign.center,
-                  style: TextStyle(fontWeight: FontWeight.w900, fontSize: 13),
+                  style: TextStyle(fontWeight: FontWeight.w900, fontSize: 11),
                 ),
-                SizedBox(height: 2),
+                SizedBox(height: 1),
                 Text(
                   'COORDINACIÓN DEL AGRUPAMIENTO DE SEGURIDAD VIAL',
                   textAlign: TextAlign.center,
-                  style: TextStyle(fontWeight: FontWeight.w800, fontSize: 11),
+                  style: TextStyle(fontWeight: FontWeight.w800, fontSize: 9),
                 ),
-                SizedBox(height: 8),
+                SizedBox(height: 5),
                 Text(
                   'BOLETA DE NOTIFICACIÓN',
                   textAlign: TextAlign.center,
-                  style: TextStyle(fontWeight: FontWeight.w900, fontSize: 15),
+                  style: TextStyle(fontWeight: FontWeight.w900, fontSize: 13),
                 ),
-                SizedBox(height: 2),
+                SizedBox(height: 1),
                 Text(
                   'OPERATIVO CONDUCE CON LEGALIDAD',
                   textAlign: TextAlign.center,
@@ -461,11 +461,11 @@ class _BoletaPaper extends StatelessWidget {
             const _TicketDivider(),
             const _TicketSection('I. FUNDAMENTO JURÍDICO'),
             _TicketBlock(
-              label: 'a) Artículo(s) que prevén la infracción',
+              label: 'a) Artículo(s) infringido(s)',
               value: _fundamentoInfraccion,
             ),
             _TicketBlock(
-              label: 'b) Artículo(s) que establecen la sanción',
+              label: 'b) Los cuales ameritan',
               value: _fundamentoSancion,
             ),
             const _TicketDivider(),
@@ -482,7 +482,7 @@ class _BoletaPaper extends StatelessWidget {
             _TicketPair(
               label: 'Nombre',
               value: _value(
-                persona?.nombre,
+                persona?.nombreCompleto,
                 fallback: 'No presente o no proporcionado',
               ),
             ),
@@ -530,11 +530,11 @@ class _BoletaPaper extends StatelessWidget {
             const _TicketDivider(),
             const _TicketSection('FIRMA Y MANIFESTACIÓN'),
             const Text('Firma de la persona infractora:'),
-            const SizedBox(height: 30),
+            const SizedBox(height: 24),
             const _SignatureLine(),
-            const SizedBox(height: 10),
+            const SizedBox(height: 6),
             const Text('Manifestación de inconformidad (opcional):'),
-            const SizedBox(height: 8),
+            const SizedBox(height: 4),
             const _HandwrittenLines(lines: 3),
             const _TicketDivider(),
             const _TicketSection('AGENTE'),
@@ -544,11 +544,11 @@ class _BoletaPaper extends StatelessWidget {
             ),
             _TicketPair(label: 'No. placa', value: _placaAgente),
             _TicketBlock(label: 'Adscripcion', value: _adscripcionAgente),
-            const SizedBox(height: 18),
+            const SizedBox(height: 12),
             const Text('Firma autógrafa/electrónica:'),
-            const SizedBox(height: 30),
+            const SizedBox(height: 24),
             const _SignatureLine(),
-            const SizedBox(height: 8),
+            const SizedBox(height: 5),
             Text(
               preview
                   ? 'PREVISUALIZACION LOCAL'
@@ -556,7 +556,7 @@ class _BoletaPaper extends StatelessWidget {
               textAlign: TextAlign.center,
               style: const TextStyle(fontWeight: FontWeight.w800),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 5),
             const Text(
               'Supervisó: Luis Eduardo Lugo Ordorica',
               textAlign: TextAlign.center,
@@ -567,7 +567,7 @@ class _BoletaPaper extends StatelessWidget {
               textAlign: TextAlign.center,
               style: TextStyle(fontWeight: FontWeight.w800),
             ),
-            const SizedBox(height: 42),
+            const SizedBox(height: 28),
           ],
         ),
       ),
@@ -687,8 +687,10 @@ Uint8List _buildEscPosTicket(
   final textBytes = _thermalEncode(writer.toString().replaceAll('\n', '\r\n'));
   return Uint8List.fromList(<int>[
     0x1B, 0x40, // Inicializa impresora.
-    0x1B, 0x21, 0x00, // Modo normal.
+    0x1B, 0x21, 0x01, // Fuente B: tipografía compacta.
+    0x1B, 0x4D, 0x01, // Selecciona fuente B explícitamente.
     0x1D, 0x21, 0x00, // Tamaño normal.
+    0x1B, 0x33, 0x14, // Interlineado compacto de 20 puntos.
     0x1B, 0x45, 0x00, // Negritas apagadas.
     0x1B, 0x74, 0x02, // Tabla CP850 para acentos en español.
     0x1B, 0x61, 0x00, // Alineación izquierda; el centrado va en texto.
@@ -713,10 +715,16 @@ Uint8List _buildEscPosTestTicket(_ThermalPaperSize paperSize) {
     0x40,
     0x1B,
     0x21,
-    0x00,
+    0x01,
+    0x1B,
+    0x4D,
+    0x01,
     0x1D,
     0x21,
     0x00,
+    0x1B,
+    0x33,
+    0x14,
     0x1B,
     0x45,
     0x00,
@@ -758,14 +766,8 @@ void _writeThermalTicket(_ThermalTicketWriter ticket, _BoletaTicketData data) {
   ticket.block('Lugar', data.lugar);
   ticket.rule();
   ticket.section('I. FUNDAMENTO JURÍDICO');
-  ticket.block(
-    'a) Artículo(s) que prevén la infracción',
-    data.fundamentoInfraccion,
-  );
-  ticket.block(
-    'b) Artículo(s) que establecen la sanción',
-    data.fundamentoSancion,
-  );
+  ticket.block('a) Artículo(s) infringido(s)', data.fundamentoInfraccion);
+  ticket.block('b) Los cuales ameritan', data.fundamentoSancion);
   ticket.rule();
   ticket.section('II. MOTIVACIÓN');
   ticket.pair('Día', _value(data.captura.fecha));
@@ -776,7 +778,10 @@ void _writeThermalTicket(_ThermalTicketWriter ticket, _BoletaTicketData data) {
   ticket.section('PERSONA INFRACTORA');
   ticket.pair(
     'Nombre',
-    _value(data.persona?.nombre, fallback: 'No presente o no proporcionado'),
+    _value(
+      data.persona?.nombreCompleto,
+      fallback: 'No presente o no proporcionado',
+    ),
   );
   ticket.block(
     'Domicilio',
@@ -966,7 +971,6 @@ class _ThermalTicketWriter {
   }
 
   void section(String text) {
-    blank();
     center(text);
   }
 
@@ -1023,8 +1027,8 @@ class _ThermalTicketWriter {
 }
 
 enum _ThermalPaperSize {
-  paper80mm('80 mm', 'Ticket ancho actual', 48),
-  paper58mm('58 mm', 'Medida anterior', 32);
+  paper80mm('80 mm', 'Ticket compacto', 64),
+  paper58mm('58 mm', 'Ticket compacto', 42);
 
   final String label;
   final String description;
@@ -1083,32 +1087,35 @@ class _BoletaLegalText {
     ConduceLegalidadVehiculo? vehiculo,
     ConduceLegalidadPersona? persona,
   ) {
-    final blocks = <String>[];
+    final consecuencias = <MapEntry<String, String>>[];
     for (final entry in _entries(vehiculo, persona)) {
-      final referencias = _referenciasLegales(entry.infraccion);
       final sancion = _sancionAplicable(
         entry.infraccion,
         entry.vehiculo,
         incluirRetencion: entry.vehiculo != null,
       );
-      final fallback = sancion == null && referencias.isEmpty
-          ? _sanitizedFallback(entry.fallbackLegal)
-          : null;
-      final lines = <String>[
-        ...referencias,
-        if (sancion != null) sancion,
-        if (fallback != null) fallback,
-      ];
-      if (lines.isNotEmpty) {
-        blocks.add(_entryBlock(entry.label, lines));
+      if (sancion != null) {
+        consecuencias.add(MapEntry(entry.label, _compactSancion(sancion)));
       }
     }
 
-    if (blocks.isEmpty && requiereInformacionLiberacion(vehiculo)) {
-      return 'Vehículo:\n- Sanción aplicable: remisión o retiro del vehículo al depósito.';
+    if (consecuencias.isEmpty && requiereInformacionLiberacion(vehiculo)) {
+      return 'remisión o retiro del vehículo al depósito.';
     }
 
-    return blocks.isEmpty ? 'Pendiente de catálogo legal' : blocks.join('\n');
+    if (consecuencias.length == 1) return consecuencias.first.value;
+    if (consecuencias.isEmpty) return 'consecuencia pendiente de catálogo.';
+
+    return consecuencias
+        .map((entry) => '${entry.key}: ${entry.value}')
+        .join('\n');
+  }
+
+  static String _compactSancion(String value) {
+    final text = value
+        .replaceFirst(RegExp(r'^Sanción aplicable:\s*'), '')
+        .trim();
+    return _lowerFirst(text);
   }
 
   static String conducta(
@@ -1226,8 +1233,6 @@ class _BoletaLegalText {
         'cancelación de la licencia o permiso para conducir',
       if (infraccion.puntos > 0)
         'penalización de ${infraccion.puntos} ${infraccion.puntos == 1 ? 'punto' : 'puntos'} en la licencia para conducir',
-      if (_cleanValue(infraccion.multaUmaTexto) != null)
-        'multa de ${_cleanValue(infraccion.multaUmaTexto)}',
       if (incluirRetencion &&
           ((vehiculo?.retencionVehiculo ?? false) ||
               infraccion.retencionVehiculo))
@@ -1452,7 +1457,7 @@ class _TicketDivider extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return const Padding(
-      padding: EdgeInsets.symmetric(vertical: 10),
+      padding: EdgeInsets.symmetric(vertical: 6),
       child: DecoratedBox(
         decoration: BoxDecoration(
           border: Border(top: BorderSide(color: Colors.black, width: 1)),
@@ -1471,7 +1476,7 @@ class _TicketSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 7),
+      padding: const EdgeInsets.only(bottom: 4),
       child: Text(
         text,
         textAlign: TextAlign.center,
@@ -1490,12 +1495,12 @@ class _TicketPair extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 4),
+      padding: const EdgeInsets.only(bottom: 2),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SizedBox(
-            width: 118,
+            width: 102,
             child: Text(
               '$label:',
               style: const TextStyle(fontWeight: FontWeight.w800),
@@ -1517,12 +1522,12 @@ class _TicketBlock extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.only(bottom: 5),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text('$label:', style: const TextStyle(fontWeight: FontWeight.w800)),
-          const SizedBox(height: 2),
+          const SizedBox(height: 1),
           Text(value),
         ],
       ),
@@ -1554,7 +1559,7 @@ class _HandwrittenLines extends StatelessWidget {
     return Column(
       children: [
         for (var i = 0; i < lines; i++) ...[
-          const SizedBox(height: 18),
+          const SizedBox(height: 14),
           const _SignatureLine(),
         ],
       ],
@@ -1627,7 +1632,6 @@ class _BoletaPreviewData {
       articulo: '402; 700; 702',
       referenciaLegalCorta: 'Artículos 402, 700 y 702',
       puntos: 0,
-      multaUmaTexto: 'Conforme a UMA vigente',
       retencionVehiculo: true,
       resumenSanciones: 'remisión o retiro del vehículo al depósito',
       fundamentoLegal:

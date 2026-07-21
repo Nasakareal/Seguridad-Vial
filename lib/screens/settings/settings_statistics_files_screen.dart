@@ -224,6 +224,10 @@ class _ModuleSection extends StatelessWidget {
               ],
             ),
           ),
+          if (module.id == 'siniestros') ...[
+            _PatrolAssignmentsSection(patrullas: module.patrullas),
+            const SizedBox(height: 8),
+          ],
           for (final report in module.reports)
             _ReportCard(
               report: report,
@@ -231,6 +235,331 @@ class _ModuleSection extends StatelessWidget {
               onDownload: onDownload,
             ),
         ],
+      ),
+    );
+  }
+}
+
+class _PatrolAssignmentsSection extends StatefulWidget {
+  final List<SettingsSiniestrosPatrol> patrullas;
+
+  const _PatrolAssignmentsSection({required this.patrullas});
+
+  @override
+  State<_PatrolAssignmentsSection> createState() =>
+      _PatrolAssignmentsSectionState();
+}
+
+class _PatrolAssignmentsSectionState extends State<_PatrolAssignmentsSection> {
+  String _query = '';
+
+  List<String> get _shiftLabels {
+    final labels = widget.patrullas
+        .expand((patrol) => patrol.usuarios)
+        .map((user) => user.shiftLabel)
+        .toSet()
+        .toList();
+    labels.sort((left, right) {
+      if (left == 'Sin turno') return 1;
+      if (right == 'Sin turno') return -1;
+      return left.toLowerCase().compareTo(right.toLowerCase());
+    });
+    if (labels.isEmpty) labels.addAll(const ['Turno A', 'Turno B']);
+    return labels;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final filtered = widget.patrullas
+        .where((patrol) => patrol.matches(_query))
+        .toList();
+    final assignmentCount = widget.patrullas.fold<int>(
+      0,
+      (total, patrol) => total + patrol.usuarios.length,
+    );
+    final shifts = _shiftLabels;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Card(
+          margin: const EdgeInsets.only(bottom: 10),
+          color: const Color(0xFFEFF6FF),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+            side: const BorderSide(color: Color(0xFFBFDBFE)),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Row(
+                  children: [
+                    Icon(Icons.local_police_outlined, color: Color(0xFF1D4ED8)),
+                    SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        'Patrullas y personal por turno',
+                        style: TextStyle(
+                          fontSize: 17,
+                          fontWeight: FontWeight.w900,
+                          color: Color(0xFF0F172A),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  '${widget.patrullas.length} patrullas · '
+                  '$assignmentCount asignaciones de usuarios',
+                  style: const TextStyle(
+                    color: Color(0xFF475569),
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  onChanged: (value) => setState(() => _query = value),
+                  decoration: InputDecoration(
+                    hintText: 'Buscar patrulla, placa o usuario',
+                    prefixIcon: const Icon(Icons.search),
+                    filled: true,
+                    fillColor: Colors.white,
+                    isDense: true,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        if (filtered.isEmpty)
+          Card(
+            margin: const EdgeInsets.only(bottom: 10),
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Center(
+                child: Text(
+                  widget.patrullas.isEmpty
+                      ? 'No hay patrullas registradas en Siniestros.'
+                      : 'No hay patrullas ni usuarios que coincidan.',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    color: Color(0xFF64748B),
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ),
+          )
+        else
+          for (final patrol in filtered)
+            _PatrolAssignmentCard(patrol: patrol, shifts: shifts),
+      ],
+    );
+  }
+}
+
+class _PatrolAssignmentCard extends StatelessWidget {
+  final SettingsSiniestrosPatrol patrol;
+  final List<String> shifts;
+
+  const _PatrolAssignmentCard({required this.patrol, required this.shifts});
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      margin: const EdgeInsets.only(bottom: 10),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(14, 14, 14, 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                CircleAvatar(
+                  backgroundColor: const Color(0xFFDBEAFE),
+                  child: Icon(
+                    patrol.tipo.toLowerCase().contains('moto')
+                        ? Icons.two_wheeler_outlined
+                        : Icons.directions_car_outlined,
+                    color: const Color(0xFF1D4ED8),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Patrulla ${patrol.numeroEconomico}',
+                        style: const TextStyle(
+                          fontSize: 17,
+                          fontWeight: FontWeight.w900,
+                          color: Color(0xFF0F172A),
+                        ),
+                      ),
+                      if (patrol.vehicleLabel.isNotEmpty) ...[
+                        const SizedBox(height: 3),
+                        Text(
+                          patrol.vehicleLabel,
+                          style: const TextStyle(
+                            color: Color(0xFF64748B),
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                _StatusBadge(
+                  label: patrol.activa ? 'Activa' : 'Inactiva',
+                  active: patrol.activa,
+                ),
+              ],
+            ),
+            const Divider(height: 24),
+            for (var index = 0; index < shifts.length; index++) ...[
+              _ShiftAssignment(
+                label: shifts[index],
+                users: patrol.usuarios
+                    .where((user) => user.shiftLabel == shifts[index])
+                    .toList(),
+              ),
+              if (index < shifts.length - 1) const SizedBox(height: 12),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ShiftAssignment extends StatelessWidget {
+  final String label;
+  final List<SettingsPatrolUser> users;
+
+  const _ShiftAssignment({required this.label, required this.users});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          width: 82,
+          child: Text(
+            label,
+            style: const TextStyle(
+              color: Color(0xFF334155),
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        ),
+        Expanded(
+          child: users.isEmpty
+              ? const Text(
+                  'Sin usuario asignado',
+                  style: TextStyle(
+                    color: Color(0xFF94A3B8),
+                    fontWeight: FontWeight.w600,
+                    fontStyle: FontStyle.italic,
+                  ),
+                )
+              : Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    for (var index = 0; index < users.length; index++) ...[
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Padding(
+                            padding: EdgeInsets.only(top: 3),
+                            child: Icon(
+                              Icons.person_outline,
+                              size: 17,
+                              color: Color(0xFF475569),
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              users[index].nombre,
+                              style: TextStyle(
+                                color: users[index].activa
+                                    ? const Color(0xFF0F172A)
+                                    : const Color(0xFF94A3B8),
+                                fontWeight: FontWeight.w700,
+                                decoration: users[index].activa
+                                    ? null
+                                    : TextDecoration.lineThrough,
+                              ),
+                            ),
+                          ),
+                          if (!users[index].activa) ...[
+                            const SizedBox(width: 6),
+                            const _StatusBadge(
+                              label: 'Inactivo',
+                              active: false,
+                              compact: true,
+                            ),
+                          ],
+                        ],
+                      ),
+                      if (index < users.length - 1) const SizedBox(height: 6),
+                    ],
+                  ],
+                ),
+        ),
+      ],
+    );
+  }
+}
+
+class _StatusBadge extends StatelessWidget {
+  final String label;
+  final bool active;
+  final bool compact;
+
+  const _StatusBadge({
+    required this.label,
+    required this.active,
+    this.compact = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final foreground = active
+        ? const Color(0xFF166534)
+        : const Color(0xFF991B1B);
+    final background = active
+        ? const Color(0xFFDCFCE7)
+        : const Color(0xFFFEE2E2);
+
+    return Container(
+      padding: EdgeInsets.symmetric(
+        horizontal: compact ? 7 : 9,
+        vertical: compact ? 3 : 5,
+      ),
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          color: foreground,
+          fontSize: compact ? 10 : 11,
+          fontWeight: FontWeight.w900,
+        ),
       ),
     );
   }

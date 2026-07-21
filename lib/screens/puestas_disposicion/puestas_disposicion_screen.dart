@@ -24,8 +24,10 @@ class _PuestasDisposicionScreenState extends State<PuestasDisposicionScreen> {
   bool _canDelete = false;
   String? _error;
   int _anio = DateTime.now().year;
+  int? _unidadId;
   String? _tipoPuesta;
   String? _motivo;
+  List<PuestaUnidad> _unidades = <PuestaUnidad>[];
   List<Map<String, dynamic>> _items = <Map<String, dynamic>>[];
 
   List<int> get _anios => List<int>.generate(
@@ -76,6 +78,7 @@ class _PuestasDisposicionScreenState extends State<PuestasDisposicionScreen> {
   }
 
   Future<void> _bootstrap() async {
+    final unidades = await _service.unidadesParaFiltrar();
     final permissions = await Future.wait<bool>([
       AuthService.can('crear puestas a disposicion'),
       AuthService.can('editar puestas a disposicion'),
@@ -86,6 +89,7 @@ class _PuestasDisposicionScreenState extends State<PuestasDisposicionScreen> {
       _canCreate = permissions[0];
       _canEdit = permissions[1];
       _canDelete = permissions[2];
+      _unidades = unidades;
     });
     await _load();
   }
@@ -99,6 +103,7 @@ class _PuestasDisposicionScreenState extends State<PuestasDisposicionScreen> {
     try {
       final items = await _service.index(
         anio: _anio,
+        unidadId: _unidadId,
         tipoPuesta: _tipoPuesta,
         motivo: _motivo,
       );
@@ -472,6 +477,33 @@ class _PuestasDisposicionScreenState extends State<PuestasDisposicionScreen> {
                     },
             ),
             const SizedBox(height: 12),
+            DropdownButtonFormField<int?>(
+              value: _unidadId,
+              isExpanded: true,
+              decoration: const InputDecoration(
+                labelText: 'Unidad',
+                prefixIcon: Icon(Icons.account_balance_outlined),
+                border: OutlineInputBorder(),
+              ),
+              items: <DropdownMenuItem<int?>>[
+                const DropdownMenuItem(
+                  value: null,
+                  child: Text('Todas las unidades visibles'),
+                ),
+                for (final unidad in _unidades)
+                  DropdownMenuItem(
+                    value: unidad.id,
+                    child: Text(unidad.nombre, overflow: TextOverflow.ellipsis),
+                  ),
+              ],
+              onChanged: _loading
+                  ? null
+                  : (value) {
+                      setState(() => _unidadId = value);
+                      _load();
+                    },
+            ),
+            const SizedBox(height: 12),
             DropdownButtonFormField<String?>(
               value: _tipoPuesta,
               decoration: const InputDecoration(
@@ -627,7 +659,7 @@ class _PuestasDisposicionScreenState extends State<PuestasDisposicionScreen> {
                 ),
               ),
               const SizedBox(height: 6),
-              Text(unidad, style: TextStyle(color: Colors.grey.shade700)),
+              _unitBadge(unidad),
               if (delegacion.isNotEmpty || destacamento.isNotEmpty) ...[
                 const SizedBox(height: 4),
                 Text(
@@ -679,6 +711,39 @@ class _PuestasDisposicionScreenState extends State<PuestasDisposicionScreen> {
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _unitBadge(String unidad) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+      decoration: BoxDecoration(
+        color: const Color(0xFFDBEAFE),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: const Color(0xFF93C5FD)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(
+            Icons.account_balance_outlined,
+            size: 15,
+            color: Color(0xFF1D4ED8),
+          ),
+          const SizedBox(width: 5),
+          Flexible(
+            child: Text(
+              unidad,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: Color(0xFF1E3A8A),
+                fontSize: 12,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

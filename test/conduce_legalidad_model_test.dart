@@ -7,8 +7,13 @@ void main() {
     'person physical description fields round trip outside observations',
     () {
       const persona = ConduceLegalidadPersona(
-        nombre: 'Persona detenida',
+        nombre: 'ANA MARIA LOPEZ GARCIA',
+        nombres: 'ANA MARIA',
+        apellidoPaterno: 'LOPEZ',
+        apellidoMaterno: 'GARCIA',
         edad: 30,
+        edadTexto: '30',
+        estadoCivil: 'SOLTERO(A)',
         nacionalidad: 'Mexico',
         edadAproximada: '25 a 34 anos',
         complexion: 'Media',
@@ -28,12 +33,20 @@ void main() {
 
       expect(json['observaciones'], isNull);
       expect(json['nacionalidad'], 'Mexico');
+      expect(json['nombres'], 'ANA MARIA');
+      expect(json['apellido_paterno'], 'LOPEZ');
+      expect(json['apellido_materno'], 'GARCIA');
+      expect(json['edad_texto'], '30');
+      expect(json['estado_civil'], 'SOLTERO(A)');
       expect(json['edad_aproximada'], '25 a 34 anos');
       expect(json['prenda_superior'], 'Playera');
       expect(json['rasgos_visibles'], <String>['Barba', 'Tatuajes']);
 
       final restored = ConduceLegalidadPersona.fromJson(json);
       expect(restored.nacionalidad, 'Mexico');
+      expect(restored.nombreCompleto, 'ANA MARIA LOPEZ GARCIA');
+      expect(restored.edadTexto, '30');
+      expect(restored.estadoCivil, 'SOLTERO(A)');
       expect(restored.hasDescripcionFisica, isTrue);
       expect(restored.colorCalzado, 'Blanco');
       expect(restored.rasgosVisibles, <String>['Barba', 'Tatuajes']);
@@ -44,6 +57,7 @@ void main() {
     final operativo = ConduceLegalidadOperativo.fromJson({
       'id': 7,
       'nombre': 'Operativo conduce con legalidad',
+      'tipo_operativo': 'conduce_legalidad',
       'municipio': 'Morelia',
       'lugar': 'Av. Camelinas y Ventura Puente',
       'numero': '123',
@@ -55,12 +69,33 @@ void main() {
     });
 
     expect(operativo.lugar, 'Av. Camelinas y Ventura Puente');
+    expect(operativo.tipoOperativo, 'conduce_legalidad');
     expect(operativo.numero, '123');
     expect(operativo.colonia, 'Felix Ireta');
     expect(operativo.codigoPostal, '58070');
     expect(
       operativo.direccionCompleta,
       'Av. Camelinas y Ventura Puente 123, Col. Felix Ireta, CP 58070, Morelia',
+    );
+  });
+
+  test('module ownership uses explicit operation type before its name', () {
+    const operativo = ConduceLegalidadOperativo(
+      id: 90,
+      nombre: 'Nombre heredado que menciona alcohol',
+      tipoOperativo: 'conduce_legalidad',
+      estado: 'activo',
+      totalCapturas: 0,
+      misCapturas: 0,
+    );
+
+    expect(
+      ConduceLegalidadModule.conduceLegalidad.ownsOperativo(operativo),
+      isTrue,
+    );
+    expect(
+      ConduceLegalidadModule.alcoholimetria.ownsOperativo(operativo),
+      isFalse,
     );
   });
 
@@ -298,6 +333,18 @@ void main() {
       );
       expect(codigosCorralon, isNot(contains('ART420_MOTO_CASCO')));
       expect(codigosPersona.toList(), codigosCorralon.toList());
+
+      final automovil = meta.fundamentosCorralon.firstWhere(
+        (item) => item.codigo == 'ART508_FI_ALCOHOL_DROGAS_CONDUCTOR',
+      );
+      final motocicleta = meta.fundamentosCorralon.firstWhere(
+        (item) => item.codigo == 'ART508_FII_ALCOHOL_MOTOCICLETA',
+      );
+
+      expect(automovil.aplicaParaTipoGeneral('automovil'), isTrue);
+      expect(automovil.aplicaParaTipoGeneral('motocicleta'), isFalse);
+      expect(motocicleta.aplicaParaTipoGeneral('motocicleta'), isTrue);
+      expect(motocicleta.aplicaParaTipoGeneral('automovil'), isFalse);
     },
   );
 

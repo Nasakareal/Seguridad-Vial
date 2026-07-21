@@ -199,7 +199,8 @@ class AppAccountDrawer extends StatelessWidget {
                               DrawerActionTile(
                                 icon: Icons.car_crash_outlined,
                                 title: 'Archivos Siniestros',
-                                subtitle: 'Partes, bitácoras y Excel',
+                                subtitle:
+                                    'Patrullas, partes, bitácoras y Excel',
                                 onTap: () => _goTo(
                                   context,
                                   AppRoutes.settingsStatisticsFiles,

@@ -26,6 +26,29 @@ void main() {
     ]);
   });
 
+  test('catálogo de unidades permite separar las puestas por área', () {
+    expect(PuestaDisposicionCatalog.unidades.map((unidad) => unidad.id), <int>[
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+    ]);
+    expect(
+      PuestaDisposicionCatalog.unidades
+          .firstWhere((unidad) => unidad.id == 1)
+          .nombre,
+      'SINIESTROS',
+    );
+    expect(
+      PuestaDisposicionCatalog.unidades
+          .firstWhere((unidad) => unidad.id == 5)
+          .nombre,
+      contains('VIALIDADES'),
+    );
+  });
+
   test('detecta PDF sin firma que el backend intentará comprimir', () async {
     final dir = await Directory.systemTemp.createTemp('puesta_pdf_test_');
     addTearDown(() => dir.delete(recursive: true));

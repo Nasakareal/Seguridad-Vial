@@ -19,6 +19,15 @@ class PuestaUnidad {
 class PuestaDisposicionCatalog {
   static const String motivoOtro = 'OTRO';
 
+  static const List<PuestaUnidad> unidades = <PuestaUnidad>[
+    PuestaUnidad(id: 1, nombre: 'SINIESTROS'),
+    PuestaUnidad(id: 2, nombre: 'DELEGACIONES'),
+    PuestaUnidad(id: 3, nombre: 'SEGURIDAD VIAL'),
+    PuestaUnidad(id: 4, nombre: 'PROTECCIÓN A CARRETERAS'),
+    PuestaUnidad(id: 5, nombre: 'PROTECCIÓN A VIALIDADES URBANAS'),
+    PuestaUnidad(id: 6, nombre: 'FOMENTO A LA CULTURA VIAL'),
+  ];
+
   static const List<String> tipos = <String>[
     'PERSONA',
     'VEHICULO',
@@ -155,11 +164,13 @@ class PuestasDisposicionService {
 
   Future<List<Map<String, dynamic>>> index({
     int? anio,
+    int? unidadId,
     String? tipoPuesta,
     String? motivo,
   }) async {
     final query = <String, dynamic>{
       if (anio != null) 'anio': anio,
+      if (unidadId != null && unidadId > 0) 'unidad_id': unidadId,
       if ((tipoPuesta ?? '').trim().isNotEmpty)
         'tipo_puesta': tipoPuesta!.trim(),
       if ((motivo ?? '').trim().isNotEmpty) 'motivo': motivo!.trim(),
@@ -351,14 +362,31 @@ class PuestasDisposicionService {
       ];
     }
 
-    return const <PuestaUnidad>[
-      PuestaUnidad(id: 1, nombre: 'SINIESTROS'),
-      PuestaUnidad(id: 2, nombre: 'DELEGACIONES'),
-      PuestaUnidad(id: 3, nombre: 'SEGURIDAD VIAL'),
-      PuestaUnidad(id: 4, nombre: 'PROTECCION A CARRETERAS'),
-      PuestaUnidad(id: 5, nombre: 'PROTECCION A VIALIDADES URBANAS'),
-      PuestaUnidad(id: 6, nombre: 'FOMENTO A LA CULTURA VIAL'),
-    ];
+    return PuestaDisposicionCatalog.unidades;
+  }
+
+  Future<List<PuestaUnidad>> unidadesParaFiltrar() async {
+    final unidadId = await AuthService.getUnidadId();
+    final isSuperadmin = await AuthService.isSuperadmin();
+    final hasFullOperationalAccess =
+        await AuthService.hasFullOperationalAccess();
+
+    if (isSuperadmin || hasFullOperationalAccess || unidadId == 3) {
+      return PuestaDisposicionCatalog.unidades;
+    }
+
+    if (unidadId != null && unidadId > 0) {
+      final known = PuestaDisposicionCatalog.unidades
+          .where((unidad) => unidad.id == unidadId)
+          .toList();
+      if (known.isNotEmpty) return known;
+
+      return <PuestaUnidad>[
+        PuestaUnidad(id: unidadId, nombre: _fallbackUnidadNombre(unidadId)),
+      ];
+    }
+
+    return PuestaDisposicionCatalog.unidades;
   }
 
   String _fallbackUnidadNombre(int id) {
@@ -370,9 +398,9 @@ class PuestasDisposicionService {
       case 3:
         return 'SEGURIDAD VIAL';
       case 4:
-        return 'PROTECCION A CARRETERAS';
+        return 'PROTECCIÓN A CARRETERAS';
       case 5:
-        return 'PROTECCION A VIALIDADES URBANAS';
+        return 'PROTECCIÓN A VIALIDADES URBANAS';
       case 6:
         return 'FOMENTO A LA CULTURA VIAL';
       default:

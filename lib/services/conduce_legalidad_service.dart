@@ -125,12 +125,16 @@ class ConduceLegalidadService {
 
   static Future<List<ConduceLegalidadOperativo>> fetchOperativos({
     bool incluirCerrados = false,
+    String? tipoOperativo,
   }) async {
-    final uri = Uri.parse('${AuthService.baseUrl}$_path/operativos').replace(
-      queryParameters: incluirCerrados
-          ? const <String, String>{'incluir_cerrados': '1'}
-          : null,
-    );
+    final query = <String, String>{
+      if (incluirCerrados) 'incluir_cerrados': '1',
+      if ((tipoOperativo ?? '').trim().isNotEmpty)
+        'tipo_operativo': tipoOperativo!.trim(),
+    };
+    final uri = Uri.parse(
+      '${AuthService.baseUrl}$_path/operativos',
+    ).replace(queryParameters: query.isEmpty ? null : query);
     final res = await http.get(uri, headers: await _headers());
     final body = _decodeJson(res);
     _throwIfNotOk(res, body, 'No se pudieron cargar los operativos.');

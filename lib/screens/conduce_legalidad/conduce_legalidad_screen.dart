@@ -65,6 +65,7 @@ class _ConduceLegalidadScreenState extends State<ConduceLegalidadScreen>
       final meta = widget.module.applyMeta(rawMeta);
       final operativos = (await ConduceLegalidadService.fetchOperativos(
         incluirCerrados: rawMeta.abilities.canManageOperativos,
+        tipoOperativo: widget.module.id,
       )).where(widget.module.ownsOperativo);
       if (!mounted) return;
       setState(() {

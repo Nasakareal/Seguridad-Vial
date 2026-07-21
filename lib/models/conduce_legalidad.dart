@@ -386,6 +386,7 @@ class ConduceLegalidadOperativo {
   final int id;
   final String? clientUuid;
   final String nombre;
+  final String? tipoOperativo;
   final String? fecha;
   final String? horaInicio;
   final String? horaCierre;
@@ -412,6 +413,7 @@ class ConduceLegalidadOperativo {
     required this.id,
     this.clientUuid,
     required this.nombre,
+    this.tipoOperativo,
     this.fecha,
     this.horaInicio,
     this.horaCierre,
@@ -458,6 +460,7 @@ class ConduceLegalidadOperativo {
       id: _asInt(json['id']),
       clientUuid: _str(json['client_uuid']),
       nombre: _str(json['nombre']) ?? 'Operativo conduce con legalidad',
+      tipoOperativo: _str(json['tipo_operativo']),
       fecha: _str(json['fecha']),
       horaInicio: _str(json['hora_inicio']),
       horaCierre: _str(json['hora_cierre']),
@@ -743,12 +746,17 @@ class ConduceLegalidadVehiculo {
 class ConduceLegalidadPersona {
   final int? id;
   final String? nombre;
+  final String? nombres;
+  final String? apellidoPaterno;
+  final String? apellidoMaterno;
   final String? telefono;
   final String? domicilio;
   final String? sexo;
   final String? nacionalidad;
   final String? ocupacion;
   final int? edad;
+  final String? edadTexto;
+  final String? estadoCivil;
   final String? tipoLicencia;
   final String? estadoLicencia;
   final String? numeroLicencia;
@@ -776,12 +784,17 @@ class ConduceLegalidadPersona {
   const ConduceLegalidadPersona({
     this.id,
     this.nombre,
+    this.nombres,
+    this.apellidoPaterno,
+    this.apellidoMaterno,
     this.telefono,
     this.domicilio,
     this.sexo,
     this.nacionalidad,
     this.ocupacion,
     this.edad,
+    this.edadTexto,
+    this.estadoCivil,
     this.tipoLicencia,
     this.estadoLicencia,
     this.numeroLicencia,
@@ -811,12 +824,17 @@ class ConduceLegalidadPersona {
     return ConduceLegalidadPersona(
       id: _nullableInt(json['id']),
       nombre: _str(json['nombre']),
+      nombres: _str(json['nombres']),
+      apellidoPaterno: _str(json['apellido_paterno']),
+      apellidoMaterno: _str(json['apellido_materno']),
       telefono: _str(json['telefono']),
       domicilio: _str(json['domicilio']),
       sexo: _str(json['sexo']),
       nacionalidad: _str(json['nacionalidad']),
       ocupacion: _str(json['ocupacion']),
       edad: _nullableInt(json['edad']),
+      edadTexto: _str(json['edad_texto']),
+      estadoCivil: _str(json['estado_civil']),
       tipoLicencia: _str(json['tipo_licencia']),
       estadoLicencia: _str(json['estado_licencia']),
       numeroLicencia: _str(json['numero_licencia']),
@@ -864,14 +882,30 @@ class ConduceLegalidadPersona {
       colorCalzado != null ||
       rasgosVisibles.isNotEmpty;
 
+  String? get nombreCompleto {
+    final separado = <String?>[nombres, apellidoPaterno, apellidoMaterno]
+        .whereType<String>()
+        .map((value) => value.trim())
+        .where((value) => value.isNotEmpty)
+        .join(' ');
+    if (separado.isNotEmpty) return separado;
+    final anterior = nombre?.trim() ?? '';
+    return anterior.isEmpty ? null : anterior;
+  }
+
   Map<String, dynamic> toJson() => {
     'nombre': nombre,
+    'nombres': nombres,
+    'apellido_paterno': apellidoPaterno,
+    'apellido_materno': apellidoMaterno,
     'telefono': telefono,
     'domicilio': domicilio,
     'sexo': sexo,
     'nacionalidad': nacionalidad,
     'ocupacion': ocupacion,
     'edad': edad,
+    'edad_texto': edadTexto,
+    'estado_civil': estadoCivil,
     'tipo_licencia': tipoLicencia,
     'estado_licencia': estadoLicencia,
     'numero_licencia': numeroLicencia,
