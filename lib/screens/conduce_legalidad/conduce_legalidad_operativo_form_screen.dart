@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import '../../core/municipios_michoacan.dart';
 import '../../models/conduce_legalidad.dart';
 import '../../services/conduce_legalidad_service.dart';
 import '../../services/geo_service.dart';
 import '../../services/reverse_geocode_service.dart';
+import '../../widgets/municipio_autocomplete_field.dart';
 import 'conduce_legalidad_module.dart';
 
 class ConduceLegalidadOperativoFormScreen extends StatefulWidget {
@@ -23,7 +25,7 @@ class ConduceLegalidadOperativoFormScreen extends StatefulWidget {
 class _ConduceLegalidadOperativoFormScreenState
     extends State<ConduceLegalidadOperativoFormScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _municipioCtrl = TextEditingController(text: 'Morelia');
+  final _municipioCtrl = TextEditingController(text: 'MORELIA');
   final _lugarCtrl = TextEditingController();
   final _numeroCtrl = TextEditingController();
   final _coloniaCtrl = TextEditingController();
@@ -61,7 +63,7 @@ class _ConduceLegalidadOperativoFormScreenState
 
     _municipioCtrl.text = operativo.municipio?.trim().isNotEmpty == true
         ? operativo.municipio!
-        : 'Morelia';
+        : 'MORELIA';
     _lugarCtrl.text = operativo.lugar ?? '';
     _numeroCtrl.text = operativo.numero ?? '';
     _coloniaCtrl.text = operativo.colonia ?? '';
@@ -147,7 +149,10 @@ class _ConduceLegalidadOperativoFormScreenState
       if (!mounted) return;
 
       setState(() {
-        _setControllerIfUseful(_municipioCtrl, address.municipio);
+        _setControllerIfUseful(
+          _municipioCtrl,
+          MunicipiosMichoacan.canonical(address.municipio),
+        );
         _setControllerIfUseful(_lugarCtrl, address.calle, overwrite: false);
         _setControllerIfUseful(_numeroCtrl, address.numero, overwrite: false);
         _setControllerIfUseful(_coloniaCtrl, address.colonia);
@@ -183,7 +188,7 @@ class _ConduceLegalidadOperativoFormScreenState
       final payload = {
         'fecha': _date(_fecha),
         'hora_inicio': _time(_hora),
-        'municipio': _emptyToNull(_municipioCtrl.text),
+        'municipio': MunicipiosMichoacan.canonical(_municipioCtrl.text),
         'lugar': _emptyToNull(_lugarCtrl.text),
         'numero': _emptyToNull(_numeroCtrl.text),
         'colonia': _emptyToNull(_coloniaCtrl.text),
@@ -272,13 +277,16 @@ class _ConduceLegalidadOperativoFormScreenState
               ],
             ),
             const SizedBox(height: 12),
-            TextFormField(
+            MunicipioAutocompleteField(
               controller: _municipioCtrl,
               decoration: const InputDecoration(
-                labelText: 'Municipio',
+                labelText: 'Municipio *',
                 border: OutlineInputBorder(),
                 prefixIcon: Icon(Icons.location_city),
               ),
+              validator: (value) => (value ?? '').trim().isEmpty
+                  ? 'Selecciona un municipio.'
+                  : null,
             ),
             const SizedBox(height: 12),
             TextFormField(

@@ -112,12 +112,6 @@ class MainActivity : FlutterFragmentActivity() {
                     return@Thread
                 }
 
-                try {
-                    adapter.cancelDiscovery()
-                } catch (_: SecurityException) {
-                    // No estamos escaneando; cancelar discovery solo mejora la conexion si esta permitido.
-                }
-
                 writeToDevice(device, bytes, insecure = true)
                 postSuccess(result, true)
             } catch (firstError: IOException) {
@@ -185,7 +179,7 @@ class MainActivity : FlutterFragmentActivity() {
     }
 
     private fun createSocket(device: BluetoothDevice, insecure: Boolean): BluetoothSocket {
-        return if (insecure && Build.VERSION.SDK_INT >= Build.VERSION_CODES.GINGERBREAD_MR1) {
+        return if (insecure) {
             device.createInsecureRfcommSocketToServiceRecord(SPP_UUID)
         } else {
             device.createRfcommSocketToServiceRecord(SPP_UUID)
@@ -197,8 +191,12 @@ class MainActivity : FlutterFragmentActivity() {
         address: String
     ): BluetoothDevice? {
         val normalized = address.trim()
-        return adapter.bondedDevices.firstOrNull {
-            it.address.equals(normalized, ignoreCase = true)
+        return try {
+            adapter.bondedDevices.firstOrNull {
+                it.address.equals(normalized, ignoreCase = true)
+            }
+        } catch (_: SecurityException) {
+            null
         }
     }
 

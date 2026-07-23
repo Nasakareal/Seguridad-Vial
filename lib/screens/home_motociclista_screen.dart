@@ -77,7 +77,7 @@ class _HomeMotociclistaScreenState extends State<HomeMotociclistaScreen> {
     ];
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF4F6FA),
+      backgroundColor: Colors.transparent,
       appBar: AppBar(
         title: const Text('Motociclista'),
         backgroundColor: Colors.blue,

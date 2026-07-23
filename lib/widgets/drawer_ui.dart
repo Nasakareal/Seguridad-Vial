@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'glass.dart';
+
 EdgeInsets drawerScrollablePadding(BuildContext context) {
   final bottomInset = MediaQuery.viewPaddingOf(context).bottom;
   return EdgeInsets.fromLTRB(14, 0, 14, bottomInset + 72);
@@ -45,6 +47,7 @@ class DrawerHeaderPanel extends StatelessWidget {
             color: Colors.black.withValues(alpha: .12),
           ),
         ],
+        border: Border.all(color: Colors.white.withValues(alpha: .38)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -129,19 +132,11 @@ class DrawerSurface extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: Colors.grey.shade200),
-        boxShadow: [
-          BoxShadow(
-            blurRadius: 12,
-            offset: const Offset(0, 6),
-            color: Colors.black.withValues(alpha: .04),
-          ),
-        ],
-      ),
+    return LiquidGlassSurface(
+      opacity: .94,
+      blur: 9,
+      showShadow: true,
+      padding: EdgeInsets.zero,
       child: child,
     );
   }

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:file_saver/file_saver.dart';
@@ -8,6 +9,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../models/conduce_legalidad.dart';
+import '../../services/auth_service.dart';
 import '../../services/conduce_legalidad_service.dart';
 import '../../services/conduce_legalidad_share_service.dart';
 import '../../widgets/safe_network_image.dart';
@@ -39,6 +41,8 @@ class _ConduceLegalidadShowScreenState extends State<ConduceLegalidadShowScreen>
   String? _error;
   ConduceLegalidadOperativo? _operativo;
   ConduceLegalidadMeta? _meta;
+  bool _isSuperadmin = false;
+  Timer? _feedingClosureTimer;
 
   @override
   void initState() {
@@ -49,6 +53,7 @@ class _ConduceLegalidadShowScreenState extends State<ConduceLegalidadShowScreen>
 
   @override
   void dispose() {
+    _feedingClosureTimer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -67,6 +72,7 @@ class _ConduceLegalidadShowScreenState extends State<ConduceLegalidadShowScreen>
     });
 
     try {
+      final isSuperadmin = await AuthService.isSuperadmin();
       final meta = widget.module.applyMeta(
         await ConduceLegalidadService.fetchMeta(
           filterConduceLegalidadMotos: !widget.module.isAlcoholimetria,
@@ -79,8 +85,10 @@ class _ConduceLegalidadShowScreenState extends State<ConduceLegalidadShowScreen>
       setState(() {
         _meta = meta;
         _operativo = operativo;
+        _isSuperadmin = isSuperadmin;
         _loading = false;
       });
+      _scheduleFeedingClosure(operativo);
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -133,6 +141,7 @@ class _ConduceLegalidadShowScreenState extends State<ConduceLegalidadShowScreen>
   }
 
   Future<void> _addCaptura() async {
+    if (!_ensureCanFeed()) return;
     final changed = await Navigator.pushNamed(
       context,
       widget.module.capturaRoute,
@@ -144,6 +153,7 @@ class _ConduceLegalidadShowScreenState extends State<ConduceLegalidadShowScreen>
   }
 
   Future<void> _editCaptura(ConduceLegalidadCaptura captura) async {
+    if (!_ensureCanFeed()) return;
     final changed = await Navigator.pushNamed(
       context,
       widget.module.capturaRoute,
@@ -248,6 +258,7 @@ class _ConduceLegalidadShowScreenState extends State<ConduceLegalidadShowScreen>
 
   Future<void> _confirmDeleteCaptura(ConduceLegalidadCaptura captura) async {
     if (_deletingCapturaId != null) return;
+    if (!_ensureCanFeed()) return;
 
     final confirmed = await showDialog<bool>(
       context: context,
@@ -361,11 +372,40 @@ class _ConduceLegalidadShowScreenState extends State<ConduceLegalidadShowScreen>
     return '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
   }
 
+  bool get _canFeedNow {
+    final operativo = _operativo;
+    return operativo != null &&
+        operativo.canFeedAt(DateTime.now(), isSuperadmin: _isSuperadmin);
+  }
+
+  bool _ensureCanFeed() {
+    if (_canFeedNow) return true;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(
+          'Este operativo de alcoholimetria cumplio 8 horas y ya no admite cambios. Solo Superadmin puede continuar.',
+        ),
+      ),
+    );
+    return false;
+  }
+
+  void _scheduleFeedingClosure(ConduceLegalidadOperativo operativo) {
+    _feedingClosureTimer?.cancel();
+    if (_isSuperadmin || !operativo.isAlcoholimetria) return;
+    final closesAt = operativo.effectiveFeedingClosesAt;
+    if (closesAt == null) return;
+    final delay = closesAt.difference(DateTime.now());
+    if (delay <= Duration.zero) return;
+    _feedingClosureTimer = Timer(delay, () {
+      if (mounted) setState(() {});
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final operativo = _operativo;
-    final canFeed =
-        (_meta?.abilities.canFeed ?? false) && operativo?.estado == 'activo';
+    final canFeed = (_meta?.abilities.canFeed ?? false) && _canFeedNow;
     final canClose =
         (_meta?.abilities.canManageOperativos ?? false) &&
         operativo?.estado == 'activo';
@@ -457,6 +497,16 @@ class _ConduceLegalidadShowScreenState extends State<ConduceLegalidadShowScreen>
       children: [
         _OperativoHeader(operativo: operativo, meta: _meta),
         const SizedBox(height: 14),
+        if (operativo.isFeedingClosedAt(DateTime.now()) && !_isSuperadmin) ...[
+          const _Panel(
+            icon: Icons.lock_clock_outlined,
+            title: 'Alimentacion cerrada',
+            child: Text(
+              'Se cumplieron las 8 horas desde la creacion. El contenido queda en consulta; solo Superadmin puede modificarlo.',
+            ),
+          ),
+          const SizedBox(height: 14),
+        ],
         if ((operativo.objetivo ?? '').trim().isNotEmpty)
           _Panel(
             icon: Icons.flag_outlined,
@@ -480,6 +530,7 @@ class _ConduceLegalidadShowScreenState extends State<ConduceLegalidadShowScreen>
               deleting: _deletingCapturaId == captura.id,
               sharing: _sharingCapturaId == captura.id,
               downloadingIph: _downloadingIphCapturaId == captura.id,
+              allowMutation: _canFeedNow,
               onTicket: () => _openBoleta(captura),
               onShare: () => _shareCaptura(captura),
               onDownloadIph: () => _downloadIph(captura),
@@ -558,6 +609,7 @@ class _CapturaCard extends StatelessWidget {
   final bool deleting;
   final bool sharing;
   final bool downloadingIph;
+  final bool allowMutation;
   final VoidCallback onTicket;
   final VoidCallback onShare;
   final VoidCallback onDownloadIph;
@@ -569,6 +621,7 @@ class _CapturaCard extends StatelessWidget {
     required this.deleting,
     required this.sharing,
     required this.downloadingIph,
+    required this.allowMutation,
     required this.onTicket,
     required this.onShare,
     required this.onDownloadIph,
@@ -642,7 +695,7 @@ class _CapturaCard extends StatelessWidget {
                         title: Text('Descargar IPH'),
                       ),
                     ),
-                    if (captura.canEdit)
+                    if (captura.canEdit && allowMutation)
                       const PopupMenuItem<String>(
                         value: 'editar',
                         child: ListTile(
@@ -651,7 +704,7 @@ class _CapturaCard extends StatelessWidget {
                           title: Text('Editar'),
                         ),
                       ),
-                    if (captura.canDelete)
+                    if (captura.canDelete && allowMutation)
                       const PopupMenuItem<String>(
                         value: 'eliminar',
                         child: ListTile(

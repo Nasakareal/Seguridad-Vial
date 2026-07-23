@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../models/feed_item.dart';
+import '../../../widgets/glass.dart';
 import 'feed_post_card.dart';
 
 class FeedSliver extends StatelessWidget {
@@ -83,19 +84,9 @@ class _EmptyCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: Colors.grey.shade200),
-        boxShadow: [
-          BoxShadow(
-            blurRadius: 14,
-            offset: const Offset(0, 8),
-            color: Colors.black.withOpacity(.06),
-          ),
-        ],
-      ),
+    return LiquidGlassSurface(
+      opacity: .86,
+      blur: 8,
       padding: const EdgeInsets.all(16),
       child: const Center(
         child: Text(
@@ -115,19 +106,9 @@ class _ErrorCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: Colors.grey.shade200),
-        boxShadow: [
-          BoxShadow(
-            blurRadius: 14,
-            offset: const Offset(0, 8),
-            color: Colors.black.withOpacity(.06),
-          ),
-        ],
-      ),
+    return LiquidGlassSurface(
+      opacity: .86,
+      blur: 8,
       padding: const EdgeInsets.all(16),
       child: Column(
         children: [
@@ -164,9 +145,9 @@ class _ErrorInline extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.red.withOpacity(.06),
+        color: Colors.red.withValues(alpha: .06),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.red.withOpacity(.18)),
+        border: Border.all(color: Colors.red.withValues(alpha: .18)),
       ),
       child: Row(
         children: [

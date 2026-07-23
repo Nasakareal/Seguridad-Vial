@@ -13,6 +13,7 @@ import '../../core/vehiculos/marcas_vehiculo.dart';
 import '../../core/vehiculos/vehiculo_taxonomia.dart';
 import '../../core/licencias/licencia_barcode_payload.dart';
 import '../../models/conduce_legalidad.dart';
+import '../../services/auth_service.dart';
 import '../../services/conduce_legalidad_persona_descriptor.dart';
 import '../../services/conduce_legalidad_service.dart';
 import '../../services/gruas_catalog_service.dart';
@@ -56,6 +57,9 @@ class _ConduceLegalidadCapturaScreenState
   String? _metaError;
   String? _contentError;
   ConduceLegalidadMeta? _meta;
+  ConduceLegalidadOperativo? _operativo;
+  bool _isSuperadmin = false;
+  Timer? _feedingClosureTimer;
   final List<ConduceLegalidadVehiculo> _vehiculos = [];
   final List<ConduceLegalidadPersona> _personas = [];
   final List<ConduceLegalidadFoto> _fotosExistentes = [];
@@ -83,6 +87,7 @@ class _ConduceLegalidadCapturaScreenState
 
   @override
   void dispose() {
+    _feedingClosureTimer?.cancel();
     _draft.dispose();
     _narrativaCtrl.dispose();
     _municipioCtrl.dispose();
@@ -243,16 +248,23 @@ class _ConduceLegalidadCapturaScreenState
       _metaError = null;
     });
     try {
+      final isSuperadmin = await AuthService.isSuperadmin();
       final meta = widget.module.applyMeta(
         await ConduceLegalidadService.fetchMeta(
           filterConduceLegalidadMotos: !widget.module.isAlcoholimetria,
         ),
       );
+      final operativo = await ConduceLegalidadService.fetchOperativo(
+        widget.operativoId,
+      );
       if (!mounted) return;
       setState(() {
         _meta = meta;
+        _operativo = operativo;
+        _isSuperadmin = isSuperadmin;
         _loadingMeta = false;
       });
+      _scheduleFeedingClosure(operativo);
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -301,6 +313,16 @@ class _ConduceLegalidadCapturaScreenState
 
   Future<void> _submit() async {
     if (_saving) return;
+    if (!_canFeedNow) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'El operativo cumplio 8 horas. Solo Superadmin puede guardar cambios.',
+          ),
+        ),
+      );
+      return;
+    }
     setState(() => _contentError = null);
     final valid = _formKey.currentState!.validate();
     if (!valid) {
@@ -399,6 +421,24 @@ class _ConduceLegalidadCapturaScreenState
     _draft.notifyChanged();
   }
 
+  bool get _canFeedNow {
+    final operativo = _operativo;
+    return operativo != null &&
+        operativo.canFeedAt(DateTime.now(), isSuperadmin: _isSuperadmin);
+  }
+
+  void _scheduleFeedingClosure(ConduceLegalidadOperativo operativo) {
+    _feedingClosureTimer?.cancel();
+    if (_isSuperadmin || !operativo.isAlcoholimetria) return;
+    final closesAt = operativo.effectiveFeedingClosesAt;
+    if (closesAt == null) return;
+    final delay = closesAt.difference(DateTime.now());
+    if (delay <= Duration.zero) return;
+    _feedingClosureTimer = Timer(delay, () {
+      if (mounted) setState(() {});
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -411,6 +451,35 @@ class _ConduceLegalidadCapturaScreenState
       ),
       body: _loadingMeta
           ? const Center(child: CircularProgressIndicator())
+          : _operativo != null && !_canFeedNow && _operativo!.isAlcoholimetria
+          ? ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFFFBEB),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: const Color(0xFFF59E0B)),
+                  ),
+                  child: const Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(Icons.lock_clock_outlined, color: Color(0xFF92400E)),
+                      SizedBox(height: 10),
+                      Text(
+                        'Operativo cerrado para captura',
+                        style: TextStyle(fontWeight: FontWeight.w900),
+                      ),
+                      SizedBox(height: 6),
+                      Text(
+                        'Ya transcurrieron 8 horas exactas desde su creacion. Solo un usuario Superadmin puede continuar alimentandolo.',
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            )
           : Form(
               key: _formKey,
               child: ListView(

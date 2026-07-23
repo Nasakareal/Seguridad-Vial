@@ -123,10 +123,12 @@ class VehiculoTaxonomia {
     if (s.contains('rabon') || s.contains('rabón')) return 'Rabón';
 
     if (s.contains('caja') && s.contains('seca')) return 'Caja seca';
-    if (s.contains('caja') && (s.contains('cerrada') || s.contains('cerr')))
+    if (s.contains('caja') && (s.contains('cerrada') || s.contains('cerr'))) {
       return 'Caja cerrada';
-    if (s.contains('caja') && (s.contains('abierta') || s.contains('abier')))
+    }
+    if (s.contains('caja') && (s.contains('abierta') || s.contains('abier'))) {
       return 'Caja abierta';
+    }
 
     if (s.contains('plataforma')) return 'Plataforma';
     if (s.contains('volteo') || s.contains('volquete')) return 'Volteo';
@@ -136,8 +138,9 @@ class VehiculoTaxonomia {
     if (s.contains('pipa')) return 'Pipa';
     if (s.contains('grua') || s.contains('grúa')) return 'Grúa';
 
-    if ((s.contains('cama') && s.contains('baja')) || s.contains('lowboy'))
+    if ((s.contains('cama') && s.contains('baja')) || s.contains('lowboy')) {
       return 'Cama baja';
+    }
     if (s.contains('gondola') || s.contains('góndola')) return 'Góndola';
     if (s.contains('dolly')) return 'Dolly';
     if (s.contains('portacont')) return 'Portacontenedor';
@@ -157,12 +160,14 @@ class VehiculoTaxonomia {
     if (s.contains('retro') && s.contains('excav')) return 'Retroexcavadora';
     if (s.contains('excav')) return 'Excavadora';
     if (s.contains('cargador') &&
-        (s.contains('frontal') || s.contains('front')))
+        (s.contains('frontal') || s.contains('front'))) {
       return 'Cargador frontal';
+    }
     if (s.contains('moto') && s.contains('conform')) return 'Motoconformadora';
     if (s.contains('bulldozer') || s.contains('topador')) return 'Bulldozer';
-    if (s.contains('rodillo') && s.contains('compact'))
+    if (s.contains('rodillo') && s.contains('compact')) {
       return 'Rodillo compactador';
+    }
     if (s.contains('montac')) return 'Montacargas';
     if (s.contains('tractor')) return 'Tractor agrícola';
     if (s.contains('paviment')) return 'Pavimentadora';

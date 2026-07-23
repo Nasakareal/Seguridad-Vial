@@ -195,8 +195,7 @@ class _MapaIncidenciasScreenState extends State<MapaIncidenciasScreen>
     if (!_scrollController.hasClients) return;
 
     try {
-      final mapCtx = _mapKey.currentContext;
-      if (mapCtx == null) {
+      if (_mapKey.currentContext == null) {
         await _scrollController.animateTo(
           0,
           duration: const Duration(milliseconds: 420),
@@ -205,9 +204,10 @@ class _MapaIncidenciasScreenState extends State<MapaIncidenciasScreen>
         return;
       }
 
-      final mapBox = mapCtx.findRenderObject() as RenderBox?;
-      final scrollCtx = _scrollController.position.context.storageContext;
-      final scrollBox = scrollCtx.findRenderObject() as RenderBox?;
+      final mapBox = _mapKey.currentContext?.findRenderObject() as RenderBox?;
+      final scrollContext = _scrollController.position.context.storageContext;
+      if (!scrollContext.mounted) return;
+      final scrollBox = scrollContext.findRenderObject() as RenderBox?;
       if (mapBox == null || scrollBox == null) return;
 
       final mapOffsetGlobal = mapBox.localToGlobal(Offset.zero);
@@ -248,7 +248,7 @@ class _MapaIncidenciasScreenState extends State<MapaIncidenciasScreen>
                     width: 44,
                     height: 44,
                     decoration: BoxDecoration(
-                      color: Colors.orange.withOpacity(.12),
+                      color: Colors.orange.withValues(alpha: .12),
                       borderRadius: BorderRadius.circular(14),
                     ),
                     child: const Icon(
@@ -331,15 +331,18 @@ class _MapaIncidenciasScreenState extends State<MapaIncidenciasScreen>
       width: size,
       height: size,
       decoration: BoxDecoration(
-        color: Colors.orange.withOpacity(.20),
+        color: Colors.orange.withValues(alpha: .20),
         shape: BoxShape.circle,
-        border: Border.all(color: Colors.orange.withOpacity(.65), width: 2),
+        border: Border.all(
+          color: Colors.orange.withValues(alpha: .65),
+          width: 2,
+        ),
       ),
       alignment: Alignment.center,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
         decoration: BoxDecoration(
-          color: Colors.black.withOpacity(.72),
+          color: Colors.black.withValues(alpha: .72),
           borderRadius: BorderRadius.circular(12),
         ),
         child: Text(
@@ -535,7 +538,7 @@ class _MapaIncidenciasScreenState extends State<MapaIncidenciasScreen>
                     BoxShadow(
                       blurRadius: 14,
                       offset: const Offset(0, 8),
-                      color: Colors.black.withOpacity(.06),
+                      color: Colors.black.withValues(alpha: .06),
                     ),
                   ],
                 ),
@@ -709,7 +712,7 @@ class _TopStatusBar extends StatelessWidget {
             width: 38,
             height: 38,
             decoration: BoxDecoration(
-              color: Colors.orange.withOpacity(.12),
+              color: Colors.orange.withValues(alpha: .12),
               borderRadius: BorderRadius.circular(12),
             ),
             child: loading
@@ -862,8 +865,8 @@ class _ErrorCard extends StatelessWidget {
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(18),
-        color: Colors.red.withOpacity(.06),
-        border: Border.all(color: Colors.red.withOpacity(.18)),
+        color: Colors.red.withValues(alpha: .06),
+        border: Border.all(color: Colors.red.withValues(alpha: .18)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

@@ -481,7 +481,7 @@ class _TopSummary extends StatelessWidget {
                 BoxShadow(
                   blurRadius: 14,
                   offset: const Offset(0, 8),
-                  color: Colors.black.withOpacity(.06),
+                  color: Colors.black.withValues(alpha: .06),
                 ),
               ],
             ),
@@ -613,7 +613,7 @@ class _HechoTile extends StatelessWidget {
           BoxShadow(
             blurRadius: 14,
             offset: const Offset(0, 8),
-            color: Colors.black.withOpacity(.06),
+            color: Colors.black.withValues(alpha: .06),
           ),
         ],
       ),
@@ -623,7 +623,7 @@ class _HechoTile extends StatelessWidget {
           width: 44,
           height: 44,
           decoration: BoxDecoration(
-            color: c.withOpacity(.12),
+            color: c.withValues(alpha: .12),
             borderRadius: BorderRadius.circular(14),
           ),
           child: Icon(accent.icon, color: c),
@@ -712,7 +712,7 @@ class _StatChip extends StatelessWidget {
           BoxShadow(
             blurRadius: 14,
             offset: const Offset(0, 8),
-            color: Colors.black.withOpacity(.06),
+            color: Colors.black.withValues(alpha: .06),
           ),
         ],
       ),
@@ -722,7 +722,7 @@ class _StatChip extends StatelessWidget {
             width: 42,
             height: 42,
             decoration: BoxDecoration(
-              color: c.withOpacity(.12),
+              color: c.withValues(alpha: .12),
               borderRadius: BorderRadius.circular(14),
             ),
             child: Icon(icon, color: c),
@@ -810,8 +810,8 @@ class _ErrorCard extends StatelessWidget {
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(18),
-        color: Colors.red.withOpacity(.06),
-        border: Border.all(color: Colors.red.withOpacity(.18)),
+        color: Colors.red.withValues(alpha: .06),
+        border: Border.all(color: Colors.red.withValues(alpha: .18)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

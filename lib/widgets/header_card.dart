@@ -18,10 +18,16 @@ class HeaderCard extends StatelessWidget {
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(18),
         gradient: LinearGradient(
-          colors: [Colors.blue.shade700, Colors.blue.shade500],
+          colors: [
+            Colors.blue.shade800,
+            Colors.blue.shade600,
+            Colors.lightBlue.shade400,
+          ],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
+          stops: const [0, .62, 1],
         ),
+        border: Border.all(color: Colors.white.withValues(alpha: .32)),
         boxShadow: [
           BoxShadow(
             blurRadius: 18,
@@ -37,8 +43,16 @@ class HeaderCard extends StatelessWidget {
             width: 46,
             height: 46,
             decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: .18),
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  Colors.white.withValues(alpha: .30),
+                  Colors.white.withValues(alpha: .12),
+                ],
+              ),
               borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: Colors.white.withValues(alpha: .42)),
             ),
             child: const Icon(Icons.shield, color: Colors.white, size: 28),
           ),

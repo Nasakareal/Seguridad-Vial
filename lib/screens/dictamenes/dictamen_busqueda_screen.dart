@@ -90,8 +90,8 @@ class _DictamenesBusquedaScreenState extends State<DictamenesBusquedaScreen> {
 
       final raw = (res['data'] as List?) ?? const [];
       final items = raw
-          .where((e) => e is Map)
-          .map((e) => (e as Map).cast<String, dynamic>())
+          .whereType<Map>()
+          .map((e) => e.cast<String, dynamic>())
           .toList();
 
       if (!mounted) return;
@@ -185,7 +185,7 @@ class _DictamenesBusquedaScreenState extends State<DictamenesBusquedaScreen> {
           BoxShadow(
             blurRadius: 12,
             offset: const Offset(0, 6),
-            color: Colors.black.withOpacity(.04),
+            color: Colors.black.withValues(alpha: .04),
           ),
         ],
       ),
@@ -302,9 +302,9 @@ class _DictamenesBusquedaScreenState extends State<DictamenesBusquedaScreen> {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Colors.red.withOpacity(.06),
+        color: Colors.red.withValues(alpha: .06),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.red.withOpacity(.25)),
+        border: Border.all(color: Colors.red.withValues(alpha: .25)),
       ),
       child: Row(
         children: [

@@ -108,8 +108,9 @@ class _DictamenSelectorState extends State<DictamenSelector> {
                         widget.onSelected(_selected);
                       },
                 validator: (v) {
-                  if (widget.data.situacion == 'TURNADO' && v == null)
+                  if (widget.data.situacion == 'TURNADO' && v == null) {
                     return 'Requerido';
+                  }
                   return null;
                 },
               ),

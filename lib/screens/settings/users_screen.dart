@@ -157,7 +157,7 @@ class _SettingsUsersScreenState extends State<SettingsUsersScreen> {
     return PermissionGuard(
       permission: 'ver usuarios',
       child: Scaffold(
-        backgroundColor: const Color(0xFFF6F7FB),
+        backgroundColor: Colors.transparent,
         appBar: AppBar(
           elevation: 0,
           backgroundColor: Colors.blue,

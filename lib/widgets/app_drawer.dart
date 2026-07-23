@@ -5,6 +5,7 @@ import '../services/auth_service.dart';
 import '../services/home_resolver_service.dart';
 import '../screens/conduce_legalidad/conduce_legalidad_module.dart';
 import 'drawer_ui.dart';
+import 'unit_branding_watermark.dart';
 
 class AppDrawer extends StatelessWidget {
   final bool trackingOn;
@@ -238,108 +239,177 @@ class AppDrawer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Drawer(
-      backgroundColor: const Color(0xFFF6F7FB),
-      child: Column(
-        children: [
-          FutureBuilder<bool>(
-            future: AuthService.isEvaluadorTeoricoConstanciasOnly(),
-            builder: (context, snapshot) {
-              final constanciasOnly = snapshot.data == true;
-              return DrawerHeaderPanel(
-                icon: Icons.shield_outlined,
-                title: 'Seguridad Vial',
-                subtitle: '',
-                chips: <String>[
-                  if (!constanciasOnly)
-                    trackingOn ? 'Ubicación activa' : 'Ubicación inactiva',
-                  'Menú principal',
-                ],
-              );
-            },
-          ),
-          Expanded(
-            child: FutureBuilder<_DrawerAccess>(
-              future: _loadAccess(),
-              builder: (context, snap) {
-                if (snap.connectionState == ConnectionState.waiting &&
-                    !snap.hasData) {
-                  return const Center(child: CircularProgressIndicator());
-                }
+      backgroundColor: Colors.transparent,
+      surfaceTintColor: Colors.transparent,
+      child: UnitBrandingBackdrop(
+        opacity: .022,
+        widthFactor: .82,
+        child: Column(
+          children: [
+            FutureBuilder<bool>(
+              future: AuthService.isEvaluadorTeoricoConstanciasOnly(),
+              builder: (context, snapshot) {
+                final constanciasOnly = snapshot.data == true;
+                return DrawerHeaderPanel(
+                  icon: Icons.shield_outlined,
+                  title: 'Seguridad Vial',
+                  subtitle: '',
+                  chips: <String>[
+                    if (!constanciasOnly)
+                      trackingOn ? 'Ubicación activa' : 'Ubicación inactiva',
+                    'Menú principal',
+                  ],
+                );
+              },
+            ),
+            Expanded(
+              child: FutureBuilder<_DrawerAccess>(
+                future: _loadAccess(),
+                builder: (context, snap) {
+                  if (snap.connectionState == ConnectionState.waiting &&
+                      !snap.hasData) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
 
-                final perms = snap.data?.perms ?? <String>{};
-                final hasFullOperationalAccess =
-                    snap.data?.hasFullOperationalAccess ?? false;
-                final canSeeDispositivos =
-                    ((snap.data?.canSeeCarreteras ?? false) ||
-                        hasFullOperationalAccess) &&
-                    (_allowed(perms, permOperativosCarreteras) ||
-                        perms.contains('crear operativos carreteras') ||
-                        perms.contains('editar operativos carreteras') ||
-                        perms.contains('eliminar operativos carreteras') ||
-                        hasFullOperationalAccess);
-                final canReviewDispositivos =
-                    canSeeDispositivos &&
-                    (snap.data?.canReviewCarreteras ?? false) &&
-                    (perms.contains('editar operativos carreteras') ||
-                        hasFullOperationalAccess);
-                final canSeeVialidadesUrbanas =
-                    snap.data?.canSeeVialidadesUrbanas ?? false;
-                final unidadId = snap.data?.unidadId;
-                final canSeeCulturaVial =
-                    hasFullOperationalAccess ||
-                    (snap.data?.canUseCulturaVial ?? false);
-                final isSuperadmin = snap.data?.isSuperadmin ?? false;
-                final canSeeAllButtons = hasFullOperationalAccess;
-                final canSeePuestas =
-                    canSeeAllButtons ||
-                    isSuperadmin ||
-                    _allowed(perms, permPuestasDisposicion);
-                final canCreatePuestas =
-                    canSeeAllButtons ||
-                    isSuperadmin ||
-                    perms.contains('crear puestas a disposicion');
-                final canSeeDictamenes =
-                    canSeeAllButtons ||
-                    (_allowed(perms, permDictamenes) && unidadId == 1);
-                final canSeeConstanciasManejo =
-                    snap.data?.canUseConstanciasManejo ?? false;
-                final constanciasOnly = snap.data?.constanciasOnly ?? false;
-                final canBypassEstadisticasPerm =
-                    hasFullOperationalAccess || isSuperadmin;
-                final canSeeEstadisticasGlobales =
-                    _allowed(
-                      perms,
-                      permEstadisticasGlobales,
-                      all: canBypassEstadisticasPerm,
-                    ) ||
-                    _allowed(
-                      perms,
-                      permEstadisticas,
-                      all: canBypassEstadisticasPerm,
+                  final perms = snap.data?.perms ?? <String>{};
+                  final hasFullOperationalAccess =
+                      snap.data?.hasFullOperationalAccess ?? false;
+                  final canSeeDispositivos =
+                      ((snap.data?.canSeeCarreteras ?? false) ||
+                          hasFullOperationalAccess) &&
+                      (_allowed(perms, permOperativosCarreteras) ||
+                          perms.contains('crear operativos carreteras') ||
+                          perms.contains('editar operativos carreteras') ||
+                          perms.contains('eliminar operativos carreteras') ||
+                          hasFullOperationalAccess);
+                  final canReviewDispositivos =
+                      canSeeDispositivos &&
+                      (snap.data?.canReviewCarreteras ?? false) &&
+                      (perms.contains('editar operativos carreteras') ||
+                          hasFullOperationalAccess);
+                  final canSeeVialidadesUrbanas =
+                      snap.data?.canSeeVialidadesUrbanas ?? false;
+                  final unidadId = snap.data?.unidadId;
+                  final canSeeCulturaVial =
+                      hasFullOperationalAccess ||
+                      (snap.data?.canUseCulturaVial ?? false);
+                  final isSuperadmin = snap.data?.isSuperadmin ?? false;
+                  final canSeeAllButtons = hasFullOperationalAccess;
+                  final canSeePuestas =
+                      canSeeAllButtons ||
+                      isSuperadmin ||
+                      _allowed(perms, permPuestasDisposicion);
+                  final canCreatePuestas =
+                      canSeeAllButtons ||
+                      isSuperadmin ||
+                      perms.contains('crear puestas a disposicion');
+                  final canSeeDictamenes =
+                      canSeeAllButtons ||
+                      (_allowed(perms, permDictamenes) && unidadId == 1);
+                  final canSeeConstanciasManejo =
+                      snap.data?.canUseConstanciasManejo ?? false;
+                  final constanciasOnly = snap.data?.constanciasOnly ?? false;
+                  final canBypassEstadisticasPerm =
+                      hasFullOperationalAccess || isSuperadmin;
+                  final canSeeEstadisticasGlobales =
+                      _allowed(
+                        perms,
+                        permEstadisticasGlobales,
+                        all: canBypassEstadisticasPerm,
+                      ) ||
+                      _allowed(
+                        perms,
+                        permEstadisticas,
+                        all: canBypassEstadisticasPerm,
+                      );
+                  final canSeeEstadisticasActividades = _allowed(
+                    perms,
+                    permEstadisticasActividades,
+                    all: canBypassEstadisticasPerm,
+                  );
+                  final canSeeMapaPatrullas =
+                      snap.data?.canViewMapaPatrullas ?? false;
+                  final canSeeMapaIncidencias = _allowed(
+                    perms,
+                    permMapa,
+                    all: canSeeAllButtons,
+                  );
+                  final canSeeLicenciasPuntos =
+                      snap.data?.canUseLicensePointsModule ?? false;
+                  final canUseDelegacionesActividadesFisicas =
+                      snap.data?.canUseDelegacionesActividadesFisicas ?? false;
+                  final canSeeConduceLegalidad =
+                      snap.data?.canAccessConduceLegalidad ??
+                      _allowed(perms, permConduceLegalidad, all: isSuperadmin);
+                  final canSeeOperativosGroup = canSeeConduceLegalidad;
+                  final canSeeRndTool = unidadId != 2;
+
+                  if (constanciasOnly) {
+                    return ListView(
+                      padding: drawerScrollablePadding(context),
+                      children: [
+                        const DrawerSectionLabel(label: 'General'),
+                        _DrawerItem(
+                          icon: Icons.home,
+                          label: 'Inicio',
+                          subtitle: 'Volver al feed',
+                          onTap: () => _nav(context, AppRoutes.home),
+                        ),
+                        if (canSeeConstanciasManejo)
+                          _DrawerItem(
+                            icon: Icons.badge,
+                            label: 'Constancias de manejo',
+                            subtitle: 'Alta y captura de constancias',
+                            onTap: () =>
+                                _nav(context, AppRoutes.constanciasManejo),
+                          ),
+                        const SizedBox(height: 12),
+                        const DrawerSectionLabel(label: 'Consulta'),
+                        _DrawerGroup(
+                          icon: Icons.handyman,
+                          label: 'Herramientas',
+                          subtitle: 'Calculadoras de apoyo',
+                          children: [
+                            if (canSeeRndTool)
+                              _DrawerSubItem(
+                                icon: Icons.app_registration,
+                                label: 'Solicitar RND',
+                                subtitle: 'Mensaje para faltas administrativas',
+                                onTap: () => _nav(
+                                  context,
+                                  AppRoutes.herramientasRndFaltas,
+                                ),
+                              ),
+                            _DrawerSubItem(
+                              icon: Icons.tire_repair,
+                              label: 'Huella de frenado',
+                              subtitle: 'Calcular velocidad por huella',
+                              onTap: () => _nav(
+                                context,
+                                AppRoutes.herramientasVelocidadFrenado,
+                              ),
+                            ),
+                            _DrawerSubItem(
+                              icon: Icons.car_repair,
+                              label: 'Deformación de láminas',
+                              subtitle: 'Calcular EES/EBS',
+                              onTap: () => _nav(
+                                context,
+                                AppRoutes.herramientasVelocidadDeformacion,
+                              ),
+                            ),
+                          ],
+                        ),
+                        _DrawerItem(
+                          icon: Icons.gavel,
+                          label: 'Sustento Legal',
+                          subtitle: 'Fundamento legal de consulta',
+                          onTap: () => _nav(context, AppRoutes.sustentoLegal),
+                        ),
+                      ],
                     );
-                final canSeeEstadisticasActividades = _allowed(
-                  perms,
-                  permEstadisticasActividades,
-                  all: canBypassEstadisticasPerm,
-                );
-                final canSeeMapaPatrullas =
-                    snap.data?.canViewMapaPatrullas ?? false;
-                final canSeeMapaIncidencias = _allowed(
-                  perms,
-                  permMapa,
-                  all: canSeeAllButtons,
-                );
-                final canSeeLicenciasPuntos =
-                    snap.data?.canUseLicensePointsModule ?? false;
-                final canUseDelegacionesActividadesFisicas =
-                    snap.data?.canUseDelegacionesActividadesFisicas ?? false;
-                final canSeeConduceLegalidad =
-                    snap.data?.canAccessConduceLegalidad ??
-                    _allowed(perms, permConduceLegalidad, all: isSuperadmin);
-                final canSeeOperativosGroup = canSeeConduceLegalidad;
-                final canSeeRndTool = unidadId != 2;
+                  }
 
-                if (constanciasOnly) {
                   return ListView(
                     padding: drawerScrollablePadding(context),
                     children: [
@@ -347,23 +417,356 @@ class AppDrawer extends StatelessWidget {
                       _DrawerItem(
                         icon: Icons.home,
                         label: 'Inicio',
-                        subtitle: 'Volver al feed',
+                        subtitle: 'Volver al panel principal',
                         onTap: () => _nav(context, AppRoutes.home),
                       ),
-                      if (canSeeConstanciasManejo)
+
+                      if (_allowed(perms, permBusqueda, all: canSeeAllButtons))
                         _DrawerItem(
-                          icon: Icons.badge,
-                          label: 'Constancias de manejo',
-                          subtitle: 'Alta y captura de constancias',
-                          onTap: () =>
-                              _nav(context, AppRoutes.constanciasManejo),
+                          icon: Icons.search,
+                          label: 'Búsqueda',
+                          subtitle: 'Localizar hechos y registros',
+                          onTap: () => _nav(
+                            context,
+                            AppRoutes.hechosBuscar,
+                            requiredPerm: permBusqueda,
+                          ),
                         ),
+
+                      if (canSeeEstadisticasGlobales ||
+                          canSeeEstadisticasActividades)
+                        _DrawerGroup(
+                          icon: Icons.insights,
+                          label: 'Estadísticas',
+                          subtitle: 'Siniestros, actividades e indicadores',
+                          children: [
+                            if (canSeeEstadisticasGlobales)
+                              _DrawerSubItem(
+                                icon: Icons.car_crash,
+                                label: 'Siniestros',
+                                subtitle: 'Indicadores y hechos filtrados',
+                                onTap: () => _nav(
+                                  context,
+                                  AppRoutes.estadisticasGlobales,
+                                  requiredPerm:
+                                      canBypassEstadisticasPerm ||
+                                          _allowed(perms, permEstadisticas)
+                                      ? null
+                                      : permEstadisticasGlobales,
+                                ),
+                              ),
+                            if (canSeeEstadisticasActividades)
+                              _DrawerSubItem(
+                                icon: Icons.photo_library,
+                                label: 'Actividades',
+                                subtitle: 'Indicadores y capturas filtradas',
+                                onTap: () => _nav(
+                                  context,
+                                  AppRoutes.estadisticasActividades,
+                                  requiredPerm: canBypassEstadisticasPerm
+                                      ? null
+                                      : permEstadisticasActividades,
+                                ),
+                              ),
+                          ],
+                        ),
+
+                      const SizedBox(height: 12),
+                      if (canSeePuestas || canSeeDictamenes) ...[
+                        const DrawerSectionLabel(label: 'Operación'),
+                        _DrawerGroup(
+                          icon: Icons.gavel,
+                          label: 'Puestas a disposición',
+                          subtitle:
+                              'Puestas, creación y dictámenes disponibles',
+                          children: [
+                            if (canSeePuestas)
+                              _DrawerSubItem(
+                                icon: Icons.folder_open,
+                                label: 'Listado de puestas',
+                                subtitle: 'Consultar registros capturados',
+                                onTap: () => _nav(
+                                  context,
+                                  AppRoutes.puestasDisposicion,
+                                  requiredPerm: permPuestasDisposicion,
+                                ),
+                              ),
+                            if (canCreatePuestas)
+                              _DrawerSubItem(
+                                icon: Icons.add_circle_outline,
+                                label: 'Crear puesta',
+                                subtitle: 'Registrar una nueva puesta',
+                                onTap: () => _nav(
+                                  context,
+                                  AppRoutes.puestasDisposicionCreate,
+                                  requiredPerm: 'crear puestas a disposicion',
+                                ),
+                              ),
+                            if (canSeeDictamenes)
+                              _DrawerSubItem(
+                                icon: Icons.description,
+                                label: 'Listado de dictámenes',
+                                subtitle: 'Explorar dictámenes existentes',
+                                onTap: () => _nav(
+                                  context,
+                                  AppRoutes.dictamenes,
+                                  requiredPerm: permDictamenes,
+                                ),
+                              ),
+                          ],
+                        ),
+                      ],
+
+                      if (_allowed(perms, permHechos, all: canSeeAllButtons))
+                        _DrawerGroup(
+                          icon: Icons.directions_car,
+                          label: 'Hechos',
+                          subtitle: 'Consulta, seguimiento y pendientes',
+                          children: [
+                            _DrawerSubItem(
+                              icon: Icons.list_alt,
+                              label: 'Listado de hechos',
+                              subtitle: 'Ver hechos capturados',
+                              onTap: () => _nav(
+                                context,
+                                AppRoutes.accidentes,
+                                requiredPerm: permHechos,
+                              ),
+                            ),
+                            _DrawerSubItem(
+                              icon: Icons.fact_check_outlined,
+                              label: 'Seguimiento de hechos',
+                              subtitle: 'Pendientes, turnados y faltantes',
+                              onTap: () => _nav(
+                                context,
+                                AppRoutes.hechosSeguimiento,
+                                requiredPerm: permHechos,
+                              ),
+                            ),
+                            _DrawerSubItem(
+                              icon: Icons.assignment_late,
+                              label: 'Cortes pendientes',
+                              subtitle: 'Revisar pendientes por corte',
+                              onTap: () => _nav(
+                                context,
+                                AppRoutes.pendientesCortes,
+                                requiredPerm: permHechos,
+                              ),
+                            ),
+                          ],
+                        ),
+
+                      if (_allowed(
+                        perms,
+                        permActividades,
+                        all: canSeeAllButtons,
+                      ))
+                        _DrawerItem(
+                          icon: Icons.photo_library,
+                          label: 'Actividades',
+                          subtitle: 'Operativos y actividades del día',
+                          onTap: () => _nav(
+                            context,
+                            AppRoutes.actividades,
+                            requiredPerm: permActividades,
+                          ),
+                        ),
+
+                      if (canUseDelegacionesActividadesFisicas)
+                        _DrawerItem(
+                          icon: Icons.fitness_center_outlined,
+                          label: 'Ejercicios Delegaciones',
+                          subtitle: 'Subir foto y participantes',
+                          onTap: () => _nav(
+                            context,
+                            AppRoutes.delegacionesActividadesFisicas,
+                          ),
+                        ),
+
+                      if (canSeeConstanciasManejo)
+                        _DrawerGroup(
+                          icon: Icons.fact_check,
+                          label: 'Modulo de examenes',
+                          subtitle: 'Captura diaria y constancias',
+                          children: [
+                            _DrawerSubItem(
+                              icon: Icons.today,
+                              label: 'Examenes diarios',
+                              subtitle: 'Capturar totales por modulo',
+                              onTap: () => _nav(
+                                context,
+                                AppRoutes.moduloExamenesDiarios,
+                              ),
+                            ),
+                            _DrawerSubItem(
+                              icon: Icons.badge,
+                              label: 'Constancias de manejo',
+                              subtitle: 'Generar lotes, imprimir y activar',
+                              onTap: () =>
+                                  _nav(context, AppRoutes.constanciasManejo),
+                            ),
+                          ],
+                        ),
+
+                      if (canSeeLicenciasPuntos)
+                        _DrawerItem(
+                          icon: Icons.scoreboard_outlined,
+                          label: 'Puntos de licencia',
+                          subtitle: 'Escanear licencia y revisar saldo',
+                          onTap: () => _nav(context, AppRoutes.licenciasPuntos),
+                        ),
+
+                      if (canSeeOperativosGroup)
+                        _DrawerGroup(
+                          icon: Icons.assignment_turned_in_outlined,
+                          label: 'Operativos',
+                          subtitle:
+                              'Conduce con legalidad, alcoholimetría y listados',
+                          children: [
+                            if (canSeeConduceLegalidad)
+                              _DrawerSubItem(
+                                icon: ConduceLegalidadModule
+                                    .conduceLegalidad
+                                    .icon,
+                                label: ConduceLegalidadModule
+                                    .conduceLegalidad
+                                    .title,
+                                subtitle: ConduceLegalidadModule
+                                    .conduceLegalidad
+                                    .listSubtitle,
+                                onTap: () =>
+                                    _nav(context, AppRoutes.conduceLegalidad),
+                              ),
+                            if (canSeeConduceLegalidad)
+                              _DrawerSubItem(
+                                icon:
+                                    ConduceLegalidadModule.alcoholimetria.icon,
+                                label:
+                                    ConduceLegalidadModule.alcoholimetria.title,
+                                subtitle: ConduceLegalidadModule
+                                    .alcoholimetria
+                                    .listSubtitle,
+                                onTap: () =>
+                                    _nav(context, AppRoutes.alcoholimetria),
+                              ),
+                            _DrawerSubItem(
+                              icon: Icons.list_alt,
+                              label: 'Listado de operativos',
+                              subtitle: 'Elegir el módulo operativo',
+                              onTap: () => _nav(context, AppRoutes.operativos),
+                            ),
+                          ],
+                        ),
+
+                      if (canSeeCulturaVial)
+                        _DrawerItem(
+                          icon: Icons.sports_esports,
+                          label: 'Cultura Vial',
+                          subtitle: 'Salas, QR y minijuegos',
+                          onTap: () => _nav(
+                            context,
+                            AppRoutes.culturaVial,
+                            requiredUnitId: AuthService.unidadCulturaVialId,
+                          ),
+                        ),
+
+                      if (canSeeDispositivos)
+                        _DrawerGroup(
+                          icon: Icons.add_road,
+                          label: 'Dispositivos',
+                          subtitle: 'Carreteras y revisión operativa',
+                          children: [
+                            _DrawerSubItem(
+                              icon: Icons.list_alt,
+                              label: 'Listado',
+                              subtitle: 'Ver dispositivos registrados',
+                              onTap: () => _nav(
+                                context,
+                                AppRoutes.dispositivos,
+                                requiredUnitId:
+                                    AuthService.unidadProteccionCarreterasId,
+                              ),
+                            ),
+                            if (canReviewDispositivos)
+                              _DrawerSubItem(
+                                icon: Icons.fact_check_outlined,
+                                label: 'Pendientes de revisión',
+                                subtitle: 'Aprobar o rechazar capturas',
+                                onTap: () => _nav(
+                                  context,
+                                  AppRoutes.dispositivosRevision,
+                                  requiredUnitId:
+                                      AuthService.unidadProteccionCarreterasId,
+                                ),
+                              ),
+                          ],
+                        ),
+
+                      if (canSeeVialidadesUrbanas)
+                        _DrawerGroup(
+                          icon: Icons.add_road,
+                          label: 'Vialidades Urbanas',
+                          subtitle: 'Operación y detalles urbanos',
+                          children: [
+                            _DrawerSubItem(
+                              icon: Icons.list_alt,
+                              label: 'Dispositivos',
+                              subtitle: 'Ver capturas y detalles',
+                              onTap: () => _nav(
+                                context,
+                                AppRoutes.vialidadesUrbanas,
+                                requiredUnitId: 5,
+                              ),
+                            ),
+                          ],
+                        ),
+
+                      if (_allowed(perms, permGruas, all: canSeeAllButtons))
+                        _DrawerItem(
+                          icon: Icons.local_shipping,
+                          label: 'Grúas',
+                          subtitle: 'Seguimiento de grúas y movimientos',
+                          onTap: () => _nav(
+                            context,
+                            AppRoutes.gruas,
+                            requiredPerm: permGruas,
+                          ),
+                        ),
+
                       const SizedBox(height: 12),
                       const DrawerSectionLabel(label: 'Consulta'),
+
+                      if (canSeeMapaPatrullas || canSeeMapaIncidencias)
+                        _DrawerGroup(
+                          icon: Icons.map,
+                          label: 'Mapa',
+                          subtitle: 'Ubicación de patrullas e incidencias',
+                          children: [
+                            if (canSeeMapaPatrullas)
+                              _DrawerSubItem(
+                                icon: Icons.local_police,
+                                label: 'Mapa patrullas',
+                                subtitle: 'Ubicar personal y patrullas',
+                                onTap: () => _nav(context, AppRoutes.mapa),
+                              ),
+                            if (canSeeMapaIncidencias)
+                              _DrawerSubItem(
+                                icon: Icons.warning_amber,
+                                label: 'Mapa incidencias',
+                                subtitle: 'Visualizar incidencias activas',
+                                onTap: () => _nav(
+                                  context,
+                                  AppRoutes.mapaIncidencias,
+                                  requiredPerm: permMapa,
+                                ),
+                              ),
+                          ],
+                        ),
+
                       _DrawerGroup(
                         icon: Icons.handyman,
                         label: 'Herramientas',
-                        subtitle: 'Calculadoras de apoyo',
+                        subtitle: 'Calculadoras de apoyo pericial',
                         children: [
                           if (canSeeRndTool)
                             _DrawerSubItem(
@@ -378,7 +781,8 @@ class AppDrawer extends StatelessWidget {
                           _DrawerSubItem(
                             icon: Icons.tire_repair,
                             label: 'Huella de frenado',
-                            subtitle: 'Calcular velocidad por huella',
+                            subtitle:
+                                'Calcular velocidad con base a la huella de frenado',
                             onTap: () => _nav(
                               context,
                               AppRoutes.herramientasVelocidadFrenado,
@@ -387,429 +791,43 @@ class AppDrawer extends StatelessWidget {
                           _DrawerSubItem(
                             icon: Icons.car_repair,
                             label: 'Deformación de láminas',
-                            subtitle: 'Calcular EES/EBS',
+                            subtitle:
+                                'Calcular EES/EBS con perfil de deformación',
                             onTap: () => _nav(
                               context,
                               AppRoutes.herramientasVelocidadDeformacion,
                             ),
                           ),
+                          _DrawerSubItem(
+                            icon: Icons.route,
+                            label: 'Reconstructor de tránsito 2D',
+                            subtitle: 'Escenas, trayectorias y secuencias',
+                            onTap: () => _nav(
+                              context,
+                              AppRoutes.herramientasReconstructorTransito2d,
+                            ),
+                          ),
                         ],
                       ),
-                      _DrawerItem(
-                        icon: Icons.gavel,
-                        label: 'Sustento Legal',
-                        subtitle: 'Fundamento legal de consulta',
-                        onTap: () => _nav(context, AppRoutes.sustentoLegal),
-                      ),
+
+                      if (_allowed(perms, permSustento, all: canSeeAllButtons))
+                        _DrawerItem(
+                          icon: Icons.gavel,
+                          label: 'Sustento Legal',
+                          subtitle: 'Consultar base normativa',
+                          onTap: () => _nav(
+                            context,
+                            AppRoutes.sustentoLegal,
+                            requiredPerm: permSustento,
+                          ),
+                        ),
                     ],
                   );
-                }
-
-                return ListView(
-                  padding: drawerScrollablePadding(context),
-                  children: [
-                    const DrawerSectionLabel(label: 'General'),
-                    _DrawerItem(
-                      icon: Icons.home,
-                      label: 'Inicio',
-                      subtitle: 'Volver al panel principal',
-                      onTap: () => _nav(context, AppRoutes.home),
-                    ),
-
-                    if (_allowed(perms, permBusqueda, all: canSeeAllButtons))
-                      _DrawerItem(
-                        icon: Icons.search,
-                        label: 'Búsqueda',
-                        subtitle: 'Localizar hechos y registros',
-                        onTap: () => _nav(
-                          context,
-                          AppRoutes.hechosBuscar,
-                          requiredPerm: permBusqueda,
-                        ),
-                      ),
-
-                    if (canSeeEstadisticasGlobales ||
-                        canSeeEstadisticasActividades)
-                      _DrawerGroup(
-                        icon: Icons.insights,
-                        label: 'Estadísticas',
-                        subtitle: 'Siniestros, actividades e indicadores',
-                        children: [
-                          if (canSeeEstadisticasGlobales)
-                            _DrawerSubItem(
-                              icon: Icons.car_crash,
-                              label: 'Siniestros',
-                              subtitle: 'Indicadores y hechos filtrados',
-                              onTap: () => _nav(
-                                context,
-                                AppRoutes.estadisticasGlobales,
-                                requiredPerm:
-                                    canBypassEstadisticasPerm ||
-                                        _allowed(perms, permEstadisticas)
-                                    ? null
-                                    : permEstadisticasGlobales,
-                              ),
-                            ),
-                          if (canSeeEstadisticasActividades)
-                            _DrawerSubItem(
-                              icon: Icons.photo_library,
-                              label: 'Actividades',
-                              subtitle: 'Indicadores y capturas filtradas',
-                              onTap: () => _nav(
-                                context,
-                                AppRoutes.estadisticasActividades,
-                                requiredPerm: canBypassEstadisticasPerm
-                                    ? null
-                                    : permEstadisticasActividades,
-                              ),
-                            ),
-                        ],
-                      ),
-
-                    const SizedBox(height: 12),
-                    if (canSeePuestas || canSeeDictamenes) ...[
-                      const DrawerSectionLabel(label: 'Operación'),
-                      _DrawerGroup(
-                        icon: Icons.gavel,
-                        label: 'Puestas a disposición',
-                        subtitle: 'Puestas, creación y dictámenes disponibles',
-                        children: [
-                          if (canSeePuestas)
-                            _DrawerSubItem(
-                              icon: Icons.folder_open,
-                              label: 'Listado de puestas',
-                              subtitle: 'Consultar registros capturados',
-                              onTap: () => _nav(
-                                context,
-                                AppRoutes.puestasDisposicion,
-                                requiredPerm: permPuestasDisposicion,
-                              ),
-                            ),
-                          if (canCreatePuestas)
-                            _DrawerSubItem(
-                              icon: Icons.add_circle_outline,
-                              label: 'Crear puesta',
-                              subtitle: 'Registrar una nueva puesta',
-                              onTap: () => _nav(
-                                context,
-                                AppRoutes.puestasDisposicionCreate,
-                                requiredPerm: 'crear puestas a disposicion',
-                              ),
-                            ),
-                          if (canSeeDictamenes)
-                            _DrawerSubItem(
-                              icon: Icons.description,
-                              label: 'Listado de dictámenes',
-                              subtitle: 'Explorar dictámenes existentes',
-                              onTap: () => _nav(
-                                context,
-                                AppRoutes.dictamenes,
-                                requiredPerm: permDictamenes,
-                              ),
-                            ),
-                        ],
-                      ),
-                    ],
-
-                    if (_allowed(perms, permHechos, all: canSeeAllButtons))
-                      _DrawerGroup(
-                        icon: Icons.directions_car,
-                        label: 'Hechos',
-                        subtitle: 'Consulta, seguimiento y pendientes',
-                        children: [
-                          _DrawerSubItem(
-                            icon: Icons.list_alt,
-                            label: 'Listado de hechos',
-                            subtitle: 'Ver hechos capturados',
-                            onTap: () => _nav(
-                              context,
-                              AppRoutes.accidentes,
-                              requiredPerm: permHechos,
-                            ),
-                          ),
-                          _DrawerSubItem(
-                            icon: Icons.fact_check_outlined,
-                            label: 'Seguimiento de hechos',
-                            subtitle: 'Pendientes, turnados y faltantes',
-                            onTap: () => _nav(
-                              context,
-                              AppRoutes.hechosSeguimiento,
-                              requiredPerm: permHechos,
-                            ),
-                          ),
-                          _DrawerSubItem(
-                            icon: Icons.assignment_late,
-                            label: 'Cortes pendientes',
-                            subtitle: 'Revisar pendientes por corte',
-                            onTap: () => _nav(
-                              context,
-                              AppRoutes.pendientesCortes,
-                              requiredPerm: permHechos,
-                            ),
-                          ),
-                        ],
-                      ),
-
-                    if (_allowed(perms, permActividades, all: canSeeAllButtons))
-                      _DrawerItem(
-                        icon: Icons.photo_library,
-                        label: 'Actividades',
-                        subtitle: 'Operativos y actividades del día',
-                        onTap: () => _nav(
-                          context,
-                          AppRoutes.actividades,
-                          requiredPerm: permActividades,
-                        ),
-                      ),
-
-                    if (canUseDelegacionesActividadesFisicas)
-                      _DrawerItem(
-                        icon: Icons.fitness_center_outlined,
-                        label: 'Ejercicios Delegaciones',
-                        subtitle: 'Subir foto y participantes',
-                        onTap: () => _nav(
-                          context,
-                          AppRoutes.delegacionesActividadesFisicas,
-                        ),
-                      ),
-
-                    if (canSeeConstanciasManejo)
-                      _DrawerGroup(
-                        icon: Icons.fact_check,
-                        label: 'Modulo de examenes',
-                        subtitle: 'Captura diaria y constancias',
-                        children: [
-                          _DrawerSubItem(
-                            icon: Icons.today,
-                            label: 'Examenes diarios',
-                            subtitle: 'Capturar totales por modulo',
-                            onTap: () =>
-                                _nav(context, AppRoutes.moduloExamenesDiarios),
-                          ),
-                          _DrawerSubItem(
-                            icon: Icons.badge,
-                            label: 'Constancias de manejo',
-                            subtitle: 'Generar lotes, imprimir y activar',
-                            onTap: () =>
-                                _nav(context, AppRoutes.constanciasManejo),
-                          ),
-                        ],
-                      ),
-
-                    if (canSeeLicenciasPuntos)
-                      _DrawerItem(
-                        icon: Icons.scoreboard_outlined,
-                        label: 'Puntos de licencia',
-                        subtitle: 'Escanear licencia y revisar saldo',
-                        onTap: () => _nav(context, AppRoutes.licenciasPuntos),
-                      ),
-
-                    if (canSeeOperativosGroup)
-                      _DrawerGroup(
-                        icon: Icons.assignment_turned_in_outlined,
-                        label: 'Operativos',
-                        subtitle:
-                            'Conduce con legalidad, alcoholimetría y listados',
-                        children: [
-                          if (canSeeConduceLegalidad)
-                            _DrawerSubItem(
-                              icon:
-                                  ConduceLegalidadModule.conduceLegalidad.icon,
-                              label:
-                                  ConduceLegalidadModule.conduceLegalidad.title,
-                              subtitle: ConduceLegalidadModule
-                                  .conduceLegalidad
-                                  .listSubtitle,
-                              onTap: () =>
-                                  _nav(context, AppRoutes.conduceLegalidad),
-                            ),
-                          if (canSeeConduceLegalidad)
-                            _DrawerSubItem(
-                              icon: ConduceLegalidadModule.alcoholimetria.icon,
-                              label:
-                                  ConduceLegalidadModule.alcoholimetria.title,
-                              subtitle: ConduceLegalidadModule
-                                  .alcoholimetria
-                                  .listSubtitle,
-                              onTap: () =>
-                                  _nav(context, AppRoutes.alcoholimetria),
-                            ),
-                          _DrawerSubItem(
-                            icon: Icons.list_alt,
-                            label: 'Listado de operativos',
-                            subtitle: 'Elegir el módulo operativo',
-                            onTap: () => _nav(context, AppRoutes.operativos),
-                          ),
-                        ],
-                      ),
-
-                    if (canSeeCulturaVial)
-                      _DrawerItem(
-                        icon: Icons.sports_esports,
-                        label: 'Cultura Vial',
-                        subtitle: 'Salas, QR y minijuegos',
-                        onTap: () => _nav(
-                          context,
-                          AppRoutes.culturaVial,
-                          requiredUnitId: AuthService.unidadCulturaVialId,
-                        ),
-                      ),
-
-                    if (canSeeDispositivos)
-                      _DrawerGroup(
-                        icon: Icons.add_road,
-                        label: 'Dispositivos',
-                        subtitle: 'Carreteras y revisión operativa',
-                        children: [
-                          _DrawerSubItem(
-                            icon: Icons.list_alt,
-                            label: 'Listado',
-                            subtitle: 'Ver dispositivos registrados',
-                            onTap: () => _nav(
-                              context,
-                              AppRoutes.dispositivos,
-                              requiredUnitId:
-                                  AuthService.unidadProteccionCarreterasId,
-                            ),
-                          ),
-                          if (canReviewDispositivos)
-                            _DrawerSubItem(
-                              icon: Icons.fact_check_outlined,
-                              label: 'Pendientes de revisión',
-                              subtitle: 'Aprobar o rechazar capturas',
-                              onTap: () => _nav(
-                                context,
-                                AppRoutes.dispositivosRevision,
-                                requiredUnitId:
-                                    AuthService.unidadProteccionCarreterasId,
-                              ),
-                            ),
-                        ],
-                      ),
-
-                    if (canSeeVialidadesUrbanas)
-                      _DrawerGroup(
-                        icon: Icons.add_road,
-                        label: 'Vialidades Urbanas',
-                        subtitle: 'Operación y detalles urbanos',
-                        children: [
-                          _DrawerSubItem(
-                            icon: Icons.list_alt,
-                            label: 'Dispositivos',
-                            subtitle: 'Ver capturas y detalles',
-                            onTap: () => _nav(
-                              context,
-                              AppRoutes.vialidadesUrbanas,
-                              requiredUnitId: 5,
-                            ),
-                          ),
-                        ],
-                      ),
-
-                    if (_allowed(perms, permGruas, all: canSeeAllButtons))
-                      _DrawerItem(
-                        icon: Icons.local_shipping,
-                        label: 'Grúas',
-                        subtitle: 'Seguimiento de grúas y movimientos',
-                        onTap: () => _nav(
-                          context,
-                          AppRoutes.gruas,
-                          requiredPerm: permGruas,
-                        ),
-                      ),
-
-                    const SizedBox(height: 12),
-                    const DrawerSectionLabel(label: 'Consulta'),
-
-                    if (canSeeMapaPatrullas || canSeeMapaIncidencias)
-                      _DrawerGroup(
-                        icon: Icons.map,
-                        label: 'Mapa',
-                        subtitle: 'Ubicación de patrullas e incidencias',
-                        children: [
-                          if (canSeeMapaPatrullas)
-                            _DrawerSubItem(
-                              icon: Icons.local_police,
-                              label: 'Mapa patrullas',
-                              subtitle: 'Ubicar personal y patrullas',
-                              onTap: () => _nav(context, AppRoutes.mapa),
-                            ),
-                          if (canSeeMapaIncidencias)
-                            _DrawerSubItem(
-                              icon: Icons.warning_amber,
-                              label: 'Mapa incidencias',
-                              subtitle: 'Visualizar incidencias activas',
-                              onTap: () => _nav(
-                                context,
-                                AppRoutes.mapaIncidencias,
-                                requiredPerm: permMapa,
-                              ),
-                            ),
-                        ],
-                      ),
-
-                    _DrawerGroup(
-                      icon: Icons.handyman,
-                      label: 'Herramientas',
-                      subtitle: 'Calculadoras de apoyo pericial',
-                      children: [
-                        if (canSeeRndTool)
-                          _DrawerSubItem(
-                            icon: Icons.app_registration,
-                            label: 'Solicitar RND',
-                            subtitle: 'Mensaje para faltas administrativas',
-                            onTap: () =>
-                                _nav(context, AppRoutes.herramientasRndFaltas),
-                          ),
-                        _DrawerSubItem(
-                          icon: Icons.tire_repair,
-                          label: 'Huella de frenado',
-                          subtitle:
-                              'Calcular velocidad con base a la huella de frenado',
-                          onTap: () => _nav(
-                            context,
-                            AppRoutes.herramientasVelocidadFrenado,
-                          ),
-                        ),
-                        _DrawerSubItem(
-                          icon: Icons.car_repair,
-                          label: 'Deformación de láminas',
-                          subtitle:
-                              'Calcular EES/EBS con perfil de deformación',
-                          onTap: () => _nav(
-                            context,
-                            AppRoutes.herramientasVelocidadDeformacion,
-                          ),
-                        ),
-                        _DrawerSubItem(
-                          icon: Icons.route,
-                          label: 'Reconstructor de tránsito 2D',
-                          subtitle: 'Escenas, trayectorias y secuencias',
-                          onTap: () => _nav(
-                            context,
-                            AppRoutes.herramientasReconstructorTransito2d,
-                          ),
-                        ),
-                      ],
-                    ),
-
-                    if (_allowed(perms, permSustento, all: canSeeAllButtons))
-                      _DrawerItem(
-                        icon: Icons.gavel,
-                        label: 'Sustento Legal',
-                        subtitle: 'Consultar base normativa',
-                        onTap: () => _nav(
-                          context,
-                          AppRoutes.sustentoLegal,
-                          requiredPerm: permSustento,
-                        ),
-                      ),
-                  ],
-                );
-              },
+                },
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

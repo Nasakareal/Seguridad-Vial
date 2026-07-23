@@ -183,7 +183,7 @@ class _DictamenCreateScreenState extends State<DictamenCreateScreen> {
                   BoxShadow(
                     blurRadius: 12,
                     offset: const Offset(0, 6),
-                    color: Colors.black.withOpacity(.04),
+                    color: Colors.black.withValues(alpha: .04),
                   ),
                 ],
               ),

@@ -1,7 +1,7 @@
 name: seguridad_vial_app
 description: App móvil para captura de hechos y monitoreo de patrullas
 publish_to: 'none'
-version: 1.28.85+134
+version: 1.28.86+135
 
 environment:
   sdk: ">=3.8.0 <4.0.0"
@@ -60,6 +60,10 @@ flutter:
     - assets/images/car.png
     - assets/images/guardiacivil.png
     - assets/images/guardiacivilcon.png
+    - assets/images/pompella/siniestros.png
+    - assets/images/pompella/vialidades.png
+    - assets/images/pompella/fomento.png
+    - assets/images/pompella/delegaciones.png
 
 flutter_icons:
   android: true

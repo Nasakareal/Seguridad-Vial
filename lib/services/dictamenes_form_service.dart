@@ -115,8 +115,9 @@ class DictamenesFormService {
   Future<List<Map<String, dynamic>>> _loadCache(String key) async {
     final prefs = await SharedPreferences.getInstance();
     final raw = prefs.getString(key);
-    if (raw == null || raw.trim().isEmpty)
+    if (raw == null || raw.trim().isEmpty) {
       return const <Map<String, dynamic>>[];
+    }
 
     try {
       final decoded = jsonDecode(raw);

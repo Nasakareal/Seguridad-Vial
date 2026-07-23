@@ -71,10 +71,7 @@ class _DictamenesScreenState extends State<DictamenesScreen> {
 
   List<Map<String, dynamic>> _toMapList(dynamic v) {
     if (v is List) {
-      return v
-          .where((e) => e is Map)
-          .map((e) => (e as Map).cast<String, dynamic>())
-          .toList();
+      return v.whereType<Map>().map((e) => e.cast<String, dynamic>()).toList();
     }
     return <Map<String, dynamic>>[];
   }
@@ -283,7 +280,7 @@ class _DictamenesScreenState extends State<DictamenesScreen> {
           BoxShadow(
             blurRadius: 12,
             offset: const Offset(0, 6),
-            color: Colors.black.withOpacity(.04),
+            color: Colors.black.withValues(alpha: .04),
           ),
         ],
       ),

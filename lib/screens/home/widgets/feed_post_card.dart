@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../models/feed_item.dart';
 import '../../../services/guardianes_camino_dispositivos_service.dart';
+import '../../../widgets/glass.dart';
 import '../../../widgets/safe_network_image.dart';
 
 class FeedPostCard extends StatelessWidget {
@@ -40,24 +41,18 @@ class FeedPostCard extends StatelessWidget {
         : GuardianesCaminoDispositivosService.toPublicUrl(rawFoto);
     final fotoUrl = normalizedFoto.isNotEmpty ? normalizedFoto : null;
 
-    return Material(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(18),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(18),
-        onTap: onTap,
-        child: Container(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: Colors.grey.shade200),
-            boxShadow: [
-              BoxShadow(
-                blurRadius: 14,
-                offset: const Offset(0, 8),
-                color: Colors.black.withValues(alpha: .06),
-              ),
-            ],
-          ),
+    const radius = BorderRadius.all(Radius.circular(18));
+
+    return LiquidGlassSurface(
+      borderRadius: radius,
+      padding: EdgeInsets.zero,
+      opacity: .88,
+      blur: 7,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: radius,
+          onTap: onTap,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -100,7 +95,7 @@ class FeedPostCard extends StatelessWidget {
                                   vertical: 4,
                                 ),
                                 decoration: BoxDecoration(
-                                  color: Colors.grey.shade100,
+                                  color: Colors.white.withValues(alpha: .58),
                                   borderRadius: BorderRadius.circular(999),
                                   border: Border.all(
                                     color: Colors.grey.shade200,
@@ -146,7 +141,10 @@ class FeedPostCard extends StatelessWidget {
                 ),
               ),
               if (fotoUrl != null) ...[
-                Divider(height: 1, color: Colors.grey.shade200),
+                Divider(
+                  height: 1,
+                  color: const Color(0xFFB8C9E5).withValues(alpha: .52),
+                ),
                 ClipRRect(
                   borderRadius: const BorderRadius.only(
                     bottomLeft: Radius.circular(18),

@@ -62,7 +62,7 @@ class _HomeFenixScreenState extends State<HomeFenixScreen> {
     final sections = _fenixSections();
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF4F6FA),
+      backgroundColor: Colors.transparent,
       appBar: AppBar(
         title: const Text('Inicio Fénix'),
         backgroundColor: Colors.blue,

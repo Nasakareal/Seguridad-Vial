@@ -364,6 +364,9 @@ class _OperativoCard extends StatelessWidget {
         ? '${operativo.totalCapturas} capturas'
         : '${operativo.misCapturas} mias';
     final hasAdminActions = operativo.canEdit || operativo.canDelete;
+    final displayState = operativo.isFeedingClosedAt(DateTime.now())
+        ? 'CERRADO 8H'
+        : operativo.estado.toUpperCase();
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -404,7 +407,7 @@ class _OperativoCard extends StatelessWidget {
                       ? null
                       : 'CP ${operativo.codigoPostal}',
                   counts,
-                  operativo.estado.toUpperCase(),
+                  displayState,
                 ]
                 .whereType<String>()
                 .where((v) => v.trim().isNotEmpty)

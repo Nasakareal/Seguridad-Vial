@@ -83,7 +83,7 @@ class _PendientesCortesScreenState extends State<PendientesCortesScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF6F7FB),
+      backgroundColor: Colors.transparent,
       appBar: AppBar(
         elevation: 0,
         backgroundColor: Colors.blue,
@@ -135,7 +135,7 @@ class _PendientesCortesScreenState extends State<PendientesCortesScreen> {
                 width: 40,
                 height: 40,
                 decoration: BoxDecoration(
-                  color: Colors.blue.withOpacity(.12),
+                  color: Colors.blue.withValues(alpha: .12),
                   borderRadius: BorderRadius.circular(14),
                 ),
                 child: const Icon(Icons.date_range, color: Colors.blue),
@@ -313,7 +313,7 @@ class _CorteTile extends StatelessWidget {
           BoxShadow(
             blurRadius: 14,
             offset: const Offset(0, 8),
-            color: Colors.black.withOpacity(.06),
+            color: Colors.black.withValues(alpha: .06),
           ),
         ],
       ),
@@ -323,7 +323,7 @@ class _CorteTile extends StatelessWidget {
           width: 44,
           height: 44,
           decoration: BoxDecoration(
-            color: Colors.blue.withOpacity(.12),
+            color: Colors.blue.withValues(alpha: .12),
             borderRadius: BorderRadius.circular(14),
           ),
           child: const Icon(Icons.event_note, color: Colors.blue),
@@ -357,8 +357,8 @@ class _ErrorCard extends StatelessWidget {
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(18),
-        color: Colors.red.withOpacity(.06),
-        border: Border.all(color: Colors.red.withOpacity(.18)),
+        color: Colors.red.withValues(alpha: .06),
+        border: Border.all(color: Colors.red.withValues(alpha: .18)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

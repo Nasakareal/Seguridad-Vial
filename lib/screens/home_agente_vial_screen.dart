@@ -125,7 +125,7 @@ class _HomeAgenteVialScreenState extends State<HomeAgenteVialScreen>
     final sections = _agenteVialSections();
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF4F6FA),
+      backgroundColor: Colors.transparent,
       appBar: AppBar(
         title: const Text('Inicio Agente Vial'),
         backgroundColor: Colors.blue,

@@ -88,8 +88,9 @@ class _RiesgoMapEmbedState extends State<RiesgoMapEmbed> {
       if (!mounted) return;
       setState(() => _error = 'No se pudo cargar zonas de riesgo.');
     } finally {
-      if (!mounted) return;
-      setState(() => _loading = false);
+      if (mounted) {
+        setState(() => _loading = false);
+      }
     }
   }
 
@@ -164,9 +165,9 @@ class _RiesgoMapEmbedState extends State<RiesgoMapEmbed> {
                     point: LatLng(c.lat, c.lng),
                     radius: _radiusMeters(c.score),
                     useRadiusInMeter: true,
-                    color: color.withOpacity(0.35),
+                    color: color.withValues(alpha: 0.35),
                     borderStrokeWidth: 2,
-                    borderColor: color.withOpacity(0.85),
+                    borderColor: color.withValues(alpha: 0.85),
                   );
                 }).toList(),
               ),
@@ -239,14 +240,14 @@ class _TopStatus extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(.96),
+        color: Colors.white.withValues(alpha: .96),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: Colors.grey.shade200),
         boxShadow: [
           BoxShadow(
             blurRadius: 12,
             offset: const Offset(0, 8),
-            color: Colors.black.withOpacity(.08),
+            color: Colors.black.withValues(alpha: .08),
           ),
         ],
       ),
@@ -256,7 +257,7 @@ class _TopStatus extends StatelessWidget {
             width: 38,
             height: 38,
             decoration: BoxDecoration(
-              color: Colors.orange.withOpacity(.12),
+              color: Colors.orange.withValues(alpha: .12),
               borderRadius: BorderRadius.circular(14),
             ),
             child: Icon(
@@ -309,7 +310,7 @@ class _RiskChip extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         decoration: BoxDecoration(
-          color: Colors.white.withOpacity(.92),
+          color: Colors.white.withValues(alpha: .92),
           borderRadius: BorderRadius.circular(999),
           border: Border.all(color: Colors.grey.shade200),
         ),
@@ -331,7 +332,7 @@ class _BottomPill extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(.95),
+        color: Colors.white.withValues(alpha: .95),
         borderRadius: BorderRadius.circular(999),
         border: Border.all(color: Colors.grey.shade200),
       ),

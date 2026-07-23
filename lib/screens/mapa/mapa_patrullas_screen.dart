@@ -316,8 +316,7 @@ class _MapaPatrullasScreenState extends State<MapaPatrullasScreen>
     if (!_scrollController.hasClients) return;
 
     try {
-      final mapCtx = _mapKey.currentContext;
-      if (mapCtx == null) {
+      if (_mapKey.currentContext == null) {
         await _scrollController.animateTo(
           0,
           duration: const Duration(milliseconds: 420),
@@ -326,9 +325,10 @@ class _MapaPatrullasScreenState extends State<MapaPatrullasScreen>
         return;
       }
 
-      final mapBox = mapCtx.findRenderObject() as RenderBox?;
-      final scrollCtx = _scrollController.position.context.storageContext;
-      final scrollBox = scrollCtx.findRenderObject() as RenderBox?;
+      final mapBox = _mapKey.currentContext?.findRenderObject() as RenderBox?;
+      final scrollContext = _scrollController.position.context.storageContext;
+      if (!scrollContext.mounted) return;
+      final scrollBox = scrollContext.findRenderObject() as RenderBox?;
 
       if (mapBox == null || scrollBox == null) return;
 
@@ -377,7 +377,7 @@ class _MapaPatrullasScreenState extends State<MapaPatrullasScreen>
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
             decoration: BoxDecoration(
-              color: Colors.black.withOpacity(.75),
+              color: Colors.black.withValues(alpha: .75),
               borderRadius: BorderRadius.circular(8),
             ),
             child: Text(
@@ -396,9 +396,12 @@ class _MapaPatrullasScreenState extends State<MapaPatrullasScreen>
             width: 44,
             height: 44,
             decoration: BoxDecoration(
-              color: accent.withOpacity(.12),
+              color: accent.withValues(alpha: .12),
               shape: BoxShape.circle,
-              border: Border.all(color: accent.withOpacity(.55), width: 2),
+              border: Border.all(
+                color: accent.withValues(alpha: .55),
+                width: 2,
+              ),
             ),
             alignment: Alignment.center,
             child: Opacity(
@@ -529,7 +532,7 @@ class _MapaPatrullasScreenState extends State<MapaPatrullasScreen>
               BoxShadow(
                 blurRadius: 14,
                 offset: const Offset(0, 8),
-                color: Colors.black.withOpacity(.06),
+                color: Colors.black.withValues(alpha: .06),
               ),
             ],
           ),
@@ -738,7 +741,7 @@ class _MapaPatrullasScreenState extends State<MapaPatrullasScreen>
                     width: 44,
                     height: 44,
                     decoration: BoxDecoration(
-                      color: Colors.blue.withOpacity(.12),
+                      color: Colors.blue.withValues(alpha: .12),
                       borderRadius: BorderRadius.circular(14),
                     ),
                     child: const Icon(Icons.local_police, color: Colors.blue),
@@ -1226,7 +1229,7 @@ class _TopStatusBar extends StatelessWidget {
             width: 38,
             height: 38,
             decoration: BoxDecoration(
-              color: Colors.blue.withOpacity(.12),
+              color: Colors.blue.withValues(alpha: .12),
               borderRadius: BorderRadius.circular(12),
             ),
             child: loading
@@ -1308,7 +1311,7 @@ class _PatrullaTile extends StatelessWidget {
           BoxShadow(
             blurRadius: 14,
             offset: const Offset(0, 8),
-            color: Colors.black.withOpacity(.06),
+            color: Colors.black.withValues(alpha: .06),
           ),
         ],
       ),
@@ -1318,7 +1321,7 @@ class _PatrullaTile extends StatelessWidget {
           width: 44,
           height: 44,
           decoration: BoxDecoration(
-            color: Colors.blue.withOpacity(.12),
+            color: Colors.blue.withValues(alpha: .12),
             borderRadius: BorderRadius.circular(14),
           ),
           child: Icon(
@@ -1418,8 +1421,8 @@ class _ErrorCard extends StatelessWidget {
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(18),
-        color: Colors.red.withOpacity(.06),
-        border: Border.all(color: Colors.red.withOpacity(.18)),
+        color: Colors.red.withValues(alpha: .06),
+        border: Border.all(color: Colors.red.withValues(alpha: .18)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

@@ -347,7 +347,7 @@ class _HomeDelegacionesScreenState extends State<HomeDelegacionesScreen>
       valueListenable: _trackingCtrl.trackingOn,
       builder: (context, trackingOn, _) {
         return Scaffold(
-          backgroundColor: const Color(0xFFE8EDF3),
+          backgroundColor: Colors.transparent,
           appBar: AppBar(
             elevation: 0,
             backgroundColor: Colors.blue,

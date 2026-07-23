@@ -282,7 +282,7 @@ class _DelegacionesActividadesFisicasScreenState
         : _buildContent();
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF4F6FA),
+      backgroundColor: Colors.transparent,
       appBar: AppBar(
         title: const Text('Ejercicios Delegaciones'),
         actions: [

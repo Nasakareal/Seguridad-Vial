@@ -11,8 +11,10 @@ import '../services/push_service.dart';
 
 import '../widgets/app_drawer.dart';
 import '../widgets/account_drawer.dart';
+import '../widgets/glass.dart';
 import '../widgets/header_card.dart';
 import '../widgets/offline_sync_status_card.dart';
+import '../widgets/unit_branding_watermark.dart';
 
 import 'login_screen.dart';
 
@@ -317,13 +319,22 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               backgroundColor: const Color(0xFFF6F7FB),
               appBar: AppBar(
                 elevation: 0,
-                backgroundColor: Colors.blue,
+                backgroundColor: Colors.transparent,
+                surfaceTintColor: Colors.transparent,
+                flexibleSpace: const LiquidGlassAppBarBackground(),
+                leading: Builder(
+                  builder: (context) => LiquidGlassIconButton(
+                    tooltip: 'Abrir menú',
+                    icon: Icons.menu,
+                    onPressed: () => Scaffold.of(context).openDrawer(),
+                  ),
+                ),
                 title: const Text('Sistema Estadístico'),
                 actions: [
                   if (canBuscar)
-                    IconButton(
+                    LiquidGlassIconButton(
                       tooltip: 'Buscar',
-                      icon: const Icon(Icons.search),
+                      icon: Icons.search,
                       onPressed: () => _go(context, AppRoutes.hechosBuscar),
                     ),
                   const AccountMenuAction(),
@@ -332,255 +343,274 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               drawer: AppDrawer(trackingOn: trackingOn),
               endDrawer: AppAccountDrawer(onLogout: () => _logout(context)),
               body: SafeArea(
-                child: RefreshIndicator(
-                  onRefresh: _refreshAll,
-                  child: CustomScrollView(
-                    controller: _scrollController,
-                    slivers: [
-                      SliverPadding(
-                        padding: const EdgeInsets.fromLTRB(16, 16, 16, 10),
-                        sliver: SliverToBoxAdapter(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              HeaderCard(
-                                trackingOn: trackingOn,
-                                showTrackingStatus: showTrackingStatus,
-                              ),
-                              const SizedBox(height: 12),
-                              const OfflineSyncStatusCard(),
-                              if (hasQuickActions) ...[
-                                const SizedBox(height: 16),
-                                Text(
-                                  'Accesos rápidos',
-                                  style: theme.textTheme.titleMedium?.copyWith(
-                                    fontWeight: FontWeight.w800,
-                                    color: const Color(0xFF0F172A),
-                                  ),
+                child: _HomeGlassBackdrop(
+                  child: RefreshIndicator(
+                    onRefresh: _refreshAll,
+                    child: CustomScrollView(
+                      controller: _scrollController,
+                      slivers: [
+                        SliverPadding(
+                          padding: const EdgeInsets.fromLTRB(16, 16, 16, 10),
+                          sliver: SliverToBoxAdapter(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                HeaderCard(
+                                  trackingOn: trackingOn,
+                                  showTrackingStatus: showTrackingStatus,
                                 ),
                                 const SizedBox(height: 12),
-                                QuickActionsGrid(
-                                  canAccidentes: canHechos,
-                                  canMapa: canMapa,
-                                  canConstancias: canConstanciasQuick,
-                                  onAccidentes: () =>
-                                      _go(context, AppRoutes.accidentes),
-                                  onMapa: () => _go(context, AppRoutes.mapa),
-                                  onConstancias: () =>
-                                      _go(context, AppRoutes.constanciasManejo),
-                                ),
-                              ],
-                              if (showTrackingStatus) ...[
-                                const SizedBox(height: 14),
-                                Container(
-                                  padding: const EdgeInsets.all(12),
-                                  decoration: BoxDecoration(
-                                    borderRadius: BorderRadius.circular(16),
-                                    color: Colors.blue.withValues(alpha: 0.06),
-                                    border: Border.all(
+                                const OfflineSyncStatusCard(),
+                                if (hasQuickActions) ...[
+                                  const SizedBox(height: 16),
+                                  Text(
+                                    'Accesos rápidos',
+                                    style: theme.textTheme.titleMedium
+                                        ?.copyWith(
+                                          fontWeight: FontWeight.w800,
+                                          color: const Color(0xFF0F172A),
+                                        ),
+                                  ),
+                                  const SizedBox(height: 12),
+                                  QuickActionsGrid(
+                                    canAccidentes: canHechos,
+                                    canMapa: canMapa,
+                                    canConstancias: canConstanciasQuick,
+                                    onAccidentes: () =>
+                                        _go(context, AppRoutes.accidentes),
+                                    onMapa: () => _go(context, AppRoutes.mapa),
+                                    onConstancias: () => _go(
+                                      context,
+                                      AppRoutes.constanciasManejo,
+                                    ),
+                                  ),
+                                ],
+                                if (showTrackingStatus) ...[
+                                  const SizedBox(height: 14),
+                                  Container(
+                                    padding: const EdgeInsets.all(12),
+                                    decoration: BoxDecoration(
+                                      borderRadius: BorderRadius.circular(16),
                                       color: Colors.blue.withValues(
-                                        alpha: 0.18,
+                                        alpha: 0.06,
                                       ),
-                                    ),
-                                  ),
-                                  child: Text(
-                                    trackingOn
-                                        ? 'Ubicación activa (enviando ubicación en segundo plano).'
-                                        : 'Ubicación inactiva (puede activarse desde el mapa de patrullas).',
-                                    style: TextStyle(
-                                      color: Colors.blue.shade900,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                              const SizedBox(height: 18),
-                              Row(
-                                children: [
-                                  Expanded(
-                                    child: Text(
-                                      'Feed',
-                                      style: theme.textTheme.titleMedium
-                                          ?.copyWith(
-                                            fontWeight: FontWeight.w900,
-                                            color: const Color(0xFF0F172A),
-                                          ),
-                                    ),
-                                  ),
-                                  InkWell(
-                                    borderRadius: BorderRadius.circular(12),
-                                    onTap: _pickDate,
-                                    child: Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 12,
-                                        vertical: 10,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: Colors.white,
-                                        borderRadius: BorderRadius.circular(12),
-                                        border: Border.all(
-                                          color: Colors.grey.shade200,
+                                      border: Border.all(
+                                        color: Colors.blue.withValues(
+                                          alpha: 0.18,
                                         ),
                                       ),
-                                      child: Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          const Icon(
-                                            Icons.calendar_month,
-                                            size: 18,
-                                          ),
-                                          const SizedBox(width: 8),
-                                          ValueListenableBuilder<DateTime>(
-                                            valueListenable:
-                                                _feedCtrl.selectedDate,
-                                            builder: (_, d, __) {
-                                              return Text(
-                                                _fmtDate(d),
-                                                style: const TextStyle(
-                                                  fontWeight: FontWeight.w800,
-                                                ),
-                                              );
-                                            },
-                                          ),
-                                        ],
+                                    ),
+                                    child: Text(
+                                      trackingOn
+                                          ? 'Ubicación activa (enviando ubicación en segundo plano).'
+                                          : 'Ubicación inactiva (puede activarse desde el mapa de patrullas).',
+                                      style: TextStyle(
+                                        color: Colors.blue.shade900,
                                       ),
                                     ),
                                   ),
                                 ],
-                              ),
-                              ValueListenableBuilder<bool>(
-                                valueListenable: _feedCtrl.puedeFiltrarUnidades,
-                                builder: (context, puedeFiltrar, _) {
-                                  if (!puedeFiltrar) {
-                                    return const SizedBox.shrink();
-                                  }
-
-                                  return ValueListenableBuilder<
-                                    List<FeedUnidad>
-                                  >(
-                                    valueListenable:
-                                        _feedCtrl.unidadesDisponibles,
-                                    builder: (context, unidades, __) {
-                                      if (unidades.isEmpty) {
-                                        return const SizedBox.shrink();
-                                      }
-
-                                      return ValueListenableBuilder<int?>(
-                                        valueListenable:
-                                            _feedCtrl.selectedUnidadId,
-                                        builder: (context, selectedId, ___) {
-                                          return Padding(
-                                            padding: const EdgeInsets.only(
-                                              top: 10,
+                                const SizedBox(height: 18),
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        'Feed',
+                                        style: theme.textTheme.titleMedium
+                                            ?.copyWith(
+                                              fontWeight: FontWeight.w900,
+                                              color: const Color(0xFF0F172A),
                                             ),
-                                            child: _FeedUnidadFilter(
-                                              unidades: unidades,
-                                              selectedUnidadId: selectedId,
-                                              onChanged: (unidadId) async {
-                                                _feedCtrl.setUnidadFilter(
-                                                  unidadId,
-                                                );
-                                                await _feedCtrl.load(
-                                                  reset: true,
-                                                );
-                                              },
+                                      ),
+                                    ),
+                                    LiquidGlassSurface(
+                                      borderRadius: BorderRadius.circular(14),
+                                      padding: EdgeInsets.zero,
+                                      opacity: .84,
+                                      blur: 8,
+                                      showShadow: false,
+                                      child: Material(
+                                        color: Colors.transparent,
+                                        child: InkWell(
+                                          borderRadius: BorderRadius.circular(
+                                            14,
+                                          ),
+                                          onTap: _pickDate,
+                                          child: Padding(
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 12,
+                                              vertical: 10,
                                             ),
-                                          );
-                                        },
-                                      );
-                                    },
-                                  );
-                                },
-                              ),
-                              ValueListenableBuilder<int?>(
-                                valueListenable: _feedCtrl.selectedUnidadId,
-                                builder: (context, selectedUnidadId, _) {
-                                  if (selectedUnidadId !=
-                                      AuthService.unidadDelegacionesId) {
-                                    return const SizedBox.shrink();
-                                  }
+                                            child: Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                const Icon(
+                                                  Icons.calendar_month,
+                                                  size: 18,
+                                                ),
+                                                const SizedBox(width: 8),
+                                                ValueListenableBuilder<
+                                                  DateTime
+                                                >(
+                                                  valueListenable:
+                                                      _feedCtrl.selectedDate,
+                                                  builder: (_, d, __) {
+                                                    return Text(
+                                                      _fmtDate(d),
+                                                      style: const TextStyle(
+                                                        fontWeight:
+                                                            FontWeight.w800,
+                                                      ),
+                                                    );
+                                                  },
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                ValueListenableBuilder<bool>(
+                                  valueListenable:
+                                      _feedCtrl.puedeFiltrarUnidades,
+                                  builder: (context, puedeFiltrar, _) {
+                                    if (!puedeFiltrar) {
+                                      return const SizedBox.shrink();
+                                    }
 
-                                  return ValueListenableBuilder<
-                                    List<FeedDelegacion>
-                                  >(
-                                    valueListenable:
-                                        _feedCtrl.delegacionesDisponibles,
-                                    builder: (context, delegaciones, __) {
-                                      if (delegaciones.isEmpty) {
-                                        return const SizedBox.shrink();
-                                      }
+                                    return ValueListenableBuilder<
+                                      List<FeedUnidad>
+                                    >(
+                                      valueListenable:
+                                          _feedCtrl.unidadesDisponibles,
+                                      builder: (context, unidades, __) {
+                                        if (unidades.isEmpty) {
+                                          return const SizedBox.shrink();
+                                        }
 
-                                      return ValueListenableBuilder<int?>(
-                                        valueListenable:
-                                            _feedCtrl.selectedDelegacionId,
-                                        builder: (context, selectedId, ___) {
-                                          return Padding(
-                                            padding: const EdgeInsets.only(
-                                              top: 10,
-                                            ),
-                                            child: _FeedDelegacionFilter(
-                                              delegaciones: delegaciones,
-                                              selectedDelegacionId: selectedId,
-                                              onChanged: (delegacionId) async {
-                                                _feedCtrl.setDelegacionFilter(
-                                                  delegacionId,
-                                                );
-                                                await _feedCtrl.load(
-                                                  reset: true,
-                                                );
-                                              },
-                                            ),
-                                          );
-                                        },
-                                      );
-                                    },
-                                  );
-                                },
-                              ),
-                              const SizedBox(height: 10),
-                            ],
-                          ),
-                        ),
-                      ),
-                      SliverPadding(
-                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-                        sliver: ValueListenableBuilder<bool>(
-                          valueListenable: _feedCtrl.loadingFeed,
-                          builder: (context, loadingFeed, _) {
-                            return ValueListenableBuilder<bool>(
-                              valueListenable: _feedCtrl.loadingMore,
-                              builder: (context, loadingMore, __) {
-                                return ValueListenableBuilder<bool>(
-                                  valueListenable: _feedCtrl.hasMore,
-                                  builder: (context, hasMore, ___) {
-                                    return ValueListenableBuilder<String?>(
-                                      valueListenable: _feedCtrl.error,
-                                      builder: (context, feedError, ____) {
-                                        return ValueListenableBuilder<
-                                          List<FeedItem>
-                                        >(
-                                          valueListenable: _feedCtrl.feed,
-                                          builder: (context, feed, _____) {
-                                            return FeedSliver(
-                                              loadingFeed: loadingFeed,
-                                              loadingMore: loadingMore,
-                                              hasMore: hasMore,
-                                              feedError: feedError,
-                                              feed: feed,
-                                              onLoadMore: _feedCtrl.loadMore,
-                                              onOpen: _openFeedItem,
+                                        return ValueListenableBuilder<int?>(
+                                          valueListenable:
+                                              _feedCtrl.selectedUnidadId,
+                                          builder: (context, selectedId, ___) {
+                                            return Padding(
+                                              padding: const EdgeInsets.only(
+                                                top: 10,
+                                              ),
+                                              child: _FeedUnidadFilter(
+                                                unidades: unidades,
+                                                selectedUnidadId: selectedId,
+                                                onChanged: (unidadId) async {
+                                                  _feedCtrl.setUnidadFilter(
+                                                    unidadId,
+                                                  );
+                                                  await _feedCtrl.load(
+                                                    reset: true,
+                                                  );
+                                                },
+                                              ),
                                             );
                                           },
                                         );
                                       },
                                     );
                                   },
-                                );
-                              },
-                            );
-                          },
+                                ),
+                                ValueListenableBuilder<int?>(
+                                  valueListenable: _feedCtrl.selectedUnidadId,
+                                  builder: (context, selectedUnidadId, _) {
+                                    if (selectedUnidadId !=
+                                        AuthService.unidadDelegacionesId) {
+                                      return const SizedBox.shrink();
+                                    }
+
+                                    return ValueListenableBuilder<
+                                      List<FeedDelegacion>
+                                    >(
+                                      valueListenable:
+                                          _feedCtrl.delegacionesDisponibles,
+                                      builder: (context, delegaciones, __) {
+                                        if (delegaciones.isEmpty) {
+                                          return const SizedBox.shrink();
+                                        }
+
+                                        return ValueListenableBuilder<int?>(
+                                          valueListenable:
+                                              _feedCtrl.selectedDelegacionId,
+                                          builder: (context, selectedId, ___) {
+                                            return Padding(
+                                              padding: const EdgeInsets.only(
+                                                top: 10,
+                                              ),
+                                              child: _FeedDelegacionFilter(
+                                                delegaciones: delegaciones,
+                                                selectedDelegacionId:
+                                                    selectedId,
+                                                onChanged:
+                                                    (delegacionId) async {
+                                                      _feedCtrl
+                                                          .setDelegacionFilter(
+                                                            delegacionId,
+                                                          );
+                                                      await _feedCtrl.load(
+                                                        reset: true,
+                                                      );
+                                                    },
+                                              ),
+                                            );
+                                          },
+                                        );
+                                      },
+                                    );
+                                  },
+                                ),
+                                const SizedBox(height: 10),
+                              ],
+                            ),
+                          ),
                         ),
-                      ),
-                    ],
+                        SliverPadding(
+                          padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+                          sliver: ValueListenableBuilder<bool>(
+                            valueListenable: _feedCtrl.loadingFeed,
+                            builder: (context, loadingFeed, _) {
+                              return ValueListenableBuilder<bool>(
+                                valueListenable: _feedCtrl.loadingMore,
+                                builder: (context, loadingMore, __) {
+                                  return ValueListenableBuilder<bool>(
+                                    valueListenable: _feedCtrl.hasMore,
+                                    builder: (context, hasMore, ___) {
+                                      return ValueListenableBuilder<String?>(
+                                        valueListenable: _feedCtrl.error,
+                                        builder: (context, feedError, ____) {
+                                          return ValueListenableBuilder<
+                                            List<FeedItem>
+                                          >(
+                                            valueListenable: _feedCtrl.feed,
+                                            builder: (context, feed, _____) {
+                                              return FeedSliver(
+                                                loadingFeed: loadingFeed,
+                                                loadingMore: loadingMore,
+                                                hasMore: hasMore,
+                                                feedError: feedError,
+                                                feed: feed,
+                                                onLoadMore: _feedCtrl.loadMore,
+                                                onOpen: _openFeedItem,
+                                              );
+                                            },
+                                          );
+                                        },
+                                      );
+                                    },
+                                  );
+                                },
+                              );
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -588,6 +618,22 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           },
         );
       },
+    );
+  }
+}
+
+class _HomeGlassBackdrop extends StatelessWidget {
+  final Widget child;
+
+  const _HomeGlassBackdrop({required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return UnitBrandingBackdrop(
+      opacity: .032,
+      widthFactor: .68,
+      alignment: const Alignment(0, -.02),
+      child: child,
     );
   }
 }
@@ -613,14 +659,13 @@ class _FeedUnidadFilter extends StatelessWidget {
     final ids = items.map((unidad) => unidad.id).toSet();
     final selected = ids.contains(selectedUnidadId) ? selectedUnidadId! : 0;
 
-    return Container(
+    return LiquidGlassSurface(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey.shade200),
-      ),
+      borderRadius: BorderRadius.circular(14),
+      opacity: .84,
+      blur: 8,
+      showShadow: false,
       child: DropdownButtonHideUnderline(
         child: DropdownButton<int>(
           isExpanded: true,
@@ -671,14 +716,13 @@ class _FeedDelegacionFilter extends StatelessWidget {
         ? selectedDelegacionId!
         : 0;
 
-    return Container(
+    return LiquidGlassSurface(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey.shade200),
-      ),
+      borderRadius: BorderRadius.circular(14),
+      opacity: .84,
+      blur: 8,
+      showShadow: false,
       child: DropdownButtonHideUnderline(
         child: DropdownButton<int>(
           isExpanded: true,

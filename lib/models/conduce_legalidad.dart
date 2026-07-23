@@ -383,6 +383,8 @@ class ConduceLegalidadFundamento {
 }
 
 class ConduceLegalidadOperativo {
+  static const Duration alcoholimetriaFeedingWindow = Duration(hours: 8);
+
   final int id;
   final String? clientUuid;
   final String nombre;
@@ -402,6 +404,10 @@ class ConduceLegalidadOperativo {
   final String? narrativa;
   final String? observaciones;
   final String estado;
+  final DateTime? createdAt;
+  final DateTime? feedingClosesAt;
+  final bool feedingClosed;
+  final bool canFeed;
   final bool canEdit;
   final bool canDelete;
   final int totalCapturas;
@@ -429,6 +435,10 @@ class ConduceLegalidadOperativo {
     this.narrativa,
     this.observaciones,
     required this.estado,
+    this.createdAt,
+    this.feedingClosesAt,
+    this.feedingClosed = false,
+    this.canFeed = true,
     this.canEdit = false,
     this.canDelete = false,
     required this.totalCapturas,
@@ -455,6 +465,31 @@ class ConduceLegalidadOperativo {
     return parts.where((part) => part.trim().isNotEmpty).join(', ');
   }
 
+  bool get isAlcoholimetria {
+    final tipo = tipoOperativo?.trim().toLowerCase();
+    if (tipo == 'alcoholimetria') return true;
+    if (tipo == 'conduce_legalidad') return false;
+    return '$nombre ${objetivo ?? ''}'.toLowerCase().contains('alcohol');
+  }
+
+  DateTime? get effectiveFeedingClosesAt {
+    if (!isAlcoholimetria) return null;
+    return feedingClosesAt ?? createdAt?.add(alcoholimetriaFeedingWindow);
+  }
+
+  bool isFeedingClosedAt(DateTime instant) {
+    if (!isAlcoholimetria) return false;
+    final closesAt = effectiveFeedingClosesAt;
+    if (closesAt == null) return feedingClosed;
+    return !instant.toUtc().isBefore(closesAt.toUtc());
+  }
+
+  bool canFeedAt(DateTime instant, {required bool isSuperadmin}) {
+    if (estado != 'activo') return false;
+    if (isSuperadmin) return true;
+    return canFeed && !isFeedingClosedAt(instant);
+  }
+
   factory ConduceLegalidadOperativo.fromJson(Map<String, dynamic> json) {
     return ConduceLegalidadOperativo(
       id: _asInt(json['id']),
@@ -476,6 +511,10 @@ class ConduceLegalidadOperativo {
       narrativa: _str(json['narrativa']),
       observaciones: _str(json['observaciones']),
       estado: _str(json['estado']) ?? 'activo',
+      createdAt: _dateTime(json['created_at']),
+      feedingClosesAt: _dateTime(json['alimentacion_cierra_en']),
+      feedingClosed: _bool(json['alimentacion_cerrada']),
+      canFeed: !json.containsKey('can_feed') || _bool(json['can_feed']),
       canEdit: _bool(json['can_edit']),
       canDelete: _bool(json['can_delete']),
       totalCapturas: _asInt(json['total_capturas']),
@@ -1029,6 +1068,11 @@ bool _bool(dynamic value) {
   if (value is bool) return value;
   final text = (value ?? '').toString().trim().toLowerCase();
   return text == '1' || text == 'true' || text == 'si';
+}
+
+DateTime? _dateTime(dynamic value) {
+  final text = _str(value);
+  return text == null ? null : DateTime.tryParse(text);
 }
 
 List<ConduceLegalidadFundamento> _expandirFundamentosOperativos(

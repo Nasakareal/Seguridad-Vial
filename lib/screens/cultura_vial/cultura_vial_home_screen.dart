@@ -232,7 +232,7 @@ class _CulturaVialHomeScreenState extends State<CulturaVialHomeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF6F7FB),
+      backgroundColor: Colors.transparent,
       appBar: AppBar(
         title: const Text('Cultura Vial'),
         actions: const [AccountMenuAction()],
@@ -477,7 +477,7 @@ class _CulturaVialSalaScreenState extends State<CulturaVialSalaScreen> {
   Widget build(BuildContext context) {
     final sala = _sala;
     return Scaffold(
-      backgroundColor: const Color(0xFFF6F7FB),
+      backgroundColor: Colors.transparent,
       appBar: AppBar(
         title: const Text('Sala de juego'),
         actions: [

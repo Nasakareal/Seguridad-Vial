@@ -373,8 +373,8 @@ class _ControlUbicacionScreenState extends State<ControlUbicacionScreen> {
                         child: ListTile(
                           leading: CircleAvatar(
                             backgroundColor: enabled
-                                ? Colors.green.withOpacity(.12)
-                                : Colors.red.withOpacity(.12),
+                                ? Colors.green.withValues(alpha: .12)
+                                : Colors.red.withValues(alpha: .12),
                             child: Icon(
                               enabled ? Icons.location_on : Icons.location_off,
                               color: enabled ? Colors.green : Colors.red,
