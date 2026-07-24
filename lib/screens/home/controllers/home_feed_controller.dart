@@ -26,6 +26,8 @@ class HomeFeedController {
 
   static const int _pageSize = 10;
   int _page = 1;
+  String? _nextCursor;
+  bool _usesCursorPagination = true;
 
   DateTime onlyDate(DateTime d) => DateTime(d.year, d.month, d.day);
 
@@ -58,14 +60,19 @@ class HomeFeedController {
     if (reset) {
       feed.value = <FeedItem>[];
       _page = 1;
+      _nextCursor = null;
+      _usesCursorPagination = true;
       hasMore.value = true;
     }
 
     try {
-      final limit = (_pageSize * _page).clamp(1, 50);
+      final limit = reset || _usesCursorPagination
+          ? _pageSize
+          : (_pageSize * _page).clamp(1, 50);
 
       final response = await FeedService.fetchFeed(
         limit: limit,
+        cursor: reset || !_usesCursorPagination ? null : _nextCursor,
         date: onlyDate(selectedDate.value),
         unidadId: selectedUnidadId.value,
         delegacionId: selectedUnidadId.value == AuthService.unidadDelegacionesId
@@ -89,15 +96,12 @@ class HomeFeedController {
         feed.value = List<FeedItem>.from(current)..addAll(newOnes);
       }
 
-      if (items.length < limit) {
-        hasMore.value = false;
-      } else {
-        if (newOnes.isEmpty && feed.value.isNotEmpty) {
-          hasMore.value = false;
-        } else {
-          hasMore.value = true;
-        }
-      }
+      _usesCursorPagination = response.usesCursorPagination;
+      _nextCursor = response.nextCursor;
+      hasMore.value =
+          response.hasMore &&
+          (!_usesCursorPagination || _nextCursor != null) &&
+          (reset || newOnes.isNotEmpty || feed.value.isEmpty);
     } catch (_) {
       error.value = 'No se pudo cargar el feed.';
     } finally {
@@ -109,16 +113,18 @@ class HomeFeedController {
     if (loadingFeed.value) return;
     if (loadingMore.value) return;
     if (!hasMore.value) return;
-    if (error.value != null) return;
-
     loadingMore.value = true;
+    error.value = null;
 
     try {
       final nextPage = _page + 1;
-      final nextLimit = (_pageSize * nextPage).clamp(1, 50);
+      final nextLimit = _usesCursorPagination
+          ? _pageSize
+          : (_pageSize * nextPage).clamp(1, 50);
 
       final response = await FeedService.fetchFeed(
         limit: nextLimit,
+        cursor: _usesCursorPagination ? _nextCursor : null,
         date: onlyDate(selectedDate.value),
         unidadId: selectedUnidadId.value,
         delegacionId: selectedUnidadId.value == AuthService.unidadDelegacionesId
@@ -141,8 +147,12 @@ class HomeFeedController {
         feed.value = List<FeedItem>.from(current)..addAll(newOnes);
       }
 
-      if (newOnes.isEmpty) hasMore.value = false;
-      if (items.length < nextLimit) hasMore.value = false;
+      _usesCursorPagination = response.usesCursorPagination;
+      _nextCursor = response.nextCursor;
+      hasMore.value =
+          newOnes.isNotEmpty &&
+          response.hasMore &&
+          (!_usesCursorPagination || _nextCursor != null);
     } catch (_) {
       error.value = 'No se pudo cargar el feed.';
     } finally {

@@ -118,14 +118,7 @@ class _QuickCard extends StatelessWidget {
                       width: compact ? 40 : 44,
                       height: compact ? 40 : 44,
                       decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                          colors: [
-                            Colors.white.withValues(alpha: .72),
-                            Colors.blue.withValues(alpha: .14),
-                          ],
-                        ),
+                        color: Colors.blue.withValues(alpha: .10),
                         borderRadius: BorderRadius.circular(14),
                         border: Border.all(
                           color: Colors.white.withValues(alpha: .90),

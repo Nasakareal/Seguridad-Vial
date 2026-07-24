@@ -254,6 +254,7 @@ class Actividad {
   final List<ActividadFoto> fotos;
   final List<ActividadVehiculo> vehiculos;
   final ActividadFomentoDetalle? fomentoCulturaVialDetalle;
+  final int? puestaDisposicionId;
 
   const Actividad({
     required this.id,
@@ -298,6 +299,7 @@ class Actividad {
     required this.fotos,
     required this.vehiculos,
     required this.fomentoCulturaVialDetalle,
+    this.puestaDisposicionId,
   });
 
   factory Actividad.fromJson(Map<String, dynamic> json) {
@@ -311,6 +313,7 @@ class Actividad {
         json['fomentoCulturaVialDetalle'];
     final fotosRaw = json['fotos'];
     final vehiculosRaw = json['vehiculos'];
+    final puestaRaw = json['puesta_disposicion'] ?? json['puestaDisposicion'];
 
     return Actividad(
       id: _asInt(json['id']),
@@ -396,6 +399,9 @@ class Actividad {
       fomentoCulturaVialDetalle: (fomento is Map)
           ? ActividadFomentoDetalle.fromJson(Map<String, dynamic>.from(fomento))
           : null,
+      puestaDisposicionId:
+          _asNullableInt(json['puesta_disposicion_id']) ??
+          (puestaRaw is Map ? _asNullableInt(puestaRaw['id']) : null),
     );
   }
 
@@ -477,6 +483,7 @@ class Actividad {
     'fotos': fotos.map((e) => e.toJson()).toList(),
     'vehiculos': vehiculos.map((e) => e.toJson()).toList(),
     'fomento_cultura_vial_detalle': fomentoCulturaVialDetalle?.toJson(),
+    'puesta_disposicion_id': puestaDisposicionId,
   };
 }
 

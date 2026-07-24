@@ -3,8 +3,10 @@ import 'package:flutter/material.dart';
 import '../app/routes.dart';
 import '../services/administrative_access_service.dart';
 import '../services/auth_service.dart';
+import '../services/settings_personal_service.dart';
 import 'drawer_ui.dart';
 import 'glass.dart';
+import 'photo_viewer.dart';
 import 'unit_branding_watermark.dart';
 
 class AccountMenuAction extends StatelessWidget {
@@ -32,8 +34,8 @@ class AppAccountDrawer extends StatelessWidget {
   const AppAccountDrawer({super.key, required this.onLogout});
 
   Future<_AccountSummary> _loadSummary() async {
-    var payload = await AuthService.getStoredUserPayload();
-    payload ??= await AuthService.getCurrentUserPayload(refresh: false);
+    var payload = await AuthService.getCurrentUserPayload(refresh: true);
+    payload ??= await AuthService.getStoredUserPayload();
 
     final role =
         _readNestedString(payload?['role'], ['name', 'nombre']) ??
@@ -55,6 +57,8 @@ class AppAccountDrawer extends StatelessWidget {
         (await AuthService.getUserEmail()) ??
         '';
 
+    final photoUrl = SettingsPersonalService.photoUrlFor(payload);
+
     var access = await AdministrativeAccessService.loadAccess();
     if (!access.canSeeConfigurationMenu) {
       access = await AdministrativeAccessService.loadAccess(refresh: true);
@@ -65,6 +69,7 @@ class AppAccountDrawer extends StatelessWidget {
       email: email,
       role: role,
       unit: unit,
+      photoUrl: photoUrl,
       access: access,
     );
   }
@@ -110,11 +115,20 @@ class AppAccountDrawer extends StatelessWidget {
           builder: (context, snapshot) {
             final summary = snapshot.data;
             final email = summary?.email ?? '';
+            final photoUrl = summary?.photoUrl ?? '';
 
             return Column(
               children: [
                 DrawerHeaderPanel(
                   avatarText: _initials(summary?.name ?? ''),
+                  photoUrl: photoUrl,
+                  onPhotoTap: photoUrl.trim().isEmpty
+                      ? null
+                      : () => showPhotoViewer(
+                          context: context,
+                          title: summary?.name ?? 'Foto de perfil',
+                          photoUrl: photoUrl,
+                        ),
                   title: summary?.name ?? 'Cargando perfil...',
                   subtitle: email.trim().isEmpty ? 'Cuenta actual' : email,
                   helper: 'Administra tu cuenta, contraseña y salida segura.',
@@ -293,6 +307,7 @@ class _AccountSummary {
   final String email;
   final String role;
   final String unit;
+  final String photoUrl;
   final AdministrativeAccess access;
 
   const _AccountSummary({
@@ -300,6 +315,7 @@ class _AccountSummary {
     required this.email,
     required this.role,
     required this.unit,
+    required this.photoUrl,
     required this.access,
   });
 }

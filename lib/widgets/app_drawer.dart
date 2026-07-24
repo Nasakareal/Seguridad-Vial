@@ -236,6 +236,17 @@ class AppDrawer extends StatelessWidget {
         await AuthService.hasRoleName('Encargado de Destacamento');
   }
 
+  Future<_DrawerHeaderData> _loadHeaderData() async {
+    final constanciasOnly =
+        await AuthService.isEvaluadorTeoricoConstanciasOnly();
+    final unidadId = await AuthService.getUnidadId();
+
+    return _DrawerHeaderData(
+      constanciasOnly: constanciasOnly,
+      backgroundAssetPath: unitBrandingAssetForUnitId(unidadId),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Drawer(
@@ -246,14 +257,15 @@ class AppDrawer extends StatelessWidget {
         widthFactor: .82,
         child: Column(
           children: [
-            FutureBuilder<bool>(
-              future: AuthService.isEvaluadorTeoricoConstanciasOnly(),
+            FutureBuilder<_DrawerHeaderData>(
+              future: _loadHeaderData(),
               builder: (context, snapshot) {
-                final constanciasOnly = snapshot.data == true;
+                final headerData = snapshot.data ?? const _DrawerHeaderData();
+                final constanciasOnly = headerData.constanciasOnly;
                 return DrawerHeaderPanel(
-                  icon: Icons.shield_outlined,
                   title: 'Seguridad Vial',
                   subtitle: '',
+                  backgroundAssetPath: headerData.backgroundAssetPath,
                   chips: <String>[
                     if (!constanciasOnly)
                       trackingOn ? 'Ubicación activa' : 'Ubicación inactiva',
@@ -831,6 +843,16 @@ class AppDrawer extends StatelessWidget {
       ),
     );
   }
+}
+
+class _DrawerHeaderData {
+  const _DrawerHeaderData({
+    this.constanciasOnly = false,
+    this.backgroundAssetPath,
+  });
+
+  final bool constanciasOnly;
+  final String? backgroundAssetPath;
 }
 
 class _DrawerAccess {

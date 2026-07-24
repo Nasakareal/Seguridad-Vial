@@ -51,13 +51,11 @@ class Glass extends StatelessWidget {
   }
 }
 
-/// Superficie translúcida para introducir el lenguaje visual "Liquid Glass"
-/// sin sacrificar contraste ni cambiar la estructura de las pantallas.
+/// Superficie translúcida uniforme, sin tintes ni degradados de color.
 class LiquidGlassSurface extends StatelessWidget {
   final Widget child;
   final EdgeInsetsGeometry padding;
   final BorderRadius borderRadius;
-  final Color accentColor;
   final double opacity;
   final double blur;
   final bool showShadow;
@@ -68,7 +66,6 @@ class LiquidGlassSurface extends StatelessWidget {
     required this.child,
     this.padding = const EdgeInsets.all(14),
     this.borderRadius = const BorderRadius.all(Radius.circular(18)),
-    this.accentColor = const Color(0xFF3B82F6),
     this.opacity = .82,
     this.blur = 10,
     this.showShadow = true,
@@ -78,23 +75,13 @@ class LiquidGlassSurface extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final surfaceOpacity = opacity.clamp(0.0, 1.0);
-    final highlightOpacity = (surfaceOpacity + .08).clamp(0.0, 1.0);
 
     final surface = Container(
       width: width,
       padding: padding,
       decoration: BoxDecoration(
         borderRadius: borderRadius,
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            Colors.white.withValues(alpha: highlightOpacity),
-            Colors.white.withValues(alpha: surfaceOpacity),
-            accentColor.withValues(alpha: .055),
-          ],
-          stops: const [0, .68, 1],
-        ),
+        color: Colors.white.withValues(alpha: surfaceOpacity),
         border: Border.all(
           color: const Color(0xFFB8C9E5).withValues(alpha: .58),
         ),

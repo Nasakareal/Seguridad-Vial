@@ -46,35 +46,40 @@ class FeedSliver extends StatelessWidget {
     }
 
     return SliverList(
-      delegate: SliverChildBuilderDelegate((context, index) {
-        if (index == feed.length) {
-          if (feedError != null) {
-            return Padding(
-              padding: const EdgeInsets.only(top: 10),
-              child: _ErrorInline(message: feedError!, onRetry: onLoadMore),
-            );
-          }
+      delegate: SliverChildBuilderDelegate(
+        (context, index) {
+          if (index == feed.length) {
+            if (feedError != null) {
+              return Padding(
+                padding: const EdgeInsets.only(top: 10),
+                child: _ErrorInline(message: feedError!, onRetry: onLoadMore),
+              );
+            }
 
-          if (loadingMore) {
-            return const Padding(
-              padding: EdgeInsets.symmetric(vertical: 16),
-              child: Center(child: CircularProgressIndicator()),
-            );
-          }
+            if (loadingMore) {
+              return const Padding(
+                padding: EdgeInsets.symmetric(vertical: 16),
+                child: Center(child: CircularProgressIndicator()),
+              );
+            }
 
-          if (!hasMore) {
+            if (!hasMore) {
+              return const SizedBox(height: 12);
+            }
+
             return const SizedBox(height: 12);
           }
 
-          return const SizedBox(height: 12);
-        }
-
-        final item = feed[index];
-        return Padding(
-          padding: EdgeInsets.only(bottom: index == feed.length - 1 ? 0 : 12),
-          child: FeedPostCard(item: item, onTap: () => onOpen(item)),
-        );
-      }, childCount: feed.length + 1),
+          final item = feed[index];
+          return Padding(
+            key: ValueKey<String>('${item.type.name}:${item.id}'),
+            padding: EdgeInsets.only(bottom: index == feed.length - 1 ? 0 : 12),
+            child: FeedPostCard(item: item, onTap: () => onOpen(item)),
+          );
+        },
+        childCount: feed.length + 1,
+        addAutomaticKeepAlives: false,
+      ),
     );
   }
 }

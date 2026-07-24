@@ -42,6 +42,9 @@ class FeedDelegacion {
 
 class FeedResponse {
   final List<FeedItem> items;
+  final bool hasMore;
+  final String? nextCursor;
+  final bool usesCursorPagination;
   final bool puedeFiltrarUnidades;
   final List<int> unidadIdsAplicadas;
   final List<FeedUnidad> unidadesFiltrables;
@@ -50,6 +53,9 @@ class FeedResponse {
 
   const FeedResponse({
     required this.items,
+    required this.hasMore,
+    required this.nextCursor,
+    required this.usesCursorPagination,
     required this.puedeFiltrarUnidades,
     required this.unidadIdsAplicadas,
     required this.unidadesFiltrables,
@@ -64,6 +70,7 @@ class FeedService {
 
   static Future<FeedResponse> fetchFeed({
     required int limit,
+    String? cursor,
     DateTime? date,
     DateTime? desde,
     DateTime? hasta,
@@ -90,7 +97,11 @@ class FeedService {
       delegacionFilterId,
     );
 
-    final query = <String, String>{'limit': safeLimit.toString()};
+    final query = <String, String>{'v': '2', 'limit': safeLimit.toString()};
+    final normalizedCursor = cursor?.trim() ?? '';
+    if (normalizedCursor.isNotEmpty) {
+      query['cursor'] = normalizedCursor;
+    }
 
     String ymd(DateTime d) {
       String two(int x) => x.toString().padLeft(2, '0');
@@ -143,6 +154,9 @@ class FeedService {
     if (decoded is! Map<String, dynamic>) {
       return const FeedResponse(
         items: <FeedItem>[],
+        hasMore: false,
+        nextCursor: null,
+        usesCursorPagination: false,
         puedeFiltrarUnidades: false,
         unidadIdsAplicadas: <int>[],
         unidadesFiltrables: <FeedUnidad>[],
@@ -152,6 +166,11 @@ class FeedService {
     }
 
     final data = decoded['data'];
+    final usesCursorPagination =
+        decoded['version'] == 2 ||
+        decoded.containsKey('has_more') ||
+        decoded.containsKey('next_cursor');
+    final nextCursor = _readText(decoded['next_cursor']);
 
     final out = <FeedItem>[];
     if (data is List) {
@@ -192,6 +211,11 @@ class FeedService {
 
     return FeedResponse(
       items: items,
+      hasMore: decoded['has_more'] is bool
+          ? decoded['has_more'] as bool
+          : out.length >= safeLimit,
+      nextCursor: nextCursor,
+      usesCursorPagination: usesCursorPagination,
       puedeFiltrarUnidades: decoded['puede_filtrar_unidades'] == true,
       unidadIdsAplicadas: unidadIds.toSet().toList()..sort(),
       unidadesFiltrables: unidadesFiltrables,

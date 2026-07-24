@@ -50,6 +50,7 @@ class _PuestaDisposicionCreateScreenState
   List<PuestaUnidad> _unidades = <PuestaUnidad>[];
   int? _hechoId;
   String? _hechoClientUuid;
+  int? _actividadId;
   bool _routeArgsApplied = false;
 
   File? _pdf;
@@ -211,10 +212,13 @@ class _PuestaDisposicionCreateScreenState
     final args = ModalRoute.of(context)?.settings.arguments;
     if (args is! Map) {
       _routeArgsApplied = true;
-      if (_hechoId != null || (_hechoClientUuid ?? '').isNotEmpty) {
+      if (_hechoId != null ||
+          (_hechoClientUuid ?? '').isNotEmpty ||
+          _actividadId != null) {
         setState(() {
           _hechoId = null;
           _hechoClientUuid = null;
+          _actividadId = null;
         });
       }
       return;
@@ -224,9 +228,12 @@ class _PuestaDisposicionCreateScreenState
 
     final hechoId = _intFrom(args['hecho_id'] ?? args['hechoId']);
     final hechoClientUuid = (args['hecho_client_uuid'] ?? '').toString().trim();
+    final actividadId = _intFrom(args['actividad_id'] ?? args['actividadId']);
     final personasMp = _intFrom(args['personas_mp']);
     final vehiculosMp = _intFrom(args['vehiculos_mp']);
-    final hechoVehiculos = _mapListFrom(args['vehiculos_hecho']);
+    final hechoVehiculos = _mapListFrom(
+      args['vehiculos_hecho'] ?? args['vehiculos_actividad'],
+    );
     final prefill = args['prefill'] is Map
         ? Map<String, dynamic>.from(args['prefill'] as Map)
         : const <String, dynamic>{};
@@ -234,8 +241,15 @@ class _PuestaDisposicionCreateScreenState
     String text(String key) => (prefill[key] ?? '').toString().trim();
 
     setState(() {
-      if (hechoId > 0) _hechoId = hechoId;
-      if (hechoClientUuid.isNotEmpty) _hechoClientUuid = hechoClientUuid;
+      if (actividadId > 0) {
+        _actividadId = actividadId;
+        _hechoId = null;
+        _hechoClientUuid = null;
+      } else {
+        if (hechoId > 0) _hechoId = hechoId;
+        if (hechoClientUuid.isNotEmpty) _hechoClientUuid = hechoClientUuid;
+        _actividadId = null;
+      }
       _hechoVehiculos = hechoVehiculos;
       _requiredPersonasCount = personasMp;
       _requiredVehiculosCount = vehiculosMp;
@@ -490,6 +504,7 @@ class _PuestaDisposicionCreateScreenState
       'unidad_id': _unidadId,
       'hecho_id': _hechoId,
       'hecho_client_uuid': _hechoClientUuid,
+      'actividad_id': _actividadId,
       'fecha': _ymd(_fecha),
       'hora': _hora == null
           ? null
@@ -528,6 +543,11 @@ class _PuestaDisposicionCreateScreenState
     _hechoId = _intValue(draft['hecho_id']);
     _hechoClientUuid = (draft['hecho_client_uuid'] ?? '').toString().trim();
     if ((_hechoClientUuid ?? '').isEmpty) _hechoClientUuid = null;
+    _actividadId = _intValue(draft['actividad_id']);
+    if ((_actividadId ?? 0) > 0) {
+      _hechoId = null;
+      _hechoClientUuid = null;
+    }
     _fecha = DateTime.tryParse((draft['fecha'] ?? '').toString()) ?? _fecha;
     _hora = _parseTime(draft['hora']) ?? _hora;
     final motivoDraft = (draft['motivo'] ?? '').toString();
@@ -1178,6 +1198,9 @@ class _PuestaDisposicionCreateScreenState
     if (hechoClientUuid.isNotEmpty) {
       fields['hecho_client_uuid'] = hechoClientUuid;
     }
+    if ((_actividadId ?? 0) > 0) {
+      fields['actividad_id'] = _actividadId.toString();
+    }
 
     if (_hora != null) {
       fields['hora_puesta'] =
@@ -1219,7 +1242,7 @@ class _PuestaDisposicionCreateScreenState
 
     if (kDebugMode) {
       debugPrint(
-        'Puesta a disposicion: enviando unidad=$_unidadId tipo=$_tipoPuesta hecho=$_hechoId personas=${personasIncluidas.length} vehiculos=${vehiculosIncluidos.length} objetos=${objetosIncluidos.length}',
+        'Puesta a disposicion: enviando unidad=$_unidadId tipo=$_tipoPuesta hecho=$_hechoId actividad=$_actividadId personas=${personasIncluidas.length} vehiculos=${vehiculosIncluidos.length} objetos=${objetosIncluidos.length}',
       );
     }
 
@@ -1294,7 +1317,9 @@ class _PuestaDisposicionCreateScreenState
     }
 
     return _Section(
-      title: 'Datos ya capturados del hecho',
+      title: _actividadId != null
+          ? 'Datos ya capturados de la actividad'
+          : 'Datos ya capturados del hecho',
       children: [
         Text(
           'Selecciona lo que se va a turnar para copiarlo a esta puesta.',
@@ -1363,6 +1388,10 @@ class _PuestaDisposicionCreateScreenState
                       if ((_hechoId ?? 0) > 0) ...[
                         const SizedBox(height: 12),
                         _readonly('Hecho vinculado', '#$_hechoId'),
+                      ],
+                      if ((_actividadId ?? 0) > 0) ...[
+                        const SizedBox(height: 12),
+                        _readonly('Actividad vinculada', '#$_actividadId'),
                       ],
                       const SizedBox(height: 12),
                       DropdownButtonFormField<String>(
@@ -2176,6 +2205,8 @@ class _VehiculoFields {
     put('motivo_relacion', motivoRelacion);
     put('numero_reporte_robo', numeroReporteRobo);
     put('observaciones', observaciones);
+    final source = (sourceKey ?? '').trim();
+    if (source.isNotEmpty) fields['vehiculos[$index][source_key]'] = source;
     if (conReporteRobo) fields['vehiculos[$index][con_reporte_robo]'] = '1';
   }
 

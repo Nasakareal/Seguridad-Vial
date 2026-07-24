@@ -14,5 +14,15 @@ void main() {
       );
       expect(Actividad.fromJson({'id': 3, 'hora': '2026-'}).hora, isNull);
     });
+
+    test('lee la puesta a disposición vinculada', () {
+      final actividad = Actividad.fromJson({
+        'id': 10,
+        'puesta_disposicion': {'id': 42},
+      });
+
+      expect(actividad.puestaDisposicionId, 42);
+      expect(actividad.toJson()['puesta_disposicion_id'], 42);
+    });
   });
 }

@@ -15,6 +15,8 @@ class SafeNetworkImage extends StatelessWidget {
   final String url;
   final double? width;
   final double? height;
+  final int? cacheWidth;
+  final int? cacheHeight;
   final BoxFit? fit;
   final AlignmentGeometry alignment;
   final FilterQuality filterQuality;
@@ -28,6 +30,8 @@ class SafeNetworkImage extends StatelessWidget {
     super.key,
     this.width,
     this.height,
+    this.cacheWidth,
+    this.cacheHeight,
     this.fit,
     this.alignment = Alignment.center,
     this.filterQuality = FilterQuality.low,
@@ -52,6 +56,8 @@ class SafeNetworkImage extends StatelessWidget {
       normalizedUrl,
       width: width,
       height: height,
+      cacheWidth: cacheWidth,
+      cacheHeight: cacheHeight,
       fit: fit,
       alignment: alignment,
       filterQuality: filterQuality,

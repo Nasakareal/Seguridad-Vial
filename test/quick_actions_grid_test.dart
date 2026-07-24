@@ -27,6 +27,14 @@ void main() {
 
     expect(find.text('Mapa de Patrullas'), findsOneWidget);
     expect(find.text('Siniestros'), findsOneWidget);
+    final decoratedBoxes = tester
+        .widgetList<Container>(find.byType(Container))
+        .map((widget) => widget.decoration)
+        .whereType<BoxDecoration>();
+    expect(
+      decoratedBoxes.where((decoration) => decoration.gradient != null),
+      isEmpty,
+    );
     expect(tester.takeException(), isNull);
   });
 

@@ -6,6 +6,7 @@ import '../core/platform_support.dart';
 import '../widgets/alerts_listener.dart';
 import '../widgets/offline_connection_banner.dart';
 import '../widgets/offline_sync_listener.dart';
+import '../widgets/screen_size_text_scale.dart';
 import '../widgets/unit_branding_watermark.dart';
 
 import 'auth_gate.dart';
@@ -68,10 +69,11 @@ class SeguridadVialApp extends StatelessWidget {
       ),
       builder: (context, child) {
         final appChild = child ?? const SizedBox.shrink();
+        final sizeScaledChild = ScreenSizeTextScale(child: appChild);
         final brandedChild = UnitBrandingBackdrop(
           opacity: .022,
           widthFactor: .68,
-          child: appChild,
+          child: sizeScaledChild,
         );
         final offlineAwareChild = OfflineConnectionBanner(child: brandedChild);
         if (!supportsForegroundTaskShell) {

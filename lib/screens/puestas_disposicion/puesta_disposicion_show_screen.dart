@@ -170,6 +170,18 @@ class _PuestaDisposicionShowScreenState
     return 0;
   }
 
+  int _actividadId(Map<String, dynamic> p) {
+    final direct = _toInt(p['actividad_id']);
+    if (direct > 0) return direct;
+
+    final nested = p['actividad'];
+    if (nested is Map) {
+      return _toInt(nested['id'] ?? nested['actividad_id']);
+    }
+
+    return 0;
+  }
+
   String _puestaPdfUrl(Map<String, dynamic> p) {
     final id = _toInt(p['id']);
     final archivo = _rawText(
@@ -225,6 +237,7 @@ class _PuestaDisposicionShowScreenState
     final numero = _text(p['numero_puesta']);
     final anio = _text(p['anio']);
     final hechoId = _hechoId(p);
+    final actividadId = _actividadId(p);
     final pdfUrl = _puestaPdfUrl(p);
     final pdfFileName = _puestaPdfFileName(p);
     final fotos = _list('fotos')
@@ -280,6 +293,8 @@ class _PuestaDisposicionShowScreenState
                       _kv('Numero', numero),
                       _kv('Anio', anio),
                       if (hechoId > 0) _kv('Hecho vinculado', '#$hechoId'),
+                      if (actividadId > 0)
+                        _kv('Actividad vinculada', '#$actividadId'),
                       _kv('Tipo', _text(p['tipo_puesta'])),
                       _kv('Motivo', _text(p['motivo'])),
                       _kv('Estatus', _text(p['estatus'])),
@@ -294,6 +309,19 @@ class _PuestaDisposicionShowScreenState
                             ),
                             icon: const Icon(Icons.open_in_new),
                             label: const Text('Abrir hecho'),
+                          ),
+                        ),
+                      if (actividadId > 0)
+                        SizedBox(
+                          width: double.infinity,
+                          child: OutlinedButton.icon(
+                            onPressed: () => Navigator.pushNamed(
+                              context,
+                              AppRoutes.actividadesShow,
+                              arguments: {'actividad_id': actividadId},
+                            ),
+                            icon: const Icon(Icons.open_in_new),
+                            label: const Text('Abrir actividad'),
                           ),
                         ),
                     ],

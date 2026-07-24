@@ -47,7 +47,9 @@ class FeedPostCard extends StatelessWidget {
       borderRadius: radius,
       padding: EdgeInsets.zero,
       opacity: .88,
-      blur: 7,
+      // El degradado, borde y sombra conservan el aspecto Liquid Glass. Evitar
+      // un BackdropFilter por publicación mantiene fluido el desplazamiento.
+      blur: 0,
       child: Material(
         color: Colors.transparent,
         child: InkWell(
@@ -167,27 +169,39 @@ class BigFeedImage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      color: Colors.grey.shade100,
-      child: AspectRatio(
-        aspectRatio: 1,
-        child: SafeNetworkImage(
-          url,
-          fit: BoxFit.contain,
-          alignment: Alignment.center,
-          filterQuality: FilterQuality.medium,
-          loadingBuilder: (context, progress) =>
-              const Center(child: CircularProgressIndicator()),
-          errorBuilder: (_, __, ___) => Center(
-            child: Icon(
-              Icons.broken_image,
-              color: Colors.grey.shade500,
-              size: 34,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final logicalWidth = constraints.hasBoundedWidth
+            ? constraints.maxWidth
+            : MediaQuery.sizeOf(context).width;
+        final pixelRatio = MediaQuery.devicePixelRatioOf(context);
+        final cacheWidth = (logicalWidth * pixelRatio).ceil().clamp(1, 1080);
+
+        return Container(
+          width: double.infinity,
+          color: Colors.grey.shade100,
+          child: AspectRatio(
+            aspectRatio: 1,
+            child: SafeNetworkImage(
+              url,
+              cacheWidth: cacheWidth,
+              fit: BoxFit.contain,
+              alignment: Alignment.center,
+              filterQuality: FilterQuality.medium,
+              loadingBuilder: (context, progress) => const Center(
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+              errorBuilder: (_, __, ___) => Center(
+                child: Icon(
+                  Icons.broken_image,
+                  color: Colors.grey.shade500,
+                  size: 34,
+                ),
+              ),
             ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 }

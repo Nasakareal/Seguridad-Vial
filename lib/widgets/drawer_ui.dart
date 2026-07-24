@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'glass.dart';
+import 'safe_network_image.dart';
 
 EdgeInsets drawerScrollablePadding(BuildContext context) {
   final bottomInset = MediaQuery.viewPaddingOf(context).bottom;
@@ -10,6 +11,9 @@ EdgeInsets drawerScrollablePadding(BuildContext context) {
 class DrawerHeaderPanel extends StatelessWidget {
   final IconData? icon;
   final String? avatarText;
+  final String? photoUrl;
+  final VoidCallback? onPhotoTap;
+  final String? backgroundAssetPath;
   final String title;
   final String subtitle;
   final String? helper;
@@ -21,6 +25,9 @@ class DrawerHeaderPanel extends StatelessWidget {
     required this.subtitle,
     this.icon,
     this.avatarText,
+    this.photoUrl,
+    this.onPhotoTap,
+    this.backgroundAssetPath,
     this.helper,
     this.chips = const <String>[],
   });
@@ -30,6 +37,7 @@ class DrawerHeaderPanel extends StatelessWidget {
     final topInset = MediaQuery.paddingOf(context).top;
 
     return Container(
+      clipBehavior: Clip.antiAlias,
       width: double.infinity,
       margin: const EdgeInsets.fromLTRB(14, 14, 14, 12),
       padding: EdgeInsets.fromLTRB(18, topInset + 10, 18, 18),
@@ -49,51 +57,80 @@ class DrawerHeaderPanel extends StatelessWidget {
         ],
         border: Border.all(color: Colors.white.withValues(alpha: .38)),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Stack(
         children: [
-          _HeaderBadge(icon: icon, avatarText: avatarText),
-          const SizedBox(height: 14),
-          Text(
-            title,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 20,
-              fontWeight: FontWeight.w900,
+          if ((backgroundAssetPath ?? '').trim().isNotEmpty)
+            Positioned.fill(
+              child: IgnorePointer(
+                child: ExcludeSemantics(
+                  child: Opacity(
+                    opacity: .18,
+                    child: Image.asset(
+                      backgroundAssetPath!,
+                      fit: BoxFit.contain,
+                      alignment: Alignment.center,
+                      filterQuality: FilterQuality.high,
+                    ),
+                  ),
+                ),
+              ),
             ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if ((photoUrl ?? '').trim().isNotEmpty ||
+                  (avatarText ?? '').trim().isNotEmpty ||
+                  icon != null) ...[
+                _HeaderBadge(
+                  icon: icon,
+                  avatarText: avatarText,
+                  photoUrl: photoUrl,
+                  onTap: onPhotoTap,
+                ),
+                const SizedBox(height: 14),
+              ],
+              Text(
+                title,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 20,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              if (subtitle.trim().isNotEmpty) ...[
+                const SizedBox(height: 6),
+                Text(
+                  subtitle,
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: .92),
+                    fontWeight: FontWeight.w700,
+                    height: 1.35,
+                  ),
+                ),
+              ],
+              if (chips.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: chips
+                      .map((chip) => DrawerHeaderChip(label: chip))
+                      .toList(),
+                ),
+              ],
+              if ((helper ?? '').trim().isNotEmpty) ...[
+                const SizedBox(height: 12),
+                Text(
+                  helper!,
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: .82),
+                    fontWeight: FontWeight.w600,
+                    height: 1.35,
+                  ),
+                ),
+              ],
+            ],
           ),
-          if (subtitle.trim().isNotEmpty) ...[
-            const SizedBox(height: 6),
-            Text(
-              subtitle,
-              style: TextStyle(
-                color: Colors.white.withValues(alpha: .92),
-                fontWeight: FontWeight.w700,
-                height: 1.35,
-              ),
-            ),
-          ],
-          if (chips.isNotEmpty) ...[
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: chips
-                  .map((chip) => DrawerHeaderChip(label: chip))
-                  .toList(),
-            ),
-          ],
-          if ((helper ?? '').trim().isNotEmpty) ...[
-            const SizedBox(height: 12),
-            Text(
-              helper!,
-              style: TextStyle(
-                color: Colors.white.withValues(alpha: .82),
-                fontWeight: FontWeight.w600,
-                height: 1.35,
-              ),
-            ),
-          ],
         ],
       ),
     );
@@ -253,24 +290,57 @@ class DrawerSectionLabel extends StatelessWidget {
 class _HeaderBadge extends StatelessWidget {
   final IconData? icon;
   final String? avatarText;
+  final String? photoUrl;
+  final VoidCallback? onTap;
 
-  const _HeaderBadge({this.icon, this.avatarText});
+  const _HeaderBadge({this.icon, this.avatarText, this.photoUrl, this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    if ((avatarText ?? '').trim().isNotEmpty) {
-      return CircleAvatar(
-        radius: 28,
-        backgroundColor: Colors.white.withValues(alpha: .16),
-        child: Text(
-          avatarText!,
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 18,
-            fontWeight: FontWeight.w900,
+    final photo = (photoUrl ?? '').trim();
+    if (photo.isNotEmpty) {
+      return Semantics(
+        button: onTap != null,
+        label: 'Ver foto de perfil',
+        child: Material(
+          color: Colors.transparent,
+          shape: const CircleBorder(),
+          child: InkWell(
+            customBorder: const CircleBorder(),
+            onTap: onTap,
+            child: Container(
+              width: 64,
+              height: 64,
+              padding: const EdgeInsets.all(2),
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.white.withValues(alpha: .20),
+                border: Border.all(
+                  color: Colors.white.withValues(alpha: .72),
+                  width: 1.5,
+                ),
+              ),
+              child: ClipOval(
+                child: SafeNetworkImage(
+                  photo,
+                  width: 60,
+                  height: 60,
+                  cacheWidth: 180,
+                  cacheHeight: 180,
+                  fit: BoxFit.cover,
+                  filterQuality: FilterQuality.medium,
+                  errorBuilder: (_, __, ___) =>
+                      _InitialsBadge(text: avatarText),
+                ),
+              ),
+            ),
           ),
         ),
       );
+    }
+
+    if ((avatarText ?? '').trim().isNotEmpty) {
+      return _InitialsBadge(text: avatarText);
     }
 
     return Container(
@@ -281,6 +351,28 @@ class _HeaderBadge extends StatelessWidget {
         borderRadius: BorderRadius.circular(18),
       ),
       child: Icon(icon ?? Icons.shield_outlined, color: Colors.white, size: 30),
+    );
+  }
+}
+
+class _InitialsBadge extends StatelessWidget {
+  final String? text;
+
+  const _InitialsBadge({this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    return CircleAvatar(
+      radius: 28,
+      backgroundColor: Colors.white.withValues(alpha: .16),
+      child: Text(
+        (text ?? '').trim().isEmpty ? 'SV' : text!.trim(),
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 18,
+          fontWeight: FontWeight.w900,
+        ),
+      ),
     );
   }
 }

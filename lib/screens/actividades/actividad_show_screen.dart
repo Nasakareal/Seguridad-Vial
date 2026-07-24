@@ -25,6 +25,7 @@ class _ActividadShowScreenState extends State<ActividadShowScreen>
   Actividad? _actividad;
   bool _bootstrapped = false;
   bool _isFomentoUser = false;
+  bool _canCreatePuesta = false;
 
   int? _idFromArgs() {
     final args = ModalRoute.of(context)?.settings.arguments;
@@ -75,14 +76,19 @@ class _ActividadShowScreenState extends State<ActividadShowScreen>
 
     try {
       var isFomentoUser = false;
+      var canCreatePuesta = false;
       try {
         isFomentoUser = await AuthService.isFomentoCulturaVialUser();
+      } catch (_) {}
+      try {
+        canCreatePuesta = await AuthService.can('crear puestas a disposicion');
       } catch (_) {}
       final a = await ActividadesService.fetchShow(id);
       if (!mounted) return;
       setState(() {
         _actividad = a;
         _isFomentoUser = isFomentoUser;
+        _canCreatePuesta = canCreatePuesta;
         _loading = false;
       });
     } catch (e) {
@@ -129,6 +135,57 @@ class _ActividadShowScreenState extends State<ActividadShowScreen>
     if (changed == true && mounted) {
       await _load();
     }
+  }
+
+  Future<void> _openPuestaDisposicion() async {
+    final a = _actividad;
+    if (a == null) return;
+
+    final puestaId = a.puestaDisposicionId ?? 0;
+    if (puestaId > 0) {
+      await Navigator.pushNamed(
+        context,
+        AppRoutes.puestasDisposicionShow,
+        arguments: {'puesta_disposicion_id': puestaId},
+      );
+      return;
+    }
+
+    final created = await Navigator.pushNamed(
+      context,
+      AppRoutes.puestasDisposicionCreate,
+      arguments: {
+        'actividad_id': a.id,
+        'vehiculos_actividad': a.vehiculos
+            .map((vehiculo) => vehiculo.toJson())
+            .toList(),
+        'vehiculos_mp': a.vehiculos.length,
+        'prefill': {
+          'motivo': _motivoPuesta(a),
+          'lugar': [
+            a.lugar?.trim() ?? '',
+            a.municipio?.trim() ?? '',
+          ].where((part) => part.isNotEmpty).join(', '),
+          'policia': a.nombre,
+          'fecha': a.fecha ?? '',
+          'hora': a.hora ?? '',
+        },
+      },
+    );
+
+    if (created == true && mounted) {
+      await _load();
+    }
+  }
+
+  String _motivoPuesta(Actividad actividad) {
+    if (actividad.vehiculos.any((vehiculo) => vehiculo.antecedenteVehiculo)) {
+      return 'VEHICULO CON REPORTE DE ROBO';
+    }
+
+    final motivo = (actividad.motivo ?? '').trim();
+    if (motivo.isNotEmpty) return motivo;
+    return actividad.subcategoria?.nombre.trim() ?? '';
   }
 
   String _displayDate(String? value) =>
@@ -259,6 +316,19 @@ class _ActividadShowScreenState extends State<ActividadShowScreen>
         backgroundColor: Colors.blue,
         title: const Text('Detalle de actividad'),
         actions: [
+          if (a != null &&
+              (_canCreatePuesta || (a.puestaDisposicionId ?? 0) > 0))
+            IconButton(
+              tooltip: (a.puestaDisposicionId ?? 0) > 0
+                  ? 'Ver puesta a disposición'
+                  : 'Crear puesta a disposición',
+              onPressed: _openPuestaDisposicion,
+              icon: Icon(
+                (a.puestaDisposicionId ?? 0) > 0
+                    ? Icons.assignment_turned_in_outlined
+                    : Icons.assignment_add,
+              ),
+            ),
           IconButton(
             tooltip: 'Editar',
             onPressed: a == null ? null : _edit,
