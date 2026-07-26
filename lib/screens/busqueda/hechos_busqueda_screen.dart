@@ -4,11 +4,14 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
+import '../../app/routes.dart';
 import '../../services/auth_service.dart';
 import '../../widgets/safe_network_image.dart';
 
 class HechosBusquedaScreen extends StatefulWidget {
-  const HechosBusquedaScreen({super.key});
+  final http.Client? client;
+
+  const HechosBusquedaScreen({super.key, this.client});
 
   @override
   State<HechosBusquedaScreen> createState() => _HechosBusquedaScreenState();
@@ -32,6 +35,8 @@ class _HechosBusquedaScreenState extends State<HechosBusquedaScreen> {
 
   static const String _baseUrl = 'https://seguridadvial-mich.com/api';
   static const String _host = 'https://seguridadvial-mich.com';
+  late final http.Client _client = widget.client ?? http.Client();
+  late final bool _ownsClient = widget.client == null;
 
   @override
   void initState() {
@@ -46,6 +51,7 @@ class _HechosBusquedaScreenState extends State<HechosBusquedaScreen> {
     _debounce?.cancel();
     _c.dispose();
     _focus.dispose();
+    if (_ownsClient) _client.close();
     super.dispose();
   }
 
@@ -145,33 +151,77 @@ class _HechosBusquedaScreenState extends State<HechosBusquedaScreen> {
   }
 
   Future<_SearchResponse> _fetchPage(String q, {required int page}) async {
-    final uri = Uri.parse('$_baseUrl/hechos/buscar').replace(
+    final hechosUri = Uri.parse('$_baseUrl/hechos/buscar').replace(
       queryParameters: <String, String>{
         'q': q,
         'per_page': '20',
         'page': page.toString(),
       },
     );
+    final operativosUri = Uri.parse('$_baseUrl/conduce-legalidad/buscar')
+        .replace(
+          queryParameters: <String, String>{
+            'q': q,
+            'per_page': '20',
+            'page': page.toString(),
+          },
+        );
 
-    final res = await http.get(uri, headers: await _headers());
+    final headers = await _headers();
+    final responses = await Future.wait([
+      _client.get(hechosUri, headers: headers),
+      _client.get(operativosUri, headers: headers),
+    ]);
 
-    if (res.statusCode != 200) {
-      throw Exception('Error ${res.statusCode}: ${res.body}');
+    final hechos = _decodeSearchPage(
+      responses[0],
+      page: page,
+      resultType: 'hecho',
+    );
+    final operativos = _decodeSearchPage(
+      responses[1],
+      page: page,
+      resultType: 'operativo',
+    );
+
+    final items = <Map<String, dynamic>>[...hechos.items, ...operativos.items]
+      ..sort(_compareSearchRows);
+
+    return _SearchResponse(
+      items: items,
+      page: page,
+      lastPage: hechos.lastPage > operativos.lastPage
+          ? hechos.lastPage
+          : operativos.lastPage,
+    );
+  }
+
+  _SearchResponse _decodeSearchPage(
+    http.Response response, {
+    required int page,
+    required String resultType,
+  }) {
+    if (response.statusCode == 403) {
+      return _SearchResponse(items: const [], page: page, lastPage: 1);
+    }
+    if (response.statusCode != 200) {
+      throw Exception('Error ${response.statusCode}: ${response.body}');
     }
 
-    final decoded = jsonDecode(res.body);
-
-    final list = (decoded is Map && decoded['data'] is List)
-        ? (decoded['data'] as List)
-        : <dynamic>[];
-
-    final meta = (decoded is Map && decoded['meta'] is Map)
-        ? (decoded['meta'] as Map)
-        : <dynamic, dynamic>{};
-
+    final decoded = jsonDecode(response.body);
+    final list = decoded is Map && decoded['data'] is List
+        ? decoded['data'] as List
+        : const <dynamic>[];
+    final meta = decoded is Map && decoded['meta'] is Map
+        ? decoded['meta'] as Map
+        : const <dynamic, dynamic>{};
     final items = <Map<String, dynamic>>[];
     for (final e in list) {
-      if (e is Map) items.add(Map<String, dynamic>.from(e));
+      if (e is! Map) continue;
+      items.add(<String, dynamic>{
+        ...Map<String, dynamic>.from(e),
+        '_result_type': resultType,
+      });
     }
 
     final currentPage = (meta['current_page'] is int)
@@ -185,7 +235,46 @@ class _HechosBusquedaScreenState extends State<HechosBusquedaScreen> {
     return _SearchResponse(items: items, page: currentPage, lastPage: lastPage);
   }
 
-  void _openHecho(Map<String, dynamic> row) {
+  int _compareSearchRows(Map<String, dynamic> a, Map<String, dynamic> b) {
+    final aDate = _safeText(a['fecha']);
+    final bDate = _safeText(b['fecha']);
+    final byDate = bDate.compareTo(aDate);
+    if (byDate != 0) return byDate;
+
+    final aId = int.tryParse(
+      _safeText(a['captura_id']).isNotEmpty
+          ? _safeText(a['captura_id'])
+          : _safeText(a['id']),
+    );
+    final bId = int.tryParse(
+      _safeText(b['captura_id']).isNotEmpty
+          ? _safeText(b['captura_id'])
+          : _safeText(b['id']),
+    );
+    return (bId ?? 0).compareTo(aId ?? 0);
+  }
+
+  void _openResult(Map<String, dynamic> row) {
+    if (_isOperativo(row)) {
+      final operativoId = int.tryParse(_safeText(row['operativo_id']));
+      final capturaId = int.tryParse(_safeText(row['captura_id']));
+      if (operativoId == null) return;
+
+      final alcoholimetria =
+          _safeText(row['module']).toLowerCase() == 'alcoholimetria';
+      Navigator.pushNamed(
+        context,
+        alcoholimetria
+            ? AppRoutes.alcoholimetriaShow
+            : AppRoutes.conduceLegalidadShow,
+        arguments: {
+          'operativoId': operativoId,
+          if (capturaId != null) 'capturaId': capturaId,
+        },
+      );
+      return;
+    }
+
     final id = row['id'];
     if (id == null) return;
 
@@ -194,7 +283,7 @@ class _HechosBusquedaScreenState extends State<HechosBusquedaScreen> {
 
     Navigator.pushNamed(
       context,
-      '/accidentes/show',
+      AppRoutes.accidentesShow,
       arguments: {'hechoId': hechoId},
     );
   }
@@ -206,6 +295,10 @@ class _HechosBusquedaScreenState extends State<HechosBusquedaScreen> {
     final s = (v ?? '').toString().trim();
     return s.isEmpty ? '' : s;
   }
+
+  bool _isOperativo(Map<String, dynamic> row) =>
+      _safeText(row['_result_type']) == 'operativo' ||
+      _safeText(row['result_type']) == 'operativo';
 
   String? _toAbsoluteUrl(String? raw) {
     final s = (raw ?? '').toString().trim();
@@ -278,6 +371,24 @@ class _HechosBusquedaScreenState extends State<HechosBusquedaScreen> {
   // Título: sin folio_c5i
   // ============================================================
   String _titleFromRow(Map<String, dynamic> row) {
+    if (_isOperativo(row)) {
+      final module = _safeText(row['module_label']);
+      var folio = _safeText(row['folio']);
+      final searchedFolio = _q.trim().toUpperCase();
+      final folios = row['folios'];
+      if (folios is List) {
+        for (final candidate in folios) {
+          final value = _safeText(candidate);
+          if (value.toUpperCase() == searchedFolio) {
+            folio = value;
+            break;
+          }
+        }
+      }
+      if (module.isNotEmpty && folio.isNotEmpty) return '$module · $folio';
+      return module.isNotEmpty ? module : 'Captura de operativo';
+    }
+
     final id = _safeText(row['id']);
     final fecha = _safeText(row['fecha']);
     final left = id.isNotEmpty ? 'Hecho #$id' : 'Hecho';
@@ -288,7 +399,7 @@ class _HechosBusquedaScreenState extends State<HechosBusquedaScreen> {
   // Ubicación: calle + colonia (lo que pediste)
   // ============================================================
   String _ubicacion(Map<String, dynamic> row) {
-    final calle = _safeText(row['calle']);
+    final calle = _safeText(_isOperativo(row) ? row['lugar'] : row['calle']);
     final col = _safeText(row['colonia']);
 
     final parts = <String>[];
@@ -310,11 +421,24 @@ class _HechosBusquedaScreenState extends State<HechosBusquedaScreen> {
         placas = _safeText(v0['placas']);
         serie = _safeText(v0['serie']);
 
-        final conds = v0['conductores'];
-        if (conds is List && conds.isNotEmpty) {
-          final c0 = conds.first;
-          if (c0 is Map) {
-            conductor = _safeText(c0['nombre']);
+        if (_isOperativo(row)) {
+          final personas = row['personas'];
+          if (personas is List && personas.isNotEmpty) {
+            final p0 = personas.first;
+            if (p0 is Map) {
+              conductor = _safeText(p0['nombre']);
+              if (conductor.isEmpty) {
+                conductor = _safeText(p0['numero_licencia']);
+              }
+            }
+          }
+        } else {
+          final conds = v0['conductores'];
+          if (conds is List && conds.isNotEmpty) {
+            final c0 = conds.first;
+            if (c0 is Map) {
+              conductor = _safeText(c0['nombre']);
+            }
           }
         }
       }
@@ -347,6 +471,19 @@ class _HechosBusquedaScreenState extends State<HechosBusquedaScreen> {
   // Leading foto
   // ============================================================
   Widget _leadingFoto(Map<String, dynamic> row) {
+    if (_isOperativo(row)) {
+      final isAlcohol =
+          _safeText(row['module']).toLowerCase() == 'alcoholimetria';
+      final color = isAlcohol ? Colors.deepPurple : Colors.teal;
+      return CircleAvatar(
+        backgroundColor: color.withValues(alpha: .12),
+        child: Icon(
+          isAlcohol ? Icons.health_and_safety_outlined : Icons.fact_check,
+          color: color,
+        ),
+      );
+    }
+
     final url = _fotoFromRow(row);
     if (url == null || url.isEmpty) {
       return CircleAvatar(
@@ -402,25 +539,41 @@ class _HechosBusquedaScreenState extends State<HechosBusquedaScreen> {
     final ubicacion = _ubicacion(row);
     final perito = _peritoFromRow(row);
     final veh = _vehiculoResumen(row);
+    final isOperativo = _isOperativo(row);
+    final fechaHora = [
+      _safeText(row['fecha']),
+      _safeText(row['hora']),
+      _safeText(row['municipio']),
+    ].where((value) => value.isNotEmpty).join(' · ');
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(ubicacion, maxLines: 2, overflow: TextOverflow.ellipsis),
 
-        // 👇 AQUÍ VA JUSTO DEBAJO DE LA DIRECCIÓN (como pediste)
-        Padding(
-          padding: const EdgeInsets.only(top: 4),
-          child: Text(
-            perito.trim().isNotEmpty ? 'Perito: $perito' : 'Perito: —',
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              fontWeight: FontWeight.w800,
-              color: Colors.black54,
+        if (isOperativo && fechaHora.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Text(
+              fechaHora,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(color: Colors.black54),
             ),
           ),
-        ),
+        if (!isOperativo)
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Text(
+              perito.trim().isNotEmpty ? 'Perito: $perito' : 'Perito: —',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontWeight: FontWeight.w800,
+                color: Colors.black54,
+              ),
+            ),
+          ),
 
         if (veh.trim().isNotEmpty)
           Padding(
@@ -473,7 +626,7 @@ class _HechosBusquedaScreenState extends State<HechosBusquedaScreen> {
                     const Icon(Icons.search, size: 20),
                     const SizedBox(width: 8),
                     const Text(
-                      'Buscar hechos',
+                      'Buscar registros',
                       style: TextStyle(fontWeight: FontWeight.w900),
                     ),
                     const Spacer(),
@@ -496,7 +649,8 @@ class _HechosBusquedaScreenState extends State<HechosBusquedaScreen> {
                     if (s.length >= 2) _buscar(s, reset: true);
                   },
                   decoration: InputDecoration(
-                    hintText: 'Placas, serie, conductor, calle, colonia…',
+                    hintText:
+                        'Folio, persona, licencia, placas, serie o lugar…',
                     prefixIcon: const Icon(Icons.search),
                     contentPadding: const EdgeInsets.symmetric(
                       horizontal: 12,
@@ -582,7 +736,7 @@ class _HechosBusquedaScreenState extends State<HechosBusquedaScreen> {
                             border: Border.all(color: Colors.grey.shade200),
                           ),
                           child: ListTile(
-                            onTap: () => _openHecho(row),
+                            onTap: () => _openResult(row),
 
                             leading: _leadingFoto(row),
 

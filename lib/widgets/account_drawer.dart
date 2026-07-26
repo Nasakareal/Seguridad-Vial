@@ -34,8 +34,10 @@ class AppAccountDrawer extends StatelessWidget {
   const AppAccountDrawer({super.key, required this.onLogout});
 
   Future<_AccountSummary> _loadSummary() async {
-    var payload = await AuthService.getCurrentUserPayload(refresh: true);
-    payload ??= await AuthService.getStoredUserPayload();
+    // El perfil local se actualiza desde el home; leerlo primero evita que la
+    // apertura del drawer dependa de la latencia de red.
+    var payload = await AuthService.getStoredUserPayload();
+    payload ??= await AuthService.getCurrentUserPayload(refresh: false);
 
     final role =
         _readNestedString(payload?['role'], ['name', 'nombre']) ??

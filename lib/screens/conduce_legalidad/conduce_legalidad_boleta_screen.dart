@@ -67,7 +67,7 @@ class _ConduceLegalidadBoletaScreenState
     final operativoId = widget.operativoId;
     final capturaId = widget.capturaId;
     if (widget.preview || operativoId == null || capturaId == null) {
-      final sample = _BoletaPreviewData.create();
+      final sample = _BoletaPreviewData.create(module: widget.module);
       setState(() {
         _operativo = sample.operativo;
         _captura = sample.captura;
@@ -402,8 +402,8 @@ class _BoletaPaper extends StatelessWidget {
     final baseStyle = const TextStyle(
       color: Colors.black,
       fontFamily: 'monospace',
-      fontSize: 10,
-      height: 1.15,
+      fontSize: 12,
+      height: 1.28,
     );
 
     return Container(
@@ -425,38 +425,46 @@ class _BoletaPaper extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const _TicketCenter(
+            _TicketCenter(
               children: [
-                Text(
+                const Text(
                   'SECRETARÍA DE SEGURIDAD PÚBLICA',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(fontWeight: FontWeight.w900, fontSize: 11),
-                ),
-                SizedBox(height: 1),
-                Text(
-                  'COORDINACIÓN DEL AGRUPAMIENTO DE SEGURIDAD VIAL',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(fontWeight: FontWeight.w800, fontSize: 9),
-                ),
-                SizedBox(height: 5),
-                Text(
-                  'BOLETA DE NOTIFICACIÓN',
                   textAlign: TextAlign.center,
                   style: TextStyle(fontWeight: FontWeight.w900, fontSize: 13),
                 ),
-                SizedBox(height: 1),
-                Text(
-                  'OPERATIVO CONDUCE CON LEGALIDAD',
+                const SizedBox(height: 1),
+                const Text(
+                  'COORDINACIÓN DEL AGRUPAMIENTO DE SEGURIDAD VIAL',
                   textAlign: TextAlign.center,
-                  style: TextStyle(fontWeight: FontWeight.w800),
+                  style: TextStyle(fontWeight: FontWeight.w800, fontSize: 11),
+                ),
+                const SizedBox(height: 5),
+                const Text(
+                  'BOLETA DE NOTIFICACIÓN',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontWeight: FontWeight.w900, fontSize: 15),
+                ),
+                const SizedBox(height: 1),
+                Text(
+                  operativo.ticketOperativoTitle,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(fontWeight: FontWeight.w800),
                 ),
               ],
             ),
             const _TicketDivider(),
-            _TicketPair(label: 'Folio interno', value: _folio),
-            _TicketPair(label: 'Municipio', value: _value(captura.municipio)),
-            _TicketPair(label: 'Fecha', value: _value(captura.fecha)),
-            _TicketPair(label: 'Hora', value: _value(captura.hora)),
+            _TicketPairRow(
+              leftLabel: 'Folio',
+              leftValue: _folio,
+              rightLabel: 'Municipio',
+              rightValue: _value(captura.municipio),
+            ),
+            _TicketPairRow(
+              leftLabel: 'Fecha',
+              leftValue: _value(captura.fecha),
+              rightLabel: 'Hora',
+              rightValue: _value(captura.hora),
+            ),
             _TicketBlock(label: 'Lugar', value: _lugar),
             const _TicketDivider(),
             const _TicketSection('I. FUNDAMENTO JURÍDICO'),
@@ -470,8 +478,12 @@ class _BoletaPaper extends StatelessWidget {
             ),
             const _TicketDivider(),
             const _TicketSection('II. MOTIVACIÓN'),
-            _TicketPair(label: 'Día', value: _value(captura.fecha)),
-            _TicketPair(label: 'Hora', value: _value(captura.hora)),
+            _TicketPairRow(
+              leftLabel: 'Día',
+              leftValue: _value(captura.fecha),
+              rightLabel: 'Hora',
+              rightValue: _value(captura.hora),
+            ),
             _TicketBlock(label: 'Lugar', value: _lugar),
             _TicketBlock(
               label: 'Descripción breve de la conducta',
@@ -495,13 +507,14 @@ class _BoletaPaper extends StatelessWidget {
             ),
             const _TicketDivider(),
             const _TicketSection('VEHÍCULO'),
-            _TicketPair(
-              label: 'Placas/permiso',
-              value: _value(vehiculo?.placas, fallback: 'No capturado'),
-            ),
-            _TicketPair(
-              label: 'Estado placas',
-              value: _value(vehiculo?.estadoPlacas, fallback: 'No capturado'),
+            _TicketPairRow(
+              leftLabel: 'Placas/permiso',
+              leftValue: _value(vehiculo?.placas, fallback: 'No capturado'),
+              rightLabel: 'Estado placas',
+              rightValue: _value(
+                vehiculo?.estadoPlacas,
+                fallback: 'No capturado',
+              ),
             ),
             _TicketBlock(label: 'Descripción', value: _vehiculoDescripcion),
             if (_mostrarInformacionLiberacion) ...[
@@ -514,19 +527,27 @@ class _BoletaPaper extends StatelessWidget {
             ],
             const _TicketDivider(),
             const _TicketSection('LICENCIA O PERMISO'),
-            _TicketPair(
-              label: 'Tipo',
-              value: _value(persona?.tipoLicencia, fallback: 'No capturado'),
+            _TicketPairRow(
+              leftLabel: 'Tipo',
+              leftValue: _value(
+                persona?.tipoLicencia,
+                fallback: 'No capturado',
+              ),
+              rightLabel: 'Número',
+              rightValue: _value(
+                persona?.numeroLicencia,
+                fallback: 'No capturado',
+              ),
             ),
-            _TicketPair(
-              label: 'Número',
-              value: _value(persona?.numeroLicencia, fallback: 'No capturado'),
+            _TicketPairRow(
+              leftLabel: 'Estado',
+              leftValue: _value(
+                persona?.estadoLicencia,
+                fallback: 'No capturado',
+              ),
+              rightLabel: 'Vigencia',
+              rightValue: _vigenciaLicencia,
             ),
-            _TicketPair(
-              label: 'Estado',
-              value: _value(persona?.estadoLicencia, fallback: 'No capturado'),
-            ),
-            _TicketPair(label: 'Vigencia', value: _vigenciaLicencia),
             const _TicketDivider(),
             const _TicketSection('FIRMA Y MANIFESTACIÓN'),
             const Text('Firma de la persona infractora:'),
@@ -576,7 +597,7 @@ class _BoletaPaper extends StatelessWidget {
 
   String get _folio {
     final suffix = total > 1 ? '-${index + 1}' : '';
-    return 'CL-${operativo.id}-${captura.id}$suffix';
+    return '${operativo.ticketFolioPrefix}-${operativo.id}-${captura.id}$suffix';
   }
 
   String get _lugar {
@@ -663,7 +684,7 @@ Uint8List _buildEscPosTicket(
   final vehiculos = captura.vehiculos.isEmpty
       ? <ConduceLegalidadVehiculo?>[null]
       : captura.vehiculos.cast<ConduceLegalidadVehiculo?>().toList();
-  final writer = _ThermalTicketWriter(width: paperSize.columns);
+  final writer = ThermalTicketRowFormatter(width: paperSize.columns);
 
   for (var i = 0; i < vehiculos.length; i++) {
     final data = _BoletaTicketData(
@@ -687,12 +708,10 @@ Uint8List _buildEscPosTicket(
   final textBytes = _thermalEncode(writer.toString().replaceAll('\n', '\r\n'));
   return Uint8List.fromList(<int>[
     0x1B, 0x40, // Inicializa impresora.
-    0x1B, 0x21, 0x01, // Fuente B: tipografía compacta.
-    0x1B, 0x4D, 0x01, // Selecciona fuente B explícitamente.
+    0x1B, 0x21, 0x00, // Fuente A normal y legible.
+    0x1B, 0x4D, 0x00, // Selecciona fuente A explícitamente.
     0x1D, 0x21, 0x00, // Tamaño normal.
-    0x1B, 0x33, 0x14, // Interlineado compacto de 20 puntos.
     0x1B, 0x45, 0x00, // Negritas apagadas.
-    0x1B, 0x74, 0x02, // Tabla CP850 para acentos en español.
     0x1B, 0x61, 0x00, // Alineación izquierda; el centrado va en texto.
     ...textBytes,
     ..._thermalTicketBottomFeed,
@@ -715,22 +734,16 @@ Uint8List _buildEscPosTestTicket(_ThermalPaperSize paperSize) {
     0x40,
     0x1B,
     0x21,
-    0x01,
+    0x00,
     0x1B,
     0x4D,
-    0x01,
+    0x00,
     0x1D,
     0x21,
     0x00,
     0x1B,
-    0x33,
-    0x14,
-    0x1B,
     0x45,
     0x00,
-    0x1B,
-    0x74,
-    0x02,
     0x1B,
     0x61,
     0x01,
@@ -752,17 +765,28 @@ const List<int> _thermalTicketBottomFeed = <int>[
   0x0A,
 ];
 
-void _writeThermalTicket(_ThermalTicketWriter ticket, _BoletaTicketData data) {
+void _writeThermalTicket(
+  ThermalTicketRowFormatter ticket,
+  _BoletaTicketData data,
+) {
   ticket.center('SECRETARÍA DE SEGURIDAD PÚBLICA');
   ticket.center('COORDINACIÓN DEL AGRUPAMIENTO DE SEGURIDAD VIAL');
   ticket.blank();
   ticket.center('BOLETA DE NOTIFICACIÓN');
-  ticket.center('OPERATIVO CONDUCE CON LEGALIDAD');
+  ticket.center(data.operativo.ticketOperativoTitle);
   ticket.rule();
-  ticket.pair('Folio interno', data.folio);
-  ticket.pair('Municipio', _value(data.captura.municipio));
-  ticket.pair('Fecha', _value(data.captura.fecha));
-  ticket.pair('Hora', _value(data.captura.hora));
+  ticket.pairRow(
+    'Folio',
+    data.folio,
+    'Municipio',
+    _value(data.captura.municipio),
+  );
+  ticket.pairRow(
+    'Fecha',
+    _value(data.captura.fecha),
+    'Hora',
+    _value(data.captura.hora),
+  );
   ticket.block('Lugar', data.lugar);
   ticket.rule();
   ticket.section('I. FUNDAMENTO JURÍDICO');
@@ -770,8 +794,12 @@ void _writeThermalTicket(_ThermalTicketWriter ticket, _BoletaTicketData data) {
   ticket.block('b) Los cuales ameritan', data.fundamentoSancion);
   ticket.rule();
   ticket.section('II. MOTIVACIÓN');
-  ticket.pair('Día', _value(data.captura.fecha));
-  ticket.pair('Hora', _value(data.captura.hora));
+  ticket.pairRow(
+    'Día',
+    _value(data.captura.fecha),
+    'Hora',
+    _value(data.captura.hora),
+  );
   ticket.block('Lugar', data.lugar);
   ticket.block('Descripción breve de la conducta', data.conducta);
   ticket.rule();
@@ -789,11 +817,9 @@ void _writeThermalTicket(_ThermalTicketWriter ticket, _BoletaTicketData data) {
   );
   ticket.rule();
   ticket.section('VEHÍCULO');
-  ticket.pair(
+  ticket.pairRow(
     'Placas/permiso',
     _value(data.vehiculo?.placas, fallback: 'No capturado'),
-  );
-  ticket.pair(
     'Estado placas',
     _value(data.vehiculo?.estadoPlacas, fallback: 'No capturado'),
   );
@@ -805,34 +831,33 @@ void _writeThermalTicket(_ThermalTicketWriter ticket, _BoletaTicketData data) {
   }
   ticket.rule();
   ticket.section('LICENCIA O PERMISO');
-  ticket.pair(
+  ticket.pairRow(
     'Tipo',
     _value(data.persona?.tipoLicencia, fallback: 'No capturado'),
-  );
-  ticket.pair(
     'Número',
     _value(data.persona?.numeroLicencia, fallback: 'No capturado'),
   );
-  ticket.pair(
+  ticket.pairRow(
     'Estado',
     _value(data.persona?.estadoLicencia, fallback: 'No capturado'),
+    'Vigencia',
+    data.vigenciaLicencia,
   );
-  ticket.pair('Vigencia', data.vigenciaLicencia);
   ticket.rule();
   ticket.section('FIRMA Y MANIFESTACIÓN');
   ticket.line('Firma de la persona infractora:');
   ticket.blank();
   ticket.blank();
-  ticket.line(_ThermalTicketWriter.repeat('_', ticket.width));
+  ticket.line(ThermalTicketRowFormatter.repeat('_', ticket.width));
   ticket.blank();
   ticket.line('Manifestación de inconformidad');
   ticket.line('(opcional):');
   ticket.blank();
-  ticket.line(_ThermalTicketWriter.repeat('_', ticket.width));
+  ticket.line(ThermalTicketRowFormatter.repeat('_', ticket.width));
   ticket.blank();
-  ticket.line(_ThermalTicketWriter.repeat('_', ticket.width));
+  ticket.line(ThermalTicketRowFormatter.repeat('_', ticket.width));
   ticket.blank();
-  ticket.line(_ThermalTicketWriter.repeat('_', ticket.width));
+  ticket.line(ThermalTicketRowFormatter.repeat('_', ticket.width));
   ticket.rule();
   ticket.section('AGENTE');
   ticket.pair(
@@ -845,7 +870,7 @@ void _writeThermalTicket(_ThermalTicketWriter ticket, _BoletaTicketData data) {
   ticket.line('Firma autógrafa/electrónica:');
   ticket.blank();
   ticket.blank();
-  ticket.line(_ThermalTicketWriter.repeat('_', ticket.width));
+  ticket.line(ThermalTicketRowFormatter.repeat('_', ticket.width));
   ticket.blank();
   ticket.center(
     'Captura #${data.captura.id} / Operativo #${data.operativo.id}',
@@ -874,7 +899,7 @@ class _BoletaTicketData {
 
   String get folio {
     final suffix = total > 1 ? '-${index + 1}' : '';
-    return 'CL-${operativo.id}-${captura.id}$suffix';
+    return '${operativo.ticketFolioPrefix}-${operativo.id}-${captura.id}$suffix';
   }
 
   String get lugar {
@@ -953,12 +978,12 @@ class _BoletaTicketData {
   }
 }
 
-class _ThermalTicketWriter {
+class ThermalTicketRowFormatter {
   final int width;
 
   final StringBuffer _buffer = StringBuffer();
 
-  _ThermalTicketWriter({required this.width});
+  ThermalTicketRowFormatter({required this.width});
 
   void center(String text) {
     for (final line in _wrapText(text, width)) {
@@ -988,6 +1013,24 @@ class _ThermalTicketWriter {
 
     line('$cleanLabel:');
     _writeWrappedParagraphs(cleanValue, indent: 2);
+  }
+
+  void pairRow(
+    String leftLabel,
+    String leftValue,
+    String rightLabel,
+    String rightValue,
+  ) {
+    final left = '${_thermalClean(leftLabel)}: ${_thermalClean(leftValue)}';
+    final right = '${_thermalClean(rightLabel)}: ${_thermalClean(rightValue)}';
+    final spaces = width - left.length - right.length;
+    if (!left.contains('\n') && !right.contains('\n') && spaces >= 2) {
+      line('$left${repeat(' ', spaces)}$right');
+      return;
+    }
+
+    pair(leftLabel, leftValue);
+    pair(rightLabel, rightValue);
   }
 
   void block(String label, String value) {
@@ -1027,8 +1070,8 @@ class _ThermalTicketWriter {
 }
 
 enum _ThermalPaperSize {
-  paper80mm('80 mm', 'Ticket compacto', 64),
-  paper58mm('58 mm', 'Ticket compacto', 42);
+  paper80mm('80 mm', 'Letra normal, 48 columnas', 48),
+  paper58mm('58 mm', 'Letra normal, 32 columnas', 32);
 
   final String label;
   final String description;
@@ -1383,6 +1426,70 @@ List<String> _wrapText(String text, int width) {
 
 String _thermalClean(String value) {
   final replacements = <String, String>{
+    'À': 'A',
+    'Á': 'A',
+    'Â': 'A',
+    'Ã': 'A',
+    'Ä': 'A',
+    'Å': 'A',
+    'Æ': 'AE',
+    'Ç': 'C',
+    'È': 'E',
+    'É': 'E',
+    'Ê': 'E',
+    'Ë': 'E',
+    'Ì': 'I',
+    'Í': 'I',
+    'Î': 'I',
+    'Ï': 'I',
+    'Ñ': 'N',
+    'Ò': 'O',
+    'Ó': 'O',
+    'Ô': 'O',
+    'Õ': 'O',
+    'Ö': 'O',
+    'Œ': 'OE',
+    'Ù': 'U',
+    'Ú': 'U',
+    'Û': 'U',
+    'Ü': 'U',
+    'Ý': 'Y',
+    'Ÿ': 'Y',
+    'à': 'a',
+    'á': 'a',
+    'â': 'a',
+    'ã': 'a',
+    'ä': 'a',
+    'å': 'a',
+    'æ': 'ae',
+    'ç': 'c',
+    'è': 'e',
+    'é': 'e',
+    'ê': 'e',
+    'ë': 'e',
+    'ì': 'i',
+    'í': 'i',
+    'î': 'i',
+    'ï': 'i',
+    'ñ': 'n',
+    'ò': 'o',
+    'ó': 'o',
+    'ô': 'o',
+    'õ': 'o',
+    'ö': 'o',
+    'œ': 'oe',
+    'ù': 'u',
+    'ú': 'u',
+    'û': 'u',
+    'ü': 'u',
+    'ý': 'y',
+    'ÿ': 'y',
+    'ß': 'ss',
+    '¿': '?',
+    '¡': '!',
+    '°': ' grados',
+    'º': 'o',
+    'ª': 'a',
     '“': '"',
     '”': '"',
     '‘': "'",
@@ -1390,52 +1497,17 @@ String _thermalClean(String value) {
     '–': '-',
     '—': '-',
     '…': '...',
+    ' ': ' ',
   };
 
   var text = value;
   for (final entry in replacements.entries) {
     text = text.replaceAll(entry.key, entry.value);
   }
-  return text.replaceAll(
-    RegExp(r'[^\x09\x0A\x0D\x20-\x7EáéíóúÁÉÍÓÚñÑüÜ¿¡°º]'),
-    '',
-  );
+  return text.replaceAll(RegExp(r'[^\x09\x0A\x0D\x20-\x7E]'), '');
 }
 
-List<int> _thermalEncode(String value) {
-  final bytes = <int>[];
-  for (final rune in _thermalClean(value).runes) {
-    if (rune <= 0x7F) {
-      bytes.add(rune);
-      continue;
-    }
-
-    final mapped = _cp850Bytes[String.fromCharCode(rune)];
-    bytes.add(mapped ?? 0x3F);
-  }
-  return bytes;
-}
-
-const Map<String, int> _cp850Bytes = <String, int>{
-  'á': 0xA0,
-  'é': 0x82,
-  'í': 0xA1,
-  'ó': 0xA2,
-  'ú': 0xA3,
-  'Á': 0xB5,
-  'É': 0x90,
-  'Í': 0xD6,
-  'Ó': 0xE0,
-  'Ú': 0xE9,
-  'ñ': 0xA4,
-  'Ñ': 0xA5,
-  'ü': 0x81,
-  'Ü': 0x9A,
-  '¿': 0xA8,
-  '¡': 0xAD,
-  '°': 0xF8,
-  'º': 0xA7,
-};
+List<int> _thermalEncode(String value) => _thermalClean(value).codeUnits;
 
 class _TicketCenter extends StatelessWidget {
   final List<Widget> children;
@@ -1507,6 +1579,57 @@ class _TicketPair extends StatelessWidget {
             ),
           ),
           Expanded(child: Text(value)),
+        ],
+      ),
+    );
+  }
+}
+
+class _TicketPairRow extends StatelessWidget {
+  final String leftLabel;
+  final String leftValue;
+  final String rightLabel;
+  final String rightValue;
+
+  const _TicketPairRow({
+    required this.leftLabel,
+    required this.leftValue,
+    required this.rightLabel,
+    required this.rightValue,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 2),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(child: _TicketInlinePair(leftLabel, leftValue)),
+          const SizedBox(width: 8),
+          Expanded(child: _TicketInlinePair(rightLabel, rightValue)),
+        ],
+      ),
+    );
+  }
+}
+
+class _TicketInlinePair extends StatelessWidget {
+  final String label;
+  final String value;
+
+  const _TicketInlinePair(this.label, this.value);
+
+  @override
+  Widget build(BuildContext context) {
+    return Text.rich(
+      TextSpan(
+        children: [
+          TextSpan(
+            text: '$label: ',
+            style: const TextStyle(fontWeight: FontWeight.w800),
+          ),
+          TextSpan(text: value),
         ],
       ),
     );
@@ -1619,7 +1742,9 @@ class _BoletaPreviewData {
 
   const _BoletaPreviewData({required this.operativo, required this.captura});
 
-  static _BoletaPreviewData create() {
+  static _BoletaPreviewData create({
+    ConduceLegalidadModule module = ConduceLegalidadModule.conduceLegalidad,
+  }) {
     final today = _date(DateTime.now());
     final now = TimeOfDay.now();
     final hour =
@@ -1643,7 +1768,8 @@ class _BoletaPreviewData {
     return _BoletaPreviewData(
       operativo: ConduceLegalidadOperativo(
         id: 1,
-        nombre: 'Operativo conduce con legalidad',
+        nombre: module.operativoNombre,
+        tipoOperativo: module.id,
         fecha: today,
         horaInicio: hour,
         municipio: 'Morelia',

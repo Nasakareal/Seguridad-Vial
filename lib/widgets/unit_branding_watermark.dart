@@ -86,6 +86,13 @@ class _UnitBrandingBackdropState extends State<UnitBrandingBackdrop> {
 
   @override
   Widget build(BuildContext context) {
+    final mediaQuery = MediaQuery.maybeOf(context);
+    final logicalWidth = mediaQuery?.size.width ?? 400;
+    final devicePixelRatio = mediaQuery?.devicePixelRatio ?? 1;
+    final decodedWidth = (logicalWidth * widget.widthFactor * devicePixelRatio)
+        .round()
+        .clamp(1, 1080);
+
     return FutureBuilder<_UnitBranding?>(
       future: _branding,
       builder: (context, snapshot) {
@@ -107,7 +114,8 @@ class _UnitBrandingBackdropState extends State<UnitBrandingBackdrop> {
                           child: Image.asset(
                             branding.assetPath,
                             fit: BoxFit.contain,
-                            filterQuality: FilterQuality.high,
+                            cacheWidth: decodedWidth,
+                            filterQuality: FilterQuality.medium,
                           ),
                         ),
                       ),

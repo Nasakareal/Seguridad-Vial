@@ -17,11 +17,13 @@ import 'conduce_legalidad_module.dart';
 
 class ConduceLegalidadShowScreen extends StatefulWidget {
   final int operativoId;
+  final int? highlightedCapturaId;
   final ConduceLegalidadModule module;
 
   const ConduceLegalidadShowScreen({
     super.key,
     required this.operativoId,
+    this.highlightedCapturaId,
     this.module = ConduceLegalidadModule.conduceLegalidad,
   });
 
@@ -492,6 +494,16 @@ class _ConduceLegalidadShowScreenState extends State<ConduceLegalidadShowScreen>
       return const Center(child: Text('Operativo no disponible.'));
     }
 
+    final capturas = operativo.capturas.toList();
+    final highlightedCapturaId = widget.highlightedCapturaId;
+    if (highlightedCapturaId != null) {
+      capturas.sort((a, b) {
+        if (a.id == highlightedCapturaId) return -1;
+        if (b.id == highlightedCapturaId) return 1;
+        return 0;
+      });
+    }
+
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 92),
       children: [
@@ -515,7 +527,7 @@ class _ConduceLegalidadShowScreenState extends State<ConduceLegalidadShowScreen>
           ),
         if ((operativo.objetivo ?? '').trim().isNotEmpty)
           const SizedBox(height: 14),
-        if (operativo.capturas.isEmpty)
+        if (capturas.isEmpty)
           const _Panel(
             icon: Icons.inbox_outlined,
             title: 'Sin capturas visibles',
@@ -524,9 +536,10 @@ class _ConduceLegalidadShowScreenState extends State<ConduceLegalidadShowScreen>
             ),
           )
         else
-          ...operativo.capturas.map(
+          ...capturas.map(
             (captura) => _CapturaCard(
               captura: captura,
+              highlighted: captura.id == highlightedCapturaId,
               deleting: _deletingCapturaId == captura.id,
               sharing: _sharingCapturaId == captura.id,
               downloadingIph: _downloadingIphCapturaId == captura.id,
@@ -606,6 +619,7 @@ class _OperativoHeader extends StatelessWidget {
 
 class _CapturaCard extends StatelessWidget {
   final ConduceLegalidadCaptura captura;
+  final bool highlighted;
   final bool deleting;
   final bool sharing;
   final bool downloadingIph;
@@ -618,6 +632,7 @@ class _CapturaCard extends StatelessWidget {
 
   const _CapturaCard({
     required this.captura,
+    this.highlighted = false,
     required this.deleting,
     required this.sharing,
     required this.downloadingIph,
@@ -645,13 +660,32 @@ class _CapturaCard extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: highlighted ? const Color(0xFFEFF6FF) : Colors.white,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.grey.shade200),
+        border: Border.all(
+          color: highlighted ? Colors.blue : Colors.grey.shade200,
+          width: highlighted ? 1.5 : 1,
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          if (highlighted) ...[
+            const Row(
+              children: [
+                Icon(Icons.search, size: 18, color: Colors.blue),
+                SizedBox(width: 6),
+                Text(
+                  'Resultado encontrado',
+                  style: TextStyle(
+                    color: Colors.blue,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+          ],
           Row(
             children: [
               const Icon(Icons.person_outline, size: 20),

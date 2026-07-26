@@ -168,10 +168,6 @@ class AppDrawer extends StatelessWidget {
   }
 
   Future<_DrawerAccess> _loadAccess() async {
-    try {
-      await AuthService.refreshCurrentUserAccess();
-    } catch (_) {}
-
     var permissions = await AuthService.getPermissions();
     var unidadId = await AuthService.getUnidadId();
     var canSeeCarreteras = await AuthService.isCarreterasUser();
@@ -433,15 +429,27 @@ class AppDrawer extends StatelessWidget {
                         onTap: () => _nav(context, AppRoutes.home),
                       ),
 
-                      if (_allowed(perms, permBusqueda, all: canSeeAllButtons))
+                      if (_allowed(
+                            perms,
+                            permBusqueda,
+                            all: canSeeAllButtons,
+                          ) ||
+                          canSeeConduceLegalidad)
                         _DrawerItem(
                           icon: Icons.search,
                           label: 'Búsqueda',
-                          subtitle: 'Localizar hechos y registros',
+                          subtitle: 'Folios, personas, vehículos y hechos',
                           onTap: () => _nav(
                             context,
                             AppRoutes.hechosBuscar,
-                            requiredPerm: permBusqueda,
+                            requiredPerm:
+                                _allowed(
+                                  perms,
+                                  permBusqueda,
+                                  all: canSeeAllButtons,
+                                )
+                                ? permBusqueda
+                                : null,
                           ),
                         ),
 

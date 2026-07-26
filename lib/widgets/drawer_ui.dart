@@ -69,7 +69,8 @@ class DrawerHeaderPanel extends StatelessWidget {
                       backgroundAssetPath!,
                       fit: BoxFit.contain,
                       alignment: Alignment.center,
-                      filterQuality: FilterQuality.high,
+                      cacheWidth: 720,
+                      filterQuality: FilterQuality.medium,
                     ),
                   ),
                 ),
@@ -171,7 +172,10 @@ class DrawerSurface extends StatelessWidget {
   Widget build(BuildContext context) {
     return LiquidGlassSurface(
       opacity: .94,
-      blur: 9,
+      // El drawer ya tiene un fondo opaco propio. Desenfocar cada tarjeta no
+      // cambia perceptiblemente el acabado, pero obliga a recalcular varias
+      // capas durante cada cuadro de la animación lateral.
+      blur: 0,
       showShadow: true,
       padding: EdgeInsets.zero,
       child: child,
@@ -327,6 +331,7 @@ class _HeaderBadge extends StatelessWidget {
                   height: 60,
                   cacheWidth: 180,
                   cacheHeight: 180,
+                  cacheDuration: const Duration(days: 7),
                   fit: BoxFit.cover,
                   filterQuality: FilterQuality.medium,
                   errorBuilder: (_, __, ___) =>

@@ -376,6 +376,7 @@ Route<dynamic>? onGenerateRoute(RouteSettings settings) {
     return MaterialPageRoute(
       builder: (_) => ConduceLegalidadShowScreen(
         operativoId: id,
+        highlightedCapturaId: _readCapturaIdFromArgs(settings.arguments),
         module: name == AppRoutes.alcoholimetriaShow
             ? ConduceLegalidadModule.alcoholimetria
             : ConduceLegalidadModule.conduceLegalidad,

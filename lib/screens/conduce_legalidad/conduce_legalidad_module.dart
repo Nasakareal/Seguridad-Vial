@@ -177,3 +177,11 @@ class ConduceLegalidadModule {
     return text;
   }
 }
+
+extension ConduceLegalidadTicketPresentation on ConduceLegalidadOperativo {
+  String get ticketOperativoTitle => isAlcoholimetria
+      ? 'OPERATIVO PREVENCIÓN DE ACCIDENTES'
+      : 'OPERATIVO CONDUCE CON LEGALIDAD';
+
+  String get ticketFolioPrefix => isAlcoholimetria ? 'PA' : 'CL';
+}

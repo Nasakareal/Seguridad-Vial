@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../app/routes.dart';
 import '../../models/conduce_legalidad.dart';
 import '../../services/auth_service.dart';
 import '../../services/conduce_legalidad_service.dart';
@@ -202,6 +203,12 @@ class _ConduceLegalidadScreenState extends State<ConduceLegalidadScreen>
       appBar: AppBar(
         title: Text(widget.module.title),
         actions: [
+          IconButton(
+            tooltip: 'Buscar registros',
+            onPressed: () =>
+                Navigator.pushNamed(context, AppRoutes.hechosBuscar),
+            icon: const Icon(Icons.search),
+          ),
           IconButton(
             tooltip: 'Actualizar',
             onPressed: _loading ? null : _load,

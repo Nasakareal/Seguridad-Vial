@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:seguridad_vial_app/widgets/drawer_ui.dart';
+import 'package:seguridad_vial_app/widgets/glass.dart';
 
 void main() {
   Widget host(Widget child) {
@@ -25,8 +26,10 @@ void main() {
     );
 
     final background = tester.widget<Image>(find.byType(Image));
-    expect(background.image, isA<AssetImage>());
-    expect((background.image as AssetImage).assetName, assetPath);
+    expect(background.image, isA<ResizeImage>());
+    final resized = background.image as ResizeImage;
+    expect(resized.imageProvider, isA<AssetImage>());
+    expect((resized.imageProvider as AssetImage).assetName, assetPath);
     expect(background.fit, BoxFit.contain);
     expect(find.byIcon(Icons.shield_outlined), findsNothing);
   });
@@ -51,5 +54,19 @@ void main() {
     await tester.tap(find.bySemanticsLabel('Ver foto de perfil'));
 
     expect(taps, 1);
+  });
+
+  testWidgets('las superficies del drawer no crean blur por tarjeta', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      host(const DrawerSurface(child: SizedBox(width: 200, height: 80))),
+    );
+
+    final surface = tester.widget<LiquidGlassSurface>(
+      find.byType(LiquidGlassSurface),
+    );
+
+    expect(surface.blur, 0);
   });
 }
