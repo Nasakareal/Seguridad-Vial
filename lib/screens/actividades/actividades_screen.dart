@@ -25,27 +25,39 @@ class ActividadesScreen extends StatefulWidget {
 
 class _ActividadesScreenState extends State<ActividadesScreen>
     with WidgetsBindingObserver {
+  static const int _pageSize = 10;
+
   bool _trackingOn = false;
   bool _bootstrapped = false;
   bool _busy = false;
   bool _sharingTotals = false;
   bool _isFomentoUser = false;
+  bool _loadingPage = false;
+  bool _showingAll = false;
 
   DateTime _selectedDate = DateTime.now();
 
   bool _loading = true;
   String? _error;
   List<Actividad> _items = [];
+  int _currentPage = 1;
+  int? _lastPage;
+  int? _total;
+  bool _hasMore = false;
+  int? _currentUserId;
 
   List<ActividadCategoria> _categorias = [];
   List<ActividadSubcategoria> _subcategorias = [];
   List<ActividadRef> _unidades = [];
+  List<ActividadRef> _delegaciones = [];
 
   int? _categoriaId;
   int? _subcategoriaId;
   int? _unidadId;
+  int? _delegacionId;
 
   final TextEditingController _qCtrl = TextEditingController();
+  final GlobalKey _listStartKey = GlobalKey();
 
   @override
   void initState() {
@@ -182,6 +194,10 @@ class _ActividadesScreenState extends State<ActividadesScreen>
     try {
       isFomentoUser = await AuthService.isFomentoCulturaVialUser();
     } catch (_) {}
+    final currentUserId = await AuthService.getUserId();
+    if (mounted) {
+      setState(() => _currentUserId = currentUserId);
+    }
 
     try {
       final cats = await ActividadesService.fetchCategorias();
@@ -218,6 +234,15 @@ class _ActividadesScreenState extends State<ActividadesScreen>
       if (!mounted) return;
       setState(() => _unidades = const []);
     }
+
+    try {
+      final delegaciones = await ActividadesService.fetchDelegacionesFiltro();
+      if (!mounted) return;
+      setState(() => _delegaciones = delegaciones);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _delegaciones = const []);
+    }
   }
 
   Future<void> _loadSubcategorias(int categoriaId) async {
@@ -246,7 +271,7 @@ class _ActividadesScreenState extends State<ActividadesScreen>
     }
   }
 
-  Future<void> _load() async {
+  Future<void> _load({bool showAll = false}) async {
     if (!mounted) return;
 
     setState(() {
@@ -255,18 +280,51 @@ class _ActividadesScreenState extends State<ActividadesScreen>
     });
 
     try {
-      final items = await ActividadesService.fetchIndex(
-        date: _selectedDate,
-        perPage: 50,
-        actividadCategoriaId: _categoriaId,
-        actividadSubcategoriaId: _subcategoriaId,
-        unidadId: _unidadId,
-        q: _qCtrl.text,
-      );
+      late final List<Actividad> items;
+      var currentPage = 1;
+      int? lastPage;
+      int? total;
+      var hasMore = false;
+
+      if (showAll) {
+        items = await ActividadesService.fetchIndex(
+          date: _selectedDate,
+          perPage: 20,
+          actividadCategoriaId: _categoriaId,
+          actividadSubcategoriaId: _subcategoriaId,
+          unidadId: _unidadId,
+          delegacionId: _delegacionId,
+          q: _qCtrl.text,
+          fetchAll: true,
+        );
+        total = items.length;
+        lastPage = 1;
+      } else {
+        final page = await ActividadesService.fetchIndexPage(
+          date: _selectedDate,
+          page: 1,
+          perPage: _pageSize,
+          actividadCategoriaId: _categoriaId,
+          actividadSubcategoriaId: _subcategoriaId,
+          unidadId: _unidadId,
+          delegacionId: _delegacionId,
+          q: _qCtrl.text,
+        );
+        items = page.items;
+        currentPage = page.currentPage;
+        lastPage = page.lastPage;
+        total = page.total;
+        hasMore = page.hasMore;
+      }
 
       if (!mounted) return;
       setState(() {
         _items = items;
+        _currentPage = currentPage;
+        _lastPage = lastPage;
+        _total = total;
+        _hasMore = hasMore;
+        _showingAll = showAll;
         _loading = false;
       });
     } catch (e) {
@@ -277,6 +335,157 @@ class _ActividadesScreenState extends State<ActividadesScreen>
         _error = 'No se pudieron obtener las actividades.\n$message';
       });
     }
+  }
+
+  Future<void> _goToPage(int targetPage) async {
+    if (_loading || _loadingPage || _showingAll || targetPage < 1) return;
+    final lastPage = _lastPage;
+    if (lastPage != null && targetPage > lastPage) return;
+
+    setState(() => _loadingPage = true);
+    try {
+      final page = await ActividadesService.fetchIndexPage(
+        date: _selectedDate,
+        page: targetPage,
+        perPage: _pageSize,
+        actividadCategoriaId: _categoriaId,
+        actividadSubcategoriaId: _subcategoriaId,
+        unidadId: _unidadId,
+        delegacionId: _delegacionId,
+        q: _qCtrl.text,
+      );
+
+      if (!mounted) return;
+      setState(() {
+        _items = page.items;
+        _currentPage = page.currentPage;
+        _lastPage = page.lastPage ?? _lastPage;
+        _total = page.total ?? _total;
+        _hasMore = page.hasMore;
+      });
+      _scrollToListStart();
+    } catch (e) {
+      if (!mounted) return;
+      final message = ActividadesService.cleanExceptionMessage(e);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('No se pudo cargar la página.\n$message')),
+      );
+    } finally {
+      if (mounted) setState(() => _loadingPage = false);
+    }
+  }
+
+  void _scrollToListStart() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final listContext = _listStartKey.currentContext;
+      if (!mounted || listContext == null) return;
+      Scrollable.ensureVisible(
+        listContext,
+        duration: const Duration(milliseconds: 250),
+        curve: Curves.easeOut,
+        alignment: .02,
+      );
+    });
+  }
+
+  String get _resultsLabel {
+    if (_showingAll) return 'Mostrando todas: ${_items.length}';
+    final total = _total;
+    final lastPage =
+        _lastPage ??
+        (total == null ? null : ((total + _pageSize - 1) ~/ _pageSize));
+    final pageLabel = lastPage == null
+        ? 'Página $_currentPage'
+        : 'Página $_currentPage de $lastPage';
+    if (total != null) return '$pageLabel · ${_items.length} de $total';
+    return '$pageLabel · ${_items.length} actividades';
+  }
+
+  Widget _paginationControls() {
+    if (_items.isEmpty) return const SizedBox.shrink();
+    final canGoPrevious = !_showingAll && _currentPage > 1;
+    final canGoNext =
+        !_showingAll &&
+        (_hasMore ||
+            (_lastPage != null && _currentPage < (_lastPage ?? _currentPage)));
+    final hasMoreThanOnePage =
+        !_showingAll &&
+        (canGoPrevious ||
+            canGoNext ||
+            (_total != null && (_total ?? 0) > _items.length));
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 2, bottom: 10),
+      child: Column(
+        children: [
+          Text(
+            _resultsLabel,
+            style: TextStyle(
+              color: _showingAll
+                  ? Colors.green.shade800
+                  : Colors.blueGrey.shade700,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          if (_showingAll) ...[
+            const SizedBox(height: 10),
+            OutlinedButton.icon(
+              onPressed: _loadingPage ? null : _load,
+              icon: const Icon(Icons.view_carousel_outlined),
+              label: const Text('Volver a páginas'),
+            ),
+          ] else if (hasMoreThanOnePage) ...[
+            const SizedBox(height: 10),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: canGoPrevious && !_loadingPage
+                        ? () => _goToPage(_currentPage - 1)
+                        : null,
+                    child: const Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [Icon(Icons.chevron_left), Text('Anterior')],
+                    ),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                  child: _loadingPage
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : Text(
+                          '$_currentPage',
+                          style: const TextStyle(fontWeight: FontWeight.w900),
+                        ),
+                ),
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: canGoNext && !_loadingPage
+                        ? () => _goToPage(_currentPage + 1)
+                        : null,
+                    child: const Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [Text('Siguiente'), Icon(Icons.chevron_right)],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            TextButton.icon(
+              onPressed: _loadingPage ? null : () => _load(showAll: true),
+              icon: const Icon(Icons.view_list),
+              label: const Text('Mostrar todo lo seleccionado'),
+            ),
+          ],
+        ],
+      ),
+    );
   }
 
   Widget _buildLoadError() {
@@ -377,6 +586,10 @@ class _ActividadesScreenState extends State<ActividadesScreen>
   Widget _filtersBar() {
     final unidadIds = _unidades.map((item) => item.id).toSet();
     final safeUnidadId = unidadIds.contains(_unidadId) ? _unidadId : null;
+    final delegacionIds = _delegaciones.map((item) => item.id).toSet();
+    final safeDelegacionId = delegacionIds.contains(_delegacionId)
+        ? _delegacionId
+        : null;
 
     return Column(
       children: [
@@ -478,6 +691,44 @@ class _ActividadesScreenState extends State<ActividadesScreen>
               filled: true,
               fillColor: Colors.white,
               prefixIcon: const Icon(Icons.apartment),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+              ),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 10,
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+        ],
+        if (_delegaciones.length > 1) ...[
+          DropdownButtonFormField<int>(
+            value: safeDelegacionId,
+            isExpanded: true,
+            items: [
+              const DropdownMenuItem<int>(
+                value: null,
+                child: Text('Delegación (todas)'),
+              ),
+              ..._delegaciones.map(
+                (delegacion) => DropdownMenuItem<int>(
+                  value: delegacion.id,
+                  child: Text(
+                    delegacion.nombre,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ),
+            ],
+            onChanged: (value) async {
+              setState(() => _delegacionId = value);
+              await _load();
+            },
+            decoration: InputDecoration(
+              filled: true,
+              fillColor: Colors.white,
+              prefixIcon: const Icon(Icons.location_city),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(14),
               ),
@@ -682,6 +933,7 @@ class _ActividadesScreenState extends State<ActividadesScreen>
                 child: _filtersBar(),
               ),
               const SizedBox(height: 12),
+              SizedBox(key: _listStartKey),
               if (!_loading && _error != null) ...[
                 _buildLoadError(),
                 const SizedBox(height: 12),
@@ -706,15 +958,50 @@ class _ActividadesScreenState extends State<ActividadesScreen>
                   itemBuilder: (context, i) {
                     final a = _items[i];
                     final cat = a.categoria?.nombre ?? '—';
+                    final isOwn =
+                        _currentUserId != null &&
+                        a.createdBy != null &&
+                        a.createdBy == _currentUserId;
 
                     return Card(
                       margin: const EdgeInsets.only(bottom: 12),
+                      color: isOwn ? Colors.green.shade50 : null,
+                      surfaceTintColor: isOwn ? Colors.green.shade50 : null,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(16),
+                        side: isOwn
+                            ? BorderSide(
+                                color: Colors.green.shade400,
+                                width: 1.4,
+                              )
+                            : BorderSide.none,
                       ),
                       child: ListTile(
                         leading: _thumb(a),
-                        title: Text('#${a.id} • $cat'),
+                        title: Row(
+                          children: [
+                            Expanded(child: Text('#${a.id} • $cat')),
+                            if (isOwn)
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 3,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Colors.green.shade700,
+                                  borderRadius: BorderRadius.circular(999),
+                                ),
+                                child: const Text(
+                                  'Tu actividad',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
                         subtitle: Text(_subtitle(a)),
                         onTap: () => _go(
                           context,
@@ -774,6 +1061,7 @@ class _ActividadesScreenState extends State<ActividadesScreen>
                     );
                   },
                 ),
+              if (!_loading && _items.isNotEmpty) _paginationControls(),
             ],
           ),
         ),

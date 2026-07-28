@@ -213,6 +213,7 @@ class ActividadVehiculo {
 
 class Actividad {
   final int id;
+  final int? createdBy;
   final int actividadCategoriaId;
   final int? actividadSubcategoriaId;
   final String nombre;
@@ -258,6 +259,7 @@ class Actividad {
 
   const Actividad({
     required this.id,
+    this.createdBy,
     required this.actividadCategoriaId,
     required this.actividadSubcategoriaId,
     required this.nombre,
@@ -317,6 +319,10 @@ class Actividad {
 
     return Actividad(
       id: _asInt(json['id']),
+      createdBy:
+          _asNullableInt(json['created_by']) ??
+          _asNullableInt(json['createdBy']) ??
+          _asNullableInt(json['user_id']),
       actividadCategoriaId: _asInt(json['actividad_categoria_id']),
       actividadSubcategoriaId: _asNullableInt(
         json['actividad_subcategoria_id'],
@@ -443,6 +449,7 @@ class Actividad {
 
   Map<String, dynamic> toJson() => {
     'id': id,
+    'created_by': createdBy,
     'actividad_categoria_id': actividadCategoriaId,
     'actividad_subcategoria_id': actividadSubcategoriaId,
     'nombre': nombre,

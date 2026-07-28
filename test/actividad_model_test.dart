@@ -24,5 +24,16 @@ void main() {
       expect(actividad.puestaDisposicionId, 42);
       expect(actividad.toJson()['puesta_disposicion_id'], 42);
     });
+
+    test('lee el creador para resaltar actividades propias', () {
+      final actividad = Actividad.fromJson({
+        'id': 8,
+        'created_by': 42,
+        'actividad_categoria_id': 3,
+      });
+
+      expect(actividad.createdBy, 42);
+      expect(actividad.toJson()['created_by'], 42);
+    });
   });
 }

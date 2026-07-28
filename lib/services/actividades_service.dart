@@ -862,13 +862,16 @@ class ActividadesService {
     int? actividadCategoriaId,
     int? actividadSubcategoriaId,
     int? unidadId,
+    int? delegacionId,
     String? q,
+    bool fetchAll = false,
   }) async {
     final items = <Actividad>[];
     final seenIds = <int>{};
     var pageNumber = 1;
 
-    while (items.length < _maxIndexItems && pageNumber <= _maxIndexPages) {
+    while (fetchAll ||
+        (items.length < _maxIndexItems && pageNumber <= _maxIndexPages)) {
       final page = await fetchIndexPage(
         date: date,
         page: pageNumber,
@@ -876,6 +879,7 @@ class ActividadesService {
         actividadCategoriaId: actividadCategoriaId,
         actividadSubcategoriaId: actividadSubcategoriaId,
         unidadId: unidadId,
+        delegacionId: delegacionId,
         q: q,
       );
 
@@ -884,7 +888,7 @@ class ActividadesService {
         if (seenIds.add(item.id)) {
           items.add(item);
         }
-        if (items.length >= _maxIndexItems) break;
+        if (!fetchAll && items.length >= _maxIndexItems) break;
       }
 
       if (!page.hasMore || page.items.isEmpty) break;
@@ -902,6 +906,7 @@ class ActividadesService {
     int? actividadCategoriaId,
     int? actividadSubcategoriaId,
     int? unidadId,
+    int? delegacionId,
     String? q,
   }) async {
     final headers = await _headersJson();
@@ -922,6 +927,9 @@ class ActividadesService {
     }
     if (unidadId != null && unidadId > 0) {
       qp['unidad_id'] = unidadId.toString();
+    }
+    if (delegacionId != null && delegacionId > 0) {
+      qp['delegacion_id'] = delegacionId.toString();
     }
     if (q != null && q.trim().isNotEmpty) {
       qp['q'] = q.trim();
@@ -944,6 +952,29 @@ class ActividadesService {
     final headers = await _headersJson();
     final uri = Uri.parse(
       '${AuthService.baseUrl}/estadisticas-actividades/catalogos/unidades',
+    );
+    final resp = await http
+        .get(uri, headers: headers)
+        .timeout(NetworkErrorHelper.interactiveRequestTimeout);
+
+    if (resp.statusCode < 200 || resp.statusCode >= 300) {
+      throw Exception(_parseBackendError(resp.body, resp.statusCode));
+    }
+
+    final raw = jsonDecode(resp.body);
+    if (raw is! List) return const <ActividadRef>[];
+
+    return raw
+        .whereType<Map>()
+        .map((e) => ActividadRef.fromJson(Map<String, dynamic>.from(e)))
+        .where((item) => item.id > 0)
+        .toList();
+  }
+
+  static Future<List<ActividadRef>> fetchDelegacionesFiltro() async {
+    final headers = await _headersJson();
+    final uri = Uri.parse(
+      '${AuthService.baseUrl}/estadisticas-actividades/catalogos/delegaciones',
     );
     final resp = await http
         .get(uri, headers: headers)

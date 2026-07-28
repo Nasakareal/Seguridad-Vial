@@ -168,21 +168,24 @@ class _HechosBusquedaScreenState extends State<HechosBusquedaScreen> {
         );
 
     final headers = await _headers();
-    final responses = await Future.wait([
+    final responses = await Future.wait<http.Response?>([
       _client.get(hechosUri, headers: headers),
-      _client.get(operativosUri, headers: headers),
+      _getOptional(operativosUri, headers),
     ]);
 
     final hechos = _decodeSearchPage(
-      responses[0],
+      responses[0]!,
       page: page,
       resultType: 'hecho',
     );
-    final operativos = _decodeSearchPage(
-      responses[1],
-      page: page,
-      resultType: 'operativo',
-    );
+    final operativos = responses[1] == null
+        ? _SearchResponse(items: const [], page: page, lastPage: 1)
+        : _decodeSearchPage(
+            responses[1]!,
+            page: page,
+            resultType: 'operativo',
+            optional: true,
+          );
 
     final items = <Map<String, dynamic>>[...hechos.items, ...operativos.items]
       ..sort(_compareSearchRows);
@@ -196,12 +199,25 @@ class _HechosBusquedaScreenState extends State<HechosBusquedaScreen> {
     );
   }
 
+  Future<http.Response?> _getOptional(
+    Uri uri,
+    Map<String, String> headers,
+  ) async {
+    try {
+      return await _client.get(uri, headers: headers);
+    } catch (_) {
+      return null;
+    }
+  }
+
   _SearchResponse _decodeSearchPage(
     http.Response response, {
     required int page,
     required String resultType,
+    bool optional = false,
   }) {
-    if (response.statusCode == 403) {
+    if (response.statusCode == 403 ||
+        (optional && response.statusCode != 200)) {
       return _SearchResponse(items: const [], page: page, lastPage: 1);
     }
     if (response.statusCode != 200) {

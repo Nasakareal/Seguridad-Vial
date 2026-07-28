@@ -9,6 +9,65 @@ import 'package:seguridad_vial_app/screens/busqueda/hechos_busqueda_screen.dart'
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
+  testWidgets(
+    'conserva resultados de choques si el buscador de operativos da 404',
+    (tester) async {
+      SharedPreferences.setMockInitialValues({'auth_token': 'test-token'});
+
+      final client = MockClient((request) async {
+        if (request.url.path.endsWith('/hechos/buscar')) {
+          return http.Response(
+            jsonEncode({
+              'data': [
+                {
+                  'id': 84,
+                  'fecha': '2026-07-25',
+                  'calle': 'Avenida Madero',
+                  'colonia': 'Centro',
+                  'perito': 'JUAN PEREZ',
+                  'vehiculos': [
+                    {
+                      'placas': 'ABC123A',
+                      'serie': 'SERIE-CHOQUE-84',
+                      'conductores': [
+                        {'nombre': 'ANA LOPEZ'},
+                      ],
+                    },
+                  ],
+                },
+              ],
+              'meta': {
+                'current_page': 1,
+                'last_page': 1,
+                'per_page': 20,
+                'total': 1,
+              },
+            }),
+            200,
+          );
+        }
+
+        if (request.url.path.endsWith('/conduce-legalidad/buscar')) {
+          return http.Response(jsonEncode({'message': 'Error HTTP 404'}), 404);
+        }
+
+        return http.Response('No encontrado', 404);
+      });
+
+      await tester.pumpWidget(
+        MaterialApp(home: HechosBusquedaScreen(client: client)),
+      );
+
+      await tester.enterText(find.byType(TextField), 'ABC123A');
+      await tester.pump(const Duration(milliseconds: 450));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Hecho #84 · 2026-07-25'), findsOneWidget);
+      expect(find.textContaining('Placas: ABC123A'), findsOneWidget);
+      expect(find.textContaining('Error: Exception: Error 404'), findsNothing);
+    },
+  );
+
   testWidgets('busca operativos y abre la captura encontrada', (tester) async {
     SharedPreferences.setMockInitialValues({'auth_token': 'test-token'});
 
