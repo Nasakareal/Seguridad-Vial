@@ -62,4 +62,95 @@ void main() {
     expect(output, 'PREVENCION AEIOU U N ?accion! 20 grados');
     expect(output.codeUnits.every((byte) => byte <= 0x7F), isTrue);
   });
+
+  test('el ticket usa una sola vez el fundamento unificado', () {
+    const fundamento = ConduceLegalidadFundamento(
+      id: 20,
+      codigo: 'ART419_MOTO_CASCO',
+      nombre: 'Motocicleta sin casco',
+      articulo: '419',
+      fraccion: 'II',
+      puntos: 3,
+      arrestoPersona: true,
+      retencionVehiculo: true,
+      resumenSanciones: 'arresto + 3 puntos + depósito',
+      narrativaSugerida: 'Se detecta motocicleta sin casco.',
+    );
+    const vehiculo = ConduceLegalidadVehiculo(
+      placas: 'ABC-123-A',
+      retencionVehiculo: true,
+      infraccion: fundamento,
+    );
+    const persona = ConduceLegalidadPersona(
+      nombre: 'PERSONA PRUEBA',
+      infraccion: fundamento,
+    );
+    const captura = ConduceLegalidadCaptura(
+      id: 12,
+      operativoId: 11,
+      infraccion: fundamento,
+      narrativa: 'Intervención en operativo.',
+      canEdit: true,
+      vehiculos: [vehiculo],
+      personas: [persona],
+    );
+
+    final legal = ConduceLegalidadBoletaLegalText.fundamentoInfraccion(
+      captura,
+      vehiculo,
+      persona,
+    );
+    final conducta = ConduceLegalidadBoletaLegalText.conducta(
+      captura,
+      vehiculo,
+      persona,
+    );
+
+    expect(legal, contains('Intervención'));
+    expect(legal, isNot(contains('Persona infractora')));
+    expect(legal, isNot(contains('Vehículo:')));
+    expect('Intervención'.allMatches(legal), hasLength(1));
+    expect(
+      'Se detecta motocicleta sin casco.'.allMatches(conducta),
+      hasLength(1),
+    );
+  });
+
+  test('el ticket conserva fundamentos separados de capturas anteriores', () {
+    const personaFundamento = ConduceLegalidadFundamento(
+      id: 21,
+      nombre: 'Sanción de persona',
+      articulo: '419',
+      puntos: 1,
+      retencionVehiculo: false,
+    );
+    const vehiculoFundamento = ConduceLegalidadFundamento(
+      id: 22,
+      nombre: 'Retiro de vehículo',
+      articulo: '420',
+      puntos: 0,
+      retencionVehiculo: true,
+    );
+    const vehiculo = ConduceLegalidadVehiculo(
+      retencionVehiculo: true,
+      infraccion: vehiculoFundamento,
+    );
+    const persona = ConduceLegalidadPersona(infraccion: personaFundamento);
+    const captura = ConduceLegalidadCaptura(
+      id: 13,
+      operativoId: 11,
+      canEdit: true,
+      vehiculos: [vehiculo],
+      personas: [persona],
+    );
+
+    final legal = ConduceLegalidadBoletaLegalText.fundamentoInfraccion(
+      captura,
+      vehiculo,
+      persona,
+    );
+
+    expect(legal, contains('Persona infractora'));
+    expect(legal, contains('Vehículo'));
+  });
 }

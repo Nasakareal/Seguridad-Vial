@@ -57,6 +57,8 @@ class _ConduceLegalidadCapturaScreenState
   String? _metaError;
   String? _contentError;
   ConduceLegalidadMeta? _meta;
+  ConduceLegalidadFundamento? _fundamento;
+  bool _fundamentoLegacyNoDisponible = false;
   ConduceLegalidadOperativo? _operativo;
   bool _isSuperadmin = false;
   Timer? _feedingClosureTimer;
@@ -106,6 +108,7 @@ class _ConduceLegalidadCapturaScreenState
         : 'Morelia';
     _lugarCtrl.text = captura.lugar ?? '';
     _observacionesCtrl.text = captura.observaciones ?? '';
+    _fundamento = captura.fundamentoEfectivo;
     _vehiculos
       ..clear()
       ..addAll(captura.vehiculos);
@@ -141,6 +144,13 @@ class _ConduceLegalidadCapturaScreenState
     _lugarCtrl.text = _stringValue(draft['lugar']) ?? _lugarCtrl.text;
     _observacionesCtrl.text =
         _stringValue(draft['observaciones']) ?? _observacionesCtrl.text;
+    if (draft['fundamento'] is Map) {
+      _fundamento = ConduceLegalidadFundamento.fromJson(
+        Map<String, dynamic>.from(draft['fundamento'] as Map),
+      );
+    } else if (draft.containsKey('licencia_punto_infraccion_id')) {
+      _fundamento = null;
+    }
 
     if (draft.containsKey('vehiculos') ||
         draft.containsKey('vehiculos_count')) {
@@ -166,6 +176,8 @@ class _ConduceLegalidadCapturaScreenState
       'municipio': _municipioCtrl.text,
       'lugar': _lugarCtrl.text,
       'observaciones': _observacionesCtrl.text,
+      'licencia_punto_infraccion_id': _fundamento?.id,
+      'fundamento': _fundamento?.toJson(),
       'vehiculos': _vehiculos.map(_vehiculoDraftJson).toList(),
       'vehiculos_count': _vehiculos.length,
       'personas': _personas.map(_personaDraftJson).toList(),
@@ -242,6 +254,56 @@ class _ConduceLegalidadCapturaScreenState
     return text.isEmpty ? null : text;
   }
 
+  ConduceLegalidadFundamento? _canonicalFundamento(
+    ConduceLegalidadFundamento? current,
+    List<ConduceLegalidadFundamento> available,
+  ) {
+    if (current == null) return null;
+
+    for (final item in available) {
+      if (item.id == current.id &&
+          item.codigo == current.codigo &&
+          item.display == current.display) {
+        return item;
+      }
+    }
+    for (final item in available) {
+      if (item.id == current.id && item.codigo == current.codigo) return item;
+    }
+    for (final item in available) {
+      if (item.id == current.id) return item;
+    }
+    return null;
+  }
+
+  Map<String, dynamic> _vehiculoPayloadJson(ConduceLegalidadVehiculo vehiculo) {
+    final json = vehiculo.toJson();
+    if (!_fundamentoLegacyNoDisponible) {
+      json.remove('licencia_punto_infraccion_id');
+    }
+    return json;
+  }
+
+  Map<String, dynamic> _personaPayloadJson(ConduceLegalidadPersona persona) {
+    final json = persona.toJson();
+    if (!_fundamentoLegacyNoDisponible) {
+      json.remove('licencia_punto_infraccion_id');
+    }
+    return json;
+  }
+
+  ConduceLegalidadVehiculo? _primerVehiculoIncompatible(
+    ConduceLegalidadFundamento? fundamento,
+  ) {
+    if (fundamento == null) return null;
+    for (final vehiculo in _vehiculos) {
+      if (!fundamento.aplicaParaTipoGeneral(vehiculo.tipoGeneral)) {
+        return vehiculo;
+      }
+    }
+    return null;
+  }
+
   Future<void> _loadMeta() async {
     setState(() {
       _loadingMeta = true;
@@ -258,8 +320,13 @@ class _ConduceLegalidadCapturaScreenState
         widget.operativoId,
       );
       if (!mounted) return;
+      final fundamentos = widget.module.fundamentosCaptura(meta);
+      final canonical = _canonicalFundamento(_fundamento, fundamentos);
       setState(() {
         _meta = meta;
+        _fundamentoLegacyNoDisponible =
+            _fundamento != null && canonical == null;
+        _fundamento = canonical ?? _fundamento;
         _operativo = operativo;
         _isSuperadmin = isSuperadmin;
         _loadingMeta = false;
@@ -277,7 +344,7 @@ class _ConduceLegalidadCapturaScreenState
   Future<void> _addVehiculo() async {
     final vehiculo = await showConduceLegalidadVehiculoModal(
       context,
-      fundamentos: _meta?.fundamentosCorralon ?? const [],
+      fundamento: _fundamento,
       initialTipoGeneral: widget.module.isAlcoholimetria
           ? 'automovil'
           : 'motocicleta',
@@ -285,13 +352,21 @@ class _ConduceLegalidadCapturaScreenState
     if (vehiculo == null || !mounted) return;
     setState(() {
       _vehiculos.add(vehiculo);
-      _aplicarNarrativaSugerida(vehiculo);
     });
     _draft.notifyChanged();
   }
 
-  void _aplicarNarrativaSugerida(ConduceLegalidadVehiculo vehiculo) {
-    final narrativa = (vehiculo.infraccion?.narrativaSugerida ?? '').trim();
+  void _setFundamento(ConduceLegalidadFundamento? fundamento) {
+    setState(() {
+      _fundamento = fundamento;
+      _fundamentoLegacyNoDisponible = false;
+    });
+    _aplicarNarrativaSugerida(fundamento);
+    _draft.notifyChanged();
+  }
+
+  void _aplicarNarrativaSugerida(ConduceLegalidadFundamento? fundamento) {
+    final narrativa = (fundamento?.narrativaSugerida ?? '').trim();
     if (narrativa.isEmpty) return;
 
     final actual = _narrativaCtrl.text.trim();
@@ -303,7 +378,6 @@ class _ConduceLegalidadCapturaScreenState
   Future<void> _addPersona() async {
     final persona = await showConduceLegalidadPersonaModal(
       context,
-      fundamentos: _meta?.fundamentosPersona ?? const [],
       isAlcoholimetria: widget.module.isAlcoholimetria,
     );
     if (persona == null || !mounted) return;
@@ -330,6 +404,18 @@ class _ConduceLegalidadCapturaScreenState
       return;
     }
 
+    final vehiculoIncompatible = _primerVehiculoIncompatible(_fundamento);
+    if (vehiculoIncompatible != null) {
+      setState(() {
+        _contentError =
+            'El fundamento seleccionado no aplica para el tipo de vehículo '
+            '${vehiculoIncompatible.tipoGeneral ?? 'capturado'}. '
+            'Cambia el fundamento o el vehículo.';
+      });
+      _scrollToKey(_contentErrorKey);
+      return;
+    }
+
     final hasNarrativa = _narrativaCtrl.text.trim().isNotEmpty;
     if (!hasNarrativa &&
         _vehiculos.isEmpty &&
@@ -353,8 +439,13 @@ class _ConduceLegalidadCapturaScreenState
         'lugar': _emptyToNull(_lugarCtrl.text),
         'narrativa': _emptyToNull(_narrativaCtrl.text),
         'observaciones': _emptyToNull(_observacionesCtrl.text),
-        'vehiculos': _vehiculos.map((item) => item.toJson()).toList(),
-        'personas': _personas.map((item) => item.toJson()).toList(),
+        if (!_fundamentoLegacyNoDisponible) ...{
+          'licencia_punto_infraccion_id': _fundamento?.id,
+          'infraccion_codigo': _fundamento?.codigo,
+          'fundamento_legal': _fundamento?.fundamentoLegal,
+        },
+        'vehiculos': _vehiculos.map(_vehiculoPayloadJson).toList(),
+        'personas': _personas.map(_personaPayloadJson).toList(),
       };
 
       final result = _editing
@@ -441,6 +532,11 @@ class _ConduceLegalidadCapturaScreenState
 
   @override
   Widget build(BuildContext context) {
+    final fundamentosCaptura = [
+      ...widget.module.fundamentosCaptura(_meta),
+      if (_fundamentoLegacyNoDisponible && _fundamento != null) _fundamento!,
+    ];
+
     return Scaffold(
       appBar: AppBar(
         title: Text(
@@ -495,6 +591,51 @@ class _ConduceLegalidadCapturaScreenState
                     ),
                     const SizedBox(height: 12),
                   ],
+                  DropdownButtonFormField<ConduceLegalidadFundamento?>(
+                    value: _fundamento,
+                    isExpanded: true,
+                    itemHeight: null,
+                    menuMaxHeight: MediaQuery.of(context).size.height * .55,
+                    decoration: const InputDecoration(
+                      labelText: 'Fundamento del operativo',
+                      helperText:
+                          'Aplica a toda la intervención, con vehículo, persona o ambos.',
+                      border: OutlineInputBorder(),
+                      prefixIcon: Icon(Icons.gavel_outlined),
+                    ),
+                    selectedItemBuilder: (context) => [
+                      const _DropdownSelectedText(
+                        'Sin fundamento seleccionado',
+                      ),
+                      ...fundamentosCaptura.map(
+                        (item) => _DropdownSelectedText(item.display),
+                      ),
+                    ],
+                    items: [
+                      const DropdownMenuItem<ConduceLegalidadFundamento?>(
+                        value: null,
+                        child: _DropdownMenuText('Sin fundamento seleccionado'),
+                      ),
+                      ...fundamentosCaptura.map(
+                        (item) => DropdownMenuItem<ConduceLegalidadFundamento?>(
+                          value: item,
+                          child: _DropdownMenuText(
+                            '${item.display}\n${item.sancionResumen}',
+                          ),
+                        ),
+                      ),
+                    ],
+                    onChanged: _saving ? null : _setFundamento,
+                  ),
+                  if (_fundamento != null) ...[
+                    const SizedBox(height: 8),
+                    _AttentionPanel(
+                      text:
+                          '${_fundamentoLegacyNoDisponible ? 'Fundamento guardado previamente; se conservará sin ofrecerlo en capturas nuevas.\n' : ''}'
+                          '${_fundamento!.fundamentoLegal ?? _fundamento!.display}\nSanción: ${_fundamento!.sancionResumen}',
+                    ),
+                  ],
+                  const SizedBox(height: 14),
                   TextFormField(
                     controller: _narrativaCtrl,
                     minLines: 5,
@@ -664,7 +805,7 @@ class _ConduceLegalidadCapturaScreenState
 
 Future<ConduceLegalidadVehiculo?> showConduceLegalidadVehiculoModal(
   BuildContext context, {
-  required List<ConduceLegalidadFundamento> fundamentos,
+  required ConduceLegalidadFundamento? fundamento,
   required String initialTipoGeneral,
 }) {
   return showModalBottomSheet<ConduceLegalidadVehiculo>(
@@ -672,18 +813,18 @@ Future<ConduceLegalidadVehiculo?> showConduceLegalidadVehiculoModal(
     isScrollControlled: true,
     useSafeArea: true,
     builder: (_) => _VehiculoModal(
-      fundamentos: fundamentos,
+      fundamento: fundamento,
       initialTipoGeneral: initialTipoGeneral,
     ),
   );
 }
 
 class _VehiculoModal extends StatefulWidget {
-  final List<ConduceLegalidadFundamento> fundamentos;
+  final ConduceLegalidadFundamento? fundamento;
   final String initialTipoGeneral;
 
   const _VehiculoModal({
-    required this.fundamentos,
+    required this.fundamento,
     required this.initialTipoGeneral,
   });
 
@@ -709,19 +850,20 @@ class _VehiculoModalState extends State<_VehiculoModal> {
   late String? _tipoGeneralSeleccionado;
   String? _tipoCarroceriaSeleccionada;
   String? _estadoPlacasSeleccionado;
-  ConduceLegalidadFundamento? _fundamento;
   bool _cargandoGruas = true;
   List<Map<String, dynamic>> _gruas = [];
   int? _gruaIdSeleccionada;
   int? _corralonGruaIdSeleccionada;
   bool _antecedenteVehiculo = false;
   String? _rawTarjeta;
-  String? _motivoRetencionAuto;
 
   @override
   void initState() {
     super.initState();
     _tipoGeneralSeleccionado = widget.initialTipoGeneral;
+    if (_fundamentoRetieneVehiculo(widget.fundamento)) {
+      _motivoCtrl.text = _motivoRetencionTexto(widget.fundamento) ?? '';
+    }
     WidgetsBinding.instance.addPostFrameCallback((_) => _cargarGruas());
   }
 
@@ -945,22 +1087,6 @@ class _VehiculoModalState extends State<_VehiculoModal> {
     );
   }
 
-  void _setFundamento(ConduceLegalidadFundamento? value) {
-    final currentMotivo = _motivoCtrl.text.trim();
-    final shouldAutofill =
-        currentMotivo.isEmpty ||
-        (_motivoRetencionAuto != null && currentMotivo == _motivoRetencionAuto);
-    final nextMotivo = _motivoRetencionTexto(value);
-
-    setState(() {
-      _fundamento = value;
-      _motivoRetencionAuto = nextMotivo;
-      if (shouldAutofill) {
-        _motivoCtrl.text = nextMotivo ?? '';
-      }
-    });
-  }
-
   String? _motivoRetencionTexto(ConduceLegalidadFundamento? fundamento) {
     if (fundamento == null) return null;
 
@@ -974,6 +1100,11 @@ class _VehiculoModalState extends State<_VehiculoModal> {
 
     final fundamentoLegal = (fundamento.fundamentoLegal ?? '').trim();
     return fundamentoLegal.isEmpty ? null : fundamentoLegal;
+  }
+
+  bool _fundamentoRetieneVehiculo(ConduceLegalidadFundamento? fundamento) {
+    return fundamento?.retencionVehiculo == true ||
+        fundamento?.depositoSiSinPersonaHabilitada == true;
   }
 
   void _submit() {
@@ -1009,6 +1140,19 @@ class _VehiculoModalState extends State<_VehiculoModal> {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text(validationError)));
+      return;
+    }
+
+    if (widget.fundamento != null &&
+        !widget.fundamento!.aplicaParaTipoGeneral(_tipoGeneralSeleccionado)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'El fundamento del operativo no aplica para este tipo de vehículo. '
+            'Cambia el tipo o el fundamento en la pantalla principal.',
+          ),
+        ),
+      );
       return;
     }
 
@@ -1058,12 +1202,9 @@ class _VehiculoModalState extends State<_VehiculoModal> {
         aseguradora: _empty(_t(_aseguradoraCtrl)),
         antecedenteVehiculo: _antecedenteVehiculo,
         rawTarjetaQr: _rawTarjeta,
-        licenciaPuntoInfraccionId: _fundamento?.id,
-        retencionVehiculo: _fundamento != null,
+        retencionVehiculo: _fundamentoRetieneVehiculo(widget.fundamento),
         motivoRetencion: _empty(_motivoCtrl.text),
         observaciones: _empty(_observacionesCtrl.text),
-        fundamentoLegal: _fundamento?.fundamentoLegal,
-        infraccion: _fundamento,
       ),
     );
   }
@@ -1089,23 +1230,11 @@ class _VehiculoModalState extends State<_VehiculoModal> {
       colorSeleccionado,
     );
     final aseguradoraSeleccionada = _aseguradoraDropdownValue();
-    final fundamentosFiltrados = widget.fundamentos
-        .where((item) => item.aplicaParaTipoGeneral(_tipoGeneralSeleccionado))
-        .toList();
-
     if ((!tienePlacas || esServicioPublicoFederal) &&
         _estadoPlacasSeleccionado != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
         setState(() => _estadoPlacasSeleccionado = null);
-      });
-    }
-
-    if (_fundamento != null &&
-        !fundamentosFiltrados.any((item) => item.id == _fundamento!.id)) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        _setFundamento(null);
       });
     }
 
@@ -1159,11 +1288,6 @@ class _VehiculoModalState extends State<_VehiculoModal> {
                   setState(() {
                     _tipoGeneralSeleccionado = value;
                     _tipoCarroceriaSeleccionada = null;
-                    if (_fundamento != null &&
-                        !_fundamento!.aplicaParaTipoGeneral(value)) {
-                      _fundamento = null;
-                      _motivoRetencionAuto = null;
-                    }
                     _syncMarcaConTipoYCarroceria();
                   });
                 },
@@ -1461,57 +1585,7 @@ class _VehiculoModalState extends State<_VehiculoModal> {
                     setState(() => _antecedenteVehiculo = value),
               ),
               const SizedBox(height: 8),
-              DropdownButtonFormField<ConduceLegalidadFundamento?>(
-                value: _fundamento,
-                isExpanded: true,
-                itemHeight: null,
-                menuMaxHeight: MediaQuery.of(context).size.height * .55,
-                decoration: const InputDecoration(
-                  labelText: 'Motivo de corralon',
-                  border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.gavel_outlined),
-                ),
-                selectedItemBuilder: (context) => [
-                  const _DropdownSelectedText('Sin fundamento seleccionado'),
-                  ...fundamentosFiltrados.map(
-                    (item) => _DropdownSelectedText(item.display),
-                  ),
-                ],
-                items: [
-                  const DropdownMenuItem<ConduceLegalidadFundamento?>(
-                    value: null,
-                    child: _DropdownMenuText('Sin fundamento seleccionado'),
-                  ),
-                  ...fundamentosFiltrados.map(
-                    (item) => DropdownMenuItem<ConduceLegalidadFundamento?>(
-                      value: item,
-                      child: _DropdownMenuText(
-                        '${item.display}\n${item.sancionResumen}',
-                      ),
-                    ),
-                  ),
-                ],
-                onChanged: _setFundamento,
-              ),
-              if (_fundamento != null) ...[
-                const SizedBox(height: 8),
-                Text(
-                  _fundamento!.fundamentoLegal ?? _fundamento!.display,
-                  style: const TextStyle(
-                    color: Color(0xFF92400E),
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'Sancion: ${_fundamento!.sancionResumen}',
-                  style: const TextStyle(
-                    color: Color(0xFF7F1D1D),
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-              ],
-              const SizedBox(height: 12),
+              const SizedBox(height: 8),
               _text(
                 _motivoCtrl,
                 'Motivo de retencion',
@@ -1568,28 +1642,20 @@ class _VehiculoModalState extends State<_VehiculoModal> {
 
 Future<ConduceLegalidadPersona?> showConduceLegalidadPersonaModal(
   BuildContext context, {
-  required List<ConduceLegalidadFundamento> fundamentos,
   required bool isAlcoholimetria,
 }) {
   return showModalBottomSheet<ConduceLegalidadPersona>(
     context: context,
     isScrollControlled: true,
     useSafeArea: true,
-    builder: (_) => _PersonaModal(
-      fundamentos: fundamentos,
-      isAlcoholimetria: isAlcoholimetria,
-    ),
+    builder: (_) => _PersonaModal(isAlcoholimetria: isAlcoholimetria),
   );
 }
 
 class _PersonaModal extends StatefulWidget {
-  final List<ConduceLegalidadFundamento> fundamentos;
   final bool isAlcoholimetria;
 
-  const _PersonaModal({
-    required this.fundamentos,
-    required this.isAlcoholimetria,
-  });
+  const _PersonaModal({required this.isAlcoholimetria});
 
   @override
   State<_PersonaModal> createState() => _PersonaModalState();
@@ -1625,7 +1691,6 @@ class _PersonaModalState extends State<_PersonaModal> {
   DateTime? _vigencia;
   bool _permanente = false;
   String? _rawLicencia;
-  ConduceLegalidadFundamento? _fundamento;
   String? _nacionalidad;
   String? _estadoCivil;
 
@@ -1756,10 +1821,6 @@ class _PersonaModalState extends State<_PersonaModal> {
             : _date(_vigencia!),
         permanente: _permanente,
         rawLicenciaQr: _rawLicencia,
-        licenciaPuntoInfraccionId: _fundamento?.id,
-        infraccionCodigo: _fundamento?.codigo,
-        fundamentoLegal: _fundamento?.fundamentoLegal,
-        infraccion: _fundamento,
         edadAproximada: _edadAproximada,
         complexion: _complexion,
         estatura: _estatura,
@@ -1827,7 +1888,6 @@ class _PersonaModalState extends State<_PersonaModal> {
   @override
   Widget build(BuildContext context) {
     final licenciaWarning = _licenciaWarningText();
-    final fundamentosPersona = widget.fundamentos;
 
     return FractionallySizedBox(
       heightFactor: .92,
@@ -1982,44 +2042,6 @@ class _PersonaModalState extends State<_PersonaModal> {
                 'Numero de licencia',
                 Icons.confirmation_number_outlined,
               ),
-              DropdownButtonFormField<ConduceLegalidadFundamento?>(
-                value: _fundamento,
-                isExpanded: true,
-                decoration: const InputDecoration(
-                  labelText: 'Fundamento / sancion de persona',
-                  border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.gavel_outlined),
-                ),
-                selectedItemBuilder: (context) => [
-                  const _DropdownSelectedText('Sin fundamento seleccionado'),
-                  ...fundamentosPersona.map(
-                    (item) => _DropdownSelectedText(item.display),
-                  ),
-                ],
-                items: [
-                  const DropdownMenuItem<ConduceLegalidadFundamento?>(
-                    value: null,
-                    child: _DropdownMenuText('Sin fundamento seleccionado'),
-                  ),
-                  ...fundamentosPersona.map(
-                    (item) => DropdownMenuItem<ConduceLegalidadFundamento?>(
-                      value: item,
-                      child: _DropdownMenuText(
-                        '${item.display}\n${item.sancionResumen}',
-                      ),
-                    ),
-                  ),
-                ],
-                onChanged: (value) => setState(() => _fundamento = value),
-              ),
-              const SizedBox(height: 10),
-              if (_fundamento != null) ...[
-                _AttentionPanel(
-                  text:
-                      'Sancion de persona: ${_fundamento!.sancionResumen}. ${_fundamento!.fundamentoLegal ?? _fundamento!.display}',
-                ),
-                const SizedBox(height: 10),
-              ],
               if (licenciaWarning != null) ...[
                 _AttentionPanel(text: licenciaWarning),
                 const SizedBox(height: 10),
@@ -2510,7 +2532,6 @@ class _VehicleTile extends StatelessWidget {
         vehiculo.serie,
         vehiculo.grua == null ? null : 'Grua: ${vehiculo.grua}',
         vehiculo.corralon == null ? null : 'Corralon: ${vehiculo.corralon}',
-        vehiculo.infraccion?.display,
       ].whereType<String>().where((v) => v.trim().isNotEmpty).join(' | '),
       onRemove: onRemove,
     );
@@ -2682,8 +2703,6 @@ class _PersonTile extends StatelessWidget {
       if ((persona.numeroLicencia ?? '').trim().isNotEmpty)
         'Lic. ${persona.numeroLicencia}',
       if ((persona.tipoLicencia ?? '').trim().isNotEmpty) persona.tipoLicencia!,
-      if (persona.infraccion != null)
-        '${persona.infraccion!.display} (${persona.infraccion!.sancionResumen})',
       if (persona.hasDescripcionFisica) 'Descripcion fisica capturada',
     ];
 

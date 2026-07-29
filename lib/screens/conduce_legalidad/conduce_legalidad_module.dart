@@ -115,6 +115,19 @@ class ConduceLegalidadModule {
     return fundamentosCount(meta) > 0;
   }
 
+  List<ConduceLegalidadFundamento> fundamentosCaptura(
+    ConduceLegalidadMeta? meta,
+  ) {
+    if (meta == null) return const <ConduceLegalidadFundamento>[];
+    if (!isAlcoholimetria) {
+      return _mergeFundamentos(meta.fundamentosCorralon);
+    }
+    return _mergeFundamentos([
+      ...meta.fundamentosCorralon,
+      ...meta.fundamentosPersona,
+    ]);
+  }
+
   bool _isAlcoholFundamento(ConduceLegalidadFundamento fundamento) {
     final articulo = (fundamento.articulo ?? '').trim();
     if (articulo == '345' || articulo == '508') return true;

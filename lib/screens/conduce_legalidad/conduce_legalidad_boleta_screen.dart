@@ -613,15 +613,23 @@ class _BoletaPaper extends StatelessWidget {
   }
 
   String get _fundamentoInfraccion {
-    return _BoletaLegalText.fundamentoInfraccion(vehiculo, persona);
+    return ConduceLegalidadBoletaLegalText.fundamentoInfraccion(
+      captura,
+      vehiculo,
+      persona,
+    );
   }
 
   String get _fundamentoSancion {
-    return _BoletaLegalText.fundamentoSancion(vehiculo, persona);
+    return ConduceLegalidadBoletaLegalText.fundamentoSancion(
+      captura,
+      vehiculo,
+      persona,
+    );
   }
 
   String get _conducta {
-    return _BoletaLegalText.conducta(captura, vehiculo, persona);
+    return ConduceLegalidadBoletaLegalText.conducta(captura, vehiculo, persona);
   }
 
   String get _vehiculoDescripcion {
@@ -668,11 +676,13 @@ class _BoletaPaper extends StatelessWidget {
   }
 
   bool get _mostrarInformacionLiberacion {
-    return _BoletaLegalText.requiereInformacionLiberacion(vehiculo);
+    return ConduceLegalidadBoletaLegalText.requiereInformacionLiberacion(
+      vehiculo,
+    );
   }
 
   String get _informacionLiberacionVehiculo {
-    return _BoletaLegalText.informacionLiberacion(vehiculo);
+    return ConduceLegalidadBoletaLegalText.informacionLiberacion(vehiculo);
   }
 }
 
@@ -915,15 +925,23 @@ class _BoletaTicketData {
   }
 
   String get fundamentoInfraccion {
-    return _BoletaLegalText.fundamentoInfraccion(vehiculo, persona);
+    return ConduceLegalidadBoletaLegalText.fundamentoInfraccion(
+      captura,
+      vehiculo,
+      persona,
+    );
   }
 
   String get fundamentoSancion {
-    return _BoletaLegalText.fundamentoSancion(vehiculo, persona);
+    return ConduceLegalidadBoletaLegalText.fundamentoSancion(
+      captura,
+      vehiculo,
+      persona,
+    );
   }
 
   String get conducta {
-    return _BoletaLegalText.conducta(captura, vehiculo, persona);
+    return ConduceLegalidadBoletaLegalText.conducta(captura, vehiculo, persona);
   }
 
   String get vehiculoDescripcion {
@@ -970,11 +988,13 @@ class _BoletaTicketData {
   }
 
   bool get mostrarInformacionLiberacion {
-    return _BoletaLegalText.requiereInformacionLiberacion(vehiculo);
+    return ConduceLegalidadBoletaLegalText.requiereInformacionLiberacion(
+      vehiculo,
+    );
   }
 
   String get informacionLiberacionVehiculo {
-    return _BoletaLegalText.informacionLiberacion(vehiculo);
+    return ConduceLegalidadBoletaLegalText.informacionLiberacion(vehiculo);
   }
 }
 
@@ -1103,16 +1123,17 @@ class _BoletaInfractionEntry {
   });
 }
 
-class _BoletaLegalText {
+class ConduceLegalidadBoletaLegalText {
   static const String _normativa =
       'del Reglamento de la Ley de Movilidad y Seguridad Vial del Estado de Michoacán';
 
   static String fundamentoInfraccion(
+    ConduceLegalidadCaptura captura,
     ConduceLegalidadVehiculo? vehiculo,
     ConduceLegalidadPersona? persona,
   ) {
     final blocks = <String>[];
-    for (final entry in _entries(vehiculo, persona)) {
+    for (final entry in _entries(captura, vehiculo, persona)) {
       final referencias = _referenciasLegales(entry.infraccion);
       final fallback = referencias.isEmpty
           ? _sanitizedFallback(entry.fallbackLegal)
@@ -1127,11 +1148,12 @@ class _BoletaLegalText {
   }
 
   static String fundamentoSancion(
+    ConduceLegalidadCaptura captura,
     ConduceLegalidadVehiculo? vehiculo,
     ConduceLegalidadPersona? persona,
   ) {
     final consecuencias = <MapEntry<String, String>>[];
-    for (final entry in _entries(vehiculo, persona)) {
+    for (final entry in _entries(captura, vehiculo, persona)) {
       final sancion = _sancionAplicable(
         entry.infraccion,
         entry.vehiculo,
@@ -1166,12 +1188,15 @@ class _BoletaLegalText {
     ConduceLegalidadVehiculo? vehiculo,
     ConduceLegalidadPersona? persona,
   ) {
+    final infraccionCaptura = captura.infraccion;
     final infraccionVehiculo = vehiculo?.infraccion;
     final infraccionPersona = persona?.infraccion;
     return _joinUnique([
       captura.narrativa,
+      infraccionCaptura?.narrativaSugerida,
       infraccionPersona?.narrativaSugerida,
       infraccionVehiculo?.narrativaSugerida,
+      _conductaCatalogo(infraccionCaptura),
       _conductaCatalogo(infraccionPersona),
       _conductaCatalogo(infraccionVehiculo),
       vehiculo?.observaciones,
@@ -1198,9 +1223,22 @@ class _BoletaLegalText {
   }
 
   static List<_BoletaInfractionEntry> _entries(
+    ConduceLegalidadCaptura captura,
     ConduceLegalidadVehiculo? vehiculo,
     ConduceLegalidadPersona? persona,
   ) {
+    if (captura.infraccion != null ||
+        _cleanValue(captura.fundamentoLegal) != null) {
+      return <_BoletaInfractionEntry>[
+        _BoletaInfractionEntry(
+          label: 'Intervención',
+          infraccion: captura.infraccion,
+          fallbackLegal: captura.fundamentoLegal,
+          vehiculo: vehiculo,
+        ),
+      ];
+    }
+
     return <_BoletaInfractionEntry>[
       if (persona?.infraccion != null ||
           _cleanValue(persona?.fundamentoLegal) != null)

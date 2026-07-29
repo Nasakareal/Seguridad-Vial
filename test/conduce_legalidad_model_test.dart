@@ -501,4 +501,148 @@ void main() {
     expect(restored.fundamentoLegal, contains('419'));
     expect(restored.narrativaSugerida, contains('motocicleta'));
   });
+
+  test('capture parses one unified fundamento and keeps legacy fallback', () {
+    final unified = ConduceLegalidadCaptura.fromJson({
+      'id': 1,
+      'operativo_id': 9,
+      'licencia_punto_infraccion_id': 30,
+      'infraccion_codigo': 'ART419_MOTO',
+      'fundamento_legal': 'Articulo 419',
+      'infraccion': {
+        'id': 30,
+        'codigo': 'ART419_MOTO',
+        'nombre': 'Motocicleta sin casco',
+        'puntos': 3,
+        'retencion_vehiculo': true,
+      },
+      'vehiculos': <dynamic>[],
+      'personas': <dynamic>[],
+    });
+
+    expect(unified.licenciaPuntoInfraccionId, 30);
+    expect(unified.infraccionCodigo, 'ART419_MOTO');
+    expect(unified.fundamentoEfectivo?.id, 30);
+
+    final legacy = ConduceLegalidadCaptura.fromJson({
+      'id': 2,
+      'operativo_id': 9,
+      'vehiculos': [
+        {
+          'licencia_punto_infraccion_id': 31,
+          'infraccion': {
+            'id': 31,
+            'codigo': 'LEGACY',
+            'nombre': 'Fundamento anterior',
+            'puntos': 0,
+            'retencion_vehiculo': true,
+          },
+        },
+      ],
+      'personas': <dynamic>[],
+    });
+
+    expect(legacy.infraccion, isNull);
+    expect(legacy.fundamentoEfectivo?.id, 31);
+  });
+
+  test('capture restores the selected variant of a combined fundamento', () {
+    final captura = ConduceLegalidadCaptura.fromJson({
+      'id': 3,
+      'operativo_id': 9,
+      'licencia_punto_infraccion_id': 20,
+      'infraccion_codigo': 'ART420_MOTO_CASCO_MENOR_MENOR',
+      'fundamento_legal': 'Art. 420 - Motocicleta con pasajero menor de edad',
+      'infraccion': {
+        'id': 20,
+        'codigo': 'ART420_MOTO_CASCO_MENOR',
+        'nombre': 'Motocicleta sin casco y con pasajero menor',
+        'texto_operativo': 'Motocicleta sin casco y con pasajero menor',
+        'referencia_legal_corta': 'Art. 420',
+        'puntos': 0,
+        'retencion_vehiculo': true,
+        'ambito_vehiculo': 'motocicleta',
+      },
+      'vehiculos': <dynamic>[],
+      'personas': <dynamic>[],
+    });
+
+    expect(
+      captura.infraccion?.display,
+      'Motocicleta con pasajero menor de edad',
+    );
+    expect(captura.infraccion?.codigo, endsWith('_MENOR'));
+    expect(captura.fundamentoLegal, contains('pasajero menor'));
+  });
+
+  test('unified catalog preserves each operation filter', () {
+    final raw = ConduceLegalidadMeta.fromJson({
+      'data': {
+        'operativo_nombre': 'Operativo',
+        'abilities': {'can_feed': true},
+        'fundamentos_corralon': [
+          {
+            'id': 40,
+            'codigo': 'ART420_MOTO_CASCO',
+            'nombre': 'Motocicleta sin casco',
+            'puntos': 0,
+            'retencion_vehiculo': true,
+          },
+        ],
+        'fundamentos_persona': [
+          {
+            'id': 41,
+            'codigo': 'ART508_ALCOHOL',
+            'nombre': 'Conducir con alcoholemia',
+            'articulo': '508',
+            'puntos': 0,
+            'arresto_persona': true,
+            'retencion_vehiculo': false,
+          },
+        ],
+      },
+    }, filterConduceLegalidadMotos: false);
+
+    final conduceMeta = ConduceLegalidadMeta.fromJson({
+      'data': {
+        'operativo_nombre': 'Operativo',
+        'abilities': {'can_feed': true},
+        'fundamentos_corralon': [
+          {
+            'id': 40,
+            'codigo': 'ART420_MOTO_CASCO',
+            'nombre': 'Motocicleta sin casco',
+            'puntos': 0,
+            'retencion_vehiculo': true,
+          },
+        ],
+        'fundamentos_persona': [
+          {
+            'id': 41,
+            'codigo': 'ART508_ALCOHOL',
+            'nombre': 'Conducir con alcoholemia',
+            'articulo': '508',
+            'puntos': 0,
+            'arresto_persona': true,
+            'retencion_vehiculo': false,
+          },
+        ],
+      },
+    });
+
+    expect(
+      ConduceLegalidadModule.conduceLegalidad
+          .fundamentosCaptura(conduceMeta)
+          .map((item) => item.codigo),
+      ['ART420_MOTO_CASCO'],
+    );
+
+    final alcoholMeta = ConduceLegalidadModule.alcoholimetria.applyMeta(raw);
+    expect(
+      ConduceLegalidadModule.alcoholimetria
+          .fundamentosCaptura(alcoholMeta)
+          .map((item) => item.codigo),
+      ['ART508_ALCOHOL'],
+    );
+  });
 }

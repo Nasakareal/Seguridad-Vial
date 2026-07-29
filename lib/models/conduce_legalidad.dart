@@ -531,6 +531,10 @@ class ConduceLegalidadCaptura {
   final int id;
   final String? clientUuid;
   final int operativoId;
+  final int? licenciaPuntoInfraccionId;
+  final String? infraccionCodigo;
+  final String? fundamentoLegal;
+  final ConduceLegalidadFundamento? infraccion;
   final int? createdBy;
   final ConduceLegalidadUserRef? creador;
   final ConduceLegalidadRef? unidad;
@@ -554,6 +558,10 @@ class ConduceLegalidadCaptura {
     required this.id,
     this.clientUuid,
     required this.operativoId,
+    this.licenciaPuntoInfraccionId,
+    this.infraccionCodigo,
+    this.fundamentoLegal,
+    this.infraccion,
     this.createdBy,
     this.creador,
     this.unidad,
@@ -575,10 +583,27 @@ class ConduceLegalidadCaptura {
   });
 
   factory ConduceLegalidadCaptura.fromJson(Map<String, dynamic> json) {
+    final infraccionCodigo = _str(json['infraccion_codigo']);
+    final fundamentoLegal = _str(json['fundamento_legal']);
+    final infraccionBase = json['infraccion'] is Map
+        ? ConduceLegalidadFundamento.fromJson(_map(json['infraccion']))
+        : null;
+    final infraccion = _fundamentoCapturaGuardado(
+      infraccionBase,
+      infraccionCodigo,
+      fundamentoLegal,
+    );
+
     return ConduceLegalidadCaptura(
       id: _asInt(json['id']),
       clientUuid: _str(json['client_uuid']),
       operativoId: _asInt(json['operativo_id']),
+      licenciaPuntoInfraccionId: _nullableInt(
+        json['licencia_punto_infraccion_id'],
+      ),
+      infraccionCodigo: infraccionCodigo,
+      fundamentoLegal: fundamentoLegal,
+      infraccion: infraccion,
       createdBy: _nullableInt(json['created_by']),
       creador: ConduceLegalidadUserRef.tryParse(json['creador']),
       unidad: ConduceLegalidadRef.tryParse(json['unidad']),
@@ -605,6 +630,13 @@ class ConduceLegalidadCaptura {
       ).map((item) => ConduceLegalidadFoto.fromJson(_map(item))).toList(),
     );
   }
+
+  /// Facilita editar capturas antiguas que todavía guardaban el fundamento
+  /// dentro del vehículo o de la persona.
+  ConduceLegalidadFundamento? get fundamentoEfectivo =>
+      infraccion ??
+      _firstFundamento(vehiculos.map((item) => item.infraccion)) ??
+      _firstFundamento(personas.map((item) => item.infraccion));
 }
 
 class ConduceLegalidadFoto {
@@ -1264,4 +1296,33 @@ String _fundamentoLegalVariante(
   }
 
   return nombre;
+}
+
+ConduceLegalidadFundamento? _firstFundamento(
+  Iterable<ConduceLegalidadFundamento?> fundamentos,
+) {
+  for (final fundamento in fundamentos) {
+    if (fundamento != null) return fundamento;
+  }
+  return null;
+}
+
+ConduceLegalidadFundamento? _fundamentoCapturaGuardado(
+  ConduceLegalidadFundamento? base,
+  String? codigoGuardado,
+  String? fundamentoLegalGuardado,
+) {
+  if (base == null) return null;
+
+  final codigo = (codigoGuardado ?? '').trim();
+  final expandidos = _expandirFundamentosOperativos([base]);
+  final seleccionado = expandidos.firstWhere(
+    (item) => item.codigo == codigo,
+    orElse: () => base,
+  );
+
+  return seleccionado.copyWith(
+    codigo: codigo.isEmpty ? null : codigo,
+    fundamentoLegal: fundamentoLegalGuardado,
+  );
 }
