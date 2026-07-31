@@ -1,6 +1,7 @@
 import 'actividad_categoria.dart';
 import 'actividad_fomento.dart';
 import 'actividad_subcategoria.dart';
+import 'conduce_legalidad.dart';
 
 class ActividadRef {
   final int id;
@@ -158,6 +159,7 @@ class ActividadVehiculo {
     final data = <String, dynamic>{
       'marca': marca,
       'modelo': modelo,
+      'tipo_general': tipoGeneral,
       'tipo': tipo,
       'linea': linea,
       'color': color,
@@ -169,6 +171,7 @@ class ActividadVehiculo {
       'tarjeta_circulacion_nombre': tarjetaCirculacionNombre,
       'grua_id': gruaId,
       'grua': grua,
+      'corralon_id': corralonId,
       'corralon': corralon,
       'aseguradora': aseguradora,
       'antecedente_vehiculo': antecedenteVehiculo ? 1 : 0,
@@ -256,6 +259,9 @@ class Actividad {
   final List<ActividadVehiculo> vehiculos;
   final ActividadFomentoDetalle? fomentoCulturaVialDetalle;
   final int? puestaDisposicionId;
+  final int? conduceLegalidadOperativoId;
+  final int? conduceLegalidadCapturaId;
+  final List<ConduceLegalidadFundamento> conduceLegalidadFundamentos;
 
   const Actividad({
     required this.id,
@@ -302,6 +308,9 @@ class Actividad {
     required this.vehiculos,
     required this.fomentoCulturaVialDetalle,
     this.puestaDisposicionId,
+    this.conduceLegalidadOperativoId,
+    this.conduceLegalidadCapturaId,
+    this.conduceLegalidadFundamentos = const <ConduceLegalidadFundamento>[],
   });
 
   factory Actividad.fromJson(Map<String, dynamic> json) {
@@ -316,6 +325,9 @@ class Actividad {
     final fotosRaw = json['fotos'];
     final vehiculosRaw = json['vehiculos'];
     final puestaRaw = json['puesta_disposicion'] ?? json['puestaDisposicion'];
+    final fundamentosConduceRaw =
+        json['conduce_legalidad_fundamentos'] ??
+        json['conduceLegalidadFundamentos'];
 
     return Actividad(
       id: _asInt(json['id']),
@@ -408,6 +420,22 @@ class Actividad {
       puestaDisposicionId:
           _asNullableInt(json['puesta_disposicion_id']) ??
           (puestaRaw is Map ? _asNullableInt(puestaRaw['id']) : null),
+      conduceLegalidadOperativoId: _asNullableInt(
+        json['conduce_legalidad_operativo_id'],
+      ),
+      conduceLegalidadCapturaId: _asNullableInt(
+        json['conduce_legalidad_captura_id'],
+      ),
+      conduceLegalidadFundamentos: (fundamentosConduceRaw is List)
+          ? fundamentosConduceRaw
+                .whereType<Map>()
+                .map(
+                  (item) => ConduceLegalidadFundamento.fromJson(
+                    Map<String, dynamic>.from(item),
+                  ),
+                )
+                .toList()
+          : const <ConduceLegalidadFundamento>[],
     );
   }
 
@@ -491,6 +519,11 @@ class Actividad {
     'vehiculos': vehiculos.map((e) => e.toJson()).toList(),
     'fomento_cultura_vial_detalle': fomentoCulturaVialDetalle?.toJson(),
     'puesta_disposicion_id': puestaDisposicionId,
+    'conduce_legalidad_operativo_id': conduceLegalidadOperativoId,
+    'conduce_legalidad_captura_id': conduceLegalidadCapturaId,
+    'conduce_legalidad_fundamentos': conduceLegalidadFundamentos
+        .map((item) => item.toJson())
+        .toList(),
   };
 }
 

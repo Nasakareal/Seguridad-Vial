@@ -230,6 +230,76 @@ void main() {
   });
 
   test(
+    'delegaciones delegado can create conduce legalidad operativos',
+    () async {
+      SharedPreferences.setMockInitialValues(<String, Object>{
+        'auth_role': 'Delegado',
+        'auth_unidad_id': AuthService.unidadDelegacionesId,
+        'auth_user_payload': jsonEncode(<String, Object>{
+          'id': 132,
+          'role': <String, Object>{'name': 'Delegado'},
+          'unidad_id': AuthService.unidadDelegacionesId,
+        }),
+        'auth_perms': <String>[],
+      });
+
+      expect(await AuthService.canCreateConduceLegalidad(), isTrue);
+    },
+  );
+
+  test(
+    'delegaciones policia cannot create conduce legalidad operativos',
+    () async {
+      SharedPreferences.setMockInitialValues(<String, Object>{
+        'auth_role': 'Policia',
+        'auth_unidad_id': AuthService.unidadDelegacionesId,
+        'auth_user_payload': jsonEncode(<String, Object>{
+          'id': 133,
+          'role': <String, Object>{'name': 'Policia'},
+          'unidad_id': AuthService.unidadDelegacionesId,
+        }),
+        'auth_perms': <String>[],
+      });
+
+      expect(await AuthService.canCreateConduceLegalidad(), isFalse);
+    },
+  );
+
+  test(
+    'only administrador subdirector and superadmin set operativo schedule',
+    () async {
+      for (final entry in <(String, int, bool)>[
+        ('Superadmin', 1, true),
+        ('Subdirector', 2, true),
+        ('Administrador', 3, true),
+        ('Administrativo', 5, false),
+        ('Delegado', 0, false),
+        ('Responsable de Turno', 13, false),
+      ]) {
+        SharedPreferences.setMockInitialValues(<String, Object>{
+          'auth_role': entry.$1,
+          if (entry.$2 > 0) 'auth_role_id': entry.$2,
+          'auth_unidad_id': AuthService.unidadDelegacionesId,
+          'auth_user_payload': jsonEncode(<String, Object>{
+            'id': 200 + entry.$2,
+            'role': <String, Object>{
+              if (entry.$2 > 0) 'id': entry.$2,
+              'name': entry.$1,
+            },
+            'unidad_id': AuthService.unidadDelegacionesId,
+          }),
+        });
+
+        expect(
+          await AuthService.canSetConduceLegalidadSchedule(),
+          entry.$3,
+          reason: entry.$1,
+        );
+      }
+    },
+  );
+
+  test(
     'agente vial uses vialidades home and hourly tracking profile',
     () async {
       SharedPreferences.setMockInitialValues(<String, Object>{

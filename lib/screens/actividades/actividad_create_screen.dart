@@ -12,11 +12,13 @@ import '../../models/actividad.dart';
 import '../../models/actividad_categoria.dart';
 import '../../models/actividad_fomento.dart';
 import '../../models/actividad_subcategoria.dart';
+import '../../models/conduce_legalidad.dart';
 import '../../models/vialidades_urbanas_dispositivo.dart';
 import '../../services/actividades_service.dart';
 import '../../services/actividad_narrativa_template_service.dart';
 import '../../services/auth_service.dart';
 import '../../services/geo_service.dart';
+import '../../services/conduce_legalidad_service.dart';
 import '../../services/local_draft_service.dart';
 import '../../services/photo_picker_service.dart';
 import '../../services/vehiculo_form_service.dart';
@@ -28,6 +30,7 @@ import '../../widgets/municipio_autocomplete_field.dart';
 import '../../widgets/normalized_integer_input_formatter.dart';
 import 'actividad_ui_labels.dart';
 import 'widgets/actividad_vehiculo_modal.dart';
+import 'widgets/actividad_conduce_legalidad_panel.dart';
 import 'widgets/fomento_cultura_vial_panel.dart';
 
 class ActividadCreateScreen extends StatefulWidget {
@@ -69,6 +72,11 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
   String? _fomentoSector;
   final List<File> _fotos = [];
   final List<ActividadVehiculo> _vehiculos = [];
+  ConduceLegalidadMeta? _conduceMeta;
+  bool _loadingConduceMeta = false;
+  String? _conduceMetaError;
+  ConduceLegalidadFundamento? _fundamentoConduce;
+  final List<ConduceLegalidadFundamento?> _fundamentosConduceAdicionales = [];
 
   final _fechaCtrl = TextEditingController();
   final _horaCtrl = TextEditingController();
@@ -314,6 +322,7 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
       });
       _syncFomentoTotal();
       _applyNarrativaTemplateIfPossible();
+      unawaited(_ensureConduceMeta());
     } catch (e) {
       if (!mounted) return;
       final message = ActividadesService.cleanExceptionMessage(e);
@@ -424,6 +433,7 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
     _vehiculos
       ..clear()
       ..addAll(_vehiculosFromFields(fields));
+    _restoreFundamentosConduce(_fundamentosConduceFromFields(fields));
 
     if (_latCtrl.text.trim().isNotEmpty && _lngCtrl.text.trim().isNotEmpty) {
       _locationStatus = 'Ubicacion recuperada del borrador offline.';
@@ -546,6 +556,7 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
     _vehiculos
       ..clear()
       ..addAll(_actividadVehiculosFromDraft(draft['vehiculos']));
+    _restoreFundamentosConduce(draft['conduce_legalidad_fundamentos']);
 
     if (_latCtrl.text.trim().isNotEmpty && _lngCtrl.text.trim().isNotEmpty) {
       _locationStatus = 'Ubicacion recuperada del borrador local.';
@@ -581,6 +592,9 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
       'fomento': _buildFomentoPayload().toJson(),
       'fotos': _fotos.map((file) => file.path).toList(),
       'vehiculos': _vehiculos.map((vehiculo) => vehiculo.toJson()).toList(),
+      'conduce_legalidad_fundamentos': _fundamentosConduceSeleccionados
+          .map((item) => item.toJson())
+          .toList(),
     };
   }
 
@@ -700,6 +714,35 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
         .toList();
   }
 
+  List<Map<String, dynamic>> _fundamentosConduceFromFields(
+    Map<String, String> fields,
+  ) {
+    final grouped = <int, Map<String, dynamic>>{};
+    final pattern = RegExp(
+      r'^conduce_legalidad_fundamentos\[(\d+)\]\[([^\]]+)\]$',
+    );
+    fields.forEach((key, value) {
+      final match = pattern.firstMatch(key);
+      if (match == null) return;
+      final index = int.tryParse(match.group(1) ?? '');
+      final field = match.group(2);
+      if (index == null || field == null) return;
+      grouped.putIfAbsent(index, () => <String, dynamic>{})[field] = value;
+    });
+
+    final indexes = grouped.keys.toList()..sort();
+    return indexes.map((index) {
+      final raw = grouped[index]!;
+      return <String, dynamic>{
+        'id': raw['licencia_punto_infraccion_id'],
+        'codigo': raw['infraccion_codigo'],
+        'nombre': raw['infraccion_codigo'] ?? 'Fundamento legal',
+        'fundamento_legal': raw['fundamento_legal'],
+        'retencion_vehiculo': true,
+      };
+    }).toList();
+  }
+
   ActividadVehiculo _vehiculoFromMap(Map<String, String> data) {
     String? str(String key) {
       final clean = (data[key] ?? '').trim();
@@ -769,6 +812,71 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
 
   bool get _useFomentoUserLayout {
     return _isFomentoUser && _showFomentoPanel;
+  }
+
+  bool get _isConduceLegalidad {
+    return ActividadesService.isConduceLegalidadSubcategoria(
+      _selectedSubcategoria()?.nombre,
+    );
+  }
+
+  List<ConduceLegalidadFundamento> get _fundamentosConduceSeleccionados => [
+    if (_fundamentoConduce != null) _fundamentoConduce!,
+    ..._fundamentosConduceAdicionales.whereType<ConduceLegalidadFundamento>(),
+  ];
+
+  List<ConduceLegalidadFundamento?> get _fundamentosConduceEstado => [
+    _fundamentoConduce,
+    ..._fundamentosConduceAdicionales,
+  ];
+
+  Future<void> _ensureConduceMeta() async {
+    if (!_isConduceLegalidad || _loadingConduceMeta || _conduceMeta != null) {
+      return;
+    }
+    setState(() {
+      _loadingConduceMeta = true;
+      _conduceMetaError = null;
+    });
+    try {
+      final meta = await ConduceLegalidadService.fetchMeta();
+      if (!mounted) return;
+      setState(() {
+        _conduceMeta = meta;
+        _loadingConduceMeta = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _loadingConduceMeta = false;
+        _conduceMetaError = ActividadesService.cleanExceptionMessage(e);
+      });
+    }
+  }
+
+  void _restoreFundamentosConduce(dynamic value) {
+    if (value is! List) return;
+    final items = value
+        .whereType<Map>()
+        .map(
+          (item) => ConduceLegalidadFundamento.fromJson(
+            Map<String, dynamic>.from(item),
+          ),
+        )
+        .toList();
+    _fundamentoConduce = items.isEmpty ? null : items.first;
+    _fundamentosConduceAdicionales
+      ..clear()
+      ..addAll(items.skip(1));
+  }
+
+  void _clearConduceSelectionIfNeeded() {
+    if (_isConduceLegalidad) {
+      unawaited(_ensureConduceMeta());
+      return;
+    }
+    _fundamentoConduce = null;
+    _fundamentosConduceAdicionales.clear();
   }
 
   List<ActividadFomentoPrograma> get _fomentoProgramas {
@@ -1227,6 +1335,10 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
       elementosParticipantesTexto: _trim(_elementosCtrl),
       patrullasParticipantesTexto: _trim(_patrullasCtrl),
       fomento: fomento,
+      isConduceLegalidad: _isConduceLegalidad,
+      conduceLegalidadFundamentos: _isConduceLegalidad
+          ? _fundamentosConduceSeleccionados
+          : const <ConduceLegalidadFundamento>[],
       vehiculos: _useFomentoUserLayout
           ? const <ActividadVehiculo>[]
           : List<ActividadVehiculo>.from(_vehiculos),
@@ -1234,6 +1346,16 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
   }
 
   Future<void> _agregarVehiculo() async {
+    if (_isConduceLegalidad && _vehiculos.isNotEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Cada alimentación de Conduce con Legalidad admite únicamente un vehículo.',
+          ),
+        ),
+      );
+      return;
+    }
     final vehiculo = await showActividadVehiculoModal(context);
     if (vehiculo == null || !mounted) return;
 
@@ -1744,6 +1866,7 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
                             } else {
                               _applyNarrativaTemplateIfPossible();
                             }
+                            _clearConduceSelectionIfNeeded();
                             _draft.notifyChanged();
                           },
                     decoration: _dec(
@@ -2172,6 +2295,42 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
             const SizedBox(height: 12),
 
             if (!_useFomentoUserLayout) ...[
+              if (_isConduceLegalidad) ...[
+                _card(
+                  title: 'Fundamentos legales',
+                  child: ActividadConduceLegalidadPanel(
+                    loading: _loadingConduceMeta,
+                    error: _conduceMetaError,
+                    catalogo:
+                        _conduceMeta?.fundamentosCorralon ??
+                        const <ConduceLegalidadFundamento>[],
+                    seleccionados: _fundamentosConduceEstado,
+                    enabled: !_saving,
+                    onRetry: _ensureConduceMeta,
+                    onPrincipalChanged: (value) {
+                      setState(() => _fundamentoConduce = value);
+                      _draft.notifyChanged();
+                    },
+                    onAdicionalChanged: (index, value) {
+                      setState(
+                        () => _fundamentosConduceAdicionales[index] = value,
+                      );
+                      _draft.notifyChanged();
+                    },
+                    onRemoveAdicional: (index) {
+                      setState(
+                        () => _fundamentosConduceAdicionales.removeAt(index),
+                      );
+                      _draft.notifyChanged();
+                    },
+                    onAdd: () {
+                      setState(() => _fundamentosConduceAdicionales.add(null));
+                      _draft.notifyChanged();
+                    },
+                  ),
+                ),
+                const SizedBox(height: 12),
+              ],
               _card(
                 title: 'Vehiculos relacionados',
                 cardKey: _vehiculosCardKey,
@@ -2191,7 +2350,11 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
                           ),
                         ),
                         ElevatedButton.icon(
-                          onPressed: _saving ? null : _agregarVehiculo,
+                          onPressed:
+                              _saving ||
+                                  (_isConduceLegalidad && _vehiculos.isNotEmpty)
+                              ? null
+                              : _agregarVehiculo,
                           icon: const Icon(Icons.add),
                           label: const Text('Agregar vehiculo'),
                         ),

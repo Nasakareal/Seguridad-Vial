@@ -1095,12 +1095,36 @@ class AuthService {
       return true;
     }
 
+    if (await isDelegacionesUser() && await isDelegadoRole()) {
+      return true;
+    }
+
     final payload = await getCurrentUserPayload(refresh: false);
     if (!await _isCurrentVialidadesUrbanasStrict(payload)) {
       return false;
     }
 
     return can('crear conduce legalidad');
+  }
+
+  static Future<bool> canSetConduceLegalidadSchedule({
+    bool refresh = false,
+  }) async {
+    if (refresh) {
+      await refreshCurrentUserAccess();
+    }
+
+    if (await isSuperadmin()) {
+      return true;
+    }
+
+    final roleId = await getRoleId();
+    if (roleId == 2 || roleId == 3) {
+      return true;
+    }
+
+    return await _hasExactRoleName('administrador') ||
+        await _hasExactRoleName('subdirector');
   }
 
   static Future<bool> _isCurrentVialidadesUrbanasStrict(

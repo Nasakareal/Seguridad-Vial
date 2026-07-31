@@ -9,6 +9,8 @@ import '../../widgets/app_drawer.dart';
 import 'conduce_legalidad_module.dart';
 import 'conduce_legalidad_operativo_form_screen.dart';
 
+enum _OperativosListMode { dia, activos, rango }
+
 class ConduceLegalidadScreen extends StatefulWidget {
   final ConduceLegalidadModule module;
 
@@ -30,10 +32,18 @@ class _ConduceLegalidadScreenState extends State<ConduceLegalidadScreen>
   String? _error;
   ConduceLegalidadMeta? _meta;
   List<ConduceLegalidadOperativo> _operativos = const [];
+  _OperativosListMode _listMode = _OperativosListMode.dia;
+  late DateTime _selectedDay;
+  late DateTime _rangeStart;
+  late DateTime _rangeEnd;
 
   @override
   void initState() {
     super.initState();
+    final today = DateUtils.dateOnly(DateTime.now());
+    _selectedDay = today;
+    _rangeStart = DateTime(today.year, today.month);
+    _rangeEnd = today;
     WidgetsBinding.instance.addObserver(this);
     WidgetsBinding.instance.addPostFrameCallback((_) => _load());
   }
@@ -59,19 +69,32 @@ class _ConduceLegalidadScreenState extends State<ConduceLegalidadScreen>
     });
 
     try {
-      final canCreate = await AuthService.canCreateConduceLegalidad();
+      final canCreateLocal = await AuthService.canCreateConduceLegalidad();
       final rawMeta = await ConduceLegalidadService.fetchMeta(
         filterConduceLegalidadMotos: !widget.module.isAlcoholimetria,
       );
       final meta = widget.module.applyMeta(rawMeta);
+      final canCreate = canCreateLocal || rawMeta.abilities.canCreateOperativo;
+      final effectiveMode = canCreate ? _listMode : _OperativosListMode.activos;
       final operativos = (await ConduceLegalidadService.fetchOperativos(
-        incluirCerrados: rawMeta.abilities.canManageOperativos,
+        incluirCerrados: effectiveMode != _OperativosListMode.activos,
         tipoOperativo: widget.module.id,
+        estado: effectiveMode == _OperativosListMode.activos ? 'activo' : null,
+        fecha: effectiveMode == _OperativosListMode.dia
+            ? _apiDate(_selectedDay)
+            : null,
+        fechaDesde: effectiveMode == _OperativosListMode.rango
+            ? _apiDate(_rangeStart)
+            : null,
+        fechaHasta: effectiveMode == _OperativosListMode.rango
+            ? _apiDate(_rangeEnd)
+            : null,
       )).where(widget.module.ownsOperativo);
       if (!mounted) return;
       setState(() {
         _canCreateLocal = canCreate;
         _meta = meta;
+        _listMode = effectiveMode;
         _operativos = operativos.toList();
         _loading = false;
       });
@@ -82,6 +105,51 @@ class _ConduceLegalidadScreenState extends State<ConduceLegalidadScreen>
         _loading = false;
       });
     }
+  }
+
+  Future<void> _changeListMode(_OperativosListMode mode) async {
+    if (_loading || mode == _listMode) return;
+    setState(() => _listMode = mode);
+    await _load();
+  }
+
+  Future<void> _pickDay() async {
+    final selected = await showDatePicker(
+      context: context,
+      initialDate: _selectedDay,
+      firstDate: DateTime(2020),
+      lastDate: DateTime.now().add(const Duration(days: 365)),
+      helpText: 'Selecciona el día del operativo',
+    );
+    if (selected == null || !mounted) return;
+    setState(() => _selectedDay = DateUtils.dateOnly(selected));
+    await _load();
+  }
+
+  Future<void> _pickRangeStart() async {
+    final selected = await showDatePicker(
+      context: context,
+      initialDate: _rangeStart,
+      firstDate: DateTime(2020),
+      lastDate: _rangeEnd,
+      helpText: 'Fecha inicial',
+    );
+    if (selected == null || !mounted) return;
+    setState(() => _rangeStart = DateUtils.dateOnly(selected));
+    await _load();
+  }
+
+  Future<void> _pickRangeEnd() async {
+    final selected = await showDatePicker(
+      context: context,
+      initialDate: _rangeEnd,
+      firstDate: _rangeStart,
+      lastDate: DateTime.now().add(const Duration(days: 365)),
+      helpText: 'Fecha final',
+    );
+    if (selected == null || !mounted) return;
+    setState(() => _rangeEnd = DateUtils.dateOnly(selected));
+    await _load();
   }
 
   Future<void> _openCreate() async {
@@ -223,11 +291,14 @@ class _ConduceLegalidadScreenState extends State<ConduceLegalidadScreen>
               label: const Text('Activar operativo'),
             )
           : null,
-      body: RefreshIndicator(onRefresh: _load, child: _buildBody(meta)),
+      body: RefreshIndicator(
+        onRefresh: _load,
+        child: _buildBody(meta, canCreate),
+      ),
     );
   }
 
-  Widget _buildBody(ConduceLegalidadMeta? meta) {
+  Widget _buildBody(ConduceLegalidadMeta? meta, bool canCreate) {
     if (_loading) {
       return const Center(child: CircularProgressIndicator());
     }
@@ -255,6 +326,18 @@ class _ConduceLegalidadScreenState extends State<ConduceLegalidadScreen>
       children: [
         _Header(meta: meta, module: widget.module),
         const SizedBox(height: 14),
+        _OperativosFilters(
+          canViewHistory: canCreate,
+          mode: _listMode,
+          selectedDay: _selectedDay,
+          rangeStart: _rangeStart,
+          rangeEnd: _rangeEnd,
+          onModeChanged: _changeListMode,
+          onPickDay: _pickDay,
+          onPickRangeStart: _pickRangeStart,
+          onPickRangeEnd: _pickRangeEnd,
+        ),
+        const SizedBox(height: 14),
         if (!widget.module.hasFundamentos(meta))
           _StatusPanel(
             icon: Icons.gavel_outlined,
@@ -264,11 +347,14 @@ class _ConduceLegalidadScreenState extends State<ConduceLegalidadScreen>
           ),
         if (!widget.module.hasFundamentos(meta)) const SizedBox(height: 14),
         if (_operativos.isEmpty)
-          const _StatusPanel(
+          _StatusPanel(
             icon: Icons.fact_check_outlined,
-            title: 'Sin operativos activos',
-            message:
-                'Cuando RT o mando habilitado active un punto, aparecera aqui para alimentar capturas.',
+            title: _listMode == _OperativosListMode.activos
+                ? 'Sin operativos activos'
+                : 'Sin operativos en este periodo',
+            message: canCreate
+                ? 'No hay operativos para ${_filterDescription(_listMode, _selectedDay, _rangeStart, _rangeEnd)}.'
+                : 'Cuando un delegado o mando habilitado active un punto, aparecerá aquí para alimentar capturas.',
           )
         else
           ..._operativos.map(
@@ -284,6 +370,130 @@ class _ConduceLegalidadScreenState extends State<ConduceLegalidadScreen>
             ),
           ),
       ],
+    );
+  }
+}
+
+class _OperativosFilters extends StatelessWidget {
+  final bool canViewHistory;
+  final _OperativosListMode mode;
+  final DateTime selectedDay;
+  final DateTime rangeStart;
+  final DateTime rangeEnd;
+  final ValueChanged<_OperativosListMode> onModeChanged;
+  final VoidCallback onPickDay;
+  final VoidCallback onPickRangeStart;
+  final VoidCallback onPickRangeEnd;
+
+  const _OperativosFilters({
+    required this.canViewHistory,
+    required this.mode,
+    required this.selectedDay,
+    required this.rangeStart,
+    required this.rangeEnd,
+    required this.onModeChanged,
+    required this.onPickDay,
+    required this.onPickRangeStart,
+    required this.onPickRangeEnd,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.filter_alt_outlined, color: Color(0xFF2563EB)),
+              SizedBox(width: 8),
+              Text(
+                'Mostrar operativos',
+                style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          if (!canViewHistory)
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(
+                  Icons.radio_button_checked,
+                  size: 18,
+                  color: Colors.green.shade700,
+                ),
+                const SizedBox(width: 8),
+                const Expanded(
+                  child: Text(
+                    'Sólo operativos activos disponibles para alimentar.',
+                    style: TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                ),
+              ],
+            )
+          else ...[
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                ChoiceChip(
+                  selected: mode == _OperativosListMode.dia,
+                  onSelected: (_) => onModeChanged(_OperativosListMode.dia),
+                  avatar: const Icon(Icons.today_outlined, size: 18),
+                  label: const Text('Por día'),
+                ),
+                ChoiceChip(
+                  selected: mode == _OperativosListMode.activos,
+                  onSelected: (_) => onModeChanged(_OperativosListMode.activos),
+                  avatar: const Icon(Icons.play_circle_outline, size: 18),
+                  label: const Text('Activos'),
+                ),
+                ChoiceChip(
+                  selected: mode == _OperativosListMode.rango,
+                  onSelected: (_) => onModeChanged(_OperativosListMode.rango),
+                  avatar: const Icon(Icons.date_range_outlined, size: 18),
+                  label: const Text('Rango'),
+                ),
+              ],
+            ),
+            if (mode == _OperativosListMode.dia) ...[
+              const SizedBox(height: 10),
+              OutlinedButton.icon(
+                onPressed: onPickDay,
+                icon: const Icon(Icons.calendar_month_outlined),
+                label: Text(_displayDate(selectedDay)),
+              ),
+            ],
+            if (mode == _OperativosListMode.rango) ...[
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 10,
+                runSpacing: 8,
+                children: [
+                  OutlinedButton.icon(
+                    onPressed: onPickRangeStart,
+                    icon: const Icon(Icons.first_page),
+                    label: Text('Desde ${_displayDate(rangeStart)}'),
+                  ),
+                  OutlinedButton.icon(
+                    onPressed: onPickRangeEnd,
+                    icon: const Icon(Icons.last_page),
+                    label: Text('Hasta ${_displayDate(rangeEnd)}'),
+                  ),
+                ],
+              ),
+            ],
+          ],
+        ],
+      ),
     );
   }
 }
@@ -545,4 +755,30 @@ class _StatusPanel extends StatelessWidget {
       ),
     );
   }
+}
+
+String _apiDate(DateTime value) {
+  return '${value.year.toString().padLeft(4, '0')}-'
+      '${value.month.toString().padLeft(2, '0')}-'
+      '${value.day.toString().padLeft(2, '0')}';
+}
+
+String _displayDate(DateTime value) {
+  return '${value.day.toString().padLeft(2, '0')}/'
+      '${value.month.toString().padLeft(2, '0')}/'
+      '${value.year.toString().padLeft(4, '0')}';
+}
+
+String _filterDescription(
+  _OperativosListMode mode,
+  DateTime selectedDay,
+  DateTime rangeStart,
+  DateTime rangeEnd,
+) {
+  return switch (mode) {
+    _OperativosListMode.dia => 'el día ${_displayDate(selectedDay)}',
+    _OperativosListMode.activos => 'los operativos activos',
+    _OperativosListMode.rango =>
+      'el rango ${_displayDate(rangeStart)} a ${_displayDate(rangeEnd)}',
+  };
 }

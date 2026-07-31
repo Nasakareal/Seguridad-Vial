@@ -17,13 +17,18 @@ void main() {
     );
   }
 
-  test('el ticket de alcoholimetría se identifica como prevención', () {
+  test('el ticket conserva el nombre exacto de Alcoholimetría', () {
     final item = operativo('alcoholimetria');
 
-    expect(item.ticketOperativoTitle, 'OPERATIVO PREVENCIÓN DE ACCIDENTES');
+    expect(item.ticketOperativoTitle, 'OPERATIVO DE ALCOHOLIMETRÍA');
     expect(item.ticketFolioPrefix, 'PA');
-    expect(item.ticketOperativoTitle, isNot(contains('ALCOHOL')));
+    expect(item.ticketOperativoTitle, contains('Í'));
+    expect(item.ticketOperativoTitle, isNot(contains('PREVENCIÓN')));
     expect(item.ticketOperativoTitle, isNot(contains('CONDUCE')));
+
+    final thermal = ThermalTicketRowFormatter(width: 48)
+      ..center(item.ticketOperativoTitle);
+    expect(thermal.toString().trim(), 'OPERATIVO DE ALCOHOLIMETRIA');
   });
 
   test('el ticket de Conduce con Legalidad conserva su identidad', () {
@@ -153,4 +158,53 @@ void main() {
     expect(legal, contains('Persona infractora'));
     expect(legal, contains('Vehículo'));
   });
+
+  test(
+    'el ticket imprime todos los fundamentos unificados sin duplicarlos',
+    () {
+      const primero = ConduceLegalidadFundamento(
+        id: 31,
+        nombre: 'Aliento alcohólico',
+        articulo: '345',
+        puntos: 0,
+        retencionVehiculo: false,
+        narrativaSugerida: 'Se detecta aliento alcohólico.',
+      );
+      const segundo = ConduceLegalidadFundamento(
+        id: 32,
+        nombre: 'Estado de ebriedad',
+        articulo: '508',
+        puntos: 0,
+        retencionVehiculo: false,
+        narrativaSugerida: 'La prueba confirma estado de ebriedad.',
+      );
+      const captura = ConduceLegalidadCaptura(
+        id: 14,
+        operativoId: 11,
+        fundamentos: [primero, segundo],
+        canEdit: true,
+        vehiculos: [],
+        personas: [],
+      );
+
+      final legal = ConduceLegalidadBoletaLegalText.fundamentoInfraccion(
+        captura,
+        null,
+        null,
+      );
+      final conducta = ConduceLegalidadBoletaLegalText.conducta(
+        captura,
+        null,
+        null,
+      );
+
+      expect(legal, contains('Fundamento 1'));
+      expect(legal, contains('Artículo 345'));
+      expect(legal, contains('Fundamento 2'));
+      expect(legal, contains('Artículo 508'));
+      expect('Artículo 345'.allMatches(legal), hasLength(1));
+      expect(conducta, contains('Se detecta aliento alcohólico.'));
+      expect(conducta, contains('La prueba confirma estado de ebriedad.'));
+    },
+  );
 }

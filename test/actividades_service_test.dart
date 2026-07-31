@@ -5,6 +5,7 @@ import 'package:seguridad_vial_app/models/actividad.dart';
 import 'package:seguridad_vial_app/models/actividad_categoria.dart';
 import 'package:seguridad_vial_app/models/actividad_fomento.dart';
 import 'package:seguridad_vial_app/models/actividad_subcategoria.dart';
+import 'package:seguridad_vial_app/models/conduce_legalidad.dart';
 import 'package:seguridad_vial_app/screens/actividades/actividad_ui_labels.dart';
 import 'package:seguridad_vial_app/services/actividades_service.dart';
 import 'package:seguridad_vial_app/widgets/normalized_integer_input_formatter.dart';
@@ -176,6 +177,7 @@ void main() {
   test('activity vehicle api payload keeps selected grua id and name', () {
     final vehiculo = ActividadVehiculo(
       marca: 'NISSAN',
+      tipoGeneral: 'automovil',
       tipo: 'Sedán',
       linea: 'TSURU',
       color: 'BLANCO',
@@ -193,7 +195,98 @@ void main() {
     expect(payload['grua_id'], 12);
     expect(payload['grua'], 'GRÚAS CENTRO');
     expect(payload['corralon'], 'CORRALÓN CENTRO');
-    expect(payload.containsKey('corralon_id'), isFalse);
+    expect(payload['corralon_id'], 20);
+    expect(payload['tipo_general'], 'automovil');
+  });
+
+  test('identifies only the exact Conduce con Legalidad subcategory', () {
+    expect(
+      ActividadesService.isConduceLegalidadSubcategoria(
+        'CONDUCE CON LEGALIDAD',
+      ),
+      isTrue,
+    );
+    expect(
+      ActividadesService.isConduceLegalidadSubcategoria(
+        'CONDUCE SIN ALCOHOL (ALCOHOLÍMETRO)',
+      ),
+      isFalse,
+    );
+    expect(
+      ActividadesService.isConduceLegalidadSubcategoria('CONDUCE SIN ALCOHOL'),
+      isFalse,
+    );
+  });
+
+  test('serializes legal foundations for an activity capture', () {
+    const fundamento = ConduceLegalidadFundamento(
+      id: 12,
+      codigo: 'ART-12',
+      nombre: 'Falta de placa',
+      puntos: 0,
+      retencionVehiculo: true,
+      fundamentoLegal: 'Artículo 12',
+    );
+    const data = ActividadUpsertData(
+      actividadCategoriaId: 4,
+      actividadSubcategoriaId: 95,
+      isConduceLegalidad: true,
+      conduceLegalidadFundamentos: <ConduceLegalidadFundamento>[fundamento],
+    );
+
+    final fields = data.toFields();
+    expect(
+      fields['conduce_legalidad_fundamentos[0][licencia_punto_infraccion_id]'],
+      '12',
+    );
+    expect(
+      fields['conduce_legalidad_fundamentos[0][infraccion_codigo]'],
+      'ART-12',
+    );
+    expect(
+      fields['conduce_legalidad_fundamentos[0][fundamento_legal]'],
+      'Artículo 12',
+    );
+  });
+
+  test('requires a foundation and at most one vehicle for Conduce', () async {
+    const vehiculo = ActividadVehiculo(
+      marca: 'HONDA',
+      tipo: 'MOTOCICLETA',
+      linea: 'CARGO',
+      color: 'ROJO',
+      capacidadPersonas: 2,
+      tipoServicio: 'PARTICULAR',
+      antecedenteVehiculo: false,
+    );
+    final issues = await ActividadesService.validateBeforeSubmitIssues(
+      data: const ActividadUpsertData(
+        actividadCategoriaId: 4,
+        actividadSubcategoriaId: 95,
+        isConduceLegalidad: true,
+        personasAlcanzadas: '1',
+        personasParticipantes: '0',
+        personasDetenidas: '0',
+        vehiculos: <ActividadVehiculo>[vehiculo, vehiculo],
+      ),
+      fotos: const <File>[],
+      requirePhotos: false,
+      requireCoords: false,
+      requireTimestamp: false,
+    );
+
+    expect(
+      issues.map((item) => item.message),
+      contains(
+        'Selecciona al menos un fundamento legal para Conduce con Legalidad.',
+      ),
+    );
+    expect(
+      issues.map((item) => item.message),
+      contains(
+        'Cada alimentación de Conduce con Legalidad admite únicamente un vehículo.',
+      ),
+    );
   });
 
   test('normalizes activity integer inputs while typing', () {

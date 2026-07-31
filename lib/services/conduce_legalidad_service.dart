@@ -126,11 +126,21 @@ class ConduceLegalidadService {
   static Future<List<ConduceLegalidadOperativo>> fetchOperativos({
     bool incluirCerrados = false,
     String? tipoOperativo,
+    String? estado,
+    String? fecha,
+    String? fechaDesde,
+    String? fechaHasta,
   }) async {
     final query = <String, String>{
       if (incluirCerrados) 'incluir_cerrados': '1',
       if ((tipoOperativo ?? '').trim().isNotEmpty)
         'tipo_operativo': tipoOperativo!.trim(),
+      if ((estado ?? '').trim().isNotEmpty) 'estado': estado!.trim(),
+      if ((fecha ?? '').trim().isNotEmpty) 'fecha': fecha!.trim(),
+      if ((fechaDesde ?? '').trim().isNotEmpty)
+        'fecha_desde': fechaDesde!.trim(),
+      if ((fechaHasta ?? '').trim().isNotEmpty)
+        'fecha_hasta': fechaHasta!.trim(),
     };
     final uri = Uri.parse(
       '${AuthService.baseUrl}$_path/operativos',

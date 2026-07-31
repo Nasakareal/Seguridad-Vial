@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -9,9 +10,11 @@ import '../../models/actividad.dart';
 import '../../models/actividad_categoria.dart';
 import '../../models/actividad_fomento.dart';
 import '../../models/actividad_subcategoria.dart';
+import '../../models/conduce_legalidad.dart';
 import '../../services/actividad_narrativa_template_service.dart';
 import '../../services/actividades_service.dart';
 import '../../services/auth_service.dart';
+import '../../services/conduce_legalidad_service.dart';
 import '../../services/photo_picker_service.dart';
 import '../../widgets/actividad_count_field.dart';
 import '../../widgets/actividad_detenidos_field.dart';
@@ -21,6 +24,7 @@ import '../../widgets/normalized_integer_input_formatter.dart';
 import '../../widgets/safe_network_image.dart';
 import 'actividad_ui_labels.dart';
 import 'widgets/actividad_vehiculo_modal.dart';
+import 'widgets/actividad_conduce_legalidad_panel.dart';
 import 'widgets/fomento_cultura_vial_panel.dart';
 
 class ActividadEditScreen extends StatefulWidget {
@@ -53,6 +57,11 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
   bool _narrativaEditadaPorUsuario = false;
   final List<File> _fotosNuevas = [];
   final Set<int> _fotoIdsEliminar = <int>{};
+  ConduceLegalidadMeta? _conduceMeta;
+  bool _loadingConduceMeta = false;
+  String? _conduceMetaError;
+  ConduceLegalidadFundamento? _fundamentoConduce;
+  final List<ConduceLegalidadFundamento?> _fundamentosConduceAdicionales = [];
 
   final _fechaCtrl = TextEditingController();
   final _horaCtrl = TextEditingController();
@@ -213,6 +222,7 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
       if (_categoriaId != null) {
         await _loadSubcategorias(_categoriaId!);
       }
+      await _ensureConduceMeta();
     } catch (e) {
       if (!mounted) return;
       final message = ActividadesService.cleanExceptionMessage(e);
@@ -246,6 +256,12 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
     _elementosCtrl.text = a.elementosParticipantesTexto ?? '';
     _patrullasCtrl.text = a.patrullasParticipantesTexto ?? '';
     _fillFomentoControllers(a.fomentoCulturaVialDetalle);
+    _fundamentoConduce = a.conduceLegalidadFundamentos.isEmpty
+        ? null
+        : a.conduceLegalidadFundamentos.first;
+    _fundamentosConduceAdicionales
+      ..clear()
+      ..addAll(a.conduceLegalidadFundamentos.skip(1));
     _syncFomentoTotal();
   }
 
@@ -430,6 +446,55 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
     return _isFomentoUser && _showFomentoPanel;
   }
 
+  bool get _isConduceLegalidad {
+    return ActividadesService.isConduceLegalidadSubcategoria(
+      _selectedSubcategoria()?.nombre,
+    );
+  }
+
+  List<ConduceLegalidadFundamento> get _fundamentosConduceSeleccionados => [
+    if (_fundamentoConduce != null) _fundamentoConduce!,
+    ..._fundamentosConduceAdicionales.whereType<ConduceLegalidadFundamento>(),
+  ];
+
+  List<ConduceLegalidadFundamento?> get _fundamentosConduceEstado => [
+    _fundamentoConduce,
+    ..._fundamentosConduceAdicionales,
+  ];
+
+  Future<void> _ensureConduceMeta() async {
+    if (!_isConduceLegalidad || _loadingConduceMeta || _conduceMeta != null) {
+      return;
+    }
+    setState(() {
+      _loadingConduceMeta = true;
+      _conduceMetaError = null;
+    });
+    try {
+      final meta = await ConduceLegalidadService.fetchMeta();
+      if (!mounted) return;
+      setState(() {
+        _conduceMeta = meta;
+        _loadingConduceMeta = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _loadingConduceMeta = false;
+        _conduceMetaError = ActividadesService.cleanExceptionMessage(e);
+      });
+    }
+  }
+
+  void _handleConduceSubcategoriaChanged() {
+    if (_isConduceLegalidad) {
+      unawaited(_ensureConduceMeta());
+      return;
+    }
+    _fundamentoConduce = null;
+    _fundamentosConduceAdicionales.clear();
+  }
+
   List<ActividadFomentoPrograma> get _fomentoProgramas {
     return _selectedSubcategoria()?.programasFomento ??
         const <ActividadFomentoPrograma>[];
@@ -612,6 +677,10 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
       elementosParticipantesTexto: _trim(_elementosCtrl),
       patrullasParticipantesTexto: _trim(_patrullasCtrl),
       fomento: fomento,
+      isConduceLegalidad: _isConduceLegalidad,
+      conduceLegalidadFundamentos: _isConduceLegalidad
+          ? _fundamentosConduceSeleccionados
+          : const <ConduceLegalidadFundamento>[],
     );
   }
 
@@ -804,6 +873,16 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
   Future<void> _agregarVehiculo() async {
     final a = _actividad;
     if (a == null || _saving) return;
+    if (_isConduceLegalidad && a.vehiculos.isNotEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Cada alimentación de Conduce con Legalidad admite únicamente un vehículo.',
+          ),
+        ),
+      );
+      return;
+    }
 
     final vehiculo = await showActividadVehiculoModal(context);
     if (vehiculo == null || !mounted) return;
@@ -1276,6 +1355,7 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
                               } else {
                                 _applyNarrativaTemplateIfPossible();
                               }
+                              _handleConduceSubcategoriaChanged();
                             },
                       decoration: _dec(
                         'Subcategoria',
@@ -1628,6 +1708,40 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
               const SizedBox(height: 12),
 
               if (!_useFomentoUserLayout) ...[
+                if (_isConduceLegalidad) ...[
+                  _card(
+                    title: 'Fundamentos legales',
+                    child: ActividadConduceLegalidadPanel(
+                      loading: _loadingConduceMeta,
+                      error: _conduceMetaError,
+                      catalogo:
+                          _conduceMeta?.fundamentosCorralon ??
+                          const <ConduceLegalidadFundamento>[],
+                      seleccionados: _fundamentosConduceEstado,
+                      enabled: !_saving,
+                      onRetry: _ensureConduceMeta,
+                      onPrincipalChanged: (value) {
+                        setState(() => _fundamentoConduce = value);
+                      },
+                      onAdicionalChanged: (index, value) {
+                        setState(
+                          () => _fundamentosConduceAdicionales[index] = value,
+                        );
+                      },
+                      onRemoveAdicional: (index) {
+                        setState(
+                          () => _fundamentosConduceAdicionales.removeAt(index),
+                        );
+                      },
+                      onAdd: () {
+                        setState(
+                          () => _fundamentosConduceAdicionales.add(null),
+                        );
+                      },
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                ],
                 _card(
                   title: 'Vehiculos relacionados',
                   cardKey: _vehiculosCardKey,
@@ -1647,7 +1761,12 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
                             ),
                           ),
                           ElevatedButton.icon(
-                            onPressed: _saving ? null : _agregarVehiculo,
+                            onPressed:
+                                _saving ||
+                                    (_isConduceLegalidad &&
+                                        a.vehiculos.isNotEmpty)
+                                ? null
+                                : _agregarVehiculo,
                             icon: const Icon(Icons.add),
                             label: const Text('Agregar vehiculo'),
                           ),

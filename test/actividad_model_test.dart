@@ -35,5 +35,31 @@ void main() {
       expect(actividad.createdBy, 42);
       expect(actividad.toJson()['created_by'], 42);
     });
+
+    test('lee el vínculo y fundamentos de Conduce con Legalidad', () {
+      final actividad = Actividad.fromJson({
+        'id': 11,
+        'conduce_legalidad_operativo_id': 7,
+        'conduce_legalidad_captura_id': 21,
+        'conduce_legalidad_fundamentos': [
+          {
+            'id': 4,
+            'codigo': 'ART-4',
+            'nombre': 'Sin placa',
+            'retencion_vehiculo': true,
+          },
+        ],
+      });
+
+      expect(actividad.conduceLegalidadOperativoId, 7);
+      expect(actividad.conduceLegalidadCapturaId, 21);
+      expect(actividad.conduceLegalidadFundamentos, hasLength(1));
+      expect(actividad.conduceLegalidadFundamentos.single.codigo, 'ART-4');
+      expect(actividad.toJson()['conduce_legalidad_operativo_id'], 7);
+      expect(
+        actividad.toJson()['conduce_legalidad_fundamentos'],
+        isA<List<dynamic>>(),
+      );
+    });
   });
 }

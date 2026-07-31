@@ -10,6 +10,7 @@ import '../models/actividad.dart';
 import '../models/actividad_categoria.dart';
 import '../models/actividad_fomento.dart';
 import '../models/actividad_subcategoria.dart';
+import '../models/conduce_legalidad.dart';
 import 'auth_service.dart';
 import 'delegacion_distance_service.dart';
 import 'network_error_helper.dart';
@@ -45,6 +46,8 @@ class ActividadUpsertData {
   final String? destacamentoId;
   final ActividadFomentoDetalle? fomento;
   final List<ActividadVehiculo> vehiculos;
+  final bool isConduceLegalidad;
+  final List<ConduceLegalidadFundamento> conduceLegalidadFundamentos;
 
   const ActividadUpsertData({
     this.clientUuid,
@@ -74,6 +77,8 @@ class ActividadUpsertData {
     this.destacamentoId,
     this.fomento,
     this.vehiculos = const <ActividadVehiculo>[],
+    this.isConduceLegalidad = false,
+    this.conduceLegalidadFundamentos = const <ConduceLegalidadFundamento>[],
   });
 
   Map<String, String> toFields() {
@@ -146,6 +151,26 @@ class ActividadUpsertData {
         if (text.isEmpty) return;
         fields['vehiculos[$index][$key]'] = text;
       });
+    }
+
+    for (
+      var index = 0;
+      index < conduceLegalidadFundamentos.length;
+      index += 1
+    ) {
+      final fundamento = conduceLegalidadFundamentos[index];
+      fields['conduce_legalidad_fundamentos[$index][licencia_punto_infraccion_id]'] =
+          fundamento.id.toString();
+      final codigo = (fundamento.codigo ?? '').trim();
+      if (codigo.isNotEmpty) {
+        fields['conduce_legalidad_fundamentos[$index][infraccion_codigo]'] =
+            codigo;
+      }
+      final fundamentoLegal = (fundamento.fundamentoLegal ?? '').trim();
+      if (fundamentoLegal.isNotEmpty) {
+        fields['conduce_legalidad_fundamentos[$index][fundamento_legal]'] =
+            fundamentoLegal;
+      }
     }
 
     return fields;
@@ -555,6 +580,10 @@ class ActividadesService {
     return RegExp(r'^OTR[OA]S?(\b|[^A-Z0-9])').hasMatch(label);
   }
 
+  static bool isConduceLegalidadSubcategoria(String? nombre) {
+    return _normalizeCatalogLabel(nombre ?? '') == 'CONDUCE CON LEGALIDAD';
+  }
+
   static String toPublicUrl(String pathOrUrl) {
     final p = pathOrUrl.trim();
     if (p.isEmpty) return '';
@@ -851,6 +880,27 @@ class ActividadesService {
 
     for (var i = 0; i < data.vehiculos.length; i += 1) {
       _validateVehiculo(issues, data.vehiculos[i], i + 1);
+    }
+
+    if (data.isConduceLegalidad) {
+      if (data.conduceLegalidadFundamentos.isEmpty) {
+        issues.add(
+          const ActividadValidationIssue(
+            target: ActividadValidationTarget.subcategoria,
+            message:
+                'Selecciona al menos un fundamento legal para Conduce con Legalidad.',
+          ),
+        );
+      }
+      if (data.vehiculos.length > 1) {
+        issues.add(
+          const ActividadValidationIssue(
+            target: ActividadValidationTarget.vehiculos,
+            message:
+                'Cada alimentación de Conduce con Legalidad admite únicamente un vehículo.',
+          ),
+        );
+      }
     }
 
     return issues;

@@ -1188,15 +1188,17 @@ class ConduceLegalidadBoletaLegalText {
     ConduceLegalidadVehiculo? vehiculo,
     ConduceLegalidadPersona? persona,
   ) {
-    final infraccionCaptura = captura.infraccion;
+    final infraccionesCaptura = captura.fundamentos.isNotEmpty
+        ? captura.fundamentos
+        : [if (captura.infraccion != null) captura.infraccion!];
     final infraccionVehiculo = vehiculo?.infraccion;
     final infraccionPersona = persona?.infraccion;
     return _joinUnique([
       captura.narrativa,
-      infraccionCaptura?.narrativaSugerida,
+      ...infraccionesCaptura.map((item) => item.narrativaSugerida),
       infraccionPersona?.narrativaSugerida,
       infraccionVehiculo?.narrativaSugerida,
-      _conductaCatalogo(infraccionCaptura),
+      ...infraccionesCaptura.map(_conductaCatalogo),
       _conductaCatalogo(infraccionPersona),
       _conductaCatalogo(infraccionVehiculo),
       vehiculo?.observaciones,
@@ -1227,6 +1229,23 @@ class ConduceLegalidadBoletaLegalText {
     ConduceLegalidadVehiculo? vehiculo,
     ConduceLegalidadPersona? persona,
   ) {
+    if (captura.fundamentos.isNotEmpty) {
+      final multiples = captura.fundamentos.length > 1;
+      return captura.fundamentos
+          .asMap()
+          .entries
+          .map((entry) {
+            final fundamento = entry.value;
+            return _BoletaInfractionEntry(
+              label: multiples ? 'Fundamento ${entry.key + 1}' : 'Intervención',
+              infraccion: fundamento,
+              fallbackLegal: fundamento.fundamentoLegal,
+              vehiculo: vehiculo,
+            );
+          })
+          .toList(growable: false);
+    }
+
     if (captura.infraccion != null ||
         _cleanValue(captura.fundamentoLegal) != null) {
       return <_BoletaInfractionEntry>[

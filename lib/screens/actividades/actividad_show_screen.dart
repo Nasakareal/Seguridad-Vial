@@ -137,6 +137,19 @@ class _ActividadShowScreenState extends State<ActividadShowScreen>
     }
   }
 
+  Future<void> _openConduceLegalidadTicket() async {
+    final a = _actividad;
+    final operativoId = a?.conduceLegalidadOperativoId;
+    final capturaId = a?.conduceLegalidadCapturaId;
+    if (operativoId == null || capturaId == null) return;
+
+    await Navigator.pushNamed(
+      context,
+      AppRoutes.conduceLegalidadBoleta,
+      arguments: {'operativoId': operativoId, 'capturaId': capturaId},
+    );
+  }
+
   Future<void> _openPuestaDisposicion() async {
     final a = _actividad;
     if (a == null) return;
@@ -316,6 +329,13 @@ class _ActividadShowScreenState extends State<ActividadShowScreen>
         backgroundColor: Colors.blue,
         title: const Text('Detalle de actividad'),
         actions: [
+          if (a?.conduceLegalidadCapturaId != null &&
+              a?.conduceLegalidadOperativoId != null)
+            IconButton(
+              tooltip: 'Imprimir ticket de Conduce con Legalidad',
+              onPressed: _openConduceLegalidadTicket,
+              icon: const Icon(Icons.print_outlined),
+            ),
           if (a != null &&
               (_canCreatePuesta || (a.puestaDisposicionId ?? 0) > 0))
             IconButton(
@@ -398,6 +418,26 @@ class _ActividadShowScreenState extends State<ActividadShowScreen>
                   ),
                 ),
                 const SizedBox(height: 12),
+                if (a.conduceLegalidadFundamentos.isNotEmpty) ...[
+                  _card(
+                    title: 'Fundamentos legales',
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: a.conduceLegalidadFundamentos
+                          .map(
+                            (fundamento) => Padding(
+                              padding: const EdgeInsets.only(bottom: 10),
+                              child: Text(
+                                '• ${fundamento.display}\n'
+                                '${fundamento.fundamentoLegal ?? ''}',
+                              ),
+                            ),
+                          )
+                          .toList(),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                ],
                 _card(
                   title: 'Ubicacion',
                   child: Column(

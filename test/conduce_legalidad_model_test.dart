@@ -3,6 +3,13 @@ import 'package:seguridad_vial_app/models/conduce_legalidad.dart';
 import 'package:seguridad_vial_app/screens/conduce_legalidad/conduce_legalidad_module.dart';
 
 void main() {
+  test('each capture accepts at most one vehicle', () {
+    expect(ConduceLegalidadCapturaLimits.maxVehiculos, 1);
+    expect(ConduceLegalidadCapturaLimits.canAddVehiculo(0), isTrue);
+    expect(ConduceLegalidadCapturaLimits.canAddVehiculo(1), isFalse);
+    expect(ConduceLegalidadCapturaLimits.canAddVehiculo(2), isFalse);
+  });
+
   test(
     'person physical description fields round trip outside observations',
     () {
@@ -66,6 +73,8 @@ void main() {
       'lat': 19.6861,
       'lng': -101.1974,
       'estado': 'activo',
+      'unidad_id': 2,
+      'delegacion_id': 15,
     });
 
     expect(operativo.lugar, 'Av. Camelinas y Ventura Puente');
@@ -73,10 +82,112 @@ void main() {
     expect(operativo.numero, '123');
     expect(operativo.colonia, 'Felix Ireta');
     expect(operativo.codigoPostal, '58070');
+    expect(operativo.unidadId, 2);
+    expect(operativo.delegacionId, 15);
     expect(
       operativo.direccionCompleta,
       'Av. Camelinas y Ventura Puente 123, Col. Felix Ireta, CP 58070, Morelia',
     );
+  });
+
+  test('meta parses superadmin scope permission and organization catalogs', () {
+    final meta = ConduceLegalidadMeta.fromJson({
+      'data': {
+        'abilities': {'can_assign_scope': true},
+        'unidades': [
+          {'id': 2, 'nombre': 'Delegaciones'},
+          {'id': 5, 'nombre': 'Vialidades Urbanas'},
+        ],
+        'delegaciones': [
+          {'id': 15, 'nombre': 'Pátzcuaro'},
+        ],
+      },
+    });
+
+    expect(meta.abilities.canAssignScope, isTrue);
+    expect(meta.unidades.map((item) => item.id), <int>[2, 5]);
+    expect(meta.delegaciones.single.nombre, 'Pátzcuaro');
+  });
+
+  test('capture parses multiple legal grounds in their server order', () {
+    final captura = ConduceLegalidadCaptura.fromJson({
+      'id': 41,
+      'operativo_id': 9,
+      'can_edit': true,
+      'vehiculos': <dynamic>[],
+      'personas': <dynamic>[],
+      'fundamentos': [
+        {
+          'id': 101,
+          'codigo': 'ART345',
+          'nombre': 'Primer fundamento',
+          'articulo': '345',
+        },
+        {
+          'id': 102,
+          'codigo': 'ART508',
+          'nombre': 'Segundo fundamento',
+          'articulo': '508',
+        },
+      ],
+    });
+
+    expect(captura.fundamentos.map((item) => item.id), <int>[101, 102]);
+    expect(captura.fundamentoEfectivo?.id, 101);
+  });
+
+  test('capture keeps legacy single legal ground as list fallback', () {
+    final captura = ConduceLegalidadCaptura.fromJson({
+      'id': 42,
+      'operativo_id': 9,
+      'can_edit': true,
+      'vehiculos': <dynamic>[],
+      'personas': <dynamic>[],
+      'infraccion': {
+        'id': 103,
+        'codigo': 'ART419',
+        'nombre': 'Fundamento anterior',
+      },
+    });
+
+    expect(captura.fundamentos, hasLength(1));
+    expect(captura.fundamentos.single.id, 103);
+    expect(captura.fundamentoEfectivo?.id, 103);
+  });
+
+  test('capture restores two variants that share one catalog id', () {
+    final captura = ConduceLegalidadCaptura.fromJson({
+      'id': 43,
+      'operativo_id': 9,
+      'can_edit': true,
+      'vehiculos': <dynamic>[],
+      'personas': <dynamic>[],
+      'fundamentos': [
+        {
+          'id': 104,
+          'codigo': 'ART420_MOTO_CASCO_MENOR',
+          'nombre': 'Motocicleta sin casco y con pasajero menor',
+          'puntos': 2,
+          'retencion_vehiculo': true,
+          'infraccion_codigo': 'ART420_MOTO_CASCO_MENOR_CASCO',
+          'fundamento_legal_guardado': 'Art. 420 - Sin casco',
+        },
+        {
+          'id': 104,
+          'codigo': 'ART420_MOTO_CASCO_MENOR',
+          'nombre': 'Motocicleta sin casco y con pasajero menor',
+          'puntos': 2,
+          'retencion_vehiculo': true,
+          'infraccion_codigo': 'ART420_MOTO_CASCO_MENOR_MENOR',
+          'fundamento_legal_guardado': 'Art. 420 - Pasajero menor',
+        },
+      ],
+    });
+
+    expect(captura.fundamentos, hasLength(2));
+    expect(captura.fundamentos.map((item) => item.id).toSet(), <int>{104});
+    expect(captura.fundamentos[0].display, contains('sin casco'));
+    expect(captura.fundamentos[1].display, contains('pasajero menor'));
   });
 
   test('module ownership uses explicit operation type before its name', () {

@@ -1,3 +1,11 @@
+abstract final class ConduceLegalidadCapturaLimits {
+  static const int maxVehiculos = 1;
+
+  static bool canAddVehiculo(int currentCount) {
+    return currentCount < maxVehiculos;
+  }
+}
+
 class ConduceLegalidadMeta {
   static const Set<String> fundamentosExcluidosOperativoCodigos = <String>{
     'ART420_FIV_IA_B_TRANSPORTE_PUBLICO_ESCOLAR',
@@ -29,12 +37,16 @@ class ConduceLegalidadMeta {
   final ConduceLegalidadAbilities abilities;
   final List<ConduceLegalidadFundamento> fundamentosCorralon;
   final List<ConduceLegalidadFundamento> fundamentosPersona;
+  final List<ConduceLegalidadRef> unidades;
+  final List<ConduceLegalidadRef> delegaciones;
 
   const ConduceLegalidadMeta({
     required this.operativoNombre,
     required this.abilities,
     required this.fundamentosCorralon,
     required this.fundamentosPersona,
+    this.unidades = const <ConduceLegalidadRef>[],
+    this.delegaciones = const <ConduceLegalidadRef>[],
   });
 
   factory ConduceLegalidadMeta.fromJson(
@@ -66,6 +78,14 @@ class ConduceLegalidadMeta {
       fundamentosPersona: fundamentosPersonaPayload.isNotEmpty
           ? fundamentosPersonaPayload
           : fundamentos.where((item) => item.aplicaSancionPersona).toList(),
+      unidades: _list(data['unidades'])
+          .map(ConduceLegalidadRef.tryParse)
+          .whereType<ConduceLegalidadRef>()
+          .toList(),
+      delegaciones: _list(data['delegaciones'])
+          .map(ConduceLegalidadRef.tryParse)
+          .whereType<ConduceLegalidadRef>()
+          .toList(),
     );
   }
 }
@@ -73,6 +93,7 @@ class ConduceLegalidadMeta {
 class ConduceLegalidadAbilities {
   final bool canFeed;
   final bool canCreateOperativo;
+  final bool canAssignScope;
   final bool canManageOperativos;
   final bool canViewAllCapturas;
   final String scope;
@@ -80,6 +101,7 @@ class ConduceLegalidadAbilities {
   const ConduceLegalidadAbilities({
     required this.canFeed,
     required this.canCreateOperativo,
+    required this.canAssignScope,
     required this.canManageOperativos,
     required this.canViewAllCapturas,
     required this.scope,
@@ -88,6 +110,7 @@ class ConduceLegalidadAbilities {
   const ConduceLegalidadAbilities.empty()
     : canFeed = false,
       canCreateOperativo = false,
+      canAssignScope = false,
       canManageOperativos = false,
       canViewAllCapturas = false,
       scope = 'own';
@@ -96,6 +119,7 @@ class ConduceLegalidadAbilities {
     return ConduceLegalidadAbilities(
       canFeed: _bool(json['can_feed']),
       canCreateOperativo: _bool(json['can_create_operativo']),
+      canAssignScope: _bool(json['can_assign_scope']),
       canManageOperativos: _bool(json['can_manage_operativos']),
       canViewAllCapturas: _bool(json['can_view_all_capturas']),
       scope: _str(json['scope']) ?? 'own',
@@ -389,6 +413,8 @@ class ConduceLegalidadOperativo {
   final String? clientUuid;
   final String nombre;
   final String? tipoOperativo;
+  final int? unidadId;
+  final int? delegacionId;
   final String? fecha;
   final String? horaInicio;
   final String? horaCierre;
@@ -420,6 +446,8 @@ class ConduceLegalidadOperativo {
     this.clientUuid,
     required this.nombre,
     this.tipoOperativo,
+    this.unidadId,
+    this.delegacionId,
     this.fecha,
     this.horaInicio,
     this.horaCierre,
@@ -496,6 +524,8 @@ class ConduceLegalidadOperativo {
       clientUuid: _str(json['client_uuid']),
       nombre: _str(json['nombre']) ?? 'Operativo conduce con legalidad',
       tipoOperativo: _str(json['tipo_operativo']),
+      unidadId: _nullableInt(json['unidad_id']),
+      delegacionId: _nullableInt(json['delegacion_id']),
       fecha: _str(json['fecha']),
       horaInicio: _str(json['hora_inicio']),
       horaCierre: _str(json['hora_cierre']),
@@ -535,6 +565,7 @@ class ConduceLegalidadCaptura {
   final String? infraccionCodigo;
   final String? fundamentoLegal;
   final ConduceLegalidadFundamento? infraccion;
+  final List<ConduceLegalidadFundamento> fundamentos;
   final int? createdBy;
   final ConduceLegalidadUserRef? creador;
   final ConduceLegalidadRef? unidad;
@@ -562,6 +593,7 @@ class ConduceLegalidadCaptura {
     this.infraccionCodigo,
     this.fundamentoLegal,
     this.infraccion,
+    this.fundamentos = const <ConduceLegalidadFundamento>[],
     this.createdBy,
     this.creador,
     this.unidad,
@@ -593,6 +625,19 @@ class ConduceLegalidadCaptura {
       infraccionCodigo,
       fundamentoLegal,
     );
+    final fundamentos = _list(json['fundamentos']).whereType<Map>().map((item) {
+      final payload = Map<String, dynamic>.from(item);
+      final base = ConduceLegalidadFundamento.fromJson(payload);
+      return _fundamentoCapturaGuardado(
+            base,
+            _str(payload['infraccion_codigo']) ?? base.codigo,
+            _str(payload['fundamento_legal_guardado']) ?? base.fundamentoLegal,
+          ) ??
+          base;
+    }).toList();
+    if (fundamentos.isEmpty && infraccion != null) {
+      fundamentos.add(infraccion);
+    }
 
     return ConduceLegalidadCaptura(
       id: _asInt(json['id']),
@@ -604,6 +649,7 @@ class ConduceLegalidadCaptura {
       infraccionCodigo: infraccionCodigo,
       fundamentoLegal: fundamentoLegal,
       infraccion: infraccion,
+      fundamentos: fundamentos,
       createdBy: _nullableInt(json['created_by']),
       creador: ConduceLegalidadUserRef.tryParse(json['creador']),
       unidad: ConduceLegalidadRef.tryParse(json['unidad']),
@@ -634,6 +680,7 @@ class ConduceLegalidadCaptura {
   /// Facilita editar capturas antiguas que todavía guardaban el fundamento
   /// dentro del vehículo o de la persona.
   ConduceLegalidadFundamento? get fundamentoEfectivo =>
+      (fundamentos.isNotEmpty ? fundamentos.first : null) ??
       infraccion ??
       _firstFundamento(vehiculos.map((item) => item.infraccion)) ??
       _firstFundamento(personas.map((item) => item.infraccion));

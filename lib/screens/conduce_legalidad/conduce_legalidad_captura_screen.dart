@@ -58,6 +58,7 @@ class _ConduceLegalidadCapturaScreenState
   String? _contentError;
   ConduceLegalidadMeta? _meta;
   ConduceLegalidadFundamento? _fundamento;
+  final List<ConduceLegalidadFundamento?> _fundamentosAdicionales = [];
   bool _fundamentoLegacyNoDisponible = false;
   ConduceLegalidadOperativo? _operativo;
   bool _isSuperadmin = false;
@@ -108,7 +109,13 @@ class _ConduceLegalidadCapturaScreenState
         : 'Morelia';
     _lugarCtrl.text = captura.lugar ?? '';
     _observacionesCtrl.text = captura.observaciones ?? '';
-    _fundamento = captura.fundamentoEfectivo;
+    final fundamentos = captura.fundamentos;
+    _fundamento = fundamentos.isNotEmpty
+        ? fundamentos.first
+        : captura.fundamentoEfectivo;
+    _fundamentosAdicionales
+      ..clear()
+      ..addAll(fundamentos.skip(1));
     _vehiculos
       ..clear()
       ..addAll(captura.vehiculos);
@@ -144,7 +151,20 @@ class _ConduceLegalidadCapturaScreenState
     _lugarCtrl.text = _stringValue(draft['lugar']) ?? _lugarCtrl.text;
     _observacionesCtrl.text =
         _stringValue(draft['observaciones']) ?? _observacionesCtrl.text;
-    if (draft['fundamento'] is Map) {
+    if (draft['fundamentos'] is List) {
+      final fundamentos = (draft['fundamentos'] as List)
+          .whereType<Map>()
+          .map(
+            (item) => ConduceLegalidadFundamento.fromJson(
+              Map<String, dynamic>.from(item),
+            ),
+          )
+          .toList();
+      _fundamento = fundamentos.isEmpty ? null : fundamentos.first;
+      _fundamentosAdicionales
+        ..clear()
+        ..addAll(fundamentos.skip(1));
+    } else if (draft['fundamento'] is Map) {
       _fundamento = ConduceLegalidadFundamento.fromJson(
         Map<String, dynamic>.from(draft['fundamento'] as Map),
       );
@@ -178,6 +198,9 @@ class _ConduceLegalidadCapturaScreenState
       'observaciones': _observacionesCtrl.text,
       'licencia_punto_infraccion_id': _fundamento?.id,
       'fundamento': _fundamento?.toJson(),
+      'fundamentos': _fundamentosSeleccionados
+          .map((item) => item.toJson())
+          .toList(),
       'vehiculos': _vehiculos.map(_vehiculoDraftJson).toList(),
       'vehiculos_count': _vehiculos.length,
       'personas': _personas.map(_personaDraftJson).toList(),
@@ -276,6 +299,15 @@ class _ConduceLegalidadCapturaScreenState
     return null;
   }
 
+  List<ConduceLegalidadFundamento> get _fundamentosSeleccionados => [
+    if (_fundamento != null) _fundamento!,
+    ..._fundamentosAdicionales.whereType<ConduceLegalidadFundamento>(),
+  ];
+
+  String _fundamentoSelectionKey(ConduceLegalidadFundamento fundamento) {
+    return '${fundamento.id}|${fundamento.codigo ?? ''}';
+  }
+
   Map<String, dynamic> _vehiculoPayloadJson(ConduceLegalidadVehiculo vehiculo) {
     final json = vehiculo.toJson();
     if (!_fundamentoLegacyNoDisponible) {
@@ -292,13 +324,14 @@ class _ConduceLegalidadCapturaScreenState
     return json;
   }
 
-  ConduceLegalidadVehiculo? _primerVehiculoIncompatible(
-    ConduceLegalidadFundamento? fundamento,
-  ) {
-    if (fundamento == null) return null;
-    for (final vehiculo in _vehiculos) {
-      if (!fundamento.aplicaParaTipoGeneral(vehiculo.tipoGeneral)) {
-        return vehiculo;
+  String? _fundamentosVehiculoError() {
+    for (final fundamento in _fundamentosSeleccionados) {
+      for (final vehiculo in _vehiculos) {
+        if (!fundamento.aplicaParaTipoGeneral(vehiculo.tipoGeneral)) {
+          return 'El fundamento “${fundamento.display}” no aplica para el '
+              'tipo de vehículo ${vehiculo.tipoGeneral ?? 'capturado'}. '
+              'Cambia el fundamento o el vehículo.';
+        }
       }
     }
     return null;
@@ -322,11 +355,22 @@ class _ConduceLegalidadCapturaScreenState
       if (!mounted) return;
       final fundamentos = widget.module.fundamentosCaptura(meta);
       final canonical = _canonicalFundamento(_fundamento, fundamentos);
+      final adicionales = _fundamentosAdicionales
+          .map((item) => _canonicalFundamento(item, fundamentos) ?? item)
+          .toList();
       setState(() {
         _meta = meta;
         _fundamentoLegacyNoDisponible =
-            _fundamento != null && canonical == null;
+            (_fundamento != null && canonical == null) ||
+            adicionales.any(
+              (item) =>
+                  item != null &&
+                  _canonicalFundamento(item, fundamentos) == null,
+            );
         _fundamento = canonical ?? _fundamento;
+        _fundamentosAdicionales
+          ..clear()
+          ..addAll(adicionales);
         _operativo = operativo;
         _isSuperadmin = isSuperadmin;
         _loadingMeta = false;
@@ -342,9 +386,18 @@ class _ConduceLegalidadCapturaScreenState
   }
 
   Future<void> _addVehiculo() async {
+    if (!ConduceLegalidadCapturaLimits.canAddVehiculo(_vehiculos.length)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Cada alimentación admite únicamente un vehículo.'),
+        ),
+      );
+      return;
+    }
+
     final vehiculo = await showConduceLegalidadVehiculoModal(
       context,
-      fundamento: _fundamento,
+      fundamentos: _fundamentosSeleccionados,
       initialTipoGeneral: widget.module.isAlcoholimetria
           ? 'automovil'
           : 'motocicleta',
@@ -356,6 +409,20 @@ class _ConduceLegalidadCapturaScreenState
     _draft.notifyChanged();
   }
 
+  Future<void> _editVehiculo(int index) async {
+    final vehiculo = await showConduceLegalidadVehiculoModal(
+      context,
+      fundamentos: _fundamentosSeleccionados,
+      initialTipoGeneral:
+          _vehiculos[index].tipoGeneral ??
+          (widget.module.isAlcoholimetria ? 'automovil' : 'motocicleta'),
+      initialVehiculo: _vehiculos[index],
+    );
+    if (vehiculo == null || !mounted) return;
+    setState(() => _vehiculos[index] = vehiculo);
+    _draft.notifyChanged();
+  }
+
   void _setFundamento(ConduceLegalidadFundamento? fundamento) {
     setState(() {
       _fundamento = fundamento;
@@ -363,6 +430,53 @@ class _ConduceLegalidadCapturaScreenState
     });
     _aplicarNarrativaSugerida(fundamento);
     _draft.notifyChanged();
+  }
+
+  void _addFundamento() {
+    if (_fundamento == null ||
+        _fundamentosAdicionales.any((item) => item == null)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Selecciona el fundamento pendiente antes de añadir otro.',
+          ),
+        ),
+      );
+      return;
+    }
+    setState(() => _fundamentosAdicionales.add(null));
+    _draft.notifyChanged();
+  }
+
+  void _setFundamentoAdicional(
+    int index,
+    ConduceLegalidadFundamento? fundamento,
+  ) {
+    setState(() => _fundamentosAdicionales[index] = fundamento);
+    _aplicarNarrativaSugerida(fundamento);
+    _draft.notifyChanged();
+  }
+
+  void _removeFundamentoAdicional(int index) {
+    setState(() => _fundamentosAdicionales.removeAt(index));
+    _draft.notifyChanged();
+  }
+
+  List<ConduceLegalidadFundamento> _opcionesFundamento(
+    List<ConduceLegalidadFundamento> catalogo,
+    ConduceLegalidadFundamento? actual,
+  ) {
+    final seleccionados = _fundamentosSeleccionados
+        .where(
+          (item) =>
+              actual == null ||
+              _fundamentoSelectionKey(item) != _fundamentoSelectionKey(actual),
+        )
+        .map(_fundamentoSelectionKey)
+        .toSet();
+    return catalogo
+        .where((item) => !seleccionados.contains(_fundamentoSelectionKey(item)))
+        .toList();
   }
 
   void _aplicarNarrativaSugerida(ConduceLegalidadFundamento? fundamento) {
@@ -404,14 +518,9 @@ class _ConduceLegalidadCapturaScreenState
       return;
     }
 
-    final vehiculoIncompatible = _primerVehiculoIncompatible(_fundamento);
-    if (vehiculoIncompatible != null) {
-      setState(() {
-        _contentError =
-            'El fundamento seleccionado no aplica para el tipo de vehículo '
-            '${vehiculoIncompatible.tipoGeneral ?? 'capturado'}. '
-            'Cambia el fundamento o el vehículo.';
-      });
+    final fundamentosError = _fundamentosVehiculoError();
+    if (fundamentosError != null) {
+      setState(() => _contentError = fundamentosError);
       _scrollToKey(_contentErrorKey);
       return;
     }
@@ -430,8 +539,22 @@ class _ConduceLegalidadCapturaScreenState
       return;
     }
 
+    if (_vehiculos.length > ConduceLegalidadCapturaLimits.maxVehiculos) {
+      setState(() {
+        _contentError =
+            'Cada alimentación admite únicamente un vehículo. '
+            'Quita los vehículos adicionales antes de guardar.';
+      });
+      _scrollToKey(_contentErrorKey);
+      return;
+    }
+
     setState(() => _saving = true);
     try {
+      final fundamentos = _fundamentosSeleccionados;
+      final fundamentoPrincipal = fundamentos.isEmpty
+          ? null
+          : fundamentos.first;
       final payload = {
         'fecha': _dateForPayload(),
         'hora': _timeForPayload(),
@@ -440,9 +563,18 @@ class _ConduceLegalidadCapturaScreenState
         'narrativa': _emptyToNull(_narrativaCtrl.text),
         'observaciones': _emptyToNull(_observacionesCtrl.text),
         if (!_fundamentoLegacyNoDisponible) ...{
-          'licencia_punto_infraccion_id': _fundamento?.id,
-          'infraccion_codigo': _fundamento?.codigo,
-          'fundamento_legal': _fundamento?.fundamentoLegal,
+          'fundamentos': fundamentos
+              .map(
+                (item) => {
+                  'licencia_punto_infraccion_id': item.id,
+                  'infraccion_codigo': item.codigo,
+                  'fundamento_legal': item.fundamentoLegal,
+                },
+              )
+              .toList(),
+          'licencia_punto_infraccion_id': fundamentoPrincipal?.id,
+          'infraccion_codigo': fundamentoPrincipal?.codigo,
+          'fundamento_legal': fundamentoPrincipal?.fundamentoLegal,
         },
         'vehiculos': _vehiculos.map(_vehiculoPayloadJson).toList(),
         'personas': _personas.map(_personaPayloadJson).toList(),
@@ -532,9 +664,13 @@ class _ConduceLegalidadCapturaScreenState
 
   @override
   Widget build(BuildContext context) {
+    final fundamentosCatalogo = widget.module.fundamentosCaptura(_meta);
+    final idsCatalogo = fundamentosCatalogo.map((item) => item.id).toSet();
     final fundamentosCaptura = [
-      ...widget.module.fundamentosCaptura(_meta),
-      if (_fundamentoLegacyNoDisponible && _fundamento != null) _fundamento!,
+      ...fundamentosCatalogo,
+      ..._fundamentosSeleccionados.where(
+        (item) => !idsCatalogo.contains(item.id),
+      ),
     ];
 
     return Scaffold(
@@ -607,16 +743,20 @@ class _ConduceLegalidadCapturaScreenState
                       const _DropdownSelectedText(
                         'Sin fundamento seleccionado',
                       ),
-                      ...fundamentosCaptura.map(
-                        (item) => _DropdownSelectedText(item.display),
-                      ),
+                      ..._opcionesFundamento(
+                        fundamentosCaptura,
+                        _fundamento,
+                      ).map((item) => _DropdownSelectedText(item.display)),
                     ],
                     items: [
                       const DropdownMenuItem<ConduceLegalidadFundamento?>(
                         value: null,
                         child: _DropdownMenuText('Sin fundamento seleccionado'),
                       ),
-                      ...fundamentosCaptura.map(
+                      ..._opcionesFundamento(
+                        fundamentosCaptura,
+                        _fundamento,
+                      ).map(
                         (item) => DropdownMenuItem<ConduceLegalidadFundamento?>(
                           value: item,
                           child: _DropdownMenuText(
@@ -635,6 +775,115 @@ class _ConduceLegalidadCapturaScreenState
                           '${_fundamento!.fundamentoLegal ?? _fundamento!.display}\nSanción: ${_fundamento!.sancionResumen}',
                     ),
                   ],
+                  ..._fundamentosAdicionales.asMap().entries.expand((entry) {
+                    final index = entry.key;
+                    final fundamento = entry.value;
+                    final opciones = _opcionesFundamento(
+                      fundamentosCaptura,
+                      fundamento,
+                    );
+                    return <Widget>[
+                      const SizedBox(height: 12),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child:
+                                DropdownButtonFormField<
+                                  ConduceLegalidadFundamento?
+                                >(
+                                  value: fundamento,
+                                  isExpanded: true,
+                                  itemHeight: null,
+                                  menuMaxHeight:
+                                      MediaQuery.of(context).size.height * .55,
+                                  decoration: InputDecoration(
+                                    labelText:
+                                        'Fundamento adicional ${index + 1}',
+                                    border: const OutlineInputBorder(),
+                                    prefixIcon: const Icon(
+                                      Icons.gavel_outlined,
+                                    ),
+                                  ),
+                                  selectedItemBuilder: (context) => [
+                                    const _DropdownSelectedText(
+                                      '-- Seleccione --',
+                                    ),
+                                    ...opciones.map(
+                                      (item) =>
+                                          _DropdownSelectedText(item.display),
+                                    ),
+                                  ],
+                                  items: [
+                                    const DropdownMenuItem<
+                                      ConduceLegalidadFundamento?
+                                    >(
+                                      value: null,
+                                      child: _DropdownMenuText(
+                                        '-- Seleccione --',
+                                      ),
+                                    ),
+                                    ...opciones.map(
+                                      (item) =>
+                                          DropdownMenuItem<
+                                            ConduceLegalidadFundamento?
+                                          >(
+                                            value: item,
+                                            child: _DropdownMenuText(
+                                              '${item.display}\n'
+                                              '${item.sancionResumen}',
+                                            ),
+                                          ),
+                                    ),
+                                  ],
+                                  onChanged: _saving
+                                      ? null
+                                      : (value) => _setFundamentoAdicional(
+                                          index,
+                                          value,
+                                        ),
+                                  validator: (value) => value == null
+                                      ? 'Selecciona el fundamento'
+                                      : null,
+                                ),
+                          ),
+                          const SizedBox(width: 8),
+                          IconButton(
+                            tooltip: 'Quitar fundamento',
+                            onPressed: _saving
+                                ? null
+                                : () => _removeFundamentoAdicional(index),
+                            icon: const Icon(
+                              Icons.delete_outline,
+                              color: Colors.red,
+                            ),
+                          ),
+                        ],
+                      ),
+                      if (fundamento != null) ...[
+                        const SizedBox(height: 8),
+                        _AttentionPanel(
+                          text:
+                              '${fundamento.fundamentoLegal ?? fundamento.display}\n'
+                              'Sanción: ${fundamento.sancionResumen}',
+                        ),
+                      ],
+                    ];
+                  }),
+                  const SizedBox(height: 10),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: OutlinedButton.icon(
+                      onPressed:
+                          _saving ||
+                              _fundamentosSeleccionados.length >=
+                                  fundamentosCaptura.length
+                          ? null
+                          : _addFundamento,
+                      icon: const Icon(Icons.add),
+                      label: const Text('Añadir otro fundamento'),
+                    ),
+                  ),
                   const SizedBox(height: 14),
                   TextFormField(
                     controller: _narrativaCtrl,
@@ -669,19 +918,26 @@ class _ConduceLegalidadCapturaScreenState
                   ),
                   const SizedBox(height: 16),
                   _SectionTitle(
-                    title: 'Vehiculos',
+                    title: 'Vehículos',
                     trailing: TextButton.icon(
-                      onPressed: _saving ? null : _addVehiculo,
+                      onPressed:
+                          _saving ||
+                              !ConduceLegalidadCapturaLimits.canAddVehiculo(
+                                _vehiculos.length,
+                              )
+                          ? null
+                          : _addVehiculo,
                       icon: const Icon(Icons.add),
-                      label: const Text('Agregar'),
+                      label: Text(_vehiculos.isEmpty ? 'Agregar' : 'Máximo 1'),
                     ),
                   ),
                   if (_vehiculos.isEmpty)
-                    const _EmptyLine(text: 'Sin vehiculos agregados.')
+                    const _EmptyLine(text: 'Sin vehículos agregados.')
                   else
                     ..._vehiculos.asMap().entries.map(
                       (entry) => _VehicleTile(
                         vehiculo: entry.value,
+                        onEdit: () => _editVehiculo(entry.key),
                         onRemove: () {
                           setState(() => _vehiculos.removeAt(entry.key));
                           _draft.notifyChanged();
@@ -805,27 +1061,31 @@ class _ConduceLegalidadCapturaScreenState
 
 Future<ConduceLegalidadVehiculo?> showConduceLegalidadVehiculoModal(
   BuildContext context, {
-  required ConduceLegalidadFundamento? fundamento,
+  required List<ConduceLegalidadFundamento> fundamentos,
   required String initialTipoGeneral,
+  ConduceLegalidadVehiculo? initialVehiculo,
 }) {
   return showModalBottomSheet<ConduceLegalidadVehiculo>(
     context: context,
     isScrollControlled: true,
     useSafeArea: true,
     builder: (_) => _VehiculoModal(
-      fundamento: fundamento,
+      fundamentos: fundamentos,
       initialTipoGeneral: initialTipoGeneral,
+      initialVehiculo: initialVehiculo,
     ),
   );
 }
 
 class _VehiculoModal extends StatefulWidget {
-  final ConduceLegalidadFundamento? fundamento;
+  final List<ConduceLegalidadFundamento> fundamentos;
   final String initialTipoGeneral;
+  final ConduceLegalidadVehiculo? initialVehiculo;
 
   const _VehiculoModal({
-    required this.fundamento,
+    required this.fundamentos,
     required this.initialTipoGeneral,
+    this.initialVehiculo,
   });
 
   @override
@@ -860,9 +1120,33 @@ class _VehiculoModalState extends State<_VehiculoModal> {
   @override
   void initState() {
     super.initState();
-    _tipoGeneralSeleccionado = widget.initialTipoGeneral;
-    if (_fundamentoRetieneVehiculo(widget.fundamento)) {
-      _motivoCtrl.text = _motivoRetencionTexto(widget.fundamento) ?? '';
+    final initial = widget.initialVehiculo;
+    _tipoGeneralSeleccionado =
+        initial?.tipoGeneral ?? widget.initialTipoGeneral;
+    _tipoCarroceriaSeleccionada = initial?.tipo;
+    _marcaCtrl.text = initial?.marca ?? '';
+    _modeloCtrl.text = initial?.modelo ?? '';
+    _lineaCtrl.text = initial?.linea ?? '';
+    _colorCtrl.text = initial?.color ?? '';
+    _placasCtrl.text = initial?.placas ?? '';
+    _estadoPlacasSeleccionado = initial?.estadoPlacas;
+    _serieCtrl.text = initial?.serie ?? '';
+    _capacidadCtrl.text = initial == null
+        ? '2'
+        : initial.capacidadPersonas.toString();
+    _tipoServicioCtrl.text = initial?.tipoServicio ?? 'PARTICULAR';
+    _tarjetaCtrl.text = initial?.tarjetaCirculacionNombre ?? '';
+    _gruaIdSeleccionada = initial?.gruaId;
+    _corralonGruaIdSeleccionada = initial?.corralonId;
+    _aseguradoraCtrl.text = initial?.aseguradora ?? '';
+    _antecedenteVehiculo = initial?.antecedenteVehiculo ?? false;
+    _rawTarjeta = initial?.rawTarjetaQr;
+    _observacionesCtrl.text = initial?.observaciones ?? '';
+    final motivoGuardado = (initial?.motivoRetencion ?? '').trim();
+    if (motivoGuardado.isNotEmpty) {
+      _motivoCtrl.text = motivoGuardado;
+    } else if (_fundamentosRetienenVehiculo(widget.fundamentos)) {
+      _motivoCtrl.text = _motivosRetencionTexto(widget.fundamentos);
     }
     WidgetsBinding.instance.addPostFrameCallback((_) => _cargarGruas());
   }
@@ -1107,6 +1391,25 @@ class _VehiculoModalState extends State<_VehiculoModal> {
         fundamento?.depositoSiSinPersonaHabilitada == true;
   }
 
+  bool _fundamentosRetienenVehiculo(
+    Iterable<ConduceLegalidadFundamento> fundamentos,
+  ) {
+    return fundamentos.any(_fundamentoRetieneVehiculo);
+  }
+
+  String _motivosRetencionTexto(
+    Iterable<ConduceLegalidadFundamento> fundamentos,
+  ) {
+    return fundamentos
+        .where(_fundamentoRetieneVehiculo)
+        .map(_motivoRetencionTexto)
+        .whereType<String>()
+        .map((item) => item.trim())
+        .where((item) => item.isNotEmpty)
+        .toSet()
+        .join('; ');
+  }
+
   void _submit() {
     if (!_formKey.currentState!.validate()) {
       _scrollToFirstFormError(_formKey);
@@ -1143,17 +1446,19 @@ class _VehiculoModalState extends State<_VehiculoModal> {
       return;
     }
 
-    if (widget.fundamento != null &&
-        !widget.fundamento!.aplicaParaTipoGeneral(_tipoGeneralSeleccionado)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'El fundamento del operativo no aplica para este tipo de vehículo. '
-            'Cambia el tipo o el fundamento en la pantalla principal.',
+    for (final fundamento in widget.fundamentos) {
+      if (!fundamento.aplicaParaTipoGeneral(_tipoGeneralSeleccionado)) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'El fundamento “${fundamento.display}” no aplica para este tipo '
+              'de vehículo. Cambia el tipo o el fundamento en la pantalla '
+              'principal.',
+            ),
           ),
-        ),
-      );
-      return;
+        );
+        return;
+      }
     }
 
     final hasIdentity = [
@@ -1183,6 +1488,7 @@ class _VehiculoModalState extends State<_VehiculoModal> {
     Navigator.pop(
       context,
       ConduceLegalidadVehiculo(
+        id: widget.initialVehiculo?.id,
         marca: _empty(marca),
         modelo: _empty(_t(_modeloCtrl)),
         tipoGeneral: _tipoGeneralSeleccionado,
@@ -1200,11 +1506,18 @@ class _VehiculoModalState extends State<_VehiculoModal> {
         grua: _empty(gruaNombre),
         corralon: _empty(corralonNombre),
         aseguradora: _empty(_t(_aseguradoraCtrl)),
+        montoDanos: widget.initialVehiculo?.montoDanos,
+        partesDanadas: widget.initialVehiculo?.partesDanadas,
         antecedenteVehiculo: _antecedenteVehiculo,
         rawTarjetaQr: _rawTarjeta,
-        retencionVehiculo: _fundamentoRetieneVehiculo(widget.fundamento),
+        licenciaPuntoInfraccionId:
+            widget.initialVehiculo?.licenciaPuntoInfraccionId,
+        infraccionCodigo: widget.initialVehiculo?.infraccionCodigo,
+        fundamentoLegal: widget.initialVehiculo?.fundamentoLegal,
+        retencionVehiculo: _fundamentosRetienenVehiculo(widget.fundamentos),
         motivoRetencion: _empty(_motivoCtrl.text),
         observaciones: _empty(_observacionesCtrl.text),
+        infraccion: widget.initialVehiculo?.infraccion,
       ),
     );
   }
@@ -1252,7 +1565,9 @@ class _VehiculoModalState extends State<_VehiculoModal> {
           child: ListView(
             children: [
               _ModalHeader(
-                title: 'Agregar vehiculo',
+                title: widget.initialVehiculo == null
+                    ? 'Agregar vehículo'
+                    : 'Editar vehículo',
                 onClose: () => Navigator.pop(context),
               ),
               const SizedBox(height: 12),
@@ -1601,8 +1916,16 @@ class _VehiculoModalState extends State<_VehiculoModal> {
               const SizedBox(height: 12),
               ElevatedButton.icon(
                 onPressed: _submit,
-                icon: const Icon(Icons.add),
-                label: const Text('Agregar vehiculo'),
+                icon: Icon(
+                  widget.initialVehiculo == null
+                      ? Icons.add
+                      : Icons.save_outlined,
+                ),
+                label: Text(
+                  widget.initialVehiculo == null
+                      ? 'Agregar vehículo'
+                      : 'Guardar cambios',
+                ),
               ),
             ],
           ),
@@ -2484,9 +2807,13 @@ class _DropdownMenuText extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 10),
-      child: Text(text, softWrap: true),
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(vertical: 14),
+      decoration: BoxDecoration(
+        border: Border(bottom: BorderSide(color: Colors.grey.shade300)),
+      ),
+      child: Text(text, softWrap: true, style: const TextStyle(height: 1.3)),
     );
   }
 }
@@ -2512,9 +2839,14 @@ class _DropdownSelectedText extends StatelessWidget {
 
 class _VehicleTile extends StatelessWidget {
   final ConduceLegalidadVehiculo vehiculo;
+  final VoidCallback onEdit;
   final VoidCallback onRemove;
 
-  const _VehicleTile({required this.vehiculo, required this.onRemove});
+  const _VehicleTile({
+    required this.vehiculo,
+    required this.onEdit,
+    required this.onRemove,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -2533,6 +2865,7 @@ class _VehicleTile extends StatelessWidget {
         vehiculo.grua == null ? null : 'Grua: ${vehiculo.grua}',
         vehiculo.corralon == null ? null : 'Corralon: ${vehiculo.corralon}',
       ].whereType<String>().where((v) => v.trim().isNotEmpty).join(' | '),
+      onEdit: onEdit,
       onRemove: onRemove,
     );
   }
@@ -2719,12 +3052,14 @@ class _CaptureTile extends StatelessWidget {
   final IconData icon;
   final String title;
   final String subtitle;
+  final VoidCallback? onEdit;
   final VoidCallback onRemove;
 
   const _CaptureTile({
     required this.icon,
     required this.title,
     required this.subtitle,
+    this.onEdit,
     required this.onRemove,
   });
 
@@ -2741,10 +3076,21 @@ class _CaptureTile extends StatelessWidget {
         leading: Icon(icon),
         title: Text(title, style: const TextStyle(fontWeight: FontWeight.w800)),
         subtitle: subtitle.trim().isEmpty ? null : Text(subtitle),
-        trailing: IconButton(
-          tooltip: 'Quitar',
-          onPressed: onRemove,
-          icon: const Icon(Icons.delete_outline, color: Colors.red),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (onEdit != null)
+              IconButton(
+                tooltip: 'Editar',
+                onPressed: onEdit,
+                icon: const Icon(Icons.edit_outlined),
+              ),
+            IconButton(
+              tooltip: 'Quitar',
+              onPressed: onRemove,
+              icon: const Icon(Icons.delete_outline, color: Colors.red),
+            ),
+          ],
         ),
       ),
     );

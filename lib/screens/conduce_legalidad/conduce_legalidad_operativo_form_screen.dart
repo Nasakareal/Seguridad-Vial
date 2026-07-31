@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../core/municipios_michoacan.dart';
 import '../../models/conduce_legalidad.dart';
+import '../../services/auth_service.dart';
 import '../../services/conduce_legalidad_service.dart';
 import '../../services/geo_service.dart';
 import '../../services/reverse_geocode_service.dart';
@@ -35,6 +36,14 @@ class _ConduceLegalidadOperativoFormScreenState
   TimeOfDay _hora = TimeOfDay.now();
   bool _saving = false;
   bool _locating = false;
+  bool _canSetSchedule = false;
+  bool _isSuperadmin = false;
+  bool _loadingAccess = true;
+  String? _organizationError;
+  List<ConduceLegalidadRef> _unidades = const <ConduceLegalidadRef>[];
+  List<ConduceLegalidadRef> _delegaciones = const <ConduceLegalidadRef>[];
+  int? _unidadId;
+  int? _delegacionId;
   double? _lat;
   double? _lng;
   String _locationStatus = 'Aun no se han capturado coordenadas.';
@@ -45,6 +54,7 @@ class _ConduceLegalidadOperativoFormScreenState
   void initState() {
     super.initState();
     _hydrateInitialOperativo();
+    _loadAccess();
   }
 
   @override
@@ -69,6 +79,8 @@ class _ConduceLegalidadOperativoFormScreenState
     _coloniaCtrl.text = operativo.colonia ?? '';
     _fecha = _parseDate(operativo.fecha) ?? DateTime.now();
     _hora = _parseTime(operativo.horaInicio) ?? TimeOfDay.now();
+    _unidadId = operativo.unidadId;
+    _delegacionId = operativo.delegacionId;
     _lat = operativo.lat;
     _lng = operativo.lng;
     _coordenadasCtrl.text =
@@ -79,6 +91,91 @@ class _ConduceLegalidadOperativoFormScreenState
     if (_coordenadasCtrl.text.trim().isNotEmpty) {
       _locationStatus = 'Coordenadas cargadas del operativo.';
     }
+  }
+
+  Future<void> _loadAccess() async {
+    if (mounted) {
+      setState(() {
+        _loadingAccess = true;
+        _organizationError = null;
+      });
+    }
+
+    final canSetSchedule = await AuthService.canSetConduceLegalidadSchedule();
+    final isSuperadmin = await AuthService.isSuperadmin();
+    if (!isSuperadmin) {
+      if (!mounted) return;
+      setState(() {
+        _canSetSchedule = canSetSchedule;
+        _isSuperadmin = false;
+        _loadingAccess = false;
+      });
+      return;
+    }
+
+    try {
+      final results = await Future.wait<dynamic>([
+        ConduceLegalidadService.fetchMeta(
+          filterConduceLegalidadMotos: !widget.module.isAlcoholimetria,
+        ),
+        AuthService.getUnidadId(),
+        AuthService.getDelegacionId(),
+      ]);
+      final meta = results[0] as ConduceLegalidadMeta;
+      final currentUnidadId = results[1] as int?;
+      final currentDelegacionId = results[2] as int?;
+      if (!mounted) return;
+
+      final unidadId = _catalogContains(meta.unidades, _unidadId)
+          ? _unidadId
+          : (_catalogContains(meta.unidades, currentUnidadId)
+                ? currentUnidadId
+                : null);
+      final delegacionId = unidadId == AuthService.unidadDelegacionesId
+          ? (_catalogContains(meta.delegaciones, _delegacionId)
+                ? _delegacionId
+                : (_catalogContains(meta.delegaciones, currentDelegacionId)
+                      ? currentDelegacionId
+                      : null))
+          : null;
+
+      setState(() {
+        _canSetSchedule = canSetSchedule;
+        _isSuperadmin = true;
+        _unidades = meta.unidades;
+        _delegaciones = meta.delegaciones;
+        _unidadId = unidadId;
+        _delegacionId = delegacionId;
+        _loadingAccess = false;
+        _organizationError = !meta.abilities.canAssignScope
+            ? 'El servidor no autorizó la asignación de unidad.'
+            : meta.unidades.isEmpty
+            ? 'No hay unidades activas disponibles.'
+            : null;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _canSetSchedule = canSetSchedule;
+        _isSuperadmin = true;
+        _loadingAccess = false;
+        _organizationError =
+            'No se pudieron cargar las unidades y delegaciones: $e';
+      });
+    }
+  }
+
+  bool _catalogContains(List<ConduceLegalidadRef> catalog, int? id) {
+    return id != null && catalog.any((item) => item.id == id);
+  }
+
+  void _selectUnidad(int? unidadId) {
+    setState(() {
+      _unidadId = unidadId;
+      if (unidadId != AuthService.unidadDelegacionesId) {
+        _delegacionId = null;
+      }
+    });
   }
 
   Future<void> _pickFecha() async {
@@ -186,8 +283,11 @@ class _ConduceLegalidadOperativoFormScreenState
     setState(() => _saving = true);
     try {
       final payload = {
-        'fecha': _date(_fecha),
-        'hora_inicio': _time(_hora),
+        if (_canSetSchedule) 'fecha': _date(_fecha),
+        if (_canSetSchedule) 'hora_inicio': _time(_hora),
+        if (_isSuperadmin) 'unidad_id': _unidadId,
+        if (_isSuperadmin && _unidadId == AuthService.unidadDelegacionesId)
+          'delegacion_id': _delegacionId,
         'municipio': MunicipiosMichoacan.canonical(_municipioCtrl.text),
         'lugar': _emptyToNull(_lugarCtrl.text),
         'numero': _emptyToNull(_numeroCtrl.text),
@@ -257,26 +357,32 @@ class _ConduceLegalidadOperativoFormScreenState
               ),
             ),
             const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: _saving ? null : _pickFecha,
-                    icon: const Icon(Icons.calendar_month),
-                    label: Text(_date(_fecha)),
+            if (_isSuperadmin) ...[
+              _buildOrganizationFields(),
+              const SizedBox(height: 12),
+            ],
+            if (_canSetSchedule) ...[
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: _saving ? null : _pickFecha,
+                      icon: const Icon(Icons.calendar_month),
+                      label: Text(_date(_fecha)),
+                    ),
                   ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: _saving ? null : _pickHora,
-                    icon: const Icon(Icons.schedule),
-                    label: Text(_time(_hora)),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: _saving ? null : _pickHora,
+                      icon: const Icon(Icons.schedule),
+                      label: Text(_time(_hora)),
+                    ),
                   ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
+                ],
+              ),
+              const SizedBox(height: 12),
+            ],
             MunicipioAutocompleteField(
               controller: _municipioCtrl,
               decoration: const InputDecoration(
@@ -352,7 +458,12 @@ class _ConduceLegalidadOperativoFormScreenState
             Text(_locationStatus, style: Theme.of(context).textTheme.bodySmall),
             const SizedBox(height: 20),
             ElevatedButton.icon(
-              onPressed: _saving ? null : _submit,
+              onPressed:
+                  (_saving ||
+                      _loadingAccess ||
+                      (_isSuperadmin && _organizationError != null))
+                  ? null
+                  : _submit,
               icon: _saving
                   ? const SizedBox(
                       width: 18,
@@ -373,6 +484,104 @@ class _ConduceLegalidadOperativoFormScreenState
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildOrganizationFields() {
+    if (_loadingAccess) {
+      return const InputDecorator(
+        decoration: InputDecoration(
+          labelText: 'Adscripción del operativo',
+          border: OutlineInputBorder(),
+          prefixIcon: Icon(Icons.apartment),
+        ),
+        child: Row(
+          children: [
+            SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+            SizedBox(width: 12),
+            Expanded(child: Text('Cargando unidades y delegaciones...')),
+          ],
+        ),
+      );
+    }
+
+    if (_organizationError != null) {
+      return InputDecorator(
+        decoration: const InputDecoration(
+          labelText: 'Adscripción del operativo',
+          border: OutlineInputBorder(),
+          prefixIcon: Icon(Icons.error_outline),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(_organizationError!),
+            const SizedBox(height: 8),
+            TextButton.icon(
+              onPressed: _saving ? null : _loadAccess,
+              icon: const Icon(Icons.refresh),
+              label: const Text('Reintentar'),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Column(
+      children: [
+        DropdownButtonFormField<int>(
+          value: _unidadId,
+          isExpanded: true,
+          decoration: const InputDecoration(
+            labelText: 'Unidad responsable *',
+            border: OutlineInputBorder(),
+            prefixIcon: Icon(Icons.apartment),
+          ),
+          items: _unidades
+              .map(
+                (unidad) => DropdownMenuItem<int>(
+                  value: unidad.id,
+                  child: Text(unidad.nombre, overflow: TextOverflow.ellipsis),
+                ),
+              )
+              .toList(),
+          onChanged: _saving ? null : _selectUnidad,
+          validator: (value) =>
+              value == null ? 'Selecciona la unidad responsable.' : null,
+        ),
+        if (_unidadId == AuthService.unidadDelegacionesId) ...[
+          const SizedBox(height: 12),
+          DropdownButtonFormField<int>(
+            value: _delegacionId,
+            isExpanded: true,
+            decoration: const InputDecoration(
+              labelText: 'Delegación específica *',
+              border: OutlineInputBorder(),
+              prefixIcon: Icon(Icons.location_city),
+            ),
+            items: _delegaciones
+                .map(
+                  (delegacion) => DropdownMenuItem<int>(
+                    value: delegacion.id,
+                    child: Text(
+                      delegacion.nombre,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                )
+                .toList(),
+            onChanged: _saving
+                ? null
+                : (value) => setState(() => _delegacionId = value),
+            validator: (value) =>
+                value == null ? 'Selecciona la delegación responsable.' : null,
+          ),
+        ],
+      ],
     );
   }
 

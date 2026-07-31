@@ -43,7 +43,7 @@ class ConduceLegalidadModule {
   static const alcoholimetria = ConduceLegalidadModule(
     id: 'alcoholimetria',
     title: 'Alcoholimetría',
-    operativoNombre: 'Operativo Alcoholimetría',
+    operativoNombre: 'Operativo de Alcoholimetría',
     listSubtitle: 'Operativos de alcoholimetría y fundamentos de alcohol',
     createRoute: AppRoutes.alcoholimetriaCreate,
     showRoute: AppRoutes.alcoholimetriaShow,
@@ -66,6 +66,8 @@ class ConduceLegalidadModule {
       abilities: meta.abilities,
       fundamentosCorralon: fundamentosAlcohol,
       fundamentosPersona: fundamentosAlcohol,
+      unidades: meta.unidades,
+      delegaciones: meta.delegaciones,
     );
   }
 
@@ -98,7 +100,7 @@ class ConduceLegalidadModule {
 
     return const <String, dynamic>{
       'tipo_operativo': 'alcoholimetria',
-      'nombre': 'Operativo Alcoholimetría',
+      'nombre': 'Operativo de Alcoholimetría',
       'objetivo': 'Alcoholimetría',
     };
   }
@@ -193,7 +195,7 @@ class ConduceLegalidadModule {
 
 extension ConduceLegalidadTicketPresentation on ConduceLegalidadOperativo {
   String get ticketOperativoTitle => isAlcoholimetria
-      ? 'OPERATIVO PREVENCIÓN DE ACCIDENTES'
+      ? 'OPERATIVO DE ALCOHOLIMETRÍA'
       : 'OPERATIVO CONDUCE CON LEGALIDAD';
 
   String get ticketFolioPrefix => isAlcoholimetria ? 'PA' : 'CL';
