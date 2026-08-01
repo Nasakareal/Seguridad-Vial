@@ -39,6 +39,48 @@ void main() {
     expect(item.ticketOperativoTitle, isNot(contains('PREVENCIÓN')));
   });
 
+  test('tickets de ambos operativos usan la dirección de su delegación', () {
+    for (final tipo in const ['conduce_legalidad', 'alcoholimetria']) {
+      final item = ConduceLegalidadOperativo.fromJson({
+        'id': 11,
+        'nombre': tipo,
+        'tipo_operativo': tipo,
+        'unidad_id': 2,
+        'delegacion_id': 6,
+        'estado': 'activo',
+        'delegacion': {
+          'id': 6,
+          'nombre': 'Pátzcuaro',
+          'direccion_completa':
+              'Av. Lázaro Cárdenas 120, Centro, Pátzcuaro, Mich.',
+        },
+      });
+
+      final texto = ConduceLegalidadBoletaLegalText.informacionLiberacion(
+        const ConduceLegalidadVehiculo(retencionVehiculo: true),
+        esDelegaciones: item.unidadId == 2,
+        delegacion: item.delegacion,
+      );
+
+      expect(texto, contains('Delegación de Pátzcuaro'));
+      expect(texto, contains('Av. Lázaro Cárdenas 120'));
+      expect(texto, isNot(contains('Justicia Cívica')));
+      expect(texto, isNot(contains('Periférico Paseo')));
+    }
+  });
+
+  test('delegación sin domicilio no cae en la dirección fija de Morelia', () {
+    final texto = ConduceLegalidadBoletaLegalText.informacionLiberacion(
+      const ConduceLegalidadVehiculo(retencionVehiculo: true),
+      esDelegaciones: true,
+      delegacion: const ConduceLegalidadRef(id: 6, nombre: 'Pátzcuaro'),
+    );
+
+    expect(texto, contains('Delegación de Pátzcuaro'));
+    expect(texto, isNot(contains('Morelia')));
+    expect(texto, isNot(contains('4433163728')));
+  });
+
   test('fecha y hora caben juntas en el ancho legible de 58 mm', () {
     final writer = ThermalTicketRowFormatter(width: 32);
 

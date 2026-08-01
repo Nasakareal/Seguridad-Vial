@@ -415,6 +415,7 @@ class ConduceLegalidadOperativo {
   final String? tipoOperativo;
   final int? unidadId;
   final int? delegacionId;
+  final ConduceLegalidadRef? delegacion;
   final String? fecha;
   final String? horaInicio;
   final String? horaCierre;
@@ -448,6 +449,7 @@ class ConduceLegalidadOperativo {
     this.tipoOperativo,
     this.unidadId,
     this.delegacionId,
+    this.delegacion,
     this.fecha,
     this.horaInicio,
     this.horaCierre,
@@ -526,6 +528,7 @@ class ConduceLegalidadOperativo {
       tipoOperativo: _str(json['tipo_operativo']),
       unidadId: _nullableInt(json['unidad_id']),
       delegacionId: _nullableInt(json['delegacion_id']),
+      delegacion: ConduceLegalidadRef.tryParse(json['delegacion']),
       fecha: _str(json['fecha']),
       horaInicio: _str(json['hora_inicio']),
       horaCierre: _str(json['hora_cierre']),
@@ -1093,8 +1096,13 @@ class ConduceLegalidadUserRef {
 class ConduceLegalidadRef {
   final int id;
   final String nombre;
+  final String? direccionCompleta;
 
-  const ConduceLegalidadRef({required this.id, required this.nombre});
+  const ConduceLegalidadRef({
+    required this.id,
+    required this.nombre,
+    this.direccionCompleta,
+  });
 
   static ConduceLegalidadRef? tryParse(dynamic raw) {
     if (raw is! Map) return null;
@@ -1104,6 +1112,9 @@ class ConduceLegalidadRef {
     return ConduceLegalidadRef(
       id: id,
       nombre: _str(json['nombre'] ?? json['name']) ?? '#$id',
+      direccionCompleta: _str(
+        json['direccion_completa'] ?? json['direccionCompleta'],
+      ),
     );
   }
 }

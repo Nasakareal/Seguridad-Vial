@@ -682,7 +682,11 @@ class _BoletaPaper extends StatelessWidget {
   }
 
   String get _informacionLiberacionVehiculo {
-    return ConduceLegalidadBoletaLegalText.informacionLiberacion(vehiculo);
+    return ConduceLegalidadBoletaLegalText.informacionLiberacion(
+      vehiculo,
+      esDelegaciones: operativo.unidadId == 2 || captura.unidad?.id == 2,
+      delegacion: operativo.delegacion ?? captura.delegacion,
+    );
   }
 }
 
@@ -994,7 +998,11 @@ class _BoletaTicketData {
   }
 
   String get informacionLiberacionVehiculo {
-    return ConduceLegalidadBoletaLegalText.informacionLiberacion(vehiculo);
+    return ConduceLegalidadBoletaLegalText.informacionLiberacion(
+      vehiculo,
+      esDelegaciones: operativo.unidadId == 2 || captura.unidad?.id == 2,
+      delegacion: operativo.delegacion ?? captura.delegacion,
+    );
   }
 }
 
@@ -1215,11 +1223,26 @@ class ConduceLegalidadBoletaLegalText {
         (infraccion?.depositoSiSinPersonaHabilitada ?? false);
   }
 
-  static String informacionLiberacion(ConduceLegalidadVehiculo? vehiculo) {
+  static String informacionLiberacion(
+    ConduceLegalidadVehiculo? vehiculo, {
+    bool esDelegaciones = false,
+    ConduceLegalidadRef? delegacion,
+  }) {
     final deposito = _cleanValue(vehiculo?.corralon);
     final retiro = deposito == null
         ? 'La entrega física se realizará conforme al depósito vehicular autorizado que corresponda.'
         : 'La entrega física se realizará en $deposito, previa autorización.';
+
+    if (esDelegaciones) {
+      final nombre = _cleanValue(delegacion?.nombre);
+      final direccion = _cleanValue(delegacion?.direccionCompleta);
+      final oficina = nombre == null
+          ? 'la delegación correspondiente'
+          : 'la Delegación de $nombre';
+      final ubicacion = direccion == null ? '' : ', ubicada en $direccion';
+
+      return 'Para iniciar el trámite de liberación del vehículo, la persona interesada deberá acudir a $oficina$ubicacion, en su horario de atención, con identificación oficial y documentación que acredite propiedad o legítima posesión. $retiro';
+    }
 
     return 'Para iniciar el trámite de liberación del vehículo, la persona interesada deberá acudir a la Dirección de Justicia Cívica y Mediación Administrativa, ubicada en Periférico Paseo de la República #5000, Colonia Sentimientos de la Nación (C.P. 58178), en Morelia, Mich., de lunes a viernes de 09:00 a 18:00 horas, con identificación oficial y documentación que acredite propiedad o legítima posesión. Informes: 4433163728. $retiro';
   }
