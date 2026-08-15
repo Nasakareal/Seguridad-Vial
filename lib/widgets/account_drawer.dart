@@ -181,6 +181,16 @@ class AppAccountDrawer extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(height: 12),
+                      const DrawerSectionLabel(label: 'Herramientas'),
+                      DrawerSurface(
+                        child: DrawerActionTile(
+                          icon: Icons.sticky_note_2_outlined,
+                          title: 'Mis notas',
+                          subtitle: 'Notas privadas, colores y marcatexto',
+                          onTap: () => _goTo(context, AppRoutes.notes),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
                       const DrawerSectionLabel(label: 'Ayuda'),
                       DrawerSurface(
                         child: Column(

@@ -81,6 +81,43 @@ void main() {
     expect(texto, isNot(contains('4433163728')));
   });
 
+  test('el operativo conserva el supervisor enviado por el backend', () {
+    final item = ConduceLegalidadOperativo.fromJson({
+      'id': 11,
+      'nombre': 'Operativo de Alcoholimetría',
+      'tipo_operativo': 'alcoholimetria',
+      'unidad_id': 2,
+      'delegacion_id': 6,
+      'estado': 'activo',
+      'supervisor': {
+        'nombre': 'Ángel Peralta Hernández',
+        'cargo': 'Delegado de la Delegación de Pátzcuaro',
+      },
+    });
+
+    expect(item.supervisor?.nombre, 'Ángel Peralta Hernández');
+    expect(item.supervisor?.cargo, 'Delegado de la Delegación de Pátzcuaro');
+    expect(item.supervisor?.nombre, isNot(contains('Lugo')));
+  });
+
+  test('una delegación nunca usa a Lugo como respaldo', () {
+    final item = ConduceLegalidadOperativo.fromJson({
+      'id': 11,
+      'nombre': 'Operativo conduce con legalidad',
+      'unidad_id': 2,
+      'delegacion_id': 6,
+      'estado': 'activo',
+      'delegacion': {'id': 6, 'nombre': 'Pátzcuaro'},
+    });
+
+    expect(item.ticketSupervisorNombre, 'Delegado no asignado');
+    expect(
+      item.ticketSupervisorCargo,
+      'Delegado de la Delegación de Pátzcuaro',
+    );
+    expect(item.ticketSupervisorNombre, isNot(contains('Lugo')));
+  });
+
   test('fecha y hora caben juntas en el ancho legible de 58 mm', () {
     final writer = ThermalTicketRowFormatter(width: 32);
 

@@ -416,6 +416,7 @@ class ConduceLegalidadOperativo {
   final int? unidadId;
   final int? delegacionId;
   final ConduceLegalidadRef? delegacion;
+  final ConduceLegalidadSupervisor? supervisor;
   final String? fecha;
   final String? horaInicio;
   final String? horaCierre;
@@ -450,6 +451,7 @@ class ConduceLegalidadOperativo {
     this.unidadId,
     this.delegacionId,
     this.delegacion,
+    this.supervisor,
     this.fecha,
     this.horaInicio,
     this.horaCierre,
@@ -495,6 +497,29 @@ class ConduceLegalidadOperativo {
     return parts.where((part) => part.trim().isNotEmpty).join(', ');
   }
 
+  bool get isDelegaciones =>
+      unidadId == 2 || delegacionId != null || delegacion != null;
+
+  String get ticketSupervisorNombre {
+    final nombre = supervisor?.nombre.trim();
+    if (nombre != null && nombre.isNotEmpty) return nombre;
+    return isDelegaciones
+        ? 'Delegado no asignado'
+        : 'Luis Eduardo Lugo Ordorica';
+  }
+
+  String get ticketSupervisorCargo {
+    final cargo = supervisor?.cargo.trim();
+    if (cargo != null && cargo.isNotEmpty) return cargo;
+    if (isDelegaciones) {
+      final nombreDelegacion = delegacion?.nombre.trim();
+      return nombreDelegacion != null && nombreDelegacion.isNotEmpty
+          ? 'Delegado de la Delegación de $nombreDelegacion'
+          : 'Delegado';
+    }
+    return 'Subdirector de la Unidad de Protección en Vialidades Urbanas';
+  }
+
   bool get isAlcoholimetria {
     final tipo = tipoOperativo?.trim().toLowerCase();
     if (tipo == 'alcoholimetria') return true;
@@ -529,6 +554,7 @@ class ConduceLegalidadOperativo {
       unidadId: _nullableInt(json['unidad_id']),
       delegacionId: _nullableInt(json['delegacion_id']),
       delegacion: ConduceLegalidadRef.tryParse(json['delegacion']),
+      supervisor: ConduceLegalidadSupervisor.tryParse(json['supervisor']),
       fecha: _str(json['fecha']),
       horaInicio: _str(json['hora_inicio']),
       horaCierre: _str(json['hora_cierre']),
@@ -1116,6 +1142,23 @@ class ConduceLegalidadRef {
         json['direccion_completa'] ?? json['direccionCompleta'],
       ),
     );
+  }
+}
+
+class ConduceLegalidadSupervisor {
+  final String nombre;
+  final String cargo;
+
+  const ConduceLegalidadSupervisor({required this.nombre, required this.cargo});
+
+  static ConduceLegalidadSupervisor? tryParse(dynamic raw) {
+    if (raw is! Map) return null;
+    final json = _map(raw);
+    final nombre = _str(json['nombre'] ?? json['name']);
+    final cargo = _str(json['cargo']);
+    if (nombre == null || cargo == null) return null;
+
+    return ConduceLegalidadSupervisor(nombre: nombre, cargo: cargo);
   }
 }
 

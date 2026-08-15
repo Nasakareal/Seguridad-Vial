@@ -578,15 +578,15 @@ class _BoletaPaper extends StatelessWidget {
               style: const TextStyle(fontWeight: FontWeight.w800),
             ),
             const SizedBox(height: 5),
-            const Text(
-              'Supervisó: Luis Eduardo Lugo Ordorica',
+            Text(
+              'Supervisó: $_supervisorNombre',
               textAlign: TextAlign.center,
-              style: TextStyle(fontWeight: FontWeight.w800),
+              style: const TextStyle(fontWeight: FontWeight.w800),
             ),
-            const Text(
-              'Subdirector de Vialidades Urbanas',
+            Text(
+              _supervisorCargo,
               textAlign: TextAlign.center,
-              style: TextStyle(fontWeight: FontWeight.w800),
+              style: const TextStyle(fontWeight: FontWeight.w800),
             ),
             const SizedBox(height: 28),
           ],
@@ -599,6 +599,10 @@ class _BoletaPaper extends StatelessWidget {
     final suffix = total > 1 ? '-${index + 1}' : '';
     return '${operativo.ticketFolioPrefix}-${operativo.id}-${captura.id}$suffix';
   }
+
+  String get _supervisorNombre => operativo.ticketSupervisorNombre;
+
+  String get _supervisorCargo => operativo.ticketSupervisorCargo;
 
   String get _lugar {
     final operativoDireccion = operativo.direccionCompleta;
@@ -890,8 +894,8 @@ void _writeThermalTicket(
     'Captura #${data.captura.id} / Operativo #${data.operativo.id}',
   );
   ticket.blank();
-  ticket.center('Supervisó: Luis Eduardo Lugo Ordorica');
-  ticket.center('Subdirector de Vialidades Urbanas');
+  ticket.center('Supervisó: ${data.supervisorNombre}');
+  ticket.center(data.supervisorCargo);
 }
 
 class _BoletaTicketData {
@@ -915,6 +919,10 @@ class _BoletaTicketData {
     final suffix = total > 1 ? '-${index + 1}' : '';
     return '${operativo.ticketFolioPrefix}-${operativo.id}-${captura.id}$suffix';
   }
+
+  String get supervisorNombre => operativo.ticketSupervisorNombre;
+
+  String get supervisorCargo => operativo.ticketSupervisorCargo;
 
   String get lugar {
     final operativoDireccion = operativo.direccionCompleta;
@@ -998,10 +1006,15 @@ class _BoletaTicketData {
   }
 
   String get informacionLiberacionVehiculo {
+    final delegacion = operativo.delegacion ?? captura.delegacion;
     return ConduceLegalidadBoletaLegalText.informacionLiberacion(
       vehiculo,
-      esDelegaciones: operativo.unidadId == 2 || captura.unidad?.id == 2,
-      delegacion: operativo.delegacion ?? captura.delegacion,
+      esDelegaciones:
+          operativo.isDelegaciones ||
+          captura.unidad?.id == 2 ||
+          captura.delegacion?.id != null ||
+          delegacion != null,
+      delegacion: delegacion,
     );
   }
 }

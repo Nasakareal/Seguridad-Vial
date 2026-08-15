@@ -12,6 +12,7 @@ class AppRoutes {
   static const String profile = '/profile';
   static const String changePassword = '/profile/change-password';
   static const String misCapturas = '/mis-capturas';
+  static const String notes = '/notes';
   static const String settings = '/settings';
   static const String users = '/settings/users';
   static const String usersCreate = '/settings/users/create';
