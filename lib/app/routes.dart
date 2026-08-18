@@ -60,6 +60,7 @@ class AppRoutes {
       '/herramientas/reconstructor-transito-2d';
 
   static const String controlUbicacion = '/control-ubicacion';
+  static const String controlSemaforico = '/control-semaforico';
   static const String gruas = '/gruas';
 
   static const String lesionados = '/lesionados';
@@ -135,4 +136,13 @@ class AppRoutes {
       '/delegaciones/excel-revision';
   static const String delegacionesActividadesFisicas =
       '/delegaciones/actividades-fisicas';
+
+  static const String comunicaciones = '/comunicaciones';
+
+  static const String comunicacionesCreate = '/comunicaciones/create';
+
+  static const String comunicacionesConversacion =
+      '/comunicaciones/conversacion';
+
+  static const String comunicacionesDetalle = '/comunicaciones/detalle';
 }

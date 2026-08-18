@@ -2,6 +2,15 @@ import 'package:flutter/material.dart';
 
 import 'package:seguridad_vial_app/app/routes.dart';
 
+import '../models/comunicacion_usuario.dart';
+
+import '../screens/comunicaciones/comunicaciones_screen.dart';
+import '../screens/comunicaciones/conversacion_screen.dart';
+import '../screens/comunicaciones/comunicacion_detalle_screen.dart';
+import '../screens/comunicaciones/comunicacion_create_screen.dart';
+import '../services/auth_service.dart';
+import '../services/comunicacion_service.dart';
+
 import '../models/conduce_legalidad.dart';
 import '../screens/login_screen.dart';
 import '../screens/home_agente_vial_screen.dart';
@@ -54,6 +63,7 @@ import '../screens/mapa/mapa_patrullas_screen.dart';
 import '../screens/mapa/mapa_incidencias_screen.dart';
 
 import '../screens/control_ubicacion/control_ubicacion_screen.dart';
+import '../screens/control_semaforico/control_semaforico_screen.dart';
 import '../screens/gruas/gruas_screen.dart';
 
 import '../screens/lesionados/lesionados_screen.dart';
@@ -128,6 +138,12 @@ final Map<String, WidgetBuilder> appRoutesMap = {
   AppRoutes.changePassword: (context) => const ChangePasswordScreen(),
   AppRoutes.misCapturas: (context) => const MisCapturasScreen(),
   AppRoutes.notes: (context) => const UserNotesScreen(),
+  AppRoutes.comunicaciones: (context) => _ComunicacionesServiceLoader(
+    builder: (service) => ComunicacionesScreen(service: service),
+  ),
+  AppRoutes.comunicacionesCreate: (context) => _ComunicacionesServiceLoader(
+    builder: (service) => ComunicacionCreateScreen(service: service),
+  ),
   AppRoutes.settings: (context) => const SettingsHomeScreen(),
   AppRoutes.users: (context) => const SettingsUsersScreen(),
   AppRoutes.usersCreate: (context) => const UserCreateScreen(),
@@ -182,6 +198,7 @@ final Map<String, WidgetBuilder> appRoutesMap = {
       const ReconstructorTransito2dScreen(),
 
   AppRoutes.controlUbicacion: (context) => const ControlUbicacionScreen(),
+  AppRoutes.controlSemaforico: (context) => const ControlSemaforicoScreen(),
   AppRoutes.gruas: (context) => const GruasScreen(),
 
   AppRoutes.lesionados: (context) => const LesionadosScreen(),
@@ -318,6 +335,65 @@ int? _readCapturaIdFromArgs(Object? args) {
     if (raw is int) return raw;
     if (raw is String) return int.tryParse(raw);
   }
+  return null;
+}
+
+ComunicacionUsuario? _readComunicacionUsuarioFromArgs(Object? args) {
+  if (args is ComunicacionUsuario) {
+    return args;
+  }
+
+  if (args is int) {
+    return ComunicacionUsuario(id: args, nombre: 'Usuario');
+  }
+
+  if (args is String) {
+    final id = int.tryParse(args);
+
+    if (id != null) {
+      return ComunicacionUsuario(id: id, nombre: 'Usuario');
+    }
+  }
+
+  if (args is Map) {
+    final rawId = args['userId'] ?? args['user_id'] ?? args['id'];
+
+    final id = rawId is int ? rawId : int.tryParse(rawId?.toString() ?? '');
+
+    if (id == null) {
+      return null;
+    }
+
+    final nombre = args['nombre']?.toString().trim();
+
+    return ComunicacionUsuario(
+      id: id,
+      nombre: nombre != null && nombre.isNotEmpty ? nombre : 'Usuario',
+    );
+  }
+
+  return null;
+}
+
+int? _readComunicacionIdFromArgs(Object? args) {
+  if (args is int) {
+    return args;
+  }
+
+  if (args is String) {
+    return int.tryParse(args);
+  }
+
+  if (args is Map) {
+    final raw = args['comunicacionId'] ?? args['comunicacion_id'] ?? args['id'];
+
+    if (raw is int) {
+      return raw;
+    }
+
+    return int.tryParse(raw?.toString() ?? '');
+  }
+
   return null;
 }
 
@@ -507,7 +583,150 @@ Route<dynamic>? onGenerateRoute(RouteSettings settings) {
     );
   }
 
+  if (routePath == AppRoutes.comunicacionesConversacion) {
+    final usuario = _readComunicacionUsuarioFromArgs(settings.arguments);
+
+    final userId =
+        usuario?.id ??
+        int.tryParse(
+          uri?.queryParameters['userId'] ??
+              uri?.queryParameters['user_id'] ??
+              '',
+        );
+
+    if (userId == null) {
+      return MaterialPageRoute(
+        builder: (_) => const _UnknownArgsScreen(
+          routeName: '/comunicaciones/conversacion',
+          message: 'sin userId',
+        ),
+        settings: settings,
+      );
+    }
+
+    final usuarioFinal =
+        usuario ?? ComunicacionUsuario(id: userId, nombre: 'Usuario');
+
+    return MaterialPageRoute(
+      builder: (_) => _ComunicacionesServiceLoader(
+        builder: (service) =>
+            ConversacionScreen(service: service, usuario: usuarioFinal),
+      ),
+      settings: settings,
+    );
+  }
+
+  if (routePath == AppRoutes.comunicacionesDetalle) {
+    final comunicacionId =
+        _readComunicacionIdFromArgs(settings.arguments) ??
+        int.tryParse(
+          uri?.queryParameters['comunicacionId'] ??
+              uri?.queryParameters['comunicacion_id'] ??
+              uri?.queryParameters['id'] ??
+              '',
+        );
+
+    if (comunicacionId == null) {
+      return MaterialPageRoute(
+        builder: (_) => const _UnknownArgsScreen(
+          routeName: '/comunicaciones/detalle',
+          message: 'sin comunicacionId',
+        ),
+        settings: settings,
+      );
+    }
+
+    return MaterialPageRoute(
+      builder: (_) => _ComunicacionesServiceLoader(
+        builder: (service) => ComunicacionDetalleScreen(
+          service: service,
+          comunicacionId: comunicacionId,
+        ),
+      ),
+      settings: settings,
+    );
+  }
+
   return null;
+}
+
+class _ComunicacionesServiceLoader extends StatefulWidget {
+  final Widget Function(ComunicacionService service) builder;
+
+  const _ComunicacionesServiceLoader({required this.builder});
+
+  @override
+  State<_ComunicacionesServiceLoader> createState() =>
+      _ComunicacionesServiceLoaderState();
+}
+
+class _ComunicacionesServiceLoaderState
+    extends State<_ComunicacionesServiceLoader> {
+  late final Future<ComunicacionService> _serviceFuture;
+
+  ComunicacionService? _service;
+
+  @override
+  void initState() {
+    super.initState();
+
+    _serviceFuture = _crearService();
+  }
+
+  Future<ComunicacionService> _crearService() async {
+    final token = await AuthService.getToken();
+
+    if (token == null || token.trim().isEmpty) {
+      throw Exception('Sesión inválida. Vuelve a iniciar sesión.');
+    }
+
+    final service = ComunicacionService(
+      baseUrl: AuthService.baseUrl,
+      token: token,
+    );
+
+    _service = service;
+
+    return service;
+  }
+
+  @override
+  void dispose() {
+    _service?.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<ComunicacionService>(
+      future: _serviceFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState != ConnectionState.done) {
+          return const Scaffold(
+            body: Center(child: CircularProgressIndicator()),
+          );
+        }
+
+        if (snapshot.hasError || snapshot.data == null) {
+          return Scaffold(
+            appBar: AppBar(title: const Text('Comunicaciones')),
+            body: Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Text(
+                  snapshot.error?.toString() ??
+                      'No fue posible iniciar el módulo de comunicaciones.',
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            ),
+          );
+        }
+
+        return widget.builder(snapshot.data!);
+      },
+    );
+  }
 }
 
 class _UnknownArgsScreen extends StatelessWidget {

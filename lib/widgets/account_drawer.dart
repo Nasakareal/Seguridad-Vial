@@ -60,6 +60,15 @@ class AppAccountDrawer extends StatelessWidget {
         '';
 
     final photoUrl = SettingsPersonalService.photoUrlFor(payload);
+    final unitId = await AuthService.getUnidadId();
+    final permissions = await AuthService.getPermissions();
+    final canUseTrafficPriority =
+        await AuthService.isSuperadmin() ||
+        await AuthService.hasFullOperationalAccess() ||
+        permissions.contains('operar prioridad semaforica') ||
+        unitId == AuthService.unidadSeguridadVialId ||
+        unitId == AuthService.unidadProteccionCarreterasId ||
+        unitId == AuthService.unidadVialidadesUrbanasId;
 
     var access = await AdministrativeAccessService.loadAccess();
     if (!access.canSeeConfigurationMenu) {
@@ -73,6 +82,7 @@ class AppAccountDrawer extends StatelessWidget {
       unit: unit,
       photoUrl: photoUrl,
       access: access,
+      canUseTrafficPriority: canUseTrafficPriority,
     );
   }
 
@@ -183,11 +193,31 @@ class AppAccountDrawer extends StatelessWidget {
                       const SizedBox(height: 12),
                       const DrawerSectionLabel(label: 'Herramientas'),
                       DrawerSurface(
-                        child: DrawerActionTile(
-                          icon: Icons.sticky_note_2_outlined,
-                          title: 'Mis notas',
-                          subtitle: 'Notas privadas, colores y marcatexto',
-                          onTap: () => _goTo(context, AppRoutes.notes),
+                        child: Column(
+                          children: _withDividers([
+                            DrawerActionTile(
+                              icon: Icons.forum_outlined,
+                              title: 'Comunicaciones',
+                              subtitle: 'Mensajes, avisos y órdenes',
+                              onTap: () =>
+                                  _goTo(context, AppRoutes.comunicaciones),
+                            ),
+                            if (summary?.canUseTrafficPriority == true)
+                              DrawerActionTile(
+                                icon: Icons.traffic_outlined,
+                                title: 'Prioridad semafórica',
+                                subtitle:
+                                    'Solicitar y confirmar paso prioritario',
+                                onTap: () =>
+                                    _goTo(context, AppRoutes.controlSemaforico),
+                              ),
+                            DrawerActionTile(
+                              icon: Icons.sticky_note_2_outlined,
+                              title: 'Mis notas',
+                              subtitle: 'Notas privadas, colores y marcatexto',
+                              onTap: () => _goTo(context, AppRoutes.notes),
+                            ),
+                          ]),
                         ),
                       ),
                       const SizedBox(height: 12),
@@ -321,6 +351,7 @@ class _AccountSummary {
   final String unit;
   final String photoUrl;
   final AdministrativeAccess access;
+  final bool canUseTrafficPriority;
 
   const _AccountSummary({
     required this.name,
@@ -329,6 +360,7 @@ class _AccountSummary {
     required this.unit,
     required this.photoUrl,
     required this.access,
+    required this.canUseTrafficPriority,
   });
 }
 

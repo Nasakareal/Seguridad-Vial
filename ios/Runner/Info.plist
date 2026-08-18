@@ -80,6 +80,7 @@
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>location</string>
+		<string>fetch</string>
 		<string>remote-notification</string>
 	</array>
 
@@ -92,7 +93,7 @@
 
 	<!-- Cámara (image_picker) -->
 	<key>NSCameraUsageDescription</key>
-	<string>Usamos la cámara para capturar evidencia y adjuntarla a los reportes.</string>
+	<string>Usamos la cámara para tomar fotografías y adjuntarlas a reportes y mensajes.</string>
 
 	<!-- Face ID / Touch ID para acciones sensibles -->
 	<key>NSFaceIDUsageDescription</key>
@@ -100,7 +101,7 @@
 
 	<!-- Fotos/Galería (image_picker) -->
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Usamos tu galería para seleccionar evidencia y adjuntarla a los reportes.</string>
+	<string>Usamos tu galería para seleccionar fotografías y adjuntarlas a reportes y mensajes.</string>
 
 	<!-- Guardar/Compartir archivos -->
 	<key>NSPhotoLibraryAddUsageDescription</key>
