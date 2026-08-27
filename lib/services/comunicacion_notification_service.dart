@@ -1,14 +1,11 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
-@pragma('vm:entry-point')
-Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
-  await Firebase.initializeApp();
-}
+import '../core/globals.dart';
+import 'comunicacion_sound_service.dart';
 
 typedef RegistrarTokenCallback = Future<void> Function(String token);
 
@@ -107,6 +104,7 @@ class ComunicacionPushEvento {
 
   String toPayload() {
     return jsonEncode({
+      'modulo': 'comunicaciones',
       'message_id': messageId,
       'comunicacion_id': comunicacionId,
       'remitente_user_id': remitenteUserId,
@@ -126,7 +124,9 @@ class ComunicacionNotificationService {
   static final ComunicacionNotificationService instance =
       ComunicacionNotificationService._();
 
-  static const String channelId = 'comunicaciones';
+  // Los canales de Android son inmutables. Se usa un id nuevo para que los
+  // dispositivos que ya crearon el canal anterior adopten el sonido corregido.
+  static const String channelId = 'comunicaciones_v3';
 
   static const String channelName = 'Comunicaciones';
 
@@ -134,9 +134,6 @@ class ComunicacionNotificationService {
       'Mensajes, avisos y órdenes de Seguridad Vial';
 
   final FirebaseMessaging _messaging = FirebaseMessaging.instance;
-
-  final FlutterLocalNotificationsPlugin _localNotifications =
-      FlutterLocalNotificationsPlugin();
 
   final StreamController<ComunicacionPushEvento> _eventosController =
       StreamController<ComunicacionPushEvento>.broadcast();
@@ -173,11 +170,7 @@ class ComunicacionNotificationService {
 
     _registrarToken = registrarToken;
 
-    FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
-
     await _inicializarNotificacionesLocales();
-
-    await solicitarPermisos();
 
     await _messaging.setForegroundNotificationPresentationOptions(
       alert: false,
@@ -193,17 +186,19 @@ class ComunicacionNotificationService {
       _procesarMensajeAbierto,
     );
 
-    _tokenSubscription = _messaging.onTokenRefresh.listen((token) async {
-      _tokensController.add(token);
+    if (_registrarToken != null) {
+      _tokenSubscription = _messaging.onTokenRefresh.listen((token) async {
+        _tokensController.add(token);
 
-      final callback = _registrarToken;
+        final callback = _registrarToken;
 
-      if (callback != null) {
-        await callback(token);
-      }
-    });
+        if (callback != null) {
+          await callback(token);
+        }
+      });
 
-    await sincronizarToken();
+      await sincronizarToken();
+    }
 
     await _procesarArranqueDesdeNotificacion();
 
@@ -255,34 +250,17 @@ class ComunicacionNotificationService {
   }
 
   Future<void> _inicializarNotificacionesLocales() async {
-    const android = AndroidInitializationSettings('@mipmap/ic_launcher');
-
-    const ios = DarwinInitializationSettings(
-      requestAlertPermission: false,
-      requestBadgePermission: false,
-      requestSoundPermission: false,
-      defaultPresentAlert: true,
-      defaultPresentBadge: true,
-      defaultPresentSound: true,
-    );
-
-    const settings = InitializationSettings(android: android, iOS: ios);
-
-    await _localNotifications.initialize(
-      settings,
-      onDidReceiveNotificationResponse: _procesarNotificacionLocalAbierta,
-    );
-
     const channel = AndroidNotificationChannel(
       channelId,
       channelName,
       description: channelDescription,
       importance: Importance.max,
       playSound: true,
+      sound: RawResourceAndroidNotificationSound('message_received'),
       enableVibration: true,
     );
 
-    final androidPlugin = _localNotifications
+    final androidPlugin = localNotifications
         .resolvePlatformSpecificImplementation<
           AndroidFlutterLocalNotificationsPlugin
         >();
@@ -293,14 +271,14 @@ class ComunicacionNotificationService {
   Future<void> _procesarArranqueDesdeNotificacion() async {
     final initialMessage = await _messaging.getInitialMessage();
 
-    if (initialMessage != null && _esComunicacion(initialMessage)) {
+    if (initialMessage != null && esComunicacion(initialMessage)) {
       _eventoInicialPendiente = ComunicacionPushEvento.fromRemoteMessage(
         initialMessage,
         accion: ComunicacionPushAccion.abierta,
       );
     }
 
-    final launchDetails = await _localNotifications
+    final launchDetails = await localNotifications
         .getNotificationAppLaunchDetails();
 
     if (launchDetails?.didNotificationLaunchApp == true &&
@@ -317,7 +295,7 @@ class ComunicacionNotificationService {
   }
 
   Future<void> _procesarMensajeForeground(RemoteMessage message) async {
-    if (!_esComunicacion(message)) {
+    if (!esComunicacion(message)) {
       return;
     }
 
@@ -328,11 +306,13 @@ class ComunicacionNotificationService {
 
     _eventosController.add(evento);
 
+    await ComunicacionSoundService.recibido();
+
     await _mostrarNotificacionLocal(message, evento);
   }
 
   void _procesarMensajeAbierto(RemoteMessage message) {
-    if (!_esComunicacion(message)) {
+    if (!esComunicacion(message)) {
       return;
     }
 
@@ -344,9 +324,7 @@ class ComunicacionNotificationService {
     _eventosController.add(evento);
   }
 
-  void _procesarNotificacionLocalAbierta(NotificationResponse response) {
-    final payload = response.payload;
-
+  void procesarPayloadAbierto(String? payload) {
     if (payload == null || payload.trim().isEmpty) {
       return;
     }
@@ -377,7 +355,7 @@ class ComunicacionNotificationService {
       channelDescription: channelDescription,
       importance: Importance.max,
       priority: Priority.high,
-      playSound: true,
+      playSound: false,
       enableVibration: true,
       visibility: NotificationVisibility.private,
     );
@@ -385,7 +363,7 @@ class ComunicacionNotificationService {
     const iosDetails = DarwinNotificationDetails(
       presentAlert: true,
       presentBadge: true,
-      presentSound: true,
+      presentSound: false,
     );
 
     const details = NotificationDetails(
@@ -395,7 +373,7 @@ class ComunicacionNotificationService {
 
     final id = evento.comunicacionId ?? _notificationId(message.messageId);
 
-    await _localNotifications.show(
+    await localNotifications.show(
       id,
       titulo,
       cuerpo,
@@ -444,7 +422,7 @@ class ComunicacionNotificationService {
     return 'Tienes un nuevo mensaje.';
   }
 
-  bool _esComunicacion(RemoteMessage message) {
+  static bool esComunicacion(RemoteMessage message) {
     final data = message.data;
 
     final modulo = data['modulo']?.toString().trim().toLowerCase();

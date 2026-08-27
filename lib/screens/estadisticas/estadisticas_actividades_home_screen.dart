@@ -1,4 +1,6 @@
+import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:file_saver/file_saver.dart';
 import 'package:fl_chart/fl_chart.dart';
@@ -23,6 +25,21 @@ class EstadisticasActividadesHomeScreen extends StatefulWidget {
 
 class _EstadisticasActividadesHomeScreenState
     extends State<EstadisticasActividadesHomeScreen> {
+  static const List<Color> _pieColors = <Color>[
+    Color(0xFF2563EB),
+    Color(0xFF16A34A),
+    Color(0xFFF59E0B),
+    Color(0xFFDC2626),
+    Color(0xFF7C3AED),
+    Color(0xFF0891B2),
+    Color(0xFFDB2777),
+    Color(0xFF65A30D),
+    Color(0xFFEA580C),
+    Color(0xFF4F46E5),
+    Color(0xFF0F766E),
+    Color(0xFF9333EA),
+  ];
+
   final _svc = EstadisticasActividadesService();
   final _q = TextEditingController();
 
@@ -47,6 +64,7 @@ class _EstadisticasActividadesHomeScreenState
   Map<String, dynamic>? _timeActividades;
   Map<String, dynamic>? _distCategoria;
   Map<String, dynamic>? _distSubcategoria;
+  Map<String, dynamic>? _resumenCategorias;
   Map<String, dynamic>? _distDelegacion;
   Map<String, dynamic>? _actividadesPage;
 
@@ -159,6 +177,7 @@ class _EstadisticasActividadesHomeScreenState
         _svc.seriesActividades(params: params),
         _svc.distribution('categoria', params: params),
         _svc.distribution('subcategoria', params: params),
+        _svc.resumenCategorias(params: params),
         _svc.distribution('delegacion', params: params),
         _svc.actividades(params: params),
         if (_canFilterUnidad)
@@ -176,25 +195,25 @@ class _EstadisticasActividadesHomeScreenState
           Future.value(const <Map<String, dynamic>>[]),
       ]);
 
-      final actividades = (results[5] as Map).cast<String, dynamic>();
+      final actividades = (results[6] as Map).cast<String, dynamic>();
       final lpRaw = actividades['last_page'];
       final lp = lpRaw is int
           ? lpRaw
           : int.tryParse(lpRaw?.toString() ?? '1') ?? 1;
 
-      final unidades = (results[6] as List)
+      final unidades = (results[7] as List)
           .whereType<Map>()
           .map((e) => Map<String, dynamic>.from(e))
           .toList();
-      final cats = (results[7] as List)
+      final cats = (results[8] as List)
           .whereType<Map>()
           .map((e) => Map<String, dynamic>.from(e))
           .toList();
-      final subs = (results[8] as List)
+      final subs = (results[9] as List)
           .whereType<Map>()
           .map((e) => Map<String, dynamic>.from(e))
           .toList();
-      final delegs = (results[9] as List)
+      final delegs = (results[10] as List)
           .whereType<Map>()
           .map((e) => Map<String, dynamic>.from(e))
           .toList();
@@ -205,7 +224,8 @@ class _EstadisticasActividadesHomeScreenState
         _timeActividades = (results[1] as Map).cast<String, dynamic>();
         _distCategoria = (results[2] as Map).cast<String, dynamic>();
         _distSubcategoria = (results[3] as Map).cast<String, dynamic>();
-        _distDelegacion = (results[4] as Map).cast<String, dynamic>();
+        _resumenCategorias = (results[4] as Map).cast<String, dynamic>();
+        _distDelegacion = (results[5] as Map).cast<String, dynamic>();
         _actividadesPage = actividades;
         _unidades = unidades;
         _categorias = cats;
@@ -397,6 +417,8 @@ class _EstadisticasActividadesHomeScreenState
                       excludeGruas: !_mostrarGruasEnGraficas,
                     ),
                   ),
+                  const SizedBox(height: 16),
+                  _categorySummaryPanel(),
                   const SizedBox(height: 16),
                   _panel(
                     title: 'Delegaciones',
@@ -746,6 +768,290 @@ class _EstadisticasActividadesHomeScreenState
     );
   }
 
+  List<Map<String, dynamic>> _categorySummaryData() {
+    final raw = (_resumenCategorias?['categorias'] as List?) ?? const [];
+    return raw
+        .whereType<Map>()
+        .map((item) => Map<String, dynamic>.from(item))
+        .toList();
+  }
+
+  String _summaryPeriodText() {
+    String display(DateTime? value) {
+      if (value == null) return 'sin fecha';
+      final day = value.day.toString().padLeft(2, '0');
+      final month = value.month.toString().padLeft(2, '0');
+      return '$day/$month/${value.year}';
+    }
+
+    return 'Del ${display(_desde)} al ${display(_hasta)}';
+  }
+
+  String _categorySummaryShareText() {
+    final buffer = StringBuffer()
+      ..writeln('*Resumen por categoría*')
+      ..writeln(_summaryPeriodText())
+      ..writeln();
+
+    for (final category in _categorySummaryData()) {
+      final name = (category['nombre'] ?? 'Sin categoría').toString();
+      final total = _asInt(category['total']);
+      buffer.writeln('*$name*: $total');
+
+      final subcategories = (category['subcategorias'] as List?) ?? const [];
+      for (final raw in subcategories.whereType<Map>()) {
+        final subcategory = Map<String, dynamic>.from(raw);
+        final subName = (subcategory['nombre'] ?? 'Sin subcategoría')
+            .toString();
+        buffer.writeln('↳ $subName: ${_asInt(subcategory['total'])}');
+      }
+    }
+
+    buffer.writeln();
+    buffer.writeln('TOTAL GENERAL: ${_asInt(_resumenCategorias?['total'])}');
+    return buffer.toString().trim();
+  }
+
+  String _csvCell(Object? value) {
+    final text = value?.toString() ?? '';
+    return '"${text.replaceAll('"', '""')}"';
+  }
+
+  Future<void> _exportCategorySummaryCsv() async {
+    await _runBusy(() async {
+      final rows = <String>[
+        [
+          'Nivel',
+          'Categoría / subcategoría',
+          'Cantidad',
+        ].map(_csvCell).join(','),
+      ];
+
+      for (final category in _categorySummaryData()) {
+        final name = (category['nombre'] ?? 'Sin categoría').toString();
+        rows.add(
+          [
+            'Categoría',
+            name,
+            _asInt(category['total']),
+          ].map(_csvCell).join(','),
+        );
+
+        final subcategories = (category['subcategorias'] as List?) ?? const [];
+        for (final raw in subcategories.whereType<Map>()) {
+          final subcategory = Map<String, dynamic>.from(raw);
+          rows.add(
+            [
+              'Subcategoría',
+              subcategory['nombre'] ?? 'Sin subcategoría',
+              _asInt(subcategory['total']),
+            ].map(_csvCell).join(','),
+          );
+        }
+      }
+
+      rows.add(
+        [
+          'Total',
+          'TOTAL GENERAL',
+          _asInt(_resumenCategorias?['total']),
+        ].map(_csvCell).join(','),
+      );
+
+      final bytes = Uint8List.fromList(<int>[
+        0xEF,
+        0xBB,
+        0xBF,
+        ...utf8.encode(rows.join('\r\n')),
+      ]);
+      final stamp = '${_fmtDate(_desde)}-a-${_fmtDate(_hasta)}';
+      final baseName = 'resumen-categorias-$stamp';
+
+      String? savedPath;
+      try {
+        savedPath = await FileSaver.instance.saveFile(
+          name: baseName,
+          bytes: bytes,
+          ext: 'csv',
+          mimeType: MimeType.csv,
+        );
+      } catch (_) {
+        savedPath = null;
+      }
+
+      final dir = await getApplicationDocumentsDirectory();
+      final file = File('${dir.path}/$baseName.csv');
+      await file.writeAsBytes(bytes, flush: true);
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            savedPath?.trim().isNotEmpty == true
+                ? 'Resumen guardado en: $savedPath'
+                : 'Resumen guardado en: ${file.path}',
+          ),
+        ),
+      );
+
+      await Share.shareXFiles([
+        XFile(file.path, mimeType: 'text/csv'),
+      ], text: 'Resumen por categoría de actividades');
+    });
+  }
+
+  Widget _categorySummaryPanel() {
+    final categories = _categorySummaryData();
+    final total = _asInt(_resumenCategorias?['total']);
+
+    return _panel(
+      title: 'Resumen por categoría',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            _summaryPeriodText(),
+            style: TextStyle(color: Colors.grey.shade700),
+          ),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              OutlinedButton.icon(
+                onPressed: categories.isEmpty || _busy
+                    ? null
+                    : _exportCategorySummaryCsv,
+                icon: const Icon(Icons.file_download_outlined),
+                label: const Text('Descargar CSV'),
+              ),
+              OutlinedButton.icon(
+                onPressed: categories.isEmpty || _busy
+                    ? null
+                    : () => Share.share(_categorySummaryShareText()),
+                icon: const Icon(Icons.share_outlined),
+                label: const Text('Compartir'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          if (categories.isEmpty)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 20),
+              child: Center(child: Text('Sin datos por categoría.')),
+            )
+          else ...[
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              color: Colors.grey.shade100,
+              child: const Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Categoría / subcategoría',
+                      style: TextStyle(fontWeight: FontWeight.w800),
+                    ),
+                  ),
+                  Text(
+                    'Cantidad',
+                    style: TextStyle(fontWeight: FontWeight.w800),
+                  ),
+                ],
+              ),
+            ),
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 480),
+              child: Scrollbar(
+                child: ListView(
+                  shrinkWrap: true,
+                  children: [
+                    for (final category in categories) ...[
+                      _categorySummaryRow(category, isCategory: true),
+                      for (final raw
+                          in ((category['subcategorias'] as List?) ?? const [])
+                              .whereType<Map>())
+                        _categorySummaryRow(
+                          Map<String, dynamic>.from(raw),
+                          isCategory: false,
+                        ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+              color: Theme.of(
+                context,
+              ).colorScheme.primary.withValues(alpha: .1),
+              child: Row(
+                children: [
+                  const Expanded(
+                    child: Text(
+                      'TOTAL GENERAL',
+                      style: TextStyle(fontWeight: FontWeight.w900),
+                    ),
+                  ),
+                  Text(
+                    total.toString(),
+                    style: const TextStyle(fontWeight: FontWeight.w900),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _categorySummaryRow(
+    Map<String, dynamic> item, {
+    required bool isCategory,
+  }) {
+    final name =
+        (item['nombre'] ?? (isCategory ? 'Sin categoría' : 'Sin subcategoría'))
+            .toString();
+    final total = _asInt(item['total']);
+
+    return Container(
+      padding: EdgeInsets.fromLTRB(isCategory ? 12 : 28, 10, 12, 10),
+      decoration: BoxDecoration(
+        color: isCategory
+            ? Theme.of(context).colorScheme.primary.withValues(alpha: .1)
+            : null,
+        border: Border(bottom: BorderSide(color: Colors.grey.shade200)),
+      ),
+      child: Row(
+        children: [
+          if (!isCategory) ...[
+            Icon(
+              Icons.subdirectory_arrow_right,
+              size: 17,
+              color: Theme.of(context).colorScheme.primary,
+            ),
+            const SizedBox(width: 6),
+          ],
+          Expanded(
+            child: Text(
+              name,
+              style: TextStyle(
+                fontWeight: isCategory ? FontWeight.w800 : FontWeight.w400,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            total.toString(),
+            style: TextStyle(
+              fontWeight: isCategory ? FontWeight.w800 : FontWeight.w500,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _pieFromDistribution(
     Map<String, dynamic>? dist, {
     required String emptyMsg,
@@ -754,7 +1060,11 @@ class _EstadisticasActividadesHomeScreenState
     final series = _seriesFromDistribution(dist, excludeGruas: excludeGruas);
     if (series.isEmpty) return _emptyChart(emptyMsg);
 
-    final top = series.take(10).toList();
+    final visible = series;
+    final totalGeneral = visible.fold<num>(
+      0,
+      (sum, item) => sum + _num(item['total']),
+    );
 
     return Column(
       children: [
@@ -765,11 +1075,18 @@ class _EstadisticasActividadesHomeScreenState
               sectionsSpace: 2,
               centerSpaceRadius: 0,
               sections: [
-                for (final e in top)
+                for (var index = 0; index < visible.length; index++)
                   PieChartSectionData(
-                    value: _num(e['total']).toDouble(),
-                    title: _num(e['total']).toInt().toString(),
+                    value: _num(visible[index]['total']).toDouble(),
+                    title:
+                        visible.length <= 14 ||
+                            (totalGeneral > 0 &&
+                                _num(visible[index]['total']) / totalGeneral >=
+                                    .025)
+                        ? _num(visible[index]['total']).toInt().toString()
+                        : '',
                     radius: 70,
+                    color: _pieColors[index % _pieColors.length],
                     titleStyle: const TextStyle(
                       fontSize: 11,
                       fontWeight: FontWeight.w700,
@@ -780,14 +1097,25 @@ class _EstadisticasActividadesHomeScreenState
           ),
         ),
         const SizedBox(height: 8),
-        ...top.map((e) {
+        Text(
+          '${visible.length} elementos · todos incluidos',
+          style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
+        ),
+        const SizedBox(height: 6),
+        ...visible.asMap().entries.map((entry) {
+          final index = entry.key;
+          final e = entry.value;
           final label = (e['label'] ?? '').toString();
           final total = (e['total'] ?? '').toString();
           return Padding(
             padding: const EdgeInsets.symmetric(vertical: 2),
             child: Row(
               children: [
-                const Icon(Icons.circle, size: 10),
+                Icon(
+                  Icons.circle,
+                  size: 10,
+                  color: _pieColors[index % _pieColors.length],
+                ),
                 const SizedBox(width: 8),
                 Expanded(child: Text(label, overflow: TextOverflow.ellipsis)),
                 Text(total),

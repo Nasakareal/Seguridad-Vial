@@ -1,9 +1,8 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
-
+import '../../services/comunicacion_sound_service.dart';
 import '../../models/comunicacion_usuario.dart';
 import '../../services/comunicacion_service.dart';
 
@@ -429,7 +428,7 @@ class _ComunicacionCreateScreenState extends State<ComunicacionCreateScreen> {
         imagenes: List<XFile>.from(_imagenes),
       );
 
-      await SystemSound.play(SystemSoundType.click);
+      await ComunicacionSoundService.enviado();
 
       if (!mounted) {
         return;

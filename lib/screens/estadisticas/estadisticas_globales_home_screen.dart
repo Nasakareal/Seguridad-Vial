@@ -6,6 +6,7 @@ import 'package:file_saver/file_saver.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
+import '../../core/vehiculos/vehiculo_taxonomia.dart';
 import '../../services/auth_service.dart';
 import '../../services/estadisticas_globales_service.dart';
 import '../../services/tracking_service.dart';
@@ -23,6 +24,21 @@ class EstadisticasGlobalesHomeScreen extends StatefulWidget {
 
 class _EstadisticasGlobalesHomeScreenState
     extends State<EstadisticasGlobalesHomeScreen> {
+  static const List<Color> _pieColors = <Color>[
+    Color(0xFF2563EB),
+    Color(0xFF16A34A),
+    Color(0xFFF59E0B),
+    Color(0xFFDC2626),
+    Color(0xFF7C3AED),
+    Color(0xFF0891B2),
+    Color(0xFFDB2777),
+    Color(0xFF65A30D),
+    Color(0xFFEA580C),
+    Color(0xFF4F46E5),
+    Color(0xFF0F766E),
+    Color(0xFF9333EA),
+  ];
+
   final _svc = EstadisticasGlobalesService();
 
   // ===== filtros =====
@@ -235,7 +251,9 @@ class _EstadisticasGlobalesHomeScreenState
         // mantener selección solo si existe en opciones
         _sector = _keepOrEmpty(_sector, _distSector);
         _tipoHecho = _keepOrEmpty(_tipoHecho, _distTipoHecho);
-        _vehTipo = _keepOrEmpty(_vehTipo, _distVehTipo);
+        if (!VehiculoTaxonomia.esTipoGeneral(_vehTipo)) {
+          _vehTipo = '';
+        }
 
         _loading = false;
       });
@@ -430,22 +448,34 @@ class _EstadisticasGlobalesHomeScreenState
   Widget _pieFromDistribution(
     Map<String, dynamic>? dist, {
     required String emptyMsg,
+    String Function(String value)? labelBuilder,
   }) {
-    final series = (dist?['series'] as List?) ?? const [];
+    final series = ((dist?['series'] as List?) ?? const [])
+        .whereType<Map>()
+        .map((item) => Map<String, dynamic>.from(item))
+        .toList();
     if (series.isEmpty) return _emptyChart(emptyMsg);
 
-    final top = series.take(10).toList();
+    final totalGeneral = series.fold<num>(
+      0,
+      (sum, item) => sum + (num.tryParse((item['total'] ?? 0).toString()) ?? 0),
+    );
 
     final sections = <PieChartSectionData>[];
-    for (var i = 0; i < top.length; i++) {
-      final r = top[i] as Map;
+    for (var i = 0; i < series.length; i++) {
+      final r = series[i];
       final total = num.tryParse((r['total'] ?? 0).toString()) ?? 0;
 
       sections.add(
         PieChartSectionData(
           value: total.toDouble(),
-          title: total.toInt().toString(),
+          title:
+              series.length <= 14 ||
+                  (totalGeneral > 0 && total / totalGeneral >= .025)
+              ? total.toInt().toString()
+              : '',
           radius: 70,
+          color: _pieColors[i % _pieColors.length],
           titleStyle: const TextStyle(
             fontSize: 11,
             fontWeight: FontWeight.w700,
@@ -467,15 +497,26 @@ class _EstadisticasGlobalesHomeScreenState
           ),
         ),
         const SizedBox(height: 8),
-        ...top.map((e) {
-          final r = e as Map;
-          final label = (r['label'] ?? '').toString();
+        Text(
+          '${series.length} elementos · todos incluidos',
+          style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
+        ),
+        const SizedBox(height: 6),
+        ...series.asMap().entries.map((entry) {
+          final index = entry.key;
+          final r = entry.value;
+          final rawLabel = (r['label'] ?? '').toString();
+          final label = labelBuilder?.call(rawLabel) ?? rawLabel;
           final total = (r['total'] ?? '').toString();
           return Padding(
             padding: const EdgeInsets.symmetric(vertical: 2),
             child: Row(
               children: [
-                const Icon(Icons.circle, size: 10),
+                Icon(
+                  Icons.circle,
+                  size: 10,
+                  color: _pieColors[index % _pieColors.length],
+                ),
                 const SizedBox(width: 8),
                 Expanded(child: Text(label, overflow: TextOverflow.ellipsis)),
                 Text(total),
@@ -587,14 +628,7 @@ class _EstadisticasGlobalesHomeScreenState
                         const SizedBox(height: 12),
                         Row(
                           children: [
-                            Expanded(
-                              child: _selectFromDist(
-                                label: 'Tipo de Vehículo',
-                                value: _vehTipo,
-                                dist: _distVehTipo,
-                                onChanged: (v) => setState(() => _vehTipo = v),
-                              ),
-                            ),
+                            Expanded(child: _vehicleTypeDropdown()),
                             const SizedBox(width: 12),
                             Expanded(
                               child: _dropdown(
@@ -764,7 +798,7 @@ class _EstadisticasGlobalesHomeScreenState
                   const SizedBox(height: 16),
 
                   _panel(
-                    title: 'Tipos de Hecho (Top)',
+                    title: 'Tipos de Hecho',
                     child: _pieFromDistribution(
                       _distTipoHecho,
                       emptyMsg: 'Sin datos de tipos de hecho',
@@ -773,10 +807,11 @@ class _EstadisticasGlobalesHomeScreenState
                   const SizedBox(height: 16),
 
                   _panel(
-                    title: 'Tipos de Vehículo (Top)',
+                    title: 'Tipos generales de Vehículo',
                     child: _pieFromDistribution(
                       _distVehTipo,
                       emptyMsg: 'Sin datos de tipos de vehículo',
+                      labelBuilder: VehiculoTaxonomia.etiquetaTipoGeneral,
                     ),
                   ),
                   const SizedBox(height: 16),
@@ -982,6 +1017,31 @@ class _EstadisticasGlobalesHomeScreenState
       decoration: InputDecoration(
         labelText: label,
         border: const OutlineInputBorder(),
+      ),
+    );
+  }
+
+  Widget _vehicleTypeDropdown() {
+    final options = <Map<String, String>>[
+      const {'value': '', 'label': '(Todos)'},
+      ...VehiculoTaxonomia.tiposGenerales,
+    ];
+    final selected = VehiculoTaxonomia.esTipoGeneral(_vehTipo) ? _vehTipo : '';
+
+    return DropdownButtonFormField<String>(
+      value: selected,
+      items: options
+          .map(
+            (item) => DropdownMenuItem<String>(
+              value: item['value'] ?? '',
+              child: Text(item['label'] ?? '', overflow: TextOverflow.ellipsis),
+            ),
+          )
+          .toList(),
+      onChanged: (value) => setState(() => _vehTipo = value ?? ''),
+      decoration: const InputDecoration(
+        labelText: 'Tipo general de vehículo',
+        border: OutlineInputBorder(),
       ),
     );
   }

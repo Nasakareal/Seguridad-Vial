@@ -6,6 +6,8 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import '../core/globals.dart';
 import '../core/platform_support.dart';
 import '../bootstrap/push_handlers.dart';
+import '../services/comunicacion_notification_service.dart';
+import 'routes.dart';
 
 class PushNavBinder extends StatefulWidget {
   final Widget child;
@@ -18,6 +20,7 @@ class PushNavBinder extends StatefulWidget {
 class _PushNavBinderState extends State<PushNavBinder> {
   StreamSubscription<RemoteMessage>? _subOnMessage;
   StreamSubscription<RemoteMessage>? _subOnOpen;
+  StreamSubscription<ComunicacionPushEvento>? _subComunicaciones;
 
   @override
   void initState() {
@@ -25,7 +28,20 @@ class _PushNavBinderState extends State<PushNavBinder> {
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       flushPendingPushTap();
+
+      final inicial = ComunicacionNotificationService.instance
+          .consumirEventoInicial();
+      if (inicial != null) {
+        _abrirComunicacion(inicial);
+      }
     });
+
+    _subComunicaciones = ComunicacionNotificationService.instance.eventos
+        .listen((evento) {
+          if (evento.accion == ComunicacionPushAccion.abierta) {
+            _abrirComunicacion(evento);
+          }
+        });
 
     if (!supportsPushMessaging) {
       return;
@@ -41,6 +57,10 @@ class _PushNavBinderState extends State<PushNavBinder> {
       RemoteMessage message,
     ) async {
       try {
+        if (ComunicacionNotificationService.esComunicacion(message)) {
+          return;
+        }
+
         final n = message.notification;
         final title = n?.title ?? 'Aviso';
         final body = n?.body ?? '';
@@ -82,6 +102,10 @@ class _PushNavBinderState extends State<PushNavBinder> {
       RemoteMessage message,
     ) {
       try {
+        if (ComunicacionNotificationService.esComunicacion(message)) {
+          return;
+        }
+
         final data = message.data.map((k, v) => MapEntry(k.toString(), v));
         handlePushTap(data);
       } catch (e, st) {
@@ -94,7 +118,29 @@ class _PushNavBinderState extends State<PushNavBinder> {
   void dispose() {
     _subOnMessage?.cancel();
     _subOnOpen?.cancel();
+    _subComunicaciones?.cancel();
     super.dispose();
+  }
+
+  void _abrirComunicacion(ComunicacionPushEvento evento) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+
+      if (evento.puedeAbrirConversacion) {
+        Navigator.of(context).pushNamed(
+          AppRoutes.comunicacionesConversacion,
+          arguments: evento.remitenteUserId,
+        );
+        return;
+      }
+
+      if (evento.puedeAbrirDetalle) {
+        Navigator.of(context).pushNamed(
+          AppRoutes.comunicacionesDetalle,
+          arguments: evento.comunicacionId,
+        );
+      }
+    });
   }
 
   @override

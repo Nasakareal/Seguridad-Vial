@@ -2,8 +2,10 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../models/semaforo_priority.dart';
 import '../../services/biometric_auth_service.dart';
 import '../../services/semaforo_ble_service.dart';
+import '../../services/semaforo_priority_service.dart';
 
 class ControlSemaforicoScreen extends StatefulWidget {
   const ControlSemaforicoScreen({super.key});
@@ -15,9 +17,14 @@ class ControlSemaforicoScreen extends StatefulWidget {
 
 class _ControlSemaforicoScreenState extends State<ControlSemaforicoScreen> {
   final gateway = SemaforoBleService();
+  final catalog = SemaforoPriorityService();
   final biometrics = BiometricAuthService();
   final reason = TextEditingController();
-  final route = TextEditingController(text: 'QUIROGA_SALIDA');
+  final search = TextEditingController();
+  List<SemaforoNode> nodes = const [];
+  SemaforoNode? selectedNode;
+  bool catalogBusy = false;
+  String catalogStatus = 'Cargando catálogo de cruceros…';
   int seconds = 90;
   int targetStage = 1;
   bool busy = false;
@@ -26,21 +33,80 @@ class _ControlSemaforicoScreenState extends State<ControlSemaforicoScreen> {
   bool priorityActive = false;
   Timer? priorityTimer;
   String status = 'Conecta el Heltec móvil por Bluetooth para iniciar.';
+  String nodeConfiguration = '';
+
+  String get selectedRoute => selectedNode?.route ?? '';
+
+  @override
+  void initState() {
+    super.initState();
+    loadCatalog();
+  }
 
   @override
   void dispose() {
     priorityTimer?.cancel();
     reason.dispose();
-    route.dispose();
+    search.dispose();
     gateway.dispose();
     super.dispose();
   }
 
+  Future<void> loadCatalog({String query = ''}) async {
+    setState(() {
+      catalogBusy = true;
+      catalogStatus = 'Consultando catálogo institucional…';
+    });
+    try {
+      final result = await catalog.listNodes(query: query);
+      if (!mounted) return;
+      final previousRoute = selectedNode?.route;
+      SemaforoNode? selected;
+      if (result.isNotEmpty) {
+        selected = result.firstWhere(
+          (node) => node.route == previousRoute,
+          orElse: () => result.first,
+        );
+      }
+      setState(() {
+        nodes = result;
+        selectedNode = selected;
+        catalogStatus = result.isEmpty
+            ? 'No hay cruceros que coincidan con la búsqueda.'
+            : '${result.length} crucero(s) registrado(s).';
+      });
+    } catch (e) {
+      if (!mounted) return;
+      const fallback = SemaforoNode(
+        id: 'FBF61B44',
+        name: 'SALIDA QUIROGA',
+        location: 'Morelia, Michoacán',
+        route: 'QUIROGA_SALIDA',
+        primaryStreet: 'SALIDA A QUIROGA',
+        secondaryStreet: 'CRUCE TRANSVERSAL',
+        activePlan: 'LOCAL CC1',
+        scheduleStart: '18:30',
+        scheduleEnd: '19:30',
+        scheduleStatus: 'SAFE',
+        online: false,
+      );
+      setState(() {
+        nodes = const [fallback];
+        selectedNode = fallback;
+        catalogStatus =
+            'Catálogo sin conexión; se conserva el crucero de banco local.';
+      });
+    } finally {
+      if (mounted) setState(() => catalogBusy = false);
+    }
+  }
+
   void message(String value) {
-    if (mounted)
+    if (mounted) {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text(value)));
+    }
   }
 
   Future<void> connect() async {
@@ -56,11 +122,12 @@ class _ControlSemaforicoScreenState extends State<ControlSemaforicoScreen> {
         status = 'Bluetooth conectado: ${gateway.deviceName}\n$response';
       });
     } catch (e) {
-      if (mounted)
+      if (mounted) {
         setState(() {
           connected = false;
           status = e.toString().replaceFirst('Exception: ', '');
         });
+      }
     } finally {
       if (mounted) setState(() => busy = false);
     }
@@ -81,11 +148,12 @@ class _ControlSemaforicoScreenState extends State<ControlSemaforicoScreen> {
       });
       message(ok ? 'Enlace Bluetooth + LoRa confirmado.' : response);
     } catch (e) {
-      if (mounted)
+      if (mounted) {
         setState(() {
           loraLinked = false;
           status = e.toString().replaceFirst('Exception: ', '');
         });
+      }
     } finally {
       if (mounted) setState(() => busy = false);
     }
@@ -93,14 +161,17 @@ class _ControlSemaforicoScreenState extends State<ControlSemaforicoScreen> {
 
   Future<void> requestPriority() async {
     if (!loraLinked) return message('Primero confirma el enlace LoRa.');
-    if (reason.text.trim().length < 8)
+    if (selectedNode == null) return message('Selecciona un crucero.');
+    if (reason.text.trim().length < 8) {
       return message('Escribe un motivo operativo de al menos 8 caracteres.');
+    }
     final approved = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
         title: const Text('Confirmar prioridad'),
         content: Text(
-          '${route.text}\n${_stageLabel(targetStage)}\n'
+          '${selectedNode!.name}\n${selectedNode!.streets}\n'
+          '${_stageLabel(targetStage)}\n'
           'Máximo $seconds segundos. Se exige confirmación real del controlador.',
         ),
         actions: [
@@ -126,7 +197,7 @@ class _ControlSemaforicoScreenState extends State<ControlSemaforicoScreen> {
     });
     try {
       final response = await gateway.requestPriority(
-        route.text.trim().toUpperCase(),
+        selectedRoute,
         targetStage,
         seconds,
       );
@@ -152,14 +223,83 @@ class _ControlSemaforicoScreenState extends State<ControlSemaforicoScreen> {
       }
       message(applied ? 'Prioridad activa y confirmada.' : _explain(response));
     } catch (e) {
-      if (mounted)
+      if (mounted) {
         setState(() {
           priorityActive = false;
           status = e.toString().replaceFirst('Exception: ', '');
         });
+      }
     } finally {
       if (mounted) setState(() => busy = false);
     }
+  }
+
+  Future<void> queryConfiguration() async {
+    if (!loraLinked) return message('Primero confirma el enlace LoRa.');
+    if (selectedNode == null) return message('Selecciona un crucero.');
+    setState(() {
+      busy = true;
+      status = 'Consultando identidad y programación del nodo fijo…';
+    });
+    try {
+      final response = await gateway.queryConfiguration(selectedRoute);
+      if (!mounted) return;
+      final ok = response.startsWith('CONFIG_ACK|');
+      if (ok) {
+        final configuration = _parseConfiguration(response);
+        try {
+          final synced = await catalog.syncNodeConfiguration(
+            configuration: configuration,
+            catalogNode: selectedNode,
+          );
+          if (mounted) {
+            setState(() {
+              nodes = [synced, ...nodes.where((node) => node.id != synced.id)];
+              selectedNode = synced;
+              catalogStatus = 'Catálogo actualizado desde el nodo por LoRa.';
+            });
+          }
+        } catch (e) {
+          if (mounted) {
+            setState(() {
+              catalogStatus =
+                  'Configuración recibida; quedó pendiente sincronizarla con el servidor.';
+            });
+          }
+        }
+      }
+      setState(() {
+        nodeConfiguration = ok ? response : '';
+        status = response;
+      });
+      message(
+        ok ? 'Configuración recibida desde el semáforo.' : _explain(response),
+      );
+    } catch (e) {
+      if (mounted) {
+        setState(() => status = e.toString().replaceFirst('Exception: ', ''));
+      }
+    } finally {
+      if (mounted) setState(() => busy = false);
+    }
+  }
+
+  String _configValue(String key) {
+    for (final field in nodeConfiguration.split('|')) {
+      if (field.startsWith('$key=')) return field.substring(key.length + 1);
+    }
+    return '—';
+  }
+
+  Map<String, String> _parseConfiguration(String response) {
+    final result = <String, String>{};
+    for (final field in response.split('|').skip(1)) {
+      final separator = field.indexOf('=');
+      if (separator > 0) {
+        result[field.substring(0, separator)] = field.substring(separator + 1);
+      }
+    }
+    return result;
   }
 
   Future<void> clearPriority() async {
@@ -168,9 +308,7 @@ class _ControlSemaforicoScreenState extends State<ControlSemaforicoScreen> {
       status = 'Solicitando regreso al ciclo local…';
     });
     try {
-      final response = await gateway.clearPriority(
-        route.text.trim().toUpperCase(),
-      );
+      final response = await gateway.clearPriority(selectedRoute);
       if (!mounted) return;
       final cleared =
           response.startsWith('PRIORITY_ACK|') &&
@@ -184,18 +322,21 @@ class _ControlSemaforicoScreenState extends State<ControlSemaforicoScreen> {
         cleared ? 'Ciclo local restaurado y confirmado.' : _explain(response),
       );
     } catch (e) {
-      if (mounted)
+      if (mounted) {
         setState(() => status = e.toString().replaceFirst('Exception: ', ''));
+      }
     } finally {
       if (mounted) setState(() => busy = false);
     }
   }
 
   String _explain(String response) {
-    if (response.contains('KEY_MISSING'))
+    if (response.contains('KEY_MISSING')) {
       return 'El enlace funciona, pero falta cargar la misma llave en ambos Heltec por USB.';
-    if (response.contains('mode=LOCAL CC1'))
+    }
+    if (response.contains('mode=LOCAL CC1')) {
       return 'El nodo respondió, pero no aplicó prioridad: la portadora GIS/MCP aún no está presente.';
+    }
     return 'La orden no fue confirmada como aplicada: $response';
   }
 
@@ -251,14 +392,103 @@ class _ControlSemaforicoScreenState extends State<ControlSemaforicoScreen> {
             icon: const Icon(Icons.cell_tower),
             label: const Text('Probar enlace con semáforo'),
           ),
+          OutlinedButton.icon(
+            onPressed: busy || !loraLinked ? null : queryConfiguration,
+            icon: const Icon(Icons.info_outline),
+            label: const Text('Consultar cruce y programación'),
+          ),
+          if (nodeConfiguration.isNotEmpty)
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _configValue('name'),
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
+                    Text('Ruta: ${_configValue('route')}'),
+                    Text('Principal: ${_configValue('street1')}'),
+                    Text('Transversal: ${_configValue('street2')}'),
+                    Text(
+                      'Plan horario: ${_configValue('start')}–${_configValue('end')} · ${_configValue('schedule')}',
+                    ),
+                    Text('Nodo: ${_configValue('node')}'),
+                  ],
+                ),
+              ),
+            ),
           const Divider(height: 32),
+          Text(
+            'Crucero destinatario',
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
+          const SizedBox(height: 8),
           TextField(
-            controller: route,
-            enabled: !busy,
+            controller: search,
+            enabled: !catalogBusy,
+            textInputAction: TextInputAction.search,
+            onSubmitted: (value) => loadCatalog(query: value),
+            decoration: InputDecoration(
+              labelText: 'Buscar por calle, nombre, ruta o nodo',
+              border: OutlineInputBorder(),
+              prefixIcon: const Icon(Icons.search),
+              suffixIcon: IconButton(
+                tooltip: 'Buscar todos',
+                onPressed: catalogBusy
+                    ? null
+                    : () => loadCatalog(query: search.text),
+                icon: const Icon(Icons.refresh),
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+          DropdownButtonFormField<SemaforoNode>(
+            value: selectedNode,
+            isExpanded: true,
             decoration: const InputDecoration(
-              labelText: 'Ruta / crucero',
+              labelText: 'Crucero registrado',
               border: OutlineInputBorder(),
             ),
+            items: nodes
+                .map(
+                  (node) => DropdownMenuItem(
+                    value: node,
+                    child: Text(
+                      node.streets.isEmpty
+                          ? '${node.name} · ${node.route}'
+                          : '${node.name} · ${node.streets}',
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                )
+                .toList(),
+            onChanged: busy
+                ? null
+                : (value) => setState(() {
+                    selectedNode = value;
+                    nodeConfiguration = '';
+                  }),
+          ),
+          const SizedBox(height: 6),
+          Row(
+            children: [
+              Icon(
+                selectedNode?.online == true ? Icons.cloud_done : Icons.cloud,
+                size: 18,
+                color: selectedNode?.online == true
+                    ? Colors.green
+                    : Colors.grey,
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  '$catalogStatus  Ruta LoRa: ${selectedRoute.isEmpty ? '—' : selectedRoute}',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 12),
           DropdownButtonFormField<int>(

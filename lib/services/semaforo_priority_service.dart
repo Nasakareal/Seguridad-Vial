@@ -17,9 +17,12 @@ class SemaforoPriorityService {
     };
   }
 
-  Future<List<SemaforoNode>> listNodes() async {
+  Future<List<SemaforoNode>> listNodes({String query = ''}) async {
+    final uri = Uri.parse('$_base/nodos').replace(
+      queryParameters: query.trim().isEmpty ? null : {'q': query.trim()},
+    );
     final response = await http
-        .get(Uri.parse('$_base/nodos'), headers: await _headers())
+        .get(uri, headers: await _headers())
         .timeout(const Duration(seconds: 8));
     final body = _decode(response.body);
     if (response.statusCode != 200) {
@@ -34,6 +37,53 @@ class SemaforoPriorityService {
         .map((e) => SemaforoNode.fromJson(Map<String, dynamic>.from(e)))
         .where((e) => e.id.isNotEmpty)
         .toList();
+  }
+
+  Future<SemaforoNode> syncNodeConfiguration({
+    required Map<String, String> configuration,
+    SemaforoNode? catalogNode,
+  }) async {
+    final nodeId = (configuration['node'] ?? catalogNode?.id ?? '').trim();
+    final route = (configuration['route'] ?? catalogNode?.route ?? '').trim();
+    if (nodeId.isEmpty || route.isEmpty) {
+      throw Exception(
+        'La respuesta LoRa no contiene identidad y ruta válidas.',
+      );
+    }
+
+    final response = await http
+        .post(
+          Uri.parse('$_base/nodos/sincronizar'),
+          headers: await _headers(),
+          body: jsonEncode({
+            'node_id': nodeId,
+            'ruta': route,
+            'nombre': configuration['name'] ?? catalogNode?.name ?? route,
+            'ubicacion': catalogNode?.location,
+            'vialidad_principal':
+                configuration['street1'] ?? catalogNode?.primaryStreet,
+            'vialidad_transversal':
+                configuration['street2'] ?? catalogNode?.secondaryStreet,
+            'latitud': catalogNode?.latitude,
+            'longitud': catalogNode?.longitude,
+            'plan_activo': configuration['mode'] ?? catalogNode?.activePlan,
+            'horario_inicio':
+                configuration['start'] ?? catalogNode?.scheduleStart,
+            'horario_fin': configuration['end'] ?? catalogNode?.scheduleEnd,
+            'horario_estado':
+                configuration['schedule'] ?? catalogNode?.scheduleStatus,
+            'estado_operativo': 'online',
+            'configuracion': configuration,
+          }),
+        )
+        .timeout(const Duration(seconds: 8));
+    final body = _decode(response.body);
+    if (![200, 201].contains(response.statusCode)) {
+      throw Exception(_message(body, 'No se pudo sincronizar el crucero.'));
+    }
+    final raw = body['data'];
+    if (raw is! Map) throw Exception('Respuesta inválida del catálogo.');
+    return SemaforoNode.fromJson(Map<String, dynamic>.from(raw));
   }
 
   Future<SemaforoPriorityRequest> requestPriority(

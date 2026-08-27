@@ -107,5 +107,9 @@
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>Usamos esta función para guardar evidencias o archivos generados por la aplicación en tu dispositivo.</string>
 
+	<!-- Bluetooth -->
+	<key>NSBluetoothAlwaysUsageDescription</key>
+	<string>Bluetooth se utiliza para comunicarse con dispositivos cercanos necesarios para las funciones operativas de Seguridad Vial.</string>
+
 </dict>
 </plist>

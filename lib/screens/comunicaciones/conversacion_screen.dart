@@ -10,6 +10,7 @@ import '../../models/comunicacion_adjunto.dart';
 import '../../models/comunicacion_usuario.dart';
 import '../../services/comunicacion_notification_service.dart';
 import '../../services/comunicacion_service.dart';
+import '../../services/comunicacion_sound_service.dart';
 
 class ConversacionScreen extends StatefulWidget {
   final ComunicacionService service;
@@ -311,6 +312,8 @@ class _ConversacionScreenState extends State<ConversacionScreen> {
       });
 
       _scrollAlFinal();
+
+      await ComunicacionSoundService.enviado();
 
       await _cargarConversacion(silencioso: true);
     } on ComunicacionApiException catch (e) {

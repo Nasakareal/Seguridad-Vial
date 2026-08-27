@@ -109,14 +109,21 @@ class SemaforoBleService {
     timeout: const Duration(seconds: 10),
   );
 
+  Future<String> queryConfiguration(String route) => sendAndWait(
+    'CONFIG|$route',
+    const ['CONFIG_ACK|', 'REJECT|'],
+    timeout: const Duration(seconds: 10),
+  );
+
   Future<String> sendAndWait(
     String command,
     List<String> prefixes, {
     Duration timeout = const Duration(seconds: 6),
   }) async {
     final characteristic = _rx;
-    if (characteristic == null)
+    if (characteristic == null) {
       throw Exception('Primero conecta el Heltec móvil.');
+    }
     final response = messages.firstWhere(
       (value) => prefixes.any(value.startsWith),
     );

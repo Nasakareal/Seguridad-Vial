@@ -11,6 +11,7 @@ import '../core/globals.dart';
 import '../core/platform_support.dart';
 import '../firebase_options.dart';
 import '../services/auth_service.dart';
+import '../services/comunicacion_notification_service.dart';
 import '../services/push_service.dart';
 import '../services/offline_sync_service.dart';
 import '../services/tracking_service.dart';
@@ -76,6 +77,14 @@ Future<bool> bootstrapApp({required void Function(String step) onStep}) async {
         const Duration(seconds: 10),
         onTimeout: () =>
             throw Exception('TIMEOUT: initLocalNotifications tardó demasiado.'),
+      );
+
+      onStep('Inicializando mensajes y comunicaciones...');
+      await ComunicacionNotificationService.instance.inicializar().timeout(
+        const Duration(seconds: 10),
+        onTimeout: () => throw Exception(
+          'TIMEOUT: las notificaciones de comunicaciones tardaron demasiado.',
+        ),
       );
     } else if (isDesktopTestPlatform) {
       onStep('Modo prueba desktop: notificaciones desactivadas.');

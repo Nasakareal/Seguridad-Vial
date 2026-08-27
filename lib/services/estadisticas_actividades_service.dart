@@ -98,6 +98,19 @@ class EstadisticasActividadesService {
     return (data as Map).cast<String, dynamic>();
   }
 
+  Future<Map<String, dynamic>> resumenCategorias({
+    Map<String, dynamic>? params,
+  }) async {
+    final uri = _u('/estadisticas-actividades/resumen/categorias', params);
+    final res = await http.get(uri, headers: await _headersJson());
+    if (res.statusCode != 200) {
+      throw _err(res, 'No se pudo cargar el resumen por categoría.');
+    }
+
+    final data = _decodeJson(res);
+    return (data as Map).cast<String, dynamic>();
+  }
+
   Future<Map<String, dynamic>> actividades({
     Map<String, dynamic>? params,
   }) async {

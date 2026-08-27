@@ -5,6 +5,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 import '../core/globals.dart';
 import '../core/safe_payload.dart';
+import '../services/comunicacion_notification_service.dart';
 import 'push_handlers.dart';
 
 const AndroidNotificationChannel svAlertasChannel = AndroidNotificationChannel(
@@ -47,6 +48,12 @@ Future<void> initLocalNotifications() async {
     initSettings,
     onDidReceiveNotificationResponse: (NotificationResponse resp) {
       final data = safeDecodePayload(resp.payload);
+      if (_esPayloadComunicacion(data)) {
+        ComunicacionNotificationService.instance.procesarPayloadAbierto(
+          resp.payload,
+        );
+        return;
+      }
       if (data.isNotEmpty) handlePushTap(data);
     },
   );
@@ -58,7 +65,13 @@ Future<void> initLocalNotifications() async {
   );
   if (launchDetails?.didNotificationLaunchApp == true &&
       launchData.isNotEmpty) {
-    queuePushTap(launchData);
+    if (_esPayloadComunicacion(launchData)) {
+      ComunicacionNotificationService.instance.procesarPayloadAbierto(
+        launchDetails?.notificationResponse?.payload,
+      );
+    } else {
+      queuePushTap(launchData);
+    }
   }
 
   final androidPlugin = localNotifications
@@ -70,4 +83,12 @@ Future<void> initLocalNotifications() async {
     await androidPlugin.createNotificationChannel(svAlertasChannel);
     await androidPlugin.createNotificationChannel(svGuardiaChannel);
   }
+}
+
+bool _esPayloadComunicacion(Map<String, dynamic> data) {
+  final modulo = data['modulo']?.toString().trim().toLowerCase();
+  return modulo == 'comunicaciones' ||
+      modulo == 'comunicacion' ||
+      data.containsKey('comunicacion_id') ||
+      data.containsKey('remitente_user_id');
 }

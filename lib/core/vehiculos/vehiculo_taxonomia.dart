@@ -90,6 +90,26 @@ class VehiculoTaxonomia {
     return carrocerias[tipoGeneral] ?? const [];
   }
 
+  static bool esTipoGeneral(String? value) {
+    final normalized = value?.trim().toLowerCase() ?? '';
+    return tiposGenerales.any((item) => item['value'] == normalized);
+  }
+
+  static String etiquetaTipoGeneral(String? value) {
+    final normalized = value?.trim().toLowerCase() ?? '';
+    for (final item in tiposGenerales) {
+      if (item['value'] == normalized) {
+        return item['label'] ?? normalized;
+      }
+    }
+
+    if (normalized == 'otro' || normalized == 'otros') return 'Otro';
+    if (normalized == 'no especificado' || normalized.isEmpty) {
+      return 'No especificado';
+    }
+    return _titleCase(value?.trim() ?? '');
+  }
+
   static String normalizeCarroceria(String raw) {
     final s = raw.trim().toLowerCase();
 
