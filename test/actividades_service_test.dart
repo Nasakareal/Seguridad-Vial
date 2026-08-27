@@ -249,6 +249,99 @@ void main() {
     );
   });
 
+  test('identifies Al corralón and serializes its infringement', () {
+    expect(ActividadesService.isAlCorralonCategoria('AL CORRALÓN'), isTrue);
+    expect(ActividadesService.isAlCorralonCategoria('Operativos'), isFalse);
+
+    const fundamento = ConduceLegalidadFundamento(
+      id: 31,
+      codigo: 'ART-31',
+      nombre: 'Abandono de vehículo',
+      puntos: 0,
+      retencionVehiculo: true,
+    );
+    const data = ActividadUpsertData(
+      actividadCategoriaId: 10,
+      actividadSubcategoriaId: 101,
+      isAlCorralon: true,
+      actividadInfracciones: <ConduceLegalidadFundamento>[fundamento],
+    );
+
+    expect(
+      data.toFields()['actividad_infracciones[0][licencia_punto_infraccion_id]'],
+      '31',
+    );
+    expect(
+      data.toFields().keys.any((key) => key.startsWith('conduce_legalidad_')),
+      isFalse,
+    );
+  });
+
+  test('recognizes Al corralón from category or its known subcategories', () {
+    expect(
+      ActividadesService.isAlCorralonActivity(
+        categoria: 'AL CORRALÓN',
+        subcategoria: 'POR ABANDONO',
+      ),
+      isTrue,
+    );
+    expect(
+      ActividadesService.isAlCorralonActivity(
+        categoria: null,
+        subcategoria: 'FALTA ADMINISTRATIVA',
+      ),
+      isTrue,
+    );
+    expect(
+      ActividadesService.isAlCorralonActivity(
+        categoria: 'OPERATIVOS',
+        subcategoria: 'CONDUCE CON LEGALIDAD',
+      ),
+      isFalse,
+    );
+  });
+
+  test('requires an infringement for Al corralón', () async {
+    const data = ActividadUpsertData(
+      actividadCategoriaId: 10,
+      actividadSubcategoriaId: 101,
+      isAlCorralon: true,
+    );
+
+    final issues = await ActividadesService.validateBeforeSubmitIssues(
+      data: data,
+      fotos: const <File>[],
+      requirePhotos: false,
+      requireCoords: false,
+      requireTimestamp: false,
+    );
+
+    expect(
+      issues.any((issue) => issue.message.contains('Al corralón')),
+      isTrue,
+    );
+  });
+
+  test('recognizes the small abandonment subset', () {
+    const abandono = ConduceLegalidadFundamento(
+      id: 1,
+      codigo: 'ART642_FIII_OBJETOS_RESIDUOS_CIRCULACION',
+      nombre: 'Abandonar objetos que entorpezcan la circulación',
+      puntos: 0,
+      retencionVehiculo: true,
+    );
+    const placas = ConduceLegalidadFundamento(
+      id: 2,
+      codigo: 'ART477_PLACAS',
+      nombre: 'Circular sin placas',
+      puntos: 0,
+      retencionVehiculo: true,
+    );
+
+    expect(ActividadesService.isFundamentoCorralonAbandono(abandono), isTrue);
+    expect(ActividadesService.isFundamentoCorralonAbandono(placas), isFalse);
+  });
+
   test('requires a foundation and at most one vehicle for Conduce', () async {
     const vehiculo = ActividadVehiculo(
       marca: 'HONDA',

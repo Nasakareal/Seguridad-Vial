@@ -36,6 +36,7 @@ class ConduceLegalidadMeta {
   final String operativoNombre;
   final ConduceLegalidadAbilities abilities;
   final List<ConduceLegalidadFundamento> fundamentosCorralon;
+  final List<ConduceLegalidadFundamento> fundamentosActividadCorralon;
   final List<ConduceLegalidadFundamento> fundamentosPersona;
   final List<ConduceLegalidadRef> unidades;
   final List<ConduceLegalidadRef> delegaciones;
@@ -44,6 +45,7 @@ class ConduceLegalidadMeta {
     required this.operativoNombre,
     required this.abilities,
     required this.fundamentosCorralon,
+    this.fundamentosActividadCorralon = const <ConduceLegalidadFundamento>[],
     required this.fundamentosPersona,
     this.unidades = const <ConduceLegalidadRef>[],
     this.delegaciones = const <ConduceLegalidadRef>[],
@@ -69,12 +71,20 @@ class ConduceLegalidadMeta {
         data['fundamentos_persona'],
       ).map((item) => ConduceLegalidadFundamento.fromJson(_map(item))),
     ).where((item) => item.aplicaSancionPersona).toList();
+    final fundamentosActividadCorralon = _expandirFundamentosOperativos(
+      _list(
+        data['fundamentos_actividad_corralon'],
+      ).map((item) => ConduceLegalidadFundamento.fromJson(_map(item))),
+    ).toList();
 
     return ConduceLegalidadMeta(
       operativoNombre:
           _str(data['operativo_nombre']) ?? 'Operativo conduce con legalidad',
       abilities: ConduceLegalidadAbilities.fromJson(_map(data['abilities'])),
       fundamentosCorralon: fundamentos,
+      fundamentosActividadCorralon: fundamentosActividadCorralon.isNotEmpty
+          ? fundamentosActividadCorralon
+          : fundamentosExpanded.toList(),
       fundamentosPersona: fundamentosPersonaPayload.isNotEmpty
           ? fundamentosPersonaPayload
           : fundamentos.where((item) => item.aplicaSancionPersona).toList(),
@@ -353,15 +363,21 @@ class ConduceLegalidadFundamento {
     final ambito = (ambitoVehiculo ?? '').trim();
     if (tipo.isEmpty || ambito.isEmpty || ambito == 'general') return true;
 
+    if (tipo == ambito) return true;
+
     if (tipo == 'motocicleta') return ambito == 'motocicleta';
     if (tipo == 'bicicleta' || tipo == 'no_motorizado') {
       return ambito == 'no_motorizado';
     }
-    if (tipo == 'camion' || tipo == 'remolque') {
+    if (tipo == 'camion' || tipo == 'remolque' || tipo == 'maquinaria') {
       return ambito == 'carga' || ambito == 'sustancias_peligrosas';
     }
 
-    return ambito == 'automovil';
+    if (tipo == 'automovil' || tipo == 'camioneta') {
+      return ambito == 'automovil';
+    }
+
+    return false;
   }
 
   String get sancionResumen {

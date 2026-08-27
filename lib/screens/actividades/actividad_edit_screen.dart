@@ -62,6 +62,7 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
   String? _conduceMetaError;
   ConduceLegalidadFundamento? _fundamentoConduce;
   final List<ConduceLegalidadFundamento?> _fundamentosConduceAdicionales = [];
+  String? _corralonTipoVehiculo;
 
   final _fechaCtrl = TextEditingController();
   final _horaCtrl = TextEditingController();
@@ -256,12 +257,19 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
     _elementosCtrl.text = a.elementosParticipantesTexto ?? '';
     _patrullasCtrl.text = a.patrullasParticipantesTexto ?? '';
     _fillFomentoControllers(a.fomentoCulturaVialDetalle);
-    _fundamentoConduce = a.conduceLegalidadFundamentos.isEmpty
+    final fundamentosActividad =
+        ActividadesService.isAlCorralonCategoria(a.categoria?.nombre)
+        ? a.infraccionesActividad
+        : a.conduceLegalidadFundamentos;
+    _fundamentoConduce = fundamentosActividad.isEmpty
         ? null
-        : a.conduceLegalidadFundamentos.first;
+        : fundamentosActividad.first;
     _fundamentosConduceAdicionales
       ..clear()
-      ..addAll(a.conduceLegalidadFundamentos.skip(1));
+      ..addAll(fundamentosActividad.skip(1));
+    _corralonTipoVehiculo = a.vehiculos.isEmpty
+        ? null
+        : a.vehiculos.first.tipoGeneral;
     _syncFomentoTotal();
   }
 
@@ -452,6 +460,14 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
     );
   }
 
+  bool get _isAlCorralon {
+    return ActividadesService.isAlCorralonCategoria(
+      _selectedCategoria()?.nombre,
+    );
+  }
+
+  bool get _usesInfraccionSelector => _isConduceLegalidad || _isAlCorralon;
+
   List<ConduceLegalidadFundamento> get _fundamentosConduceSeleccionados => [
     if (_fundamentoConduce != null) _fundamentoConduce!,
     ..._fundamentosConduceAdicionales.whereType<ConduceLegalidadFundamento>(),
@@ -462,8 +478,35 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
     ..._fundamentosConduceAdicionales,
   ];
 
+  List<ConduceLegalidadFundamento> get _catalogoInfracciones {
+    final meta = _conduceMeta;
+    final items =
+        meta?.fundamentosCorralon ?? const <ConduceLegalidadFundamento>[];
+    if (_isAlCorralon) {
+      var result = meta?.fundamentosActividadCorralon ?? items;
+      if (ActividadesService.isCorralonAbandonoSubcategoria(
+        _selectedSubcategoria()?.nombre,
+      )) {
+        final abandono = result
+            .where(ActividadesService.isFundamentoCorralonAbandono)
+            .toList();
+        if (abandono.isNotEmpty) result = abandono;
+      }
+      final tipo = _corralonTipoVehiculo;
+      if ((tipo ?? '').isNotEmpty) {
+        result = result
+            .where((item) => item.aplicaParaTipoGeneral(tipo))
+            .toList();
+      }
+      return result;
+    }
+    return items.where((item) => item.aplicaConduceLegalidadMotos).toList();
+  }
+
   Future<void> _ensureConduceMeta() async {
-    if (!_isConduceLegalidad || _loadingConduceMeta || _conduceMeta != null) {
+    if (!_usesInfraccionSelector ||
+        _loadingConduceMeta ||
+        _conduceMeta != null) {
       return;
     }
     setState(() {
@@ -471,7 +514,9 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
       _conduceMetaError = null;
     });
     try {
-      final meta = await ConduceLegalidadService.fetchMeta();
+      final meta = await ConduceLegalidadService.fetchMeta(
+        filterConduceLegalidadMotos: false,
+      );
       if (!mounted) return;
       setState(() {
         _conduceMeta = meta;
@@ -487,12 +532,13 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
   }
 
   void _handleConduceSubcategoriaChanged() {
-    if (_isConduceLegalidad) {
+    if (_usesInfraccionSelector) {
       unawaited(_ensureConduceMeta());
       return;
     }
     _fundamentoConduce = null;
     _fundamentosConduceAdicionales.clear();
+    _corralonTipoVehiculo = null;
   }
 
   List<ActividadFomentoPrograma> get _fomentoProgramas {
@@ -679,6 +725,10 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
       fomento: fomento,
       isConduceLegalidad: _isConduceLegalidad,
       conduceLegalidadFundamentos: _isConduceLegalidad
+          ? _fundamentosConduceSeleccionados
+          : const <ConduceLegalidadFundamento>[],
+      isAlCorralon: _isAlCorralon,
+      actividadInfracciones: _isAlCorralon
           ? _fundamentosConduceSeleccionados
           : const <ConduceLegalidadFundamento>[],
     );
@@ -956,6 +1006,41 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _error = 'No se pudo desvincular el vehiculo.\n$e');
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  Future<void> _editarVehiculo(ActividadVehiculo vehiculo) async {
+    final a = _actividad;
+    final vehiculoId = vehiculo.id;
+    if (a == null || vehiculoId == null || _saving) return;
+
+    final editado = await showActividadVehiculoModal(
+      context,
+      initialVehiculo: vehiculo,
+    );
+    if (editado == null || !mounted) return;
+
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
+
+    try {
+      final updated = await ActividadesService.updateVehiculo(
+        actividadId: a.id,
+        vehiculoId: vehiculoId,
+        vehiculo: editado,
+      );
+      if (!mounted) return;
+      setState(() => _actividad = updated);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Vehículo actualizado correctamente.')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _error = 'No se pudo actualizar el vehículo.\n$e');
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -1301,6 +1386,7 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
                             ActividadValidationTarget.subcategoria,
                           );
                         });
+                        _handleConduceSubcategoriaChanged();
                         _syncFomentoTotal();
                         if (v == null) {
                           _clearNarrativaTemplateIfCurrent();
@@ -1708,17 +1794,32 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
               const SizedBox(height: 12),
 
               if (!_useFomentoUserLayout) ...[
-                if (_isConduceLegalidad) ...[
+                if (_usesInfraccionSelector) ...[
                   _card(
-                    title: 'Fundamentos legales',
+                    title: _isAlCorralon
+                        ? 'Infracción para la remisión'
+                        : 'Fundamentos legales',
                     child: ActividadConduceLegalidadPanel(
                       loading: _loadingConduceMeta,
                       error: _conduceMetaError,
-                      catalogo:
-                          _conduceMeta?.fundamentosCorralon ??
-                          const <ConduceLegalidadFundamento>[],
+                      catalogo: _catalogoInfracciones,
                       seleccionados: _fundamentosConduceEstado,
                       enabled: !_saving,
+                      introText: _isAlCorralon
+                          ? 'Selecciona la infracción que motivó la remisión. Puedes añadir otra sin hacer más grande el formulario.'
+                          : 'Esta actividad también alimentará el operativo activo de Conduce con Legalidad de tu unidad y delegación.',
+                      fieldLabel: _isAlCorralon
+                          ? 'Infracción'
+                          : 'Fundamento legal',
+                      showVehicleTypeFilter: _isAlCorralon,
+                      vehicleType: _corralonTipoVehiculo,
+                      onVehicleTypeChanged: (value) {
+                        setState(() {
+                          _corralonTipoVehiculo = value;
+                          _fundamentoConduce = null;
+                          _fundamentosConduceAdicionales.clear();
+                        });
+                      },
                       onRetry: _ensureConduceMeta,
                       onPrincipalChanged: (value) {
                         setState(() => _fundamentoConduce = value);
@@ -1792,6 +1893,9 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
                         ...a.vehiculos.map((vehiculo) {
                           return ActividadVehiculoCard(
                             vehiculo: vehiculo,
+                            onEdit: _saving || vehiculo.id == null
+                                ? null
+                                : () => _editarVehiculo(vehiculo),
                             onRemove: _saving || vehiculo.id == null
                                 ? null
                                 : () => _quitarVehiculo(vehiculo),

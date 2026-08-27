@@ -77,6 +77,7 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
   String? _conduceMetaError;
   ConduceLegalidadFundamento? _fundamentoConduce;
   final List<ConduceLegalidadFundamento?> _fundamentosConduceAdicionales = [];
+  String? _corralonTipoVehiculo;
 
   final _fechaCtrl = TextEditingController();
   final _horaCtrl = TextEditingController();
@@ -820,6 +821,14 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
     );
   }
 
+  bool get _isAlCorralon {
+    return ActividadesService.isAlCorralonCategoria(
+      _selectedCategoria()?.nombre,
+    );
+  }
+
+  bool get _usesInfraccionSelector => _isConduceLegalidad || _isAlCorralon;
+
   List<ConduceLegalidadFundamento> get _fundamentosConduceSeleccionados => [
     if (_fundamentoConduce != null) _fundamentoConduce!,
     ..._fundamentosConduceAdicionales.whereType<ConduceLegalidadFundamento>(),
@@ -830,8 +839,35 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
     ..._fundamentosConduceAdicionales,
   ];
 
+  List<ConduceLegalidadFundamento> get _catalogoInfracciones {
+    final meta = _conduceMeta;
+    final items =
+        meta?.fundamentosCorralon ?? const <ConduceLegalidadFundamento>[];
+    if (_isAlCorralon) {
+      var result = meta?.fundamentosActividadCorralon ?? items;
+      if (ActividadesService.isCorralonAbandonoSubcategoria(
+        _selectedSubcategoria()?.nombre,
+      )) {
+        final abandono = result
+            .where(ActividadesService.isFundamentoCorralonAbandono)
+            .toList();
+        if (abandono.isNotEmpty) result = abandono;
+      }
+      final tipo = _corralonTipoVehiculo;
+      if ((tipo ?? '').isNotEmpty) {
+        result = result
+            .where((item) => item.aplicaParaTipoGeneral(tipo))
+            .toList();
+      }
+      return result;
+    }
+    return items.where((item) => item.aplicaConduceLegalidadMotos).toList();
+  }
+
   Future<void> _ensureConduceMeta() async {
-    if (!_isConduceLegalidad || _loadingConduceMeta || _conduceMeta != null) {
+    if (!_usesInfraccionSelector ||
+        _loadingConduceMeta ||
+        _conduceMeta != null) {
       return;
     }
     setState(() {
@@ -839,7 +875,9 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
       _conduceMetaError = null;
     });
     try {
-      final meta = await ConduceLegalidadService.fetchMeta();
+      final meta = await ConduceLegalidadService.fetchMeta(
+        filterConduceLegalidadMotos: false,
+      );
       if (!mounted) return;
       setState(() {
         _conduceMeta = meta;
@@ -871,12 +909,13 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
   }
 
   void _clearConduceSelectionIfNeeded() {
-    if (_isConduceLegalidad) {
+    if (_usesInfraccionSelector) {
       unawaited(_ensureConduceMeta());
       return;
     }
     _fundamentoConduce = null;
     _fundamentosConduceAdicionales.clear();
+    _corralonTipoVehiculo = null;
   }
 
   List<ActividadFomentoPrograma> get _fomentoProgramas {
@@ -1339,6 +1378,10 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
       conduceLegalidadFundamentos: _isConduceLegalidad
           ? _fundamentosConduceSeleccionados
           : const <ConduceLegalidadFundamento>[],
+      isAlCorralon: _isAlCorralon,
+      actividadInfracciones: _isAlCorralon
+          ? _fundamentosConduceSeleccionados
+          : const <ConduceLegalidadFundamento>[],
       vehiculos: _useFomentoUserLayout
           ? const <ActividadVehiculo>[]
           : List<ActividadVehiculo>.from(_vehiculos),
@@ -1361,8 +1404,25 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
 
     setState(() {
       _vehiculos.add(vehiculo);
+      if (_isAlCorralon &&
+          _corralonTipoVehiculo == null &&
+          _fundamentosConduceSeleccionados.isEmpty) {
+        _corralonTipoVehiculo = vehiculo.tipoGeneral;
+      }
       _removeFieldError(ActividadValidationTarget.vehiculos);
     });
+    _draft.notifyChanged();
+  }
+
+  Future<void> _editarVehiculo(int index) async {
+    if (_saving || index < 0 || index >= _vehiculos.length) return;
+    final vehiculo = await showActividadVehiculoModal(
+      context,
+      initialVehiculo: _vehiculos[index],
+    );
+    if (vehiculo == null || !mounted) return;
+
+    setState(() => _vehiculos[index] = vehiculo);
     _draft.notifyChanged();
   }
 
@@ -1811,6 +1871,7 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
                           ActividadValidationTarget.subcategoria,
                         );
                       });
+                      _clearConduceSelectionIfNeeded();
                       _syncFomentoTotal();
                       if (v == null) {
                         _clearNarrativaTemplateIfCurrent();
@@ -2295,17 +2356,33 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
             const SizedBox(height: 12),
 
             if (!_useFomentoUserLayout) ...[
-              if (_isConduceLegalidad) ...[
+              if (_usesInfraccionSelector) ...[
                 _card(
-                  title: 'Fundamentos legales',
+                  title: _isAlCorralon
+                      ? 'Infracción para la remisión'
+                      : 'Fundamentos legales',
                   child: ActividadConduceLegalidadPanel(
                     loading: _loadingConduceMeta,
                     error: _conduceMetaError,
-                    catalogo:
-                        _conduceMeta?.fundamentosCorralon ??
-                        const <ConduceLegalidadFundamento>[],
+                    catalogo: _catalogoInfracciones,
                     seleccionados: _fundamentosConduceEstado,
                     enabled: !_saving,
+                    introText: _isAlCorralon
+                        ? 'Selecciona la infracción que motivó la remisión. Puedes añadir otra sin hacer más grande el formulario.'
+                        : 'Esta actividad también alimentará el operativo activo de Conduce con Legalidad de tu unidad y delegación.',
+                    fieldLabel: _isAlCorralon
+                        ? 'Infracción'
+                        : 'Fundamento legal',
+                    showVehicleTypeFilter: _isAlCorralon,
+                    vehicleType: _corralonTipoVehiculo,
+                    onVehicleTypeChanged: (value) {
+                      setState(() {
+                        _corralonTipoVehiculo = value;
+                        _fundamentoConduce = null;
+                        _fundamentosConduceAdicionales.clear();
+                      });
+                      _draft.notifyChanged();
+                    },
                     onRetry: _ensureConduceMeta,
                     onPrincipalChanged: (value) {
                       setState(() => _fundamentoConduce = value);
@@ -2380,6 +2457,9 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
                       ..._vehiculos.asMap().entries.map((entry) {
                         return ActividadVehiculoCard(
                           vehiculo: entry.value,
+                          onEdit: _saving
+                              ? null
+                              : () => _editarVehiculo(entry.key),
                           onRemove: _saving
                               ? null
                               : () => _quitarVehiculo(entry.key),

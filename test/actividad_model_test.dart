@@ -3,6 +3,29 @@ import 'package:seguridad_vial_app/models/actividad.dart';
 
 void main() {
   group('Actividad', () {
+    test('permite enviar campos vacíos al editar un vehículo', () {
+      const vehiculo = ActividadVehiculo(
+        id: 15,
+        marca: 'NISSAN',
+        tipo: 'Sedán',
+        linea: 'VERSA',
+        color: 'BLANCO',
+        capacidadPersonas: 5,
+        tipoServicio: 'PARTICULAR',
+        antecedenteVehiculo: false,
+      );
+
+      expect(vehiculo.toApiJson(), isNot(contains('grua_id')));
+      expect(
+        vehiculo.toApiJson(includeNulls: true),
+        containsPair('grua_id', null),
+      );
+      expect(
+        vehiculo.toApiJson(includeNulls: true),
+        containsPair('corralon', null),
+      );
+    });
+
     test('normaliza la hora recibida del backend', () {
       expect(Actividad.fromJson({'id': 1, 'hora': '09:30:00'}).hora, '09:30');
       expect(
@@ -36,6 +59,23 @@ void main() {
       expect(actividad.toJson()['created_by'], 42);
     });
 
+    test('identifica si el creador pertenece a Siniestros', () {
+      final actividad = Actividad.fromJson({
+        'id': 8,
+        'created_by': 42,
+        'creador_unidad_id': 1,
+        'unidad': {'id': 2, 'nombre': 'Delegaciones'},
+      });
+      final actividadOtraUnidad = Actividad.fromJson({
+        'id': 9,
+        'creador_unidad_id': 3,
+        'unidad': {'id': 1, 'nombre': 'Siniestros'},
+      });
+
+      expect(actividad.creadaPorUnidadSiniestros, isTrue);
+      expect(actividadOtraUnidad.creadaPorUnidadSiniestros, isFalse);
+    });
+
     test('lee el vínculo y fundamentos de Conduce con Legalidad', () {
       final actividad = Actividad.fromJson({
         'id': 11,
@@ -60,6 +100,25 @@ void main() {
         actividad.toJson()['conduce_legalidad_fundamentos'],
         isA<List<dynamic>>(),
       );
+    });
+
+    test('lee las infracciones propias de una actividad Al corralón', () {
+      final actividad = Actividad.fromJson({
+        'id': 12,
+        'infracciones_actividad': [
+          {
+            'id': 9,
+            'codigo': 'ART-9',
+            'nombre': 'Abandono',
+            'fundamento_legal': 'Artículo 9',
+            'retencion_vehiculo': true,
+          },
+        ],
+      });
+
+      expect(actividad.infraccionesActividad, hasLength(1));
+      expect(actividad.infraccionesActividad.single.codigo, 'ART-9');
+      expect(actividad.toJson()['infracciones_actividad'], hasLength(1));
     });
   });
 }

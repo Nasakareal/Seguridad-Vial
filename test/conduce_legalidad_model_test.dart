@@ -490,6 +490,51 @@ void main() {
     expect(meta.fundamentosCorralon.map((item) => item.id).toSet(), {20});
   });
 
+  test('meta keeps the full general catalog for Al corralón activities', () {
+    final meta = ConduceLegalidadMeta.fromJson({
+      'data': {
+        'abilities': {'can_feed': true},
+        'fundamentos_corralon': [
+          {
+            'id': 1,
+            'nombre': 'Solo motocicleta',
+            'retencion_vehiculo': true,
+            'ambito_vehiculo': 'motocicleta',
+          },
+        ],
+        'fundamentos_actividad_corralon': [
+          {
+            'id': 2,
+            'nombre': 'Automóvil sin placas',
+            'retencion_vehiculo': true,
+            'ambito_vehiculo': 'automovil',
+          },
+          {
+            'id': 3,
+            'nombre': 'Falta general',
+            'retencion_vehiculo': true,
+            'ambito_vehiculo': 'general',
+          },
+        ],
+      },
+    });
+
+    expect(meta.fundamentosCorralon.single.id, 1);
+    expect(meta.fundamentosActividadCorralon.map((item) => item.id), [2, 3]);
+    expect(
+      meta.fundamentosActividadCorralon.first.aplicaParaTipoGeneral(
+        'camioneta',
+      ),
+      isTrue,
+    );
+    expect(
+      meta.fundamentosActividadCorralon.first.aplicaParaTipoGeneral(
+        'motocicleta',
+      ),
+      isFalse,
+    );
+  });
+
   test('meta separates combined motorcycle capacity and helmet fundamentos', () {
     final meta = ConduceLegalidadMeta.fromJson({
       'data': {

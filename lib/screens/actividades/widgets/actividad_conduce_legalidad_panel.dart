@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../models/conduce_legalidad.dart';
+import '../../../core/vehiculos/vehiculo_taxonomia.dart';
 
 class ActividadConduceLegalidadPanel extends StatelessWidget {
   final bool loading;
@@ -13,6 +14,11 @@ class ActividadConduceLegalidadPanel extends StatelessWidget {
   final void Function(int, ConduceLegalidadFundamento?) onAdicionalChanged;
   final ValueChanged<int> onRemoveAdicional;
   final VoidCallback onAdd;
+  final String introText;
+  final String fieldLabel;
+  final bool showVehicleTypeFilter;
+  final String? vehicleType;
+  final ValueChanged<String?>? onVehicleTypeChanged;
 
   const ActividadConduceLegalidadPanel({
     super.key,
@@ -26,6 +32,12 @@ class ActividadConduceLegalidadPanel extends StatelessWidget {
     required this.onAdicionalChanged,
     required this.onRemoveAdicional,
     required this.onAdd,
+    this.introText =
+        'Esta actividad también alimentará el operativo activo de Conduce con Legalidad de tu unidad y delegación.',
+    this.fieldLabel = 'Fundamento legal',
+    this.showVehicleTypeFilter = false,
+    this.vehicleType,
+    this.onVehicleTypeChanged,
   });
 
   String _key(ConduceLegalidadFundamento item) =>
@@ -90,48 +102,43 @@ class ActividadConduceLegalidadPanel extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          'Esta actividad también alimentará el operativo activo de Conduce '
-          'con Legalidad de tu unidad y delegación.',
-        ),
+        Text(introText),
         const SizedBox(height: 12),
-        DropdownButtonFormField<ConduceLegalidadFundamento?>(
-          value: principalValue,
-          isExpanded: true,
-          itemHeight: null,
-          menuMaxHeight: MediaQuery.of(context).size.height * .55,
-          decoration: const InputDecoration(
-            labelText: 'Fundamento legal',
-            border: OutlineInputBorder(),
-            prefixIcon: Icon(Icons.gavel_outlined),
+        if (showVehicleTypeFilter) ...[
+          DropdownButtonFormField<String?>(
+            value: vehicleType,
+            isExpanded: true,
+            decoration: const InputDecoration(
+              labelText: 'Tipo de vehículo',
+              border: OutlineInputBorder(),
+              prefixIcon: Icon(Icons.directions_car_outlined),
+            ),
+            items: [
+              const DropdownMenuItem<String?>(
+                value: null,
+                child: Text('Todos los tipos'),
+              ),
+              ...VehiculoTaxonomia.tiposGenerales.map(
+                (item) => DropdownMenuItem<String?>(
+                  value: item['value'],
+                  child: Text(item['label'] ?? item['value'] ?? ''),
+                ),
+              ),
+              const DropdownMenuItem<String?>(
+                value: 'transporte_publico',
+                child: Text('Transporte público'),
+              ),
+            ],
+            onChanged: enabled ? onVehicleTypeChanged : null,
           ),
-          selectedItemBuilder: (context) => [
-            const Text(
-              'Seleccione un fundamento...',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-            ...principalOptions.map(
-              (item) => Text(
-                item.display,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-          ],
-          items: [
-            const DropdownMenuItem<ConduceLegalidadFundamento?>(
-              value: null,
-              child: Text('Seleccione un fundamento...'),
-            ),
-            ...principalOptions.map(
-              (item) => DropdownMenuItem<ConduceLegalidadFundamento?>(
-                value: item,
-                child: _FundamentoMenuOption(fundamento: item),
-              ),
-            ),
-          ],
-          onChanged: enabled ? onPrincipalChanged : null,
+          const SizedBox(height: 10),
+        ],
+        _FundamentoPickerField(
+          value: principalValue,
+          options: principalOptions,
+          label: fieldLabel,
+          enabled: enabled,
+          onChanged: onPrincipalChanged,
         ),
         if (principal != null) ...[
           const SizedBox(height: 8),
@@ -151,45 +158,13 @@ class ActividadConduceLegalidadPanel extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Expanded(
-                  child: DropdownButtonFormField<ConduceLegalidadFundamento?>(
+                  child: _FundamentoPickerField(
                     value: value,
-                    isExpanded: true,
-                    itemHeight: null,
-                    menuMaxHeight: MediaQuery.of(context).size.height * .55,
-                    decoration: InputDecoration(
-                      labelText: 'Fundamento adicional $actualIndex',
-                      border: const OutlineInputBorder(),
-                      prefixIcon: const Icon(Icons.gavel_outlined),
-                    ),
-                    selectedItemBuilder: (context) => [
-                      const Text(
-                        'Seleccione un fundamento...',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      ...options.map(
-                        (item) => Text(
-                          item.display,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    ],
-                    items: [
-                      const DropdownMenuItem<ConduceLegalidadFundamento?>(
-                        value: null,
-                        child: Text('Seleccione un fundamento...'),
-                      ),
-                      ...options.map(
-                        (item) => DropdownMenuItem<ConduceLegalidadFundamento?>(
-                          value: item,
-                          child: _FundamentoMenuOption(fundamento: item),
-                        ),
-                      ),
-                    ],
-                    onChanged: enabled
-                        ? (value) => onAdicionalChanged(actualIndex - 1, value)
-                        : null,
+                    options: options,
+                    label: 'Fundamento adicional $actualIndex',
+                    enabled: enabled,
+                    onChanged: (value) =>
+                        onAdicionalChanged(actualIndex - 1, value),
                   ),
                 ),
                 IconButton(
@@ -224,36 +199,214 @@ class ActividadConduceLegalidadPanel extends StatelessWidget {
   }
 }
 
-class _FundamentoMenuOption extends StatelessWidget {
-  final ConduceLegalidadFundamento fundamento;
+class _FundamentoPickerField extends StatelessWidget {
+  final ConduceLegalidadFundamento? value;
+  final List<ConduceLegalidadFundamento> options;
+  final String label;
+  final bool enabled;
+  final ValueChanged<ConduceLegalidadFundamento?> onChanged;
 
-  const _FundamentoMenuOption({required this.fundamento});
+  const _FundamentoPickerField({
+    required this.value,
+    required this.options,
+    required this.label,
+    required this.enabled,
+    required this.onChanged,
+  });
+
+  Future<void> _open(BuildContext context) async {
+    final selected = await showModalBottomSheet<ConduceLegalidadFundamento>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (_) => _FundamentoSearchSheet(options: options, title: label),
+    );
+    if (selected != null) onChanged(selected);
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(vertical: 12),
-      decoration: BoxDecoration(
-        border: Border(bottom: BorderSide(color: Colors.grey.shade300)),
+    return InkWell(
+      onTap: enabled && options.isNotEmpty ? () => _open(context) : null,
+      borderRadius: BorderRadius.circular(4),
+      child: InputDecorator(
+        isEmpty: value == null,
+        decoration: InputDecoration(
+          labelText: label,
+          border: const OutlineInputBorder(),
+          prefixIcon: const Icon(Icons.search),
+          suffixIcon: value == null
+              ? const Icon(Icons.arrow_drop_down)
+              : IconButton(
+                  tooltip: 'Limpiar selección',
+                  onPressed: enabled ? () => onChanged(null) : null,
+                  icon: const Icon(Icons.close),
+                ),
+        ),
+        child: Text(
+          value?.display ??
+              (options.isEmpty
+                  ? 'No hay fundamentos para estos filtros'
+                  : 'Buscar por conducta, artículo o código...'),
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: value == null ? TextStyle(color: Colors.grey.shade700) : null,
+        ),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            fundamento.display,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(fontWeight: FontWeight.w700),
-          ),
-          const SizedBox(height: 5),
-          Text(
-            fundamento.sancionResumen,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(color: Colors.grey.shade700, fontSize: 12),
-          ),
-        ],
+    );
+  }
+}
+
+class _FundamentoSearchSheet extends StatefulWidget {
+  final List<ConduceLegalidadFundamento> options;
+  final String title;
+
+  const _FundamentoSearchSheet({required this.options, required this.title});
+
+  @override
+  State<_FundamentoSearchSheet> createState() => _FundamentoSearchSheetState();
+}
+
+class _FundamentoSearchSheetState extends State<_FundamentoSearchSheet> {
+  final _searchCtrl = TextEditingController();
+  String _query = '';
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  String _normalize(String value) {
+    return value
+        .toUpperCase()
+        .replaceAll('Á', 'A')
+        .replaceAll('É', 'E')
+        .replaceAll('Í', 'I')
+        .replaceAll('Ó', 'O')
+        .replaceAll('Ú', 'U')
+        .replaceAll('Ü', 'U')
+        .replaceAll('Ñ', 'N')
+        .replaceAll(RegExp(r'[^A-Z0-9]+'), ' ')
+        .trim();
+  }
+
+  String _searchText(ConduceLegalidadFundamento item) {
+    return _normalize(
+      [
+        item.codigo,
+        item.nombre,
+        item.articulo,
+        item.fraccion,
+        item.inciso,
+        item.referenciaLegalCorta,
+        item.etiquetaOperativa,
+        item.textoOperativo,
+        item.descripcion,
+        item.fundamentoLegal,
+        item.ambitoVehiculoTexto,
+      ].whereType<String>().join(' '),
+    );
+  }
+
+  List<ConduceLegalidadFundamento> get _filtered {
+    final query = _normalize(_query);
+    if (query.isEmpty) return widget.options;
+    final words = query.split(' ').where((word) => word.isNotEmpty).toList();
+    final result = widget.options.where((item) {
+      final text = _searchText(item);
+      return words.every(text.contains);
+    }).toList();
+    result.sort((a, b) {
+      final aText = _searchText(a);
+      final bText = _searchText(b);
+      final aStarts = aText.startsWith(query) ? 0 : 1;
+      final bStarts = bText.startsWith(query) ? 0 : 1;
+      if (aStarts != bStarts) return aStarts.compareTo(bStarts);
+      return a.display.compareTo(b.display);
+    });
+    return result;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final items = _filtered;
+    return Padding(
+      padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
+      child: SizedBox(
+        height: MediaQuery.sizeOf(context).height * .78,
+        child: Column(
+          children: [
+            ListTile(
+              title: Text(
+                widget.title,
+                style: const TextStyle(fontWeight: FontWeight.w900),
+              ),
+              subtitle: Text('${items.length} fundamentos disponibles'),
+              trailing: IconButton(
+                onPressed: () => Navigator.pop(context),
+                icon: const Icon(Icons.close),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+              child: TextField(
+                controller: _searchCtrl,
+                autofocus: true,
+                onChanged: (value) => setState(() => _query = value),
+                decoration: InputDecoration(
+                  hintText: 'Ej. placas, abandono, artículo 420...',
+                  prefixIcon: const Icon(Icons.search),
+                  suffixIcon: _query.isEmpty
+                      ? null
+                      : IconButton(
+                          onPressed: () {
+                            _searchCtrl.clear();
+                            setState(() => _query = '');
+                          },
+                          icon: const Icon(Icons.clear),
+                        ),
+                  border: const OutlineInputBorder(),
+                ),
+              ),
+            ),
+            Expanded(
+              child: items.isEmpty
+                  ? const Center(
+                      child: Padding(
+                        padding: EdgeInsets.all(24),
+                        child: Text(
+                          'No encontré fundamentos con esas palabras.',
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    )
+                  : ListView.separated(
+                      itemCount: items.length,
+                      separatorBuilder: (_, __) => const Divider(height: 1),
+                      itemBuilder: (context, index) {
+                        final item = items[index];
+                        return ListTile(
+                          title: Text(
+                            item.display,
+                            maxLines: 3,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          subtitle: Text(
+                            [
+                              item.referenciaLegalCorta,
+                              item.sancionResumen,
+                            ].whereType<String>().join(' · '),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          onTap: () => Navigator.pop(context, item),
+                        );
+                      },
+                    ),
+            ),
+          ],
+        ),
       ),
     );
   }

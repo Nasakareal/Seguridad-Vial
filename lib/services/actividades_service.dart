@@ -48,6 +48,8 @@ class ActividadUpsertData {
   final List<ActividadVehiculo> vehiculos;
   final bool isConduceLegalidad;
   final List<ConduceLegalidadFundamento> conduceLegalidadFundamentos;
+  final bool isAlCorralon;
+  final List<ConduceLegalidadFundamento> actividadInfracciones;
 
   const ActividadUpsertData({
     this.clientUuid,
@@ -79,6 +81,8 @@ class ActividadUpsertData {
     this.vehiculos = const <ActividadVehiculo>[],
     this.isConduceLegalidad = false,
     this.conduceLegalidadFundamentos = const <ConduceLegalidadFundamento>[],
+    this.isAlCorralon = false,
+    this.actividadInfracciones = const <ConduceLegalidadFundamento>[],
   });
 
   Map<String, String> toFields() {
@@ -171,6 +175,11 @@ class ActividadUpsertData {
         fields['conduce_legalidad_fundamentos[$index][fundamento_legal]'] =
             fundamentoLegal;
       }
+    }
+
+    for (var index = 0; index < actividadInfracciones.length; index += 1) {
+      fields['actividad_infracciones[$index][licencia_punto_infraccion_id]'] =
+          actividadInfracciones[index].id.toString();
     }
 
     return fields;
@@ -584,6 +593,43 @@ class ActividadesService {
     return _normalizeCatalogLabel(nombre ?? '') == 'CONDUCE CON LEGALIDAD';
   }
 
+  static bool isAlCorralonCategoria(String? nombre) {
+    return _normalizeCatalogLabel(nombre ?? '') == 'AL CORRALON';
+  }
+
+  static bool isAlCorralonActivity({String? categoria, String? subcategoria}) {
+    if (isAlCorralonCategoria(categoria)) return true;
+    final sub = _normalizeCatalogLabel(subcategoria ?? '');
+    return sub == 'POR ABANDONO' ||
+        sub == 'ABANDONO' ||
+        sub == 'POR FALTA ADMINISTRATIVA' ||
+        sub == 'FALTA ADMINISTRATIVA' ||
+        sub == 'POR HECHO DELICTIVO' ||
+        sub == 'HECHO DELICTIVO';
+  }
+
+  static bool isCorralonAbandonoSubcategoria(String? nombre) {
+    final label = _normalizeCatalogLabel(nombre ?? '');
+    return label.contains('ABANDONO');
+  }
+
+  static bool isFundamentoCorralonAbandono(
+    ConduceLegalidadFundamento fundamento,
+  ) {
+    final text = _normalizeCatalogLabel(
+      [
+        fundamento.codigo,
+        fundamento.nombre,
+        fundamento.descripcion,
+        fundamento.fundamentoLegal,
+        fundamento.textoOperativo,
+      ].whereType<String>().join(' '),
+    );
+    return text.contains('ABANDON') ||
+        text.contains('NO RETIRAR VEHICULO') ||
+        text.contains('REQUERIMIENTO DE RETIRO');
+  }
+
   static String toPublicUrl(String pathOrUrl) {
     final p = pathOrUrl.trim();
     if (p.isEmpty) return '';
@@ -901,6 +947,15 @@ class ActividadesService {
           ),
         );
       }
+    }
+
+    if (data.isAlCorralon && data.actividadInfracciones.isEmpty) {
+      issues.add(
+        const ActividadValidationIssue(
+          target: ActividadValidationTarget.subcategoria,
+          message: 'Selecciona al menos una infracción para Al corralón.',
+        ),
+      );
     }
 
     return issues;
@@ -1307,6 +1362,26 @@ class ActividadesService {
     final headers = await _headersJson();
     final uri = Uri.parse('$_base/$actividadId/vehiculos/$vehiculoId');
     final resp = await http.delete(uri, headers: headers);
+
+    if (resp.statusCode < 200 || resp.statusCode >= 300) {
+      throw Exception(_parseBackendError(resp.body, resp.statusCode));
+    }
+
+    return _decodeActividadResponse(resp.body);
+  }
+
+  static Future<Actividad> updateVehiculo({
+    required int actividadId,
+    required int vehiculoId,
+    required ActividadVehiculo vehiculo,
+  }) async {
+    final headers = await _headersJson();
+    final uri = Uri.parse('$_base/$actividadId/vehiculos/$vehiculoId');
+    final resp = await http.put(
+      uri,
+      headers: headers,
+      body: jsonEncode(vehiculo.toApiJson(includeNulls: true)),
+    );
 
     if (resp.statusCode < 200 || resp.statusCode >= 300) {
       throw Exception(_parseBackendError(resp.body, resp.statusCode));

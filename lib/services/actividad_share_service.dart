@@ -27,6 +27,7 @@ class ActividadShareService {
       actividad: actividad,
     );
     payload = _conUbicacionFallback(payload, actividad);
+    payload = _conInfraccionesFallback(payload, actividad);
     payload = _conFotosOriginalesLocales(payload, actividad);
     await _compartirPayload(payload);
   }
@@ -177,6 +178,34 @@ class ActividadShareService {
 
     return ActividadNativeShareData(
       message: _insertarBloqueUbicacion(payload.message, bloque),
+      media: payload.media,
+    );
+  }
+
+  static ActividadNativeShareData _conInfraccionesFallback(
+    ActividadNativeShareData payload,
+    Actividad? actividad,
+  ) {
+    if (actividad == null || actividad.infraccionesActividad.isEmpty) {
+      return payload;
+    }
+    final upper = payload.message.toUpperCase();
+    if (upper.contains('FUNDAMENTO(S) DE LA INFRACCIÓN') ||
+        upper.contains('FUNDAMENTO(S) DE LA INFRACCION')) {
+      return payload;
+    }
+
+    final lines = <String>['FUNDAMENTO(S) DE LA INFRACCIÓN'];
+    for (final item in actividad.infraccionesActividad) {
+      lines.add('• ${item.display}');
+      final legal = (item.fundamentoLegal ?? item.referenciaLegalCorta ?? '')
+          .trim();
+      if (legal.isNotEmpty) lines.add('  $legal');
+      lines.add('  Sanción: ${item.sancionResumen}');
+    }
+
+    return ActividadNativeShareData(
+      message: '${payload.message.trim()}\n\n${lines.join('\n')}'.trim(),
       media: payload.media,
     );
   }

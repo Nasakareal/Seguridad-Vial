@@ -155,7 +155,7 @@ class ActividadVehiculo {
     );
   }
 
-  Map<String, dynamic> toApiJson() {
+  Map<String, dynamic> toApiJson({bool includeNulls = false}) {
     final data = <String, dynamic>{
       'marca': marca,
       'modelo': modelo,
@@ -180,7 +180,7 @@ class ActividadVehiculo {
     };
 
     data.removeWhere((_, value) {
-      if (value == null) return true;
+      if (!includeNulls && value == null) return true;
       if (value is String && value.trim().isEmpty) return true;
       return false;
     });
@@ -217,6 +217,7 @@ class ActividadVehiculo {
 class Actividad {
   final int id;
   final int? createdBy;
+  final int? creadorUnidadId;
   final int actividadCategoriaId;
   final int? actividadSubcategoriaId;
   final String nombre;
@@ -262,10 +263,12 @@ class Actividad {
   final int? conduceLegalidadOperativoId;
   final int? conduceLegalidadCapturaId;
   final List<ConduceLegalidadFundamento> conduceLegalidadFundamentos;
+  final List<ConduceLegalidadFundamento> infraccionesActividad;
 
   const Actividad({
     required this.id,
     this.createdBy,
+    this.creadorUnidadId,
     required this.actividadCategoriaId,
     required this.actividadSubcategoriaId,
     required this.nombre,
@@ -311,6 +314,7 @@ class Actividad {
     this.conduceLegalidadOperativoId,
     this.conduceLegalidadCapturaId,
     this.conduceLegalidadFundamentos = const <ConduceLegalidadFundamento>[],
+    this.infraccionesActividad = const <ConduceLegalidadFundamento>[],
   });
 
   factory Actividad.fromJson(Map<String, dynamic> json) {
@@ -328,6 +332,8 @@ class Actividad {
     final fundamentosConduceRaw =
         json['conduce_legalidad_fundamentos'] ??
         json['conduceLegalidadFundamentos'];
+    final infraccionesActividadRaw =
+        json['infracciones_actividad'] ?? json['infraccionesActividad'];
 
     return Actividad(
       id: _asInt(json['id']),
@@ -335,6 +341,10 @@ class Actividad {
           _asNullableInt(json['created_by']) ??
           _asNullableInt(json['createdBy']) ??
           _asNullableInt(json['user_id']),
+      creadorUnidadId:
+          _asNullableInt(json['creador_unidad_id']) ??
+          _asNullableInt(json['creator_unit_id']) ??
+          _asNestedNullableInt(json['creador'], key: 'unidad_id'),
       actividadCategoriaId: _asInt(json['actividad_categoria_id']),
       actividadSubcategoriaId: _asNullableInt(
         json['actividad_subcategoria_id'],
@@ -436,6 +446,16 @@ class Actividad {
                 )
                 .toList()
           : const <ConduceLegalidadFundamento>[],
+      infraccionesActividad: (infraccionesActividadRaw is List)
+          ? infraccionesActividadRaw
+                .whereType<Map>()
+                .map(
+                  (item) => ConduceLegalidadFundamento.fromJson(
+                    Map<String, dynamic>.from(item),
+                  ),
+                )
+                .toList()
+          : const <ConduceLegalidadFundamento>[],
     );
   }
 
@@ -456,6 +476,8 @@ class Actividad {
 
     return items;
   }
+
+  bool get creadaPorUnidadSiniestros => (creadorUnidadId ?? unidad?.id) == 1;
 
   List<String> get previewPhotoPaths {
     final items = <String>[];
@@ -478,6 +500,7 @@ class Actividad {
   Map<String, dynamic> toJson() => {
     'id': id,
     'created_by': createdBy,
+    'creador_unidad_id': creadorUnidadId,
     'actividad_categoria_id': actividadCategoriaId,
     'actividad_subcategoria_id': actividadSubcategoriaId,
     'nombre': nombre,
@@ -524,6 +547,9 @@ class Actividad {
     'conduce_legalidad_fundamentos': conduceLegalidadFundamentos
         .map((item) => item.toJson())
         .toList(),
+    'infracciones_actividad': infraccionesActividad
+        .map((item) => item.toJson())
+        .toList(),
   };
 }
 
@@ -538,8 +564,9 @@ int? _asNullableInt(dynamic v) {
   return int.tryParse(v.toString());
 }
 
-int? _asNestedNullableInt(dynamic v) {
+int? _asNestedNullableInt(dynamic v, {String? key}) {
   if (v is! Map) return null;
+  if (key != null) return _asNullableInt(v[key]);
   return _asNullableInt(v['id'] ?? v['value']);
 }
 

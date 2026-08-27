@@ -10,17 +10,22 @@ import '../../../widgets/antecedente_highlight_tile.dart';
 import '../../../widgets/marca_vehiculo_dropdown.dart';
 import '../../../widgets/tarjeta_circulacion_scanner_screen.dart';
 
-Future<ActividadVehiculo?> showActividadVehiculoModal(BuildContext context) {
+Future<ActividadVehiculo?> showActividadVehiculoModal(
+  BuildContext context, {
+  ActividadVehiculo? initialVehiculo,
+}) {
   return showModalBottomSheet<ActividadVehiculo>(
     context: context,
     isScrollControlled: true,
     useSafeArea: true,
-    builder: (_) => const _ActividadVehiculoModal(),
+    builder: (_) => _ActividadVehiculoModal(initialVehiculo: initialVehiculo),
   );
 }
 
 class _ActividadVehiculoModal extends StatefulWidget {
-  const _ActividadVehiculoModal();
+  final ActividadVehiculo? initialVehiculo;
+
+  const _ActividadVehiculoModal({this.initialVehiculo});
 
   @override
   State<_ActividadVehiculoModal> createState() =>
@@ -52,11 +57,67 @@ class _ActividadVehiculoModalState extends State<_ActividadVehiculoModal> {
   List<Map<String, dynamic>> _gruas = const <Map<String, dynamic>>[];
   int? _gruaIdSeleccionada;
   int? _corralonGruaIdSeleccionada;
+  bool _gruaSelectionChanged = false;
+  bool _corralonSelectionChanged = false;
 
   @override
   void initState() {
     super.initState();
+    _cargarVehiculoInicial();
     _cargarGruas();
+  }
+
+  void _cargarVehiculoInicial() {
+    final vehiculo = widget.initialVehiculo;
+    if (vehiculo == null) return;
+
+    _tipoGeneral = _tipoGeneralInicial(vehiculo);
+    _carroceria = _carroceriaInicial(_tipoGeneral, vehiculo.tipo);
+    _marcaCtrl.text = vehiculo.marca;
+    _modeloCtrl.text = vehiculo.modelo ?? '';
+    _lineaCtrl.text = vehiculo.linea;
+    _colorCtrl.text = vehiculo.color;
+    _placasCtrl.text = vehiculo.placas ?? '';
+    _serieCtrl.text = vehiculo.serie ?? '';
+    _capacidadCtrl.text = vehiculo.capacidadPersonas.toString();
+    _tarjetaCtrl.text = vehiculo.tarjetaCirculacionNombre ?? '';
+    _aseguradoraCtrl.text = vehiculo.aseguradora ?? '';
+    _montoDanosCtrl.text = (vehiculo.montoDanos ?? 0).toString();
+    _partesDanadasCtrl.text = vehiculo.partesDanadas ?? '';
+    _estadoPlacas = VehiculoFormService.normalizeEstadoPlacas(
+      vehiculo.estadoPlacas,
+    );
+    _tipoServicio = VehiculoFormService.tipoServicioPlacaValue(
+      vehiculo.tipoServicio,
+    );
+    _antecedenteVehiculo = vehiculo.antecedenteVehiculo;
+    _gruaIdSeleccionada = vehiculo.gruaId;
+    _corralonGruaIdSeleccionada = vehiculo.corralonId;
+  }
+
+  String? _tipoGeneralInicial(ActividadVehiculo vehiculo) {
+    final tipoGuardado = vehiculo.tipoGeneral?.trim().toLowerCase();
+    if (VehiculoTaxonomia.esTipoGeneral(tipoGuardado)) return tipoGuardado;
+
+    final carroceria = vehiculo.tipo.trim();
+    for (final entry in VehiculoTaxonomia.carrocerias.entries) {
+      if (entry.value.any(
+        (item) => item.toLowerCase() == carroceria.toLowerCase(),
+      )) {
+        return entry.key;
+      }
+    }
+    return null;
+  }
+
+  String? _carroceriaInicial(String? tipoGeneral, String value) {
+    final actual = value.trim();
+    for (final item in VehiculoTaxonomia.carroceriasDeTipoGeneral(
+      tipoGeneral,
+    )) {
+      if (item.toLowerCase() == actual.toLowerCase()) return item;
+    }
+    return null;
   }
 
   @override
@@ -130,6 +191,12 @@ class _ActividadVehiculoModalState extends State<_ActividadVehiculoModal> {
       if (!mounted) return;
       setState(() {
         _gruas = gruas;
+        _gruaIdSeleccionada ??= _buscarGruaPorNombre(
+          widget.initialVehiculo?.grua,
+        );
+        _corralonGruaIdSeleccionada ??= _buscarGruaPorNombre(
+          widget.initialVehiculo?.corralon,
+        );
         if (!GruasCatalogService.containsId(_gruas, _gruaIdSeleccionada)) {
           _gruaIdSeleccionada = null;
         }
@@ -148,6 +215,18 @@ class _ActividadVehiculoModalState extends State<_ActividadVehiculoModal> {
         _cargandoGruas = false;
       });
     }
+  }
+
+  int? _buscarGruaPorNombre(String? nombre) {
+    final buscado = (nombre ?? '').trim().toLowerCase();
+    if (buscado.isEmpty) return null;
+    for (final grua in _gruas) {
+      if (GruasCatalogService.displayName(grua).trim().toLowerCase() ==
+          buscado) {
+        return GruasCatalogService.idOf(grua);
+      }
+    }
+    return null;
   }
 
   Future<void> _scanTarjetaCirculacion() async {
@@ -299,10 +378,22 @@ class _ActividadVehiculoModalState extends State<_ActividadVehiculoModal> {
       _gruas,
       _corralonGruaIdSeleccionada,
     );
+    final gruaParaGuardar = _gruaIdSeleccionada != null
+        ? gruaNombre
+        : _gruaSelectionChanged
+        ? null
+        : widget.initialVehiculo?.grua;
+    final corralonParaGuardar = _corralonGruaIdSeleccionada != null
+        ? corralonNombre
+        : _corralonSelectionChanged
+        ? null
+        : widget.initialVehiculo?.corralon;
 
     Navigator.pop(
       context,
       ActividadVehiculo(
+        id: widget.initialVehiculo?.id,
+        clientUuid: widget.initialVehiculo?.clientUuid,
         marca: marca,
         modelo: _nullIfEmpty(_t(_modeloCtrl)),
         tipoGeneral: _tipoGeneral,
@@ -316,9 +407,9 @@ class _ActividadVehiculoModalState extends State<_ActividadVehiculoModal> {
         tipoServicio: VehiculoFormService.tipoServicioPlacaValue(_tipoServicio),
         tarjetaCirculacionNombre: _nullIfEmpty(_t(_tarjetaCtrl)),
         gruaId: _gruaIdSeleccionada,
-        grua: _nullIfEmpty(gruaNombre ?? ''),
+        grua: _nullIfEmpty(gruaParaGuardar ?? ''),
         corralonId: _corralonGruaIdSeleccionada,
-        corralon: _nullIfEmpty(corralonNombre ?? ''),
+        corralon: _nullIfEmpty(corralonParaGuardar ?? ''),
         aseguradora: _nullIfEmpty(_t(_aseguradoraCtrl)),
         antecedenteVehiculo: _antecedenteVehiculo,
         montoDanos: montoDanos ?? 0,
@@ -424,19 +515,21 @@ class _ActividadVehiculoModalState extends State<_ActividadVehiculoModal> {
             children: [
               Row(
                 children: [
-                  const Expanded(
+                  Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Agregar vehículo',
-                          style: TextStyle(
+                          widget.initialVehiculo == null
+                              ? 'Agregar vehículo'
+                              : 'Editar vehículo',
+                          style: const TextStyle(
                             fontSize: 20,
                             fontWeight: FontWeight.w900,
                           ),
                         ),
-                        SizedBox(height: 2),
-                        Text('Solo datos del vehículo.'),
+                        const SizedBox(height: 2),
+                        const Text('Solo datos del vehículo.'),
                       ],
                     ),
                   ),
@@ -642,8 +735,10 @@ class _ActividadVehiculoModalState extends State<_ActividadVehiculoModal> {
                     GruasCatalogService.containsId(_gruas, _gruaIdSeleccionada)
                     ? _gruaIdSeleccionada
                     : null,
-                onChanged: (value) =>
-                    setState(() => _gruaIdSeleccionada = value),
+                onChanged: (value) => setState(() {
+                  _gruaIdSeleccionada = value;
+                  _gruaSelectionChanged = true;
+                }),
               ),
               const SizedBox(height: 10),
               _gruasSelector(
@@ -657,8 +752,10 @@ class _ActividadVehiculoModalState extends State<_ActividadVehiculoModal> {
                     )
                     ? _corralonGruaIdSeleccionada
                     : null,
-                onChanged: (value) =>
-                    setState(() => _corralonGruaIdSeleccionada = value),
+                onChanged: (value) => setState(() {
+                  _corralonGruaIdSeleccionada = value;
+                  _corralonSelectionChanged = true;
+                }),
               ),
               const SizedBox(height: 10),
               TextFormField(
@@ -699,8 +796,14 @@ class _ActividadVehiculoModalState extends State<_ActividadVehiculoModal> {
               const SizedBox(height: 12),
               ElevatedButton.icon(
                 onPressed: _submit,
-                icon: const Icon(Icons.add),
-                label: const Text('Agregar vehículo'),
+                icon: Icon(
+                  widget.initialVehiculo == null ? Icons.add : Icons.save,
+                ),
+                label: Text(
+                  widget.initialVehiculo == null
+                      ? 'Agregar vehículo'
+                      : 'Guardar cambios',
+                ),
               ),
             ],
           ),
@@ -712,11 +815,13 @@ class _ActividadVehiculoModalState extends State<_ActividadVehiculoModal> {
 
 class ActividadVehiculoCard extends StatelessWidget {
   final ActividadVehiculo vehiculo;
+  final VoidCallback? onEdit;
   final VoidCallback? onRemove;
 
   const ActividadVehiculoCard({
     super.key,
     required this.vehiculo,
+    this.onEdit,
     this.onRemove,
   });
 
@@ -768,11 +873,26 @@ class ActividadVehiculoCard extends StatelessWidget {
                   ],
                 ),
               ),
-              if (onRemove != null)
-                IconButton(
-                  tooltip: 'Quitar',
-                  onPressed: onRemove,
-                  icon: const Icon(Icons.delete_outline, color: Colors.red),
+              if (onEdit != null || onRemove != null)
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (onEdit != null)
+                      IconButton(
+                        tooltip: 'Editar vehículo',
+                        onPressed: onEdit,
+                        icon: const Icon(Icons.edit_outlined),
+                      ),
+                    if (onRemove != null)
+                      IconButton(
+                        tooltip: 'Quitar',
+                        onPressed: onRemove,
+                        icon: const Icon(
+                          Icons.delete_outline,
+                          color: Colors.red,
+                        ),
+                      ),
+                  ],
                 ),
             ],
           ),

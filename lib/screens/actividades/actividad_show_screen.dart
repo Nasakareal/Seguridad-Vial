@@ -8,6 +8,7 @@ import '../../services/auth_service.dart';
 import '../../widgets/photo_viewer.dart';
 import '../../widgets/safe_network_image.dart';
 import 'actividad_ui_labels.dart';
+import 'actividad_corralon_ticket_screen.dart';
 import 'widgets/actividad_vehiculo_modal.dart';
 
 class ActividadShowScreen extends StatefulWidget {
@@ -150,6 +151,27 @@ class _ActividadShowScreenState extends State<ActividadShowScreen>
     );
   }
 
+  Future<void> _openCorralonTicket() async {
+    final actividad = _actividad;
+    if (actividad == null) return;
+    if (actividad.infraccionesActividad.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Esta actividad todavía no tiene una infracción guardada. Edítala para capturar el fundamento antes de imprimir.',
+          ),
+        ),
+      );
+      return;
+    }
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ActividadCorralonTicketScreen(actividad: actividad),
+      ),
+    );
+  }
+
   Future<void> _openPuestaDisposicion() async {
     final a = _actividad;
     if (a == null) return;
@@ -237,6 +259,13 @@ class _ActividadShowScreenState extends State<ActividadShowScreen>
     final delegacionName = _normalizeForMatch(delegacion?.nombre);
     return delegacion != null &&
         (delegacion.id > 0 || delegacionName.isNotEmpty);
+  }
+
+  bool _isAlCorralon(Actividad a) {
+    return ActividadesService.isAlCorralonActivity(
+      categoria: a.categoria?.nombre,
+      subcategoria: a.subcategoria?.nombre,
+    );
   }
 
   Widget _photoCarousel(Actividad a) {
@@ -335,6 +364,12 @@ class _ActividadShowScreenState extends State<ActividadShowScreen>
               tooltip: 'Imprimir ticket de Conduce con Legalidad',
               onPressed: _openConduceLegalidadTicket,
               icon: const Icon(Icons.print_outlined),
+            ),
+          if (a != null && _isAlCorralon(a))
+            IconButton(
+              tooltip: 'Imprimir notificación de infracción',
+              onPressed: _openCorralonTicket,
+              icon: const Icon(Icons.receipt_long_outlined),
             ),
           if (a != null &&
               (_canCreatePuesta || (a.puestaDisposicionId ?? 0) > 0))
@@ -459,6 +494,47 @@ class _ActividadShowScreenState extends State<ActividadShowScreen>
                   ),
                 ),
                 const SizedBox(height: 12),
+                if (_isAlCorralon(a)) ...[
+                  _card(
+                    title: 'Infracciones de la remisión',
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        if (a.infraccionesActividad.isEmpty)
+                          const Padding(
+                            padding: EdgeInsets.only(bottom: 10),
+                            child: Text(
+                              'Sin fundamento guardado. Edita esta actividad y selecciona la infracción correspondiente.',
+                            ),
+                          )
+                        else
+                          for (final item in a.infraccionesActividad)
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 10),
+                              child: Text(
+                                '${item.display}\n${item.fundamentoLegal ?? item.referenciaLegalCorta ?? ''}\nSanción: ${item.sancionResumen}',
+                              ),
+                            ),
+                        FilledButton.icon(
+                          onPressed: a.infraccionesActividad.isEmpty
+                              ? _edit
+                              : _openCorralonTicket,
+                          icon: Icon(
+                            a.infraccionesActividad.isEmpty
+                                ? Icons.edit_outlined
+                                : Icons.print_outlined,
+                          ),
+                          label: Text(
+                            a.infraccionesActividad.isEmpty
+                                ? 'Capturar infracción'
+                                : 'Imprimir notificación',
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                ],
                 _card(
                   title: 'Contenido',
                   child: Column(
