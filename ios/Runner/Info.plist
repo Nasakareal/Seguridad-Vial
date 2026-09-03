@@ -111,5 +111,14 @@
 	<key>NSBluetoothAlwaysUsageDescription</key>
 	<string>Bluetooth se utiliza para comunicarse con dispositivos cercanos necesarios para las funciones operativas de Seguridad Vial.</string>
 
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>La red local se utiliza para configurar y supervisar los dos controladores semafóricos autorizados.</string>
+
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
+
 </dict>
 </plist>

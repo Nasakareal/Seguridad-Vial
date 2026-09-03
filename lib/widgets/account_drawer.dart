@@ -69,6 +69,9 @@ class AppAccountDrawer extends StatelessWidget {
         unitId == AuthService.unidadSeguridadVialId ||
         unitId == AuthService.unidadProteccionCarreterasId ||
         unitId == AuthService.unidadVialidadesUrbanasId;
+    final canUseWorkshopTrafficLights =
+        await AuthService.isSuperadmin() ||
+        unitId == AuthService.unidadCulturaVialId;
 
     var access = await AdministrativeAccessService.loadAccess();
     if (!access.canSeeConfigurationMenu) {
@@ -83,6 +86,7 @@ class AppAccountDrawer extends StatelessWidget {
       photoUrl: photoUrl,
       access: access,
       canUseTrafficPriority: canUseTrafficPriority,
+      canUseWorkshopTrafficLights: canUseWorkshopTrafficLights,
     );
   }
 
@@ -210,6 +214,17 @@ class AppAccountDrawer extends StatelessWidget {
                                     'Solicitar y confirmar paso prioritario',
                                 onTap: () =>
                                     _goTo(context, AppRoutes.controlSemaforico),
+                              ),
+                            if (summary?.canUseWorkshopTrafficLights == true)
+                              DrawerActionTile(
+                                icon: Icons.construction_outlined,
+                                title: 'Semáforos de talleres',
+                                subtitle:
+                                    'Fases y tiempos de equipos de Fomento',
+                                onTap: () => _goTo(
+                                  context,
+                                  AppRoutes.semaforosTalleres,
+                                ),
                               ),
                             DrawerActionTile(
                               icon: Icons.sticky_note_2_outlined,
@@ -352,6 +367,7 @@ class _AccountSummary {
   final String photoUrl;
   final AdministrativeAccess access;
   final bool canUseTrafficPriority;
+  final bool canUseWorkshopTrafficLights;
 
   const _AccountSummary({
     required this.name,
@@ -361,6 +377,7 @@ class _AccountSummary {
     required this.photoUrl,
     required this.access,
     required this.canUseTrafficPriority,
+    required this.canUseWorkshopTrafficLights,
   });
 }
 

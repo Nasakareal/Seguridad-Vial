@@ -64,6 +64,7 @@ import '../screens/mapa/mapa_incidencias_screen.dart';
 
 import '../screens/control_ubicacion/control_ubicacion_screen.dart';
 import '../screens/control_semaforico/control_semaforico_screen.dart';
+import '../screens/semaforos_talleres/semaforos_talleres_screen.dart';
 import '../screens/gruas/gruas_screen.dart';
 
 import '../screens/lesionados/lesionados_screen.dart';
@@ -199,6 +200,7 @@ final Map<String, WidgetBuilder> appRoutesMap = {
 
   AppRoutes.controlUbicacion: (context) => const ControlUbicacionScreen(),
   AppRoutes.controlSemaforico: (context) => const ControlSemaforicoScreen(),
+  AppRoutes.semaforosTalleres: (context) => const SemaforosTalleresScreen(),
   AppRoutes.gruas: (context) => const GruasScreen(),
 
   AppRoutes.lesionados: (context) => const LesionadosScreen(),

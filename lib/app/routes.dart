@@ -61,6 +61,7 @@ class AppRoutes {
 
   static const String controlUbicacion = '/control-ubicacion';
   static const String controlSemaforico = '/control-semaforico';
+  static const String semaforosTalleres = '/semaforos-talleres';
   static const String gruas = '/gruas';
 
   static const String lesionados = '/lesionados';
