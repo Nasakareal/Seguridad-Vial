@@ -93,12 +93,14 @@ class LocalDraftService {
   }
 }
 
-class LocalDraftAutosave {
+class LocalDraftAutosave with WidgetsBindingObserver {
   LocalDraftAutosave({
     required this.draftId,
     required this.collect,
     this.delay = const Duration(milliseconds: 450),
-  });
+  }) {
+    WidgetsBinding.instance.addObserver(this);
+  }
 
   final String draftId;
   final Map<String, dynamic> Function() collect;
@@ -109,6 +111,16 @@ class LocalDraftAutosave {
   Timer? _timer;
   bool _muted = false;
   bool _disposed = false;
+  bool _discarded = false;
+  Future<void> _pendingWrite = Future<void>.value();
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.paused) {
+      unawaited(flush());
+    }
+  }
 
   void attachTextControllers(Map<String, TextEditingController> controllers) {
     for (final controller in controllers.values) {
@@ -119,21 +131,30 @@ class LocalDraftAutosave {
     }
   }
 
-  Future<bool> restore(void Function(Map<String, dynamic> values) apply) async {
-    final values = await LocalDraftService.load(draftId);
-    if (values == null || values.isEmpty) return false;
-
+  Future<bool> restore(
+    void Function(Map<String, dynamic> values) apply, {
+    Future<bool> Function(Map<String, dynamic> values)? shouldRestore,
+  }) async {
     _muted = true;
     try {
+      final values = await LocalDraftService.load(draftId);
+      if (_disposed || _discarded || values == null || values.isEmpty) {
+        return false;
+      }
+      if (shouldRestore != null && !await shouldRestore(values)) {
+        if (!_disposed) await discard();
+        return false;
+      }
+      if (_disposed || _discarded) return false;
       apply(values);
+      return true;
     } finally {
       _muted = false;
     }
-    return true;
   }
 
   void notifyChanged() {
-    if (_muted || _disposed) return;
+    if (_muted || _disposed || _discarded) return;
     _timer?.cancel();
     _timer = Timer(delay, () {
       unawaited(flush());
@@ -141,16 +162,28 @@ class LocalDraftAutosave {
   }
 
   Future<void> flush() async {
-    if (_muted || _disposed) return;
-    await LocalDraftService.save(draftId, collect());
+    if (_muted || _disposed || _discarded) return;
+    final values = collect();
+    final write = _pendingWrite.then(
+      (_) => LocalDraftService.save(draftId, values),
+    );
+    _pendingWrite = write.then<void>(
+      (_) {},
+      onError: (Object _, StackTrace __) {},
+    );
+    await write;
   }
 
-  Future<void> discard() async {
+  Future<void> discard({bool stopAutosave = false}) async {
+    _discarded = true;
     _timer?.cancel();
+    await _pendingWrite;
     await LocalDraftService.discard(draftId);
+    _discarded = stopAutosave;
   }
 
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _disposed = true;
     _timer?.cancel();
     for (final entry in _listeners.entries) {

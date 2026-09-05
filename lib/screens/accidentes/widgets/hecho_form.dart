@@ -13,6 +13,7 @@ import '../../../services/offline_sync_service.dart';
 import '../../../services/photo_picker_service.dart';
 import '../../../services/reverse_geocode_service.dart';
 import '../../../widgets/municipio_autocomplete_field.dart';
+import '../../../widgets/capture_draft_recovery_dialog.dart';
 import 'ubicacion_card.dart';
 import 'photo_card.dart';
 import 'danos_patrimoniales_card.dart';
@@ -27,6 +28,7 @@ class HechoForm extends StatefulWidget {
   final File? initialFotoLugar2;
   final File? initialFotoSituacion;
   final String? draftId;
+  final VoidCallback? onDraftReady;
   final Future<OfflineActionResult> Function({
     required HechoFormData data,
     required DictamenItem? dictamenSelected,
@@ -46,6 +48,7 @@ class HechoForm extends StatefulWidget {
     this.initialFotoLugar2,
     this.initialFotoSituacion,
     this.draftId,
+    this.onDraftReady,
     required this.onSubmit,
     this.onSubmitted,
   });
@@ -64,6 +67,7 @@ class _HechoFormState extends State<HechoForm> {
   final _danosKey = GlobalKey();
   final _folioFieldKey = GlobalKey();
   bool _submitting = false;
+  bool _submitted = false;
   bool _isPerito = false;
   bool _loadingRoleFlags = true;
   bool _usesRelaxedHechosRules = false;
@@ -98,13 +102,20 @@ class _HechoFormState extends State<HechoForm> {
 
   DictamenItem? _dictamenSelected;
   LocalDraftAutosave? _draft;
+  Future<void>? _draftRestoration;
 
   @override
   void initState() {
     super.initState();
     _syncFromData();
     _initDraft();
-    _loadRoleFlags();
+    unawaited(_finishInitialization());
+  }
+
+  Future<void> _finishInitialization() async {
+    await _loadRoleFlags();
+    await _draftRestoration;
+    if (mounted) widget.onDraftReady?.call();
   }
 
   @override
@@ -181,7 +192,7 @@ class _HechoFormState extends State<HechoForm> {
         widget.data.sector = null;
       }
       if (_isPerito) {
-        _hora = HechosFormService.currentTime();
+        _hora ??= HechosFormService.currentTime();
         widget.data.hora = _hora;
       }
       if (_hideDelegacionesAdminFields) {
@@ -244,11 +255,24 @@ class _HechoFormState extends State<HechoForm> {
         'propiedades_afectadas': _propsCtrl,
         'monto_danos': _montoCtrl,
       });
-    unawaited(_restoreLocalDraft());
+    _draftRestoration = _restoreLocalDraft();
   }
 
   Future<void> _restoreLocalDraft() async {
-    final restored = await _draft?.restore(_applyLocalDraft) ?? false;
+    final restored =
+        await _draft?.restore(
+          _applyLocalDraft,
+          shouldRestore: widget.mode == HechoFormMode.create
+              ? (values) async =>
+                    mounted &&
+                    await confirmCaptureDraftRecovery(
+                      context,
+                      values: values,
+                      newLabel: 'Nuevo hecho',
+                    )
+              : null,
+        ) ??
+        false;
     if (!mounted || !restored) return;
     setState(() {});
     ScaffoldMessenger.of(
@@ -258,9 +282,7 @@ class _HechoFormState extends State<HechoForm> {
 
   void _applyLocalDraft(Map<String, dynamic> draft) {
     final d = widget.data;
-    d.clientUuid = widget.mode == HechoFormMode.create
-        ? null
-        : _blankToNull(draft['client_uuid']);
+    d.clientUuid = _blankToNull(draft['client_uuid']);
     d.folioC5i = _str(draft['folio_c5i']);
     d.perito = _str(draft['perito']);
     d.autorizacionPractico = _str(draft['autorizacion_practico']);
@@ -347,7 +369,7 @@ class _HechoFormState extends State<HechoForm> {
     final d = widget.data;
     final shouldStoreMp = _isTurnadoValue(d.situacion);
     return <String, dynamic>{
-      'client_uuid': widget.mode == HechoFormMode.create ? null : d.clientUuid,
+      'client_uuid': d.clientUuid,
       'folio_c5i': _folioCtrl.text,
       'perito': _peritoCtrl.text,
       'autorizacion_practico': _authPracCtrl.text,
@@ -761,28 +783,34 @@ class _HechoFormState extends State<HechoForm> {
       _ensureReadOnlyCaptureTimestamp();
     }
 
-    d.hora = _isPerito ? HechosFormService.currentTime() : _hora;
+    d.hora = _hora;
     d.fecha = _fecha;
   }
 
   Future<void> _submit() async {
-    if (_submitting) return;
-
-    _syncToData();
-
-    final invalidFields =
-        _formKey.currentState?.validateGranularly() ??
-        const <FormFieldState<Object?>>{};
-    if (invalidFields.isNotEmpty) {
-      await _scrollToFirstInvalidField(invalidFields);
-      return;
-    }
-
-    if (!await _validateBusinessRules()) return;
-
+    if (_submitting || _submitted) return;
     setState(() => _submitting = true);
 
     try {
+      _syncToData();
+
+      final invalidFields =
+          _formKey.currentState?.validateGranularly() ??
+          const <FormFieldState<Object?>>{};
+      if (invalidFields.isNotEmpty) {
+        await _scrollToFirstInvalidField(invalidFields);
+        return;
+      }
+
+      if (!await _validateBusinessRules()) return;
+
+      // Persist the identity before the first network attempt. A retry or an
+      // interrupted capture must refer to the same event, even after restart.
+      if (widget.mode == HechoFormMode.create) {
+        widget.data.clientUuid ??= OfflineSyncService.newClientUuid();
+      }
+      await _draft?.flush();
+
       final result = await widget.onSubmit(
         data: widget.data,
         dictamenSelected: _dictamenSelected,
@@ -791,8 +819,8 @@ class _HechoFormState extends State<HechoForm> {
         fotoSituacion: _fotoSituacion,
       );
 
-      if (!mounted) return;
-      await _draft?.discard();
+      _submitted = true;
+      await _draft?.discard(stopAutosave: true);
       if (!mounted) return;
       if (widget.onSubmitted != null) {
         await widget.onSubmitted!(result, widget.data);
@@ -1394,7 +1422,7 @@ class _HechoFormState extends State<HechoForm> {
           SizedBox(
             width: double.infinity,
             child: ElevatedButton(
-              onPressed: _submitting ? null : _submit,
+              onPressed: (_submitting || _submitted) ? null : _submit,
               child: _submitting
                   ? const SizedBox(
                       height: 20,

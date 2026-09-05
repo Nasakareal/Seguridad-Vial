@@ -49,7 +49,7 @@ void main() {
     tester,
   ) async {
     final data = validDelegacionesData();
-    var submitted = false;
+    var submitCount = 0;
 
     await tester.pumpWidget(
       MaterialApp(
@@ -66,9 +66,10 @@ void main() {
                     required fotoLugar2,
                     required fotoSituacion,
                   }) async {
-                    submitted = true;
+                    submitCount += 1;
                     return const OfflineActionResult.synced();
                   },
+              onSubmitted: (_, _) async {},
             ),
           ),
         ),
@@ -88,25 +89,20 @@ void main() {
     await tester.tap(find.text('Guardar cambios'));
     await tester.pumpAndSettle();
 
-    expect(submitted, isTrue);
+    expect(submitCount, 1);
+    await tester.tap(find.text('Guardar cambios'));
+    await tester.pumpAndSettle();
+    expect(submitCount, 1);
     expect(data.situacion, 'PENDIENTE');
     expect(data.vehiculosMp, '0');
     expect(data.personasMp, '0');
   });
 
-  testWidgets('create local draft restores fields without old client uuid', (
+  testWidgets('retry keeps the UUID persisted before the network attempt', (
     tester,
   ) async {
-    await LocalDraftService.save('hechos:create', <String, dynamic>{
-      'client_uuid': 'old-offline-operation',
-      'folio_c5i': 'C5I-123',
-      'perito': 'Elemento borrador',
-      'unidad': 'Unidad 99',
-      'hora': '09:30',
-      'fecha': '2026-04-25',
-    });
-    final data = HechoFormData();
-
+    final data = validDelegacionesData()..situacion = 'PENDIENTE';
+    final attempts = <String?>[];
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
@@ -123,21 +119,89 @@ void main() {
                     required fotoLugar2,
                     required fotoSituacion,
                   }) async {
-                    return const OfflineActionResult.synced();
+                    attempts.add(data.clientUuid);
+                    final saved = await LocalDraftService.load('hechos:create');
+                    expect(saved?['client_uuid'], data.clientUuid);
+                    if (attempts.length == 1)
+                      throw Exception('Fallo de prueba');
+                    return const OfflineActionResult.queued();
                   },
+              onSubmitted: (_, _) async {},
             ),
           ),
         ),
       ),
     );
-
     await tester.pumpAndSettle();
-
-    expect(data.clientUuid, isNull);
-    expect(data.folioC5i, 'C5I-123');
-    expect(data.perito, 'Elemento borrador');
-    expect(data.unidad, 'Unidad 99');
+    final save = find.text('Registrar Hecho');
+    await tester.ensureVisible(save);
+    await tester.tap(save);
+    await tester.pumpAndSettle();
+    await tester.pump(const Duration(seconds: 5));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(save);
+    await tester.tap(save);
+    await tester.pumpAndSettle();
+    expect(attempts, hasLength(2));
+    expect(attempts.first, isNotEmpty);
+    expect(attempts[1], attempts.first);
+    expect(await LocalDraftService.load('hechos:create'), isNull);
   });
+
+  for (final recover in [false, true]) {
+    testWidgets('create draft recovery is explicit: $recover', (tester) async {
+      await LocalDraftService.save('hechos:create', <String, dynamic>{
+        'client_uuid': 'old-offline-operation',
+        'folio_c5i': 'C5I-123',
+        'perito': 'Elemento borrador',
+        'unidad': 'Unidad 99',
+        'hora': '09:30',
+        'fecha': '2026-04-25',
+      });
+      final data = HechoFormData();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SingleChildScrollView(
+              child: HechoForm(
+                mode: HechoFormMode.create,
+                data: data,
+                draftId: 'hechos:create',
+                onSubmit:
+                    ({
+                      required data,
+                      required dictamenSelected,
+                      required fotoLugar,
+                      required fotoLugar2,
+                      required fotoSituacion,
+                    }) async {
+                      return const OfflineActionResult.synced();
+                    },
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      expect(data.folioC5i, isEmpty);
+      expect(find.text('¿Continuar una captura anterior?'), findsOneWidget);
+      await tester.tap(
+        find.text(recover ? 'Continuar captura anterior' : 'Nuevo hecho'),
+      );
+      await tester.pumpAndSettle();
+
+      expect(data.clientUuid, recover ? 'old-offline-operation' : isNull);
+      expect(data.folioC5i, recover ? 'C5I-123' : isEmpty);
+      expect(data.perito, recover ? 'Elemento borrador' : isEmpty);
+      expect(data.unidad, recover ? 'Unidad 99' : isEmpty);
+      if (!recover) {
+        expect(await LocalDraftService.load('hechos:create'), isNull);
+      }
+    });
+  }
 
   testWidgets('delegaciones turnado does not show existing puesta selector', (
     tester,

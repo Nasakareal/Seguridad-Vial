@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
 
@@ -53,10 +54,6 @@ class _CreateHechoScreenState extends State<CreateHechoScreen> {
       _needsDelegacionesCaptureTotals = needsCaptureTotals;
       _checkingAccess = false;
     });
-
-    if (needsCaptureTotals) {
-      _scheduleCaptureTotalsPrompt();
-    }
   }
 
   @override
@@ -199,10 +196,6 @@ class _CreateHechoScreenState extends State<CreateHechoScreen> {
       _formResetNonce += 1;
     });
 
-    if (_needsDelegacionesCaptureTotals) {
-      _scheduleCaptureTotalsPrompt();
-    }
-
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(const SnackBar(content: Text('Formulario local limpio.')));
@@ -343,6 +336,43 @@ class _CreateHechoScreenState extends State<CreateHechoScreen> {
     if (!result.queued) {
       final hechoId = HechosFormService.hechoIdFromCreateResult(result);
       if (hechoId != null && hechoId > 0) {
+        final response = jsonDecode(result.responseBody ?? '{}');
+        if (response is Map && response['created'] == false) {
+          final saved = response['data'] is Map
+              ? response['data'] as Map
+              : const {};
+          final continueCapture = await showDialog<bool>(
+            context: context,
+            barrierDismissible: false,
+            builder: (context) => AlertDialog(
+              title: const Text('Este hecho ya estaba guardado'),
+              content: Text(
+                'Hecho #$hechoId\nFecha: ${saved['fecha'] ?? ''}\nLugar: ${saved['calle'] ?? ''}\n\nNo se creó otro hecho ni se modificó el anterior. Continúa únicamente si es el mismo evento y te faltan vehículos o lesionados.',
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context, false),
+                  child: const Text('Volver al listado'),
+                ),
+                FilledButton(
+                  onPressed: () => Navigator.pop(context, true),
+                  child: const Text('Continuar este hecho'),
+                ),
+              ],
+            ),
+          );
+          if (!mounted) return;
+          if (continueCapture != true) {
+            Navigator.pop(context, true);
+            return;
+          }
+          Navigator.pushReplacementNamed(
+            context,
+            AppRoutes.vehiculos,
+            arguments: {'hechoId': hechoId},
+          );
+          return;
+        }
         final isDelegaciones = await AuthService.isDelegacionesUser();
         if (!mounted) return;
         final situacion = (data.situacion ?? '').trim().toUpperCase();
@@ -488,10 +518,6 @@ class _CreateHechoScreenState extends State<CreateHechoScreen> {
       );
     }
 
-    if (_needsDelegacionesCaptureTotals && !_captureTotalsReady) {
-      _scheduleCaptureTotalsPrompt();
-    }
-
     return Scaffold(
       appBar: _buildAppBar(showNewAction: true),
       body: SingleChildScrollView(
@@ -500,6 +526,13 @@ class _CreateHechoScreenState extends State<CreateHechoScreen> {
           key: ValueKey(_formResetNonce),
           mode: HechoFormMode.create,
           data: _data,
+          onDraftReady: () {
+            if (!_draftSuspendedForReset &&
+                _needsDelegacionesCaptureTotals &&
+                !_captureTotalsReady) {
+              _scheduleCaptureTotalsPrompt();
+            }
+          },
           initialFotoLugar: _initialFotoLugar,
           initialFotoLugar2: _initialFotoLugar2,
           initialFotoSituacion: _initialFotoSituacion,

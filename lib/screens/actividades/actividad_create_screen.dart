@@ -20,6 +20,8 @@ import '../../services/auth_service.dart';
 import '../../services/geo_service.dart';
 import '../../services/conduce_legalidad_service.dart';
 import '../../services/local_draft_service.dart';
+import '../../services/offline_sync_service.dart';
+import '../../widgets/capture_draft_recovery_dialog.dart';
 import '../../services/photo_picker_service.dart';
 import '../../services/vehiculo_form_service.dart';
 import '../../services/vialidades_urbanas_service.dart';
@@ -502,7 +504,16 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
   }
 
   Future<void> _restoreLocalDraft() async {
-    final restored = await _draft.restore(_applyLocalDraft);
+    final restored = await _draft.restore(
+      _applyLocalDraft,
+      shouldRestore: (values) async =>
+          mounted &&
+          await confirmCaptureDraftRecovery(
+            context,
+            values: values,
+            newLabel: 'Nueva actividad',
+          ),
+    );
     if (!mounted || !restored) return;
     setState(() {});
     if (_categoriaId != null && _categoriaId! > 0) {
@@ -1457,42 +1468,43 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
   }
 
   Future<void> _submit() async {
-    setState(_clearValidationErrors);
-
-    final payload = _buildPayload();
-    final validationIssues =
-        await ActividadesService.validateBeforeSubmitIssues(
-          data: payload,
-          fotos: List<File>.from(_fotos),
-          requireTimestamp: _canEditCaptureTimestamp,
-        );
-    if (!mounted) return;
-    if (validationIssues.isNotEmpty) {
-      await _showValidationIssues(validationIssues);
-      return;
-    }
-
-    if (!mounted) return;
-    final confirmedCounts = await ActividadPeopleCountGuard.confirmIfNeeded(
-      context,
-      payload,
-    );
-    if (!confirmedCounts || !mounted) return;
-
     if (_saving) return;
     setState(() => _saving = true);
-
     try {
+      setState(_clearValidationErrors);
+
+      _clientUuid ??= OfflineSyncService.newClientUuid();
+      final payload = _buildPayload();
+      final validationIssues =
+          await ActividadesService.validateBeforeSubmitIssues(
+            data: payload,
+            fotos: List<File>.from(_fotos),
+            requireTimestamp: _canEditCaptureTimestamp,
+          );
+      if (!mounted) return;
+      if (validationIssues.isNotEmpty) {
+        await _showValidationIssues(validationIssues);
+        return;
+      }
+
+      if (!mounted) return;
+      final confirmedCounts = await ActividadPeopleCountGuard.confirmIfNeeded(
+        context,
+        payload,
+      );
+      if (!confirmedCounts || !mounted) return;
+
+      await _draft.flush();
       final result = await ActividadesService.create(
         data: payload,
         fotos: List<File>.from(_fotos),
       );
 
+      await _draft.discard(stopAutosave: true);
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text(result.message)));
-      await _draft.discard();
       if (!mounted) return;
       Navigator.pop(context, <String, dynamic>{
         'changed': true,
