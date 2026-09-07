@@ -26,6 +26,8 @@ class AppRoutes {
   static const String tutoriales = '/tutoriales';
   static const String directorioRedApoyo = '/directorio-red-apoyo';
   static const String directorioRedApoyoShow = '/directorio-red-apoyo/show';
+  static const String calea = '/calea';
+  static const String caleaDetalle = '/calea/detalle';
 
   static const String accidentes = '/accidentes';
   static const String accidentesCreate = '/accidentes/create';

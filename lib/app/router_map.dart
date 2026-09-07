@@ -35,6 +35,8 @@ import '../screens/settings/users_screen.dart';
 import '../screens/tutoriales/tutoriales_screen.dart';
 import '../screens/red_apoyo/directorio_red_apoyo_screen.dart';
 import '../screens/red_apoyo/directorio_red_apoyo_show_screen.dart';
+import '../screens/calea/calea_screen.dart';
+import '../screens/calea/calea_detail_screen.dart';
 
 import '../screens/accidentes/accidentes_screen.dart';
 import '../screens/accidentes/create_screen.dart';
@@ -164,6 +166,8 @@ final Map<String, WidgetBuilder> appRoutesMap = {
   AppRoutes.directorioRedApoyo: (context) => const DirectorioRedApoyoScreen(),
   AppRoutes.directorioRedApoyoShow: (context) =>
       const DirectorioRedApoyoShowScreen(),
+  AppRoutes.calea: (context) => const CaleaScreen(),
+  AppRoutes.caleaDetalle: (context) => const CaleaDetailScreen(),
 
   AppRoutes.accidentes: (context) => const AccidentesScreen(),
   AppRoutes.accidentesCreate: (context) => const CreateHechoScreen(),

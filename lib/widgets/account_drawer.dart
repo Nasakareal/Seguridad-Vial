@@ -30,6 +30,7 @@ class AccountMenuAction extends StatelessWidget {
 
 class AppAccountDrawer extends StatelessWidget {
   final Future<void> Function() onLogout;
+  static bool _caleaPermissionRefreshed = false;
 
   const AppAccountDrawer({super.key, required this.onLogout});
 
@@ -61,7 +62,14 @@ class AppAccountDrawer extends StatelessWidget {
 
     final photoUrl = SettingsPersonalService.photoUrlFor(payload);
     final unitId = await AuthService.getUnidadId();
-    final permissions = await AuthService.getPermissions();
+    var permissions = await AuthService.getPermissions();
+    // CALEA es un permiso nuevo. Se fuerza una actualización una vez por
+    // ejecución para que el acceso aparezca sin exigir cerrar sesión.
+    if (!_caleaPermissionRefreshed) {
+      _caleaPermissionRefreshed = true;
+      permissions = await AuthService.refreshPermissions();
+    }
+    final canViewCalea = await AuthService.can('ver calea');
     final canUseTrafficPriority =
         await AuthService.isSuperadmin() ||
         await AuthService.hasFullOperationalAccess() ||
@@ -87,6 +95,7 @@ class AppAccountDrawer extends StatelessWidget {
       access: access,
       canUseTrafficPriority: canUseTrafficPriority,
       canUseWorkshopTrafficLights: canUseWorkshopTrafficLights,
+      canViewCalea: canViewCalea,
     );
   }
 
@@ -206,6 +215,13 @@ class AppAccountDrawer extends StatelessWidget {
                               onTap: () =>
                                   _goTo(context, AppRoutes.comunicaciones),
                             ),
+                            if (summary?.canViewCalea == true)
+                              DrawerActionTile(
+                                icon: Icons.policy_outlined,
+                                title: 'Directivas CALEA',
+                                subtitle: 'Consultar, buscar y estudiar',
+                                onTap: () => _goTo(context, AppRoutes.calea),
+                              ),
                             if (summary?.canUseTrafficPriority == true)
                               DrawerActionTile(
                                 icon: Icons.traffic_outlined,
@@ -221,10 +237,8 @@ class AppAccountDrawer extends StatelessWidget {
                                 title: 'Semáforos de talleres',
                                 subtitle:
                                     'Fases y tiempos de equipos de Fomento',
-                                onTap: () => _goTo(
-                                  context,
-                                  AppRoutes.semaforosTalleres,
-                                ),
+                                onTap: () =>
+                                    _goTo(context, AppRoutes.semaforosTalleres),
                               ),
                             DrawerActionTile(
                               icon: Icons.sticky_note_2_outlined,
@@ -368,6 +382,7 @@ class _AccountSummary {
   final AdministrativeAccess access;
   final bool canUseTrafficPriority;
   final bool canUseWorkshopTrafficLights;
+  final bool canViewCalea;
 
   const _AccountSummary({
     required this.name,
@@ -378,6 +393,7 @@ class _AccountSummary {
     required this.access,
     required this.canUseTrafficPriority,
     required this.canUseWorkshopTrafficLights,
+    required this.canViewCalea,
   });
 }
 
