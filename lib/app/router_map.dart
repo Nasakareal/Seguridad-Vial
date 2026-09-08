@@ -37,6 +37,9 @@ import '../screens/red_apoyo/directorio_red_apoyo_screen.dart';
 import '../screens/red_apoyo/directorio_red_apoyo_show_screen.dart';
 import '../screens/calea/calea_screen.dart';
 import '../screens/calea/calea_detail_screen.dart';
+import '../screens/calea/calea_surveys_screen.dart';
+import '../screens/calea/calea_survey_form_screen.dart';
+import '../screens/calea/calea_survey_public_screen.dart';
 
 import '../screens/accidentes/accidentes_screen.dart';
 import '../screens/accidentes/create_screen.dart';
@@ -168,6 +171,9 @@ final Map<String, WidgetBuilder> appRoutesMap = {
       const DirectorioRedApoyoShowScreen(),
   AppRoutes.calea: (context) => const CaleaScreen(),
   AppRoutes.caleaDetalle: (context) => const CaleaDetailScreen(),
+  AppRoutes.caleaEncuestas: (context) => const CaleaSurveysScreen(),
+  AppRoutes.caleaEncuestaCrear: (context) => const CaleaSurveyFormScreen(),
+  AppRoutes.caleaEncuestaPublica: (context) => const CaleaSurveyPublicScreen(),
 
   AppRoutes.accidentes: (context) => const AccidentesScreen(),
   AppRoutes.accidentesCreate: (context) => const CreateHechoScreen(),

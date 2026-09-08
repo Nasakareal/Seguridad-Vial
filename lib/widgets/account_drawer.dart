@@ -204,6 +204,16 @@ class AppAccountDrawer extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(height: 12),
+                      const DrawerSectionLabel(label: 'Encuestas'),
+                      DrawerSurface(
+                        child: DrawerActionTile(
+                          icon: Icons.fact_check_outlined,
+                          title: 'Encuestas CALEA',
+                          subtitle: 'Pendientes, tiempo y resultados',
+                          onTap: () => _goTo(context, AppRoutes.caleaEncuestas),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
                       const DrawerSectionLabel(label: 'Herramientas'),
                       DrawerSurface(
                         child: Column(

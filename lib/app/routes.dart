@@ -28,6 +28,9 @@ class AppRoutes {
   static const String directorioRedApoyoShow = '/directorio-red-apoyo/show';
   static const String calea = '/calea';
   static const String caleaDetalle = '/calea/detalle';
+  static const String caleaEncuestas = '/calea/encuestas';
+  static const String caleaEncuestaCrear = '/calea/encuestas/crear';
+  static const String caleaEncuestaPublica = '/calea/encuestas/publica';
 
   static const String accidentes = '/accidentes';
   static const String accidentesCreate = '/accidentes/create';

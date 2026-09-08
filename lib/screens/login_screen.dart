@@ -11,6 +11,7 @@ import 'home_motociclista_screen.dart';
 import 'home_screen.dart';
 import 'home_perito_screen.dart';
 import 'location_consent_screen.dart';
+import '../app/routes.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -228,6 +229,20 @@ class _LoginScreenState extends State<LoginScreen> {
                                         onPressed: _login,
                                       ),
                                     ),
+                              const SizedBox(height: 10),
+                              SizedBox(
+                                width: double.infinity,
+                                child: OutlinedButton.icon(
+                                  icon: const Icon(Icons.fact_check_outlined),
+                                  label: const Text(
+                                    'Contestar encuesta sin cuenta',
+                                  ),
+                                  onPressed: () => Navigator.pushNamed(
+                                    context,
+                                    AppRoutes.caleaEncuestaPublica,
+                                  ),
+                                ),
+                              ),
                             ],
                           ),
                         ),
