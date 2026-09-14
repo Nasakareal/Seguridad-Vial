@@ -21,6 +21,7 @@ import '../screens/home_motociclista_screen.dart';
 import '../screens/home_screen.dart';
 import '../screens/home_perito_screen.dart';
 import '../screens/account/change_password_screen.dart';
+import '../screens/account/account_settings_screen.dart';
 import '../screens/account/profile_screen.dart';
 import '../screens/mis_capturas/mis_capturas_screen.dart';
 import '../screens/notes/user_notes_screen.dart';
@@ -141,6 +142,7 @@ final Map<String, WidgetBuilder> appRoutesMap = {
       const MotociclistaReportsScreen(),
   AppRoutes.homeDelegaciones: (context) => const HomeDelegacionesScreen(),
   AppRoutes.profile: (context) => const ProfileScreen(),
+  AppRoutes.accountSettings: (context) => const AccountSettingsScreen(),
   AppRoutes.changePassword: (context) => const ChangePasswordScreen(),
   AppRoutes.misCapturas: (context) => const MisCapturasScreen(),
   AppRoutes.notes: (context) => const UserNotesScreen(),

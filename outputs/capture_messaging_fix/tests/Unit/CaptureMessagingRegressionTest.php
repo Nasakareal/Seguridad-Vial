@@ -110,10 +110,16 @@ class CaptureMessagingRegressionTest extends TestCase
 
     public function test_communication_push_has_audible_android_and_apple_options(): void
     {
-        $options = PushService::platformOptions(['modulo' => 'comunicaciones', 'comunicacion_id' => '10']);
-        $this->assertSame('comunicaciones_v3', $options['android']['notification']['channel_id']);
-        $this->assertSame('message_received', $options['android']['notification']['sound']);
+        $options = PushService::platformOptions(
+            ['modulo' => 'comunicaciones', 'comunicacion_id' => '10'],
+            'Mario Bautista R.',
+            'Contestar de enterado'
+        );
+        $this->assertSame('high', $options['android']['priority']);
+        $this->assertArrayNotHasKey('notification', $options['android']);
         $this->assertSame('default', $options['apns']['payload']['aps']['sound']);
+        $this->assertSame('Mario Bautista R.', $options['apns']['payload']['aps']['alert']['title']);
+        $this->assertSame('comunicaciones_prioritarias', $options['apns']['payload']['aps']['thread-id']);
         $this->assertSame([], PushService::platformOptions(['modulo' => 'hechos']));
     }
 

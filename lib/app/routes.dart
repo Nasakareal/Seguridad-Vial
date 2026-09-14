@@ -10,6 +10,7 @@ class AppRoutes {
   static const String motociclistaReportes = '/motociclista/reportes';
   static const String homeDelegaciones = '/home-delegaciones';
   static const String profile = '/profile';
+  static const String accountSettings = '/account/settings';
   static const String changePassword = '/profile/change-password';
   static const String misCapturas = '/mis-capturas';
   static const String notes = '/notes';

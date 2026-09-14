@@ -41,16 +41,29 @@ class PushService
             $allOk = true;
 
             foreach ($tokens as $t) {
-                $payload = [
-                    'message' => [
-                        'token' => $t,
-                        'notification' => [
-                            'title' => $title,
-                            'body'  => $body,
-                        ],
-                        'data' => $this->stringifyData($data),
-                    ] + self::platformOptions($data),
+                $isCommunication = ($data['modulo'] ?? '') === 'comunicaciones';
+                $messageData = $data;
+                if ($isCommunication) {
+                    $messageData['push_title'] = $title;
+                    $messageData['push_body'] = $body;
+                }
+
+                $message = [
+                    'token' => $t,
+                    'data' => $this->stringifyData($messageData),
                 ];
+                if ($isCommunication) {
+                    // Android receives a high-priority data push so the app can
+                    // render an ongoing, separately grouped notification.
+                    $message += self::platformOptions($data, $title, $body);
+                } else {
+                    $message['notification'] = [
+                        'title' => $title,
+                        'body'  => $body,
+                    ];
+                }
+
+                $payload = ['message' => $message];
 
                 $res = Http::timeout(15)
                     ->withToken($accessToken)
@@ -73,7 +86,7 @@ class PushService
         }
     }
 
-    public static function platformOptions(array $data): array
+    public static function platformOptions(array $data, string $title = '', string $body = ''): array
     {
         if (($data['modulo'] ?? '') !== 'comunicaciones') {
             return [];
@@ -81,15 +94,15 @@ class PushService
         return [
             'android' => [
                 'priority' => 'high',
-                'notification' => [
-                    'channel_id' => 'comunicaciones_v3',
-                    'sound' => 'message_received',
-                    'tag' => 'comunicacion_'.($data['comunicacion_id'] ?? ''),
-                ],
             ],
             'apns' => [
                 'headers' => ['apns-priority' => '10', 'apns-push-type' => 'alert'],
-                'payload' => ['aps' => ['sound' => 'default']],
+                'payload' => ['aps' => [
+                    'alert' => ['title' => $title, 'body' => $body],
+                    'sound' => 'default',
+                    'thread-id' => 'comunicaciones_prioritarias',
+                    'category' => 'COMUNICACION_PRIORITARIA',
+                ]],
             ],
         ];
     }

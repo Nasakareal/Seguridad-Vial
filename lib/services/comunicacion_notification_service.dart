@@ -125,13 +125,18 @@ class ComunicacionNotificationService {
       ComunicacionNotificationService._();
 
   // Los canales de Android son inmutables. Se usa un id nuevo para que los
-  // dispositivos que ya crearon el canal anterior adopten el sonido corregido.
-  static const String channelId = 'comunicaciones_v3';
+  // dispositivos que ya crearon el canal anterior adopten la nueva identidad.
+  static const String channelId = 'comunicaciones_prioritarias_v4';
 
-  static const String channelName = 'Comunicaciones';
+  static const String channelName = 'Comunicaciones prioritarias';
 
   static const String channelDescription =
-      'Mensajes, avisos y órdenes de Seguridad Vial';
+      'Mensajes, avisos y órdenes que requieren atención';
+
+  static const String androidGroupKey =
+      'mx.gob.morelia.seguridad_vial.COMUNICACIONES';
+
+  static const String appleThreadIdentifier = 'comunicaciones_prioritarias';
 
   final FirebaseMessaging _messaging = FirebaseMessaging.instance;
 
@@ -349,14 +354,26 @@ class ComunicacionNotificationService {
 
     final cuerpo = notification?.body ?? _cuerpoEvento(evento);
 
-    const androidDetails = AndroidNotificationDetails(
+    final androidDetails = AndroidNotificationDetails(
       channelId,
       channelName,
       channelDescription: channelDescription,
+      icon: 'ic_stat_comunicacion',
       importance: Importance.max,
       priority: Priority.high,
       playSound: false,
       enableVibration: true,
+      groupKey: androidGroupKey,
+      autoCancel: true,
+      ongoing: true,
+      category: AndroidNotificationCategory.message,
+      subText: 'COMUNICACIÓN PRIORITARIA',
+      ticker: cuerpo,
+      styleInformation: BigTextStyleInformation(
+        cuerpo,
+        contentTitle: titulo,
+        summaryText: 'Comunicación prioritaria',
+      ),
       visibility: NotificationVisibility.private,
     );
 
@@ -364,9 +381,10 @@ class ComunicacionNotificationService {
       presentAlert: true,
       presentBadge: true,
       presentSound: false,
+      threadIdentifier: appleThreadIdentifier,
     );
 
-    const details = NotificationDetails(
+    final details = NotificationDetails(
       android: androidDetails,
       iOS: iosDetails,
     );
@@ -378,6 +396,78 @@ class ComunicacionNotificationService {
       titulo,
       cuerpo,
       details,
+      payload: evento.toPayload(),
+    );
+  }
+
+  /// Los pushes de comunicaciones son data-only en Android para que incluso
+  /// con la app cerrada podamos aplicar grupo, icono y persistencia propios.
+  @pragma('vm:entry-point')
+  static Future<void> mostrarDesdeSegundoPlano(RemoteMessage message) async {
+    if (!esComunicacion(message)) {
+      return;
+    }
+
+    final evento = ComunicacionPushEvento.fromRemoteMessage(
+      message,
+      accion: ComunicacionPushAccion.recibida,
+    );
+    final titulo =
+        _nullableString(message.data['push_title']) ??
+        evento.remitente ??
+        'Comunicación prioritaria';
+    final cuerpo =
+        _nullableString(message.data['push_body']) ??
+        evento.contenido ??
+        evento.asunto ??
+        'Tienes una comunicación pendiente.';
+
+    const channel = AndroidNotificationChannel(
+      channelId,
+      channelName,
+      description: channelDescription,
+      importance: Importance.max,
+      playSound: true,
+      sound: RawResourceAndroidNotificationSound('message_received'),
+      enableVibration: true,
+    );
+    final androidPlugin = localNotifications
+        .resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin
+        >();
+    await androidPlugin?.createNotificationChannel(channel);
+
+    final details = AndroidNotificationDetails(
+      channelId,
+      channelName,
+      channelDescription: channelDescription,
+      icon: 'ic_stat_comunicacion',
+      importance: Importance.max,
+      priority: Priority.high,
+      playSound: true,
+      sound: const RawResourceAndroidNotificationSound('message_received'),
+      enableVibration: true,
+      groupKey: androidGroupKey,
+      autoCancel: true,
+      ongoing: true,
+      category: AndroidNotificationCategory.message,
+      subText: 'COMUNICACIÓN PRIORITARIA',
+      ticker: cuerpo,
+      styleInformation: BigTextStyleInformation(
+        cuerpo,
+        contentTitle: titulo,
+        summaryText: 'Comunicación prioritaria',
+      ),
+      visibility: NotificationVisibility.private,
+    );
+
+    final id =
+        evento.comunicacionId ?? _notificationIdEstatico(message.messageId);
+    await localNotifications.show(
+      id,
+      titulo,
+      cuerpo,
+      NotificationDetails(android: details),
       payload: evento.toPayload(),
     );
   }
@@ -439,6 +529,10 @@ class ComunicacionNotificationService {
   }
 
   int _notificationId(String? messageId) {
+    return _notificationIdEstatico(messageId);
+  }
+
+  static int _notificationIdEstatico(String? messageId) {
     if (messageId == null || messageId.isEmpty) {
       return DateTime.now().millisecondsSinceEpoch.remainder(2147483647);
     }

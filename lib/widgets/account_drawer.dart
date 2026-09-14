@@ -361,6 +361,17 @@ class AppAccountDrawer extends StatelessWidget {
                         ),
                       ],
                       const SizedBox(height: 12),
+                      const DrawerSectionLabel(label: 'Ajustes'),
+                      DrawerSurface(
+                        child: DrawerActionTile(
+                          icon: Icons.tune_outlined,
+                          title: 'Ajustes',
+                          subtitle: 'Preferencias de alertas y notificaciones',
+                          onTap: () =>
+                              _goTo(context, AppRoutes.accountSettings),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
                       const DrawerSectionLabel(label: 'Sesión'),
                       DrawerSurface(
                         child: DrawerActionTile(

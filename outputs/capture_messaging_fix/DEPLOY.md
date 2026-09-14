@@ -27,6 +27,10 @@ No se cambiaron credenciales de Firebase ni se enviaron mensajes de prueba reale
   en la app antes de continuar vehículos o lesionados.
 - Los mensajes web/API disparan push mediante el mismo servicio que Waze, tras
   responder al envío, para que una falla push no provoque repetir el mensaje.
+- En Android, las comunicaciones usan un push de datos de alta prioridad para
+  mostrarse con icono y grupo propios, sin poder descartarse hasta abrirlas.
+- En Apple se agrupan en el hilo `comunicaciones_prioritarias`; iOS no permite
+  bloquear el descarte manual de una notificación.
 - Los destinatarios pueden abrir y responder al superadmin que les escribió.
 
 La detección por contenido evita coincidencias exactas; no intenta decidir que dos

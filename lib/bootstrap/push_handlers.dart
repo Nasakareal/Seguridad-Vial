@@ -1,18 +1,21 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../core/globals.dart';
 import '../core/safe_payload.dart';
 import '../firebase_options.dart';
 import '../app/routes.dart';
+import '../services/comunicacion_notification_service.dart';
 
 Map<String, dynamic>? _pendingPushTapData;
 
 @pragma('vm:entry-point')
-Future<void> firebaseMessagingBackgroundHandler(message) async {
+Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  await ComunicacionNotificationService.mostrarDesdeSegundoPlano(message);
 }
 
 Future<void> openMapsFromData(Map<String, dynamic> data) async {
