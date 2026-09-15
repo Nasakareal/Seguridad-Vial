@@ -14,6 +14,8 @@ import 'tracking_guard_constants.dart';
 import 'tracking_guard_notification_service.dart';
 import 'tracking_task.dart';
 import 'suspicious_place_local_tracker.dart';
+import 'response_route_recorder.dart';
+import 'location_flag_service.dart';
 
 class TrackingService {
   static const String notificationTitle = trackingGuardNotificationTitle;
@@ -204,6 +206,7 @@ class TrackingService {
     if (_iosRunning) return true;
 
     final ls = LocationService(apiBase: _apiBase);
+    unawaited(ResponseRouteRecorder.flushPending(apiBase: _apiBase));
 
     await _maybeRequestPreciseAccuracy();
 
@@ -260,6 +263,11 @@ class TrackingService {
 
     _lastGood = pos;
     _lastGoodAt = DateTime.now();
+    if (await AuthService.getUnidadId() == 1 &&
+        await AuthService.canShareLocationTracking() &&
+        await LocationFlagService.isEnabledForRoute()) {
+      await ResponseRouteRecorder.record(pos, apiBase: _apiBase);
+    }
     await DelegacionDistanceService.recordLocalMileagePoint(
       lat: pos.latitude,
       lng: pos.longitude,

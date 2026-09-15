@@ -11,6 +11,7 @@ import 'location_flag_service.dart';
 import 'tracking_guard_constants.dart';
 import 'tracking_guard_notification_service.dart';
 import 'suspicious_place_local_tracker.dart';
+import 'response_route_recorder.dart';
 
 class TrackingTaskHandler extends TaskHandler {
   TrackingTaskHandler(this.apiBase);
@@ -126,6 +127,8 @@ class TrackingTaskHandler extends TaskHandler {
       final age = DateTime.now().difference(pos.timestamp);
       if (age.inMinutes >= 2) return;
 
+      await ResponseRouteRecorder.record(pos, apiBase: apiBase);
+
       await DelegacionDistanceService.recordLocalMileagePoint(
         lat: pos.latitude,
         lng: pos.longitude,
@@ -178,6 +181,7 @@ class TrackingTaskHandler extends TaskHandler {
 
   @override
   void onStart(DateTime timestamp, SendPort? sendPort) {
+    unawaited(ResponseRouteRecorder.flushPending(apiBase: apiBase));
     unawaited(_refreshGuardPresence());
     unawaited(_sendLocationOnce());
   }

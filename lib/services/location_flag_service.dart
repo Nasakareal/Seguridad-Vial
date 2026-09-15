@@ -5,6 +5,31 @@ import 'auth_service.dart';
 
 class LocationFlagService {
   static const String apiBase = 'https://seguridadvial-mich.com/api';
+  static int? _routeOwner;
+  static bool _routeAllowed = false;
+  static DateTime? _routeCheckedAt;
+
+  static Future<bool> isEnabledForRoute() async {
+    final owner = await AuthService.getUserId();
+    if (owner != _routeOwner) {
+      _routeOwner = owner;
+      _routeAllowed = false;
+      _routeCheckedAt = null;
+    }
+    if (_routeCheckedAt != null &&
+        DateTime.now().difference(_routeCheckedAt!) <
+            const Duration(seconds: 45)) {
+      return _routeAllowed;
+    }
+    _routeCheckedAt = DateTime.now();
+    try {
+      _routeAllowed = await isEnabledForMe();
+    } catch (_) {
+      // Keep the last explicit authorization while offline; the server also
+      // verifies the shift at each sample's capture time before accepting it.
+    }
+    return _routeAllowed;
+  }
 
   static bool _toBool(dynamic v) {
     return v == true ||
@@ -59,10 +84,15 @@ class LocationFlagService {
     final token = await AuthService.getToken();
     if (token == null || token.isEmpty) return false;
 
-    final res = await http.get(
-      Uri.parse('$apiBase/me'),
-      headers: {'Authorization': 'Bearer $token', 'Accept': 'application/json'},
-    );
+    final res = await http
+        .get(
+          Uri.parse('$apiBase/me'),
+          headers: {
+            'Authorization': 'Bearer $token',
+            'Accept': 'application/json',
+          },
+        )
+        .timeout(const Duration(seconds: 5));
 
     if (res.statusCode != 200) return false;
 
