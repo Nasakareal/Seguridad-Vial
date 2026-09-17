@@ -24,6 +24,7 @@ import '../screens/account/change_password_screen.dart';
 import '../screens/account/account_settings_screen.dart';
 import '../screens/account/profile_screen.dart';
 import '../screens/mis_capturas/mis_capturas_screen.dart';
+import '../screens/patrullas/patrulla_servicio_screen.dart';
 import '../screens/notes/user_notes_screen.dart';
 import '../screens/settings/personal_incidencia_form_screen.dart';
 import '../screens/settings/personal_show_screen.dart';
@@ -145,6 +146,12 @@ final Map<String, WidgetBuilder> appRoutesMap = {
   AppRoutes.accountSettings: (context) => const AccountSettingsScreen(),
   AppRoutes.changePassword: (context) => const ChangePasswordScreen(),
   AppRoutes.misCapturas: (context) => const MisCapturasScreen(),
+  AppRoutes.patrullaServicio: (context) {
+    final section = ModalRoute.of(context)?.settings.arguments;
+    return PatrullaServicioScreen(
+      initialSection: section is String ? section : 'servicio',
+    );
+  },
   AppRoutes.notes: (context) => const UserNotesScreen(),
   AppRoutes.comunicaciones: (context) => _ComunicacionesServiceLoader(
     builder: (service) => ComunicacionesScreen(service: service),

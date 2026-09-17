@@ -17,6 +17,7 @@ import '../../widgets/antecedente_highlight_tile.dart';
 import '../../widgets/marca_vehiculo_dropdown.dart';
 import '../../widgets/reporte_robo_selector.dart';
 import '../../widgets/tarjeta_circulacion_scanner_screen.dart';
+import 'ayuda/formulario_vehiculo_help_sheet.dart';
 
 class VehiculoCreateScreen extends StatefulWidget {
   const VehiculoCreateScreen({super.key});
@@ -815,6 +816,71 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
     }
   }
 
+  void _mostrarAyudaCapturaVehiculo() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      showDragHandle: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (sheetContext) {
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Row(
+                children: [
+                  Icon(Icons.help_outline, color: Colors.blue, size: 28),
+                  SizedBox(width: 10),
+                  Text(
+                    '¿En qué necesitas ayuda?',
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Consulta cómo completar correctamente los datos del vehículo.',
+                style: TextStyle(color: Colors.grey.shade700),
+              ),
+              const SizedBox(height: 18),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const CircleAvatar(
+                  child: Icon(Icons.directions_car_outlined),
+                ),
+                title: const Text('Cómo llenar el formulario del vehículo'),
+                subtitle: const Text(
+                  'Paso a paso de qué información va en cada campo.',
+                ),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () {
+                  Navigator.of(sheetContext).pop();
+
+                  Future.delayed(const Duration(milliseconds: 180), () {
+                    if (!mounted) return;
+
+                    showModalBottomSheet(
+                      context: context,
+                      isScrollControlled: true,
+                      useSafeArea: true,
+                      backgroundColor: Colors.transparent,
+                      builder: (_) => const FormularioVehiculoHelpSheet(),
+                    );
+                  });
+                },
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final hechoId = _hechoIdFromArgs(context);
@@ -856,6 +922,13 @@ class _VehiculoCreateScreenState extends State<VehiculoCreateScreen> {
               ? 'Nuevo vehículo (Hecho pendiente)'
               : 'Nuevo vehículo (Hecho #$hechoId)',
         ),
+        actions: [
+          IconButton(
+            tooltip: 'Ayuda',
+            icon: const Icon(Icons.help_outline),
+            onPressed: _mostrarAyudaCapturaVehiculo,
+          ),
+        ],
       ),
       body: Padding(
         padding: const EdgeInsets.all(16),

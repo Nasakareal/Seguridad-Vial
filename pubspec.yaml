@@ -68,6 +68,7 @@ flutter:
     - assets/images/pompella/vialidades.png
     - assets/images/pompella/fomento.png
     - assets/images/pompella/delegaciones.png
+    - assets/ayuda/
 
 flutter_icons:
   android: true

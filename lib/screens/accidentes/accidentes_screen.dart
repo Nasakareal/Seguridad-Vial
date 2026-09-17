@@ -21,6 +21,7 @@ import '../login_screen.dart';
 import 'edit_screen.dart';
 
 import 'widgets/hecho_card.dart';
+import 'ayuda/siniestro_help_sheet.dart';
 
 class AccidentesScreen extends StatefulWidget {
   const AccidentesScreen({super.key});
@@ -818,6 +819,76 @@ class _AccidentesScreenState extends State<AccidentesScreen>
     }
   }
 
+  void _mostrarAyuda() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      showDragHandle: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (context) {
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Row(
+                children: [
+                  Icon(Icons.help_outline, color: Colors.blue, size: 28),
+                  SizedBox(width: 10),
+                  Text(
+                    '¿En qué necesitas ayuda?',
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Consulta información sobre el uso del sistema.',
+                style: TextStyle(color: Colors.grey.shade700),
+              ),
+              const SizedBox(height: 18),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const CircleAvatar(child: Icon(Icons.add_road)),
+                title: const Text('Cómo Registrar un Siniestro'),
+                subtitle: const Text(
+                  'Cómo iniciar correctamente la captura de un hecho.',
+                ),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () {
+                  Navigator.of(context).pop();
+
+                  showModalBottomSheet(
+                    context: this.context,
+                    isScrollControlled: true,
+                    useSafeArea: true,
+                    backgroundColor: Colors.transparent,
+                    builder: (_) => const SiniestroHelpSheet(),
+                  );
+                },
+              ),
+              const Divider(),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const CircleAvatar(child: Icon(Icons.support_agent)),
+                title: const Text('Problemas con el sistema'),
+                subtitle: const Text(
+                  'Errores de acceso, carga, fotografías o funcionamiento.',
+                ),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () {},
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   Widget _buildFiltrosCard({required int totalFiltrado}) {
     final delegaciones = _delegacionesVisiblesParaSelect();
     final delegacionIds = delegaciones.map((d) => _toInt(d['id'])).toSet();
@@ -842,6 +913,25 @@ class _AccidentesScreenState extends State<AccidentesScreen>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          Align(
+            alignment: Alignment.centerRight,
+            child: OutlinedButton.icon(
+              onPressed: _mostrarAyuda,
+              icon: const Icon(Icons.help_outline, size: 17),
+              label: const Text('Ayuda'),
+              style: OutlinedButton.styleFrom(
+                visualDensity: VisualDensity.compact,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 6,
+                ),
+                minimumSize: Size.zero,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+
           Text(
             'Mostrando hechos del día: $_fechaSeleccionada',
             style: TextStyle(
@@ -987,7 +1077,7 @@ class _AccidentesScreenState extends State<AccidentesScreen>
       appBar: AppBar(
         elevation: 0,
         backgroundColor: Colors.blue,
-        title: const Text('Hechos / Accidentes'),
+        title: const Text('Siniestros'),
         actions: [
           IconButton(
             tooltip: 'Buscar',

@@ -70,6 +70,7 @@ class AppAccountDrawer extends StatelessWidget {
       permissions = await AuthService.refreshPermissions();
     }
     final canViewCalea = await AuthService.can('ver calea');
+    final canUsePatrol = await AuthService.can('ver patrullas');
     final canUseTrafficPriority =
         await AuthService.isSuperadmin() ||
         await AuthService.hasFullOperationalAccess() ||
@@ -96,6 +97,7 @@ class AppAccountDrawer extends StatelessWidget {
       canUseTrafficPriority: canUseTrafficPriority,
       canUseWorkshopTrafficLights: canUseWorkshopTrafficLights,
       canViewCalea: canViewCalea,
+      canUsePatrol: canUsePatrol,
     );
   }
 
@@ -204,6 +206,47 @@ class AppAccountDrawer extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(height: 12),
+                      if (summary?.canUsePatrol == true) ...[
+                        const DrawerSectionLabel(label: 'Patrulla'),
+                        DrawerSurface(
+                          child: Column(
+                            children: _withDividers([
+                              DrawerActionTile(
+                                icon: Icons.key_rounded,
+                                title: 'Recibir patrulla',
+                                subtitle:
+                                    'Inspección, evidencia e inicio de turno',
+                                onTap: () => _goTo(
+                                  context,
+                                  AppRoutes.patrullaServicio,
+                                  arguments: 'recibir',
+                                ),
+                              ),
+                              DrawerActionTile(
+                                icon: Icons.local_police_outlined,
+                                title: 'Mi servicio de patrulla',
+                                subtitle: 'Bitácora, kilometraje y entrega',
+                                onTap: () => _goTo(
+                                  context,
+                                  AppRoutes.patrullaServicio,
+                                  arguments: 'servicio',
+                                ),
+                              ),
+                              DrawerActionTile(
+                                icon: Icons.history_rounded,
+                                title: 'Historial de patrullas',
+                                subtitle: 'Consultar servicios anteriores',
+                                onTap: () => _goTo(
+                                  context,
+                                  AppRoutes.patrullaServicio,
+                                  arguments: 'historial',
+                                ),
+                              ),
+                            ]),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                      ],
                       const DrawerSectionLabel(label: 'Encuestas'),
                       DrawerSurface(
                         child: DrawerActionTile(
@@ -404,6 +447,7 @@ class _AccountSummary {
   final bool canUseTrafficPriority;
   final bool canUseWorkshopTrafficLights;
   final bool canViewCalea;
+  final bool canUsePatrol;
 
   const _AccountSummary({
     required this.name,
@@ -415,6 +459,7 @@ class _AccountSummary {
     required this.canUseTrafficPriority,
     required this.canUseWorkshopTrafficLights,
     required this.canViewCalea,
+    required this.canUsePatrol,
   });
 }
 

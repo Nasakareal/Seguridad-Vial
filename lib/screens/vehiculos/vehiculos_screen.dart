@@ -9,6 +9,10 @@ import '../../app/routes.dart';
 import '../../services/auth_service.dart';
 import '../../services/photo_picker_service.dart';
 import '../../widgets/safe_network_image.dart';
+import 'ayuda/vehiculo_help_sheet.dart';
+import 'ayuda/acciones_vehiculo_help_sheet.dart';
+import 'ayuda/eliminar_registro_help_sheet.dart';
+import 'ayuda/lesionado_help_sheet.dart';
 
 class VehiculosScreen extends StatefulWidget {
   const VehiculosScreen({super.key});
@@ -744,6 +748,158 @@ class _VehiculosScreenState extends State<VehiculosScreen> {
     _cargarVehiculos();
   }
 
+  void _mostrarAyudaVehiculos() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      showDragHandle: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (sheetContext) {
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Row(
+                children: [
+                  Icon(Icons.help_outline, color: Colors.blue, size: 28),
+                  SizedBox(width: 10),
+                  Text(
+                    '¿En qué necesitas ayuda?',
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                  ),
+                ],
+              ),
+
+              const SizedBox(height: 8),
+
+              Text(
+                'Consulta las funciones disponibles para vehículos, conductores y lesionados de este hecho.',
+                style: TextStyle(color: Colors.grey.shade700),
+              ),
+
+              const SizedBox(height: 18),
+
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const CircleAvatar(child: Icon(Icons.add_road)),
+                title: const Text('Cómo registrar un vehículo'),
+                subtitle: const Text(
+                  'Paso a paso para agregar un vehículo al hecho.',
+                ),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () {
+                  Navigator.of(sheetContext).pop();
+
+                  Future.delayed(const Duration(milliseconds: 180), () {
+                    if (!mounted) return;
+
+                    showModalBottomSheet(
+                      context: context,
+                      isScrollControlled: true,
+                      useSafeArea: true,
+                      backgroundColor: Colors.transparent,
+                      builder: (_) => const VehiculoHelpSheet(),
+                    );
+                  });
+                },
+              ),
+
+              const Divider(height: 1),
+
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const CircleAvatar(
+                  child: Icon(Icons.touch_app_outlined),
+                ),
+                title: const Text('Qué hace cada botón'),
+                subtitle: const Text(
+                  'Edición, conductor, fotografía, inventario y demás acciones.',
+                ),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () {
+                  Navigator.of(sheetContext).pop();
+
+                  Future.delayed(const Duration(milliseconds: 180), () {
+                    if (!mounted) return;
+
+                    showModalBottomSheet(
+                      context: context,
+                      isScrollControlled: true,
+                      useSafeArea: true,
+                      backgroundColor: Colors.transparent,
+                      builder: (_) => const AccionesVehiculoHelpSheet(),
+                    );
+                  });
+                },
+              ),
+
+              const Divider(height: 1),
+
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const CircleAvatar(child: Icon(Icons.delete_outline)),
+                title: const Text('Cómo eliminar un registro'),
+                subtitle: const Text(
+                  'Qué hacer si se capturó por error un vehículo, conductor o lesionado.',
+                ),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () {
+                  Navigator.of(sheetContext).pop();
+
+                  Future.delayed(const Duration(milliseconds: 180), () {
+                    if (!mounted) return;
+
+                    showModalBottomSheet(
+                      context: context,
+                      isScrollControlled: true,
+                      useSafeArea: true,
+                      backgroundColor: Colors.transparent,
+                      builder: (_) => const EliminarRegistroHelpSheet(),
+                    );
+                  });
+                },
+              ),
+
+              const Divider(height: 1),
+
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const CircleAvatar(
+                  child: Icon(Icons.personal_injury_outlined),
+                ),
+                title: const Text('Cómo registrar una persona lesionada'),
+                subtitle: const Text(
+                  'Paso a paso para agregar lesionados relacionados con el hecho.',
+                ),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () {
+                  Navigator.of(sheetContext).pop();
+
+                  Future.delayed(const Duration(milliseconds: 180), () {
+                    if (!mounted) return;
+
+                    showModalBottomSheet(
+                      context: context,
+                      isScrollControlled: true,
+                      useSafeArea: true,
+                      backgroundColor: Colors.transparent,
+                      builder: (_) => const LesionadoHelpSheet(),
+                    );
+                  });
+                },
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -751,6 +907,12 @@ class _VehiculosScreenState extends State<VehiculosScreen> {
         title: Text('Vehículos (Hecho #$_hechoId)'),
         actions: [
           IconButton(
+            tooltip: 'Ayuda',
+            icon: const Icon(Icons.help_outline),
+            onPressed: _mostrarAyudaVehiculos,
+          ),
+          IconButton(
+            tooltip: 'Actualizar',
             icon: const Icon(Icons.refresh),
             onPressed: _cargarVehiculos,
           ),
