@@ -6,6 +6,7 @@ import '../../models/conduce_legalidad.dart';
 import '../../services/browser_print_service.dart';
 import '../../services/conduce_legalidad_service.dart';
 import '../../services/thermal_printer_service.dart';
+import 'ayuda/conduce_legalidad_workflow_help_sheet.dart';
 import 'conduce_legalidad_module.dart';
 
 class ConduceLegalidadBoletaScreen extends StatefulWidget {
@@ -263,6 +264,18 @@ class _ConduceLegalidadBoletaScreenState
     ).showSnackBar(SnackBar(content: Text(message)));
   }
 
+  void _showPrintHelp() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => const ConduceLegalidadWorkflowHelpSheet(
+        mode: ConduceLegalidadHelpMode.impresion,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -270,6 +283,11 @@ class _ConduceLegalidadBoletaScreenState
       appBar: AppBar(
         title: const Text('Boleta de infracción'),
         actions: [
+          IconButton(
+            tooltip: 'Ayuda para imprimir',
+            onPressed: _showPrintHelp,
+            icon: const Icon(Icons.help_outline),
+          ),
           IconButton(
             tooltip: 'Imprimir',
             onPressed: _loading || _printing ? null : _print,
@@ -515,6 +533,17 @@ class _BoletaPaper extends StatelessWidget {
                 vehiculo?.estadoPlacas,
                 fallback: 'No capturado',
               ),
+            ),
+            _TicketBlock(
+              label: 'NÚMERO DE INVENTARIO',
+              value: _value(
+                vehiculo?.numeroInventario,
+                fallback: 'No capturado',
+              ),
+            ),
+            _TicketBlock(
+              label: 'CORRALÓN DE DESTINO',
+              value: _value(vehiculo?.corralon, fallback: 'No capturado'),
             ),
             _TicketBlock(label: 'Descripción', value: _vehiculoDescripcion),
             if (_mostrarInformacionLiberacion) ...[
@@ -840,6 +869,14 @@ void _writeThermalTicket(
     _value(data.vehiculo?.placas, fallback: 'No capturado'),
     'Estado placas',
     _value(data.vehiculo?.estadoPlacas, fallback: 'No capturado'),
+  );
+  ticket.block(
+    'NÚMERO DE INVENTARIO',
+    _value(data.vehiculo?.numeroInventario, fallback: 'No capturado'),
+  );
+  ticket.block(
+    'CORRALÓN DE DESTINO',
+    _value(data.vehiculo?.corralon, fallback: 'No capturado'),
   );
   ticket.block('Descripción', data.vehiculoDescripcion);
   if (data.mostrarInformacionLiberacion) {
@@ -1901,6 +1938,7 @@ class _BoletaPreviewData {
             placas: 'ABC1D',
             estadoPlacas: 'Michoacán',
             serie: '3SCPFTDEMO0000001',
+            numeroInventario: 'INV-2026-0042',
             tipoServicio: 'Particular',
             retencionVehiculo: true,
             motivoRetencion: 'Retencion por falta de licencia vigente.',

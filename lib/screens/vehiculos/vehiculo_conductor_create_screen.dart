@@ -12,6 +12,7 @@ import '../services/auth_service.dart';
 import '../../services/local_draft_service.dart';
 import '../../services/vehiculo_form_service.dart';
 import '../../widgets/antecedente_highlight_tile.dart';
+import '../../widgets/help_options_menu.dart';
 import 'ayuda/formulario_conductor_help_sheet.dart';
 
 class VehiculoConductorCreateScreen extends StatefulWidget {
@@ -570,54 +571,35 @@ class _VehiculoConductorCreateScreenState
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       builder: (sheetContext) {
-        return Padding(
-          padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Row(
-                children: [
-                  Icon(Icons.help_outline, color: Colors.blue, size: 28),
-                  SizedBox(width: 10),
-                  Text(
-                    '¿En qué necesitas ayuda?',
-                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                  ),
-                ],
+        return HelpOptionsMenu(
+          description:
+              'Consulta cómo completar correctamente los datos del conductor.',
+          children: [
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const CircleAvatar(child: Icon(Icons.person_outline)),
+              title: const Text('Cómo llenar el formulario del conductor'),
+              subtitle: const Text(
+                'Paso a paso de qué información va en cada campo.',
               ),
-              const SizedBox(height: 8),
-              Text(
-                'Consulta cómo completar correctamente los datos del conductor.',
-                style: TextStyle(color: Colors.grey.shade700),
-              ),
-              const SizedBox(height: 18),
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: const CircleAvatar(child: Icon(Icons.person_outline)),
-                title: const Text('Cómo llenar el formulario del conductor'),
-                subtitle: const Text(
-                  'Paso a paso de qué información va en cada campo.',
-                ),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () {
-                  Navigator.of(sheetContext).pop();
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () {
+                Navigator.of(sheetContext).pop();
 
-                  Future.delayed(const Duration(milliseconds: 180), () {
-                    if (!mounted) return;
+                Future.delayed(const Duration(milliseconds: 180), () {
+                  if (!mounted) return;
 
-                    showModalBottomSheet(
-                      context: context,
-                      isScrollControlled: true,
-                      useSafeArea: true,
-                      backgroundColor: Colors.transparent,
-                      builder: (_) => const FormularioConductorHelpSheet(),
-                    );
-                  });
-                },
-              ),
-            ],
-          ),
+                  showModalBottomSheet(
+                    context: context,
+                    isScrollControlled: true,
+                    useSafeArea: true,
+                    backgroundColor: Colors.transparent,
+                    builder: (_) => const FormularioConductorHelpSheet(),
+                  );
+                });
+              },
+            ),
+          ],
         );
       },
     );

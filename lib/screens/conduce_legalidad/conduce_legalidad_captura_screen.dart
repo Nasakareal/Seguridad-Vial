@@ -21,8 +21,10 @@ import '../../services/local_draft_service.dart';
 import '../../services/photo_picker_service.dart';
 import '../../services/vehiculo_form_service.dart';
 import '../../widgets/marca_vehiculo_dropdown.dart';
+import '../../widgets/help_options_menu.dart';
 import '../../widgets/safe_network_image.dart';
 import '../../widgets/tarjeta_circulacion_scanner_screen.dart';
+import 'ayuda/conduce_legalidad_form_help_sheet.dart';
 import 'conduce_legalidad_module.dart';
 
 class ConduceLegalidadCapturaScreen extends StatefulWidget {
@@ -70,6 +72,100 @@ class _ConduceLegalidadCapturaScreenState
   final ImagePicker _picker = ImagePicker();
 
   bool get _editing => widget.initialCaptura != null;
+
+  void _showHelp() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      showDragHandle: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (sheetContext) => HelpOptionsMenu(
+        description:
+            'Elige la parte del formulario que estás llenando en este momento.',
+        children: [
+          _helpOption(
+            sheetContext: sheetContext,
+            title: 'Fundamento y datos de la intervención',
+            subtitle: 'Fundamentos, narrativa, municipio y lugar específico.',
+            icon: Icons.gavel_outlined,
+            color: const Color(0xFF6D28D9),
+            topic: ConduceLegalidadCaptureFormHelpTopic.intervencion,
+          ),
+          const Divider(),
+          _helpOption(
+            sheetContext: sheetContext,
+            title: widget.module.isAlcoholimetria
+                ? 'Vehículo y escaneo de tarjeta'
+                : 'Motocicleta y escaneo de tarjeta',
+            subtitle:
+                'Tipo, carrocería, marca, placas, serie, grúa y corralón.',
+            icon: widget.module.isAlcoholimetria
+                ? Icons.directions_car_outlined
+                : Icons.two_wheeler_outlined,
+            color: const Color(0xFF0F766E),
+            topic: ConduceLegalidadCaptureFormHelpTopic.vehiculo,
+          ),
+          const Divider(),
+          _helpOption(
+            sheetContext: sheetContext,
+            title: 'Persona y escaneo de licencia',
+            subtitle:
+                'Datos personales, licencia, vigencia y revisión antes de agregar.',
+            icon: Icons.badge_outlined,
+            color: const Color(0xFF0369A1),
+            topic: ConduceLegalidadCaptureFormHelpTopic.persona,
+          ),
+          const Divider(),
+          _helpOption(
+            sheetContext: sheetContext,
+            title: 'Fotos, observaciones y guardado',
+            subtitle:
+                'Adjuntar evidencias, revisar la captura y guardarla correctamente.',
+            icon: Icons.save_outlined,
+            color: const Color(0xFF15803D),
+            topic: ConduceLegalidadCaptureFormHelpTopic.guardado,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _helpOption({
+    required BuildContext sheetContext,
+    required String title,
+    required String subtitle,
+    required IconData icon,
+    required Color color,
+    required ConduceLegalidadCaptureFormHelpTopic topic,
+  }) {
+    return ListTile(
+      contentPadding: EdgeInsets.zero,
+      leading: CircleAvatar(
+        backgroundColor: color.withValues(alpha: .12),
+        child: Icon(icon, color: color),
+      ),
+      title: Text(title),
+      subtitle: Text(subtitle),
+      trailing: const Icon(Icons.chevron_right),
+      onTap: () {
+        Navigator.of(sheetContext).pop();
+        showModalBottomSheet(
+          context: context,
+          isScrollControlled: true,
+          useSafeArea: true,
+          backgroundColor: Colors.transparent,
+          builder: (_) => ConduceLegalidadCaptureFormHelpSheet(
+            topic: topic,
+            isEditing: _editing,
+            isAlcoholimetria: widget.module.isAlcoholimetria,
+          ),
+        );
+      },
+    );
+  }
 
   @override
   void initState() {
@@ -294,6 +390,18 @@ class _ConduceLegalidadCapturaScreenState
       if (item.id == current.id && item.codigo == current.codigo) return item;
     }
     for (final item in available) {
+      if ((current.codigo ?? '').isNotEmpty &&
+          item.codigo == current.codigo &&
+          item.display == current.display) {
+        return item;
+      }
+    }
+    for (final item in available) {
+      if ((current.codigo ?? '').isNotEmpty && item.codigo == current.codigo) {
+        return item;
+      }
+    }
+    for (final item in available) {
       if (item.id == current.id) return item;
     }
     return null;
@@ -398,6 +506,7 @@ class _ConduceLegalidadCapturaScreenState
     final vehiculo = await showConduceLegalidadVehiculoModal(
       context,
       fundamentos: _fundamentosSeleccionados,
+      onlyMotorcycles: !widget.module.isAlcoholimetria,
       initialTipoGeneral: widget.module.isAlcoholimetria
           ? 'automovil'
           : 'motocicleta',
@@ -413,6 +522,7 @@ class _ConduceLegalidadCapturaScreenState
     final vehiculo = await showConduceLegalidadVehiculoModal(
       context,
       fundamentos: _fundamentosSeleccionados,
+      onlyMotorcycles: !widget.module.isAlcoholimetria,
       initialTipoGeneral:
           _vehiculos[index].tipoGeneral ??
           (widget.module.isAlcoholimetria ? 'automovil' : 'motocicleta'),
@@ -518,6 +628,16 @@ class _ConduceLegalidadCapturaScreenState
       return;
     }
 
+    final vehiculoError = ConduceLegalidadCapturaRequirements.vehiculoError(
+      isAlcoholimetria: widget.module.isAlcoholimetria,
+      vehiculos: _vehiculos,
+    );
+    if (vehiculoError != null) {
+      setState(() => _contentError = vehiculoError);
+      _scrollToKey(_contentErrorKey);
+      return;
+    }
+
     final fundamentosError = _fundamentosVehiculoError();
     if (fundamentosError != null) {
       setState(() => _contentError = fundamentosError);
@@ -566,13 +686,15 @@ class _ConduceLegalidadCapturaScreenState
           'fundamentos': fundamentos
               .map(
                 (item) => {
-                  'licencia_punto_infraccion_id': item.id,
+                  if (item.id > 0) 'licencia_punto_infraccion_id': item.id,
                   'infraccion_codigo': item.codigo,
                   'fundamento_legal': item.fundamentoLegal,
                 },
               )
               .toList(),
-          'licencia_punto_infraccion_id': fundamentoPrincipal?.id,
+          'licencia_punto_infraccion_id': (fundamentoPrincipal?.id ?? 0) > 0
+              ? fundamentoPrincipal!.id
+              : null,
           'infraccion_codigo': fundamentoPrincipal?.codigo,
           'fundamento_legal': fundamentoPrincipal?.fundamentoLegal,
         },
@@ -680,6 +802,13 @@ class _ConduceLegalidadCapturaScreenState
               ? 'Editar captura ${widget.module.title}'
               : 'Agregar captura ${widget.module.title}',
         ),
+        actions: [
+          IconButton(
+            tooltip: 'Ayuda para llenar y escanear',
+            onPressed: _showHelp,
+            icon: const Icon(Icons.help_outline),
+          ),
+        ],
       ),
       body: _loadingMeta
           ? const Center(child: CircularProgressIndicator())
@@ -1063,6 +1192,7 @@ Future<ConduceLegalidadVehiculo?> showConduceLegalidadVehiculoModal(
   BuildContext context, {
   required List<ConduceLegalidadFundamento> fundamentos,
   required String initialTipoGeneral,
+  bool onlyMotorcycles = false,
   ConduceLegalidadVehiculo? initialVehiculo,
 }) {
   return showModalBottomSheet<ConduceLegalidadVehiculo>(
@@ -1072,6 +1202,7 @@ Future<ConduceLegalidadVehiculo?> showConduceLegalidadVehiculoModal(
     builder: (_) => _VehiculoModal(
       fundamentos: fundamentos,
       initialTipoGeneral: initialTipoGeneral,
+      onlyMotorcycles: onlyMotorcycles,
       initialVehiculo: initialVehiculo,
     ),
   );
@@ -1080,11 +1211,13 @@ Future<ConduceLegalidadVehiculo?> showConduceLegalidadVehiculoModal(
 class _VehiculoModal extends StatefulWidget {
   final List<ConduceLegalidadFundamento> fundamentos;
   final String initialTipoGeneral;
+  final bool onlyMotorcycles;
   final ConduceLegalidadVehiculo? initialVehiculo;
 
   const _VehiculoModal({
     required this.fundamentos,
     required this.initialTipoGeneral,
+    this.onlyMotorcycles = false,
     this.initialVehiculo,
   });
 
@@ -1100,6 +1233,7 @@ class _VehiculoModalState extends State<_VehiculoModal> {
   final _colorCtrl = TextEditingController();
   final _placasCtrl = TextEditingController();
   final _serieCtrl = TextEditingController();
+  final _numeroInventarioCtrl = TextEditingController();
   final _capacidadCtrl = TextEditingController(text: '2');
   final _tipoServicioCtrl = TextEditingController(text: 'PARTICULAR');
   final _tarjetaCtrl = TextEditingController();
@@ -1121,8 +1255,9 @@ class _VehiculoModalState extends State<_VehiculoModal> {
   void initState() {
     super.initState();
     final initial = widget.initialVehiculo;
-    _tipoGeneralSeleccionado =
-        initial?.tipoGeneral ?? widget.initialTipoGeneral;
+    _tipoGeneralSeleccionado = widget.onlyMotorcycles
+        ? 'motocicleta'
+        : initial?.tipoGeneral ?? widget.initialTipoGeneral;
     _tipoCarroceriaSeleccionada = initial?.tipo;
     _marcaCtrl.text = initial?.marca ?? '';
     _modeloCtrl.text = initial?.modelo ?? '';
@@ -1131,6 +1266,7 @@ class _VehiculoModalState extends State<_VehiculoModal> {
     _placasCtrl.text = initial?.placas ?? '';
     _estadoPlacasSeleccionado = initial?.estadoPlacas;
     _serieCtrl.text = initial?.serie ?? '';
+    _numeroInventarioCtrl.text = initial?.numeroInventario ?? '';
     _capacidadCtrl.text = initial == null
         ? '2'
         : initial.capacidadPersonas.toString();
@@ -1159,6 +1295,7 @@ class _VehiculoModalState extends State<_VehiculoModal> {
     _colorCtrl.dispose();
     _placasCtrl.dispose();
     _serieCtrl.dispose();
+    _numeroInventarioCtrl.dispose();
     _capacidadCtrl.dispose();
     _tipoServicioCtrl.dispose();
     _tarjetaCtrl.dispose();
@@ -1246,6 +1383,9 @@ class _VehiculoModalState extends State<_VehiculoModal> {
 
   String? _tipoGeneralValidator(String? value) {
     if ((value ?? '').trim().isEmpty) return 'Requerido';
+    if (widget.onlyMotorcycles && value != 'motocicleta') {
+      return 'Este operativo es exclusivo para motocicletas';
+    }
     return null;
   }
 
@@ -1301,7 +1441,8 @@ class _VehiculoModalState extends State<_VehiculoModal> {
       final tipoGeneral =
           parsed.tipoGeneral ??
           _inferirTipoGeneralPorCarroceria(parsed.tipoCarroceria);
-      if (_isTipoGeneralDisponible(tipoGeneral) &&
+      if ((!widget.onlyMotorcycles || tipoGeneral == 'motocicleta') &&
+          _isTipoGeneralDisponible(tipoGeneral) &&
           _tipoGeneralSeleccionado != tipoGeneral) {
         _tipoGeneralSeleccionado = tipoGeneral;
         _tipoCarroceriaSeleccionada = null;
@@ -1498,6 +1639,7 @@ class _VehiculoModalState extends State<_VehiculoModal> {
         placas: _empty(placasClean),
         estadoPlacas: _empty(estadoPlacasPayload),
         serie: _empty(VehiculoFormService.normalizeSerie(_t(_serieCtrl)) ?? ''),
+        numeroInventario: _empty(_t(_numeroInventarioCtrl)),
         capacidadPersonas: _toIntOrNull(_t(_capacidadCtrl)) ?? 0,
         tipoServicio: _empty(tipoServicio),
         tarjetaCirculacionNombre: _empty(_t(_tarjetaCtrl)),
@@ -1592,12 +1734,18 @@ class _VehiculoModalState extends State<_VehiculoModal> {
                     value: null,
                     child: Text('-- Seleccione --'),
                   ),
-                  ...VehiculoTaxonomia.tiposGenerales.map((item) {
-                    return DropdownMenuItem<String>(
-                      value: item['value'],
-                      child: Text(item['label'] ?? ''),
-                    );
-                  }),
+                  ...VehiculoTaxonomia.tiposGenerales
+                      .where(
+                        (item) =>
+                            !widget.onlyMotorcycles ||
+                            item['value'] == 'motocicleta',
+                      )
+                      .map((item) {
+                        return DropdownMenuItem<String>(
+                          value: item['value'],
+                          child: Text(item['label'] ?? ''),
+                        );
+                      }),
                 ],
                 onChanged: (value) {
                   setState(() {
@@ -1782,6 +1930,26 @@ class _VehiculoModalState extends State<_VehiculoModal> {
                 validator: VehiculoFormService.validateSerie,
               ),
               _text(
+                _numeroInventarioCtrl,
+                widget.onlyMotorcycles
+                    ? 'Número de inventario *'
+                    : 'Número de inventario',
+                Icons.inventory_2_outlined,
+                helperText: widget.onlyMotorcycles
+                    ? 'Obligatorio para guardar y emitir la boleta.'
+                    : 'Se mostrará en la boleta.',
+                validator: (value) {
+                  if (widget.onlyMotorcycles && (value ?? '').trim().isEmpty) {
+                    return 'Captura el número de inventario';
+                  }
+                  return VehiculoFormService.validateOptionalText(
+                    value,
+                    max: 100,
+                    label: 'Número de inventario',
+                  );
+                },
+              ),
+              _text(
                 _capacidadCtrl,
                 'Capacidad de personas *',
                 Icons.people,
@@ -1838,15 +2006,21 @@ class _VehiculoModalState extends State<_VehiculoModal> {
                   : DropdownButtonFormField<int?>(
                       value: _corralonGruaIdSeleccionada,
                       isExpanded: true,
-                      decoration: const InputDecoration(
-                        labelText: 'Corralon (empresa)',
+                      decoration: InputDecoration(
+                        labelText: widget.onlyMotorcycles
+                            ? 'Corralón de destino *'
+                            : 'Corralón de destino',
                         border: OutlineInputBorder(),
                         prefixIcon: Icon(Icons.warehouse),
                       ),
                       items: [
-                        const DropdownMenuItem<int?>(
+                        DropdownMenuItem<int?>(
                           value: null,
-                          child: Text('SIN CORRALON / N/A'),
+                          child: Text(
+                            widget.onlyMotorcycles
+                                ? '-- Selecciona corralón --'
+                                : 'SIN CORRALÓN / N/A',
+                          ),
                         ),
                         ..._gruas
                             .where((g) => GruasCatalogService.idOf(g) != null)
@@ -1867,6 +2041,10 @@ class _VehiculoModalState extends State<_VehiculoModal> {
                       onChanged: (value) {
                         setState(() => _corralonGruaIdSeleccionada = value);
                       },
+                      validator: (value) =>
+                          widget.onlyMotorcycles && value == null
+                          ? 'Selecciona el corralón de destino'
+                          : null,
                     ),
               const SizedBox(height: 10),
               DropdownButtonFormField<String>(
@@ -1939,6 +2117,7 @@ class _VehiculoModalState extends State<_VehiculoModal> {
     String label,
     IconData icon, {
     int maxLines = 1,
+    String? helperText,
     String? Function(String?)? validator,
     TextInputType? keyboardType,
     ValueChanged<String>? onChanged,
@@ -1954,6 +2133,8 @@ class _VehiculoModalState extends State<_VehiculoModal> {
           labelText: label,
           border: const OutlineInputBorder(),
           prefixIcon: Icon(icon),
+          helperText: helperText,
+          helperMaxLines: 2,
           alignLabelWithHint: maxLines > 1,
         ),
         validator: validator,
@@ -2862,6 +3043,9 @@ class _VehicleTile extends StatelessWidget {
       subtitle: [
         vehiculo.placas,
         vehiculo.serie,
+        vehiculo.numeroInventario == null
+            ? null
+            : 'Inventario: ${vehiculo.numeroInventario}',
         vehiculo.grua == null ? null : 'Grua: ${vehiculo.grua}',
         vehiculo.corralon == null ? null : 'Corralon: ${vehiculo.corralon}',
       ].whereType<String>().where((v) => v.trim().isNotEmpty).join(' | '),

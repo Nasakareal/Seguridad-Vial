@@ -37,6 +37,41 @@ void main() {
     expect(selected, 'ZAMORA');
   });
 
+  testWidgets('changes an existing municipio from the explicit action button', (
+    tester,
+  ) async {
+    final controller = TextEditingController(text: 'MORELIA');
+    addTearDown(controller.dispose);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Padding(
+            padding: const EdgeInsets.all(16),
+            child: MunicipioAutocompleteField(
+              controller: controller,
+              decoration: const InputDecoration(labelText: 'Municipio'),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.byTooltip('Cambiar municipio'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Cambiar municipio'), findsOneWidget);
+    expect(find.text('Actual: MORELIA'), findsOneWidget);
+
+    await tester.enterText(find.byType(TextField).last, 'zamo');
+    await tester.pump();
+    await tester.tap(find.text('ZAMORA'));
+    await tester.pumpAndSettle();
+
+    expect(controller.text, 'ZAMORA');
+    expect(find.byTooltip('Cambiar municipio'), findsOneWidget);
+  });
+
   testWidgets('can dismiss the picker while the host unmounts', (tester) async {
     final controller = TextEditingController(text: 'MORELIA');
     addTearDown(controller.dispose);

@@ -40,6 +40,8 @@ class _GruasScreenState extends State<GruasScreen> {
   int? _delegacionUsoFiltroId;
   int? _gruaFiltroId;
   static const int _soloDelegacionesConServiciosId = -1;
+  // Identificador sólo de UI; no debe coincidir con un id real de unidad.
+  static const int _origenConduceLegalidadId = -2;
 
   // --- NUEVO: modo día/semana ---
   bool _modoDia = false;
@@ -60,8 +62,12 @@ class _GruasScreenState extends State<GruasScreen> {
   }
 
   Future<void> _bootstrapAccess() async {
-    final canChooseUnidad = await AuthService.hasFullOperationalAccess();
+    final fullAccess = await AuthService.hasFullOperationalAccess();
     final unidadId = await AuthService.getUnidadId();
+    final canChooseUnidad =
+        fullAccess ||
+        (unidadId == AuthService.unidadSiniestrosId &&
+            await AuthService.isSubdirectorRole());
 
     if (!mounted) return;
     setState(() {
@@ -117,7 +123,9 @@ class _GruasScreenState extends State<GruasScreen> {
   }
 
   Map<String, String> _baseFiltroParams({bool includeGrua = false}) {
-    final params = <String, String>{'unidad_id': '$_unidadFiltroId'};
+    final params = _unidadFiltroId == _origenConduceLegalidadId
+        ? <String, String>{'origen': 'conduce_legalidad'}
+        : <String, String>{'unidad_id': '$_unidadFiltroId'};
 
     if (_unidadFiltroId == 2 &&
         _delegacionFiltroId != null &&
@@ -516,6 +524,19 @@ class _GruasScreenState extends State<GruasScreen> {
 
   // CAMBIO: ir a SHOW en lugar de EDIT
   Future<void> _irAVerVehiculo(Map<String, dynamic> v) async {
+    final operativoConduceId = _toInt(v['operativo_conduce_id']);
+    if (operativoConduceId > 0) {
+      await Navigator.pushNamed(
+        context,
+        AppRoutes.conduceLegalidadShow,
+        arguments: {
+          'operativoId': operativoConduceId,
+          'capturaId': _toInt(v['captura_conduce_id']),
+        },
+      );
+      return;
+    }
+
     final actividadId = _toInt(v['actividad_id']);
     if (actividadId > 0) {
       await Navigator.pushNamed(
@@ -615,6 +636,9 @@ class _GruasScreenState extends State<GruasScreen> {
     final actividadId = _toInt(v['actividad_id']);
     final puestaId = _toInt(v['puesta_disposicion_id']);
     final operativoId = _toInt(v['operativo_dispositivo_id']);
+    final folioConduce = (v['folio_conduce'] ?? '').toString().trim();
+    final numeroInventario = (v['numero_inventario'] ?? '').toString().trim();
+    final corralon = (v['corralon'] ?? '').toString().trim();
     final delegacion = _delegacionServicioLabel(v);
     final fecha = (v['fecha_servicio'] ?? '').toString().trim();
 
@@ -634,6 +658,9 @@ class _GruasScreenState extends State<GruasScreen> {
       'Seguro: ${tieneSeguro ? 'Sí' : 'No'}',
       if (servicioId > 0) 'Servicio: #$servicioId',
       if (vehiculoId > 0) 'Vehículo ID: #$vehiculoId',
+      if (folioConduce.isNotEmpty) 'Folio Conduce: $folioConduce',
+      if (numeroInventario.isNotEmpty) 'Inventario: $numeroInventario',
+      if (corralon.isNotEmpty) 'Corralón: $corralon',
       if (delegacion.isNotEmpty) 'Delegación: $delegacion',
       if (actividadId > 0) 'Actividad: #$actividadId',
       if (puestaId > 0) 'Puesta a disposición: #$puestaId',
@@ -828,24 +855,33 @@ class _GruasScreenState extends State<GruasScreen> {
           ),
           const SizedBox(height: 10),
           if (_canChooseUnidadFiltro)
-            SegmentedButton<int>(
-              segments: const [
-                ButtonSegment<int>(
-                  value: 1,
-                  label: Text('Siniestros'),
-                  icon: Icon(Icons.car_crash),
-                ),
-                ButtonSegment<int>(
-                  value: 2,
-                  label: Text('Delegaciones'),
-                  icon: Icon(Icons.local_police),
-                ),
-              ],
-              selected: {_unidadFiltroId},
-              onSelectionChanged: (selection) {
-                if (selection.isEmpty) return;
-                _setUnidadFiltro(selection.first);
-              },
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: SegmentedButton<int>(
+                segments: const [
+                  ButtonSegment<int>(
+                    value: 1,
+                    label: Text('Siniestros'),
+                    icon: Icon(Icons.car_crash),
+                  ),
+                  ButtonSegment<int>(
+                    value: 2,
+                    label: Text('Delegaciones'),
+                    icon: Icon(Icons.local_police),
+                  ),
+                  ButtonSegment<int>(
+                    value: _origenConduceLegalidadId,
+                    label: Text('Conduce'),
+                    icon: Icon(Icons.two_wheeler),
+                  ),
+                ],
+                showSelectedIcon: false,
+                selected: {_unidadFiltroId},
+                onSelectionChanged: (selection) {
+                  if (selection.isEmpty) return;
+                  _setUnidadFiltro(selection.first);
+                },
+              ),
             )
           else
             InputDecorator(
@@ -1244,6 +1280,10 @@ class _GruasScreenState extends State<GruasScreen> {
                       final aseguradora = (v['aseguradora'] ?? '')
                           .toString()
                           .trim();
+                      final numeroInventario = (v['numero_inventario'] ?? '')
+                          .toString()
+                          .trim();
+                      final corralon = (v['corralon'] ?? '').toString().trim();
 
                       final tieneSeguroInt = _toInt(v['tiene_seguro']);
                       final tieneSeguro = tieneSeguroInt == 1;
@@ -1270,6 +1310,9 @@ class _GruasScreenState extends State<GruasScreen> {
                           ].where((s) => s.isNotEmpty).join(' '),
                         if (color.isNotEmpty) color,
                         if (aseguradora.isNotEmpty) 'Aseg: $aseguradora',
+                        if (numeroInventario.isNotEmpty)
+                          'Inventario: $numeroInventario',
+                        if (corralon.isNotEmpty) 'Corralón: $corralon',
                         'Seguro: ${tieneSeguro ? 'SÍ' : 'NO'}',
                         if (servicioId > 0) 'Servicio #$servicioId',
                         if (vehiculoId > 0) 'Vehículo #$vehiculoId',
@@ -1329,6 +1372,9 @@ class _GruasScreenState extends State<GruasScreen> {
   }
 
   String _vehiculoServicioKey(Map<String, dynamic> v) {
+    final conduceVehiculoId = _toInt(v['conduce_vehiculo_id']);
+    if (conduceVehiculoId > 0) return 'conduce:$conduceVehiculoId';
+
     final servicioId = _toInt(v['servicio_id']);
     if (servicioId > 0) return 'servicio:$servicioId';
 
@@ -1363,6 +1409,9 @@ class _GruasScreenState extends State<GruasScreen> {
 
   String _unidadFiltroLabel() {
     if (_unidadFiltroId == 2) return 'Delegaciones';
+    if (_unidadFiltroId == _origenConduceLegalidadId) {
+      return 'Conduce con Legalidad';
+    }
     return 'Siniestros';
   }
 
@@ -1518,6 +1567,14 @@ class _GruasScreenState extends State<GruasScreen> {
   }
 
   String _origenServicioLabel(Map<String, dynamic> servicio) {
+    final operativoConduceId = _toInt(servicio['operativo_conduce_id']);
+    if (operativoConduceId > 0) {
+      final folio = (servicio['folio_conduce'] ?? '').toString().trim();
+      return folio.isEmpty
+          ? 'Conduce con Legalidad #$operativoConduceId'
+          : 'Conduce con Legalidad · $folio';
+    }
+
     final actividadId = _toInt(servicio['actividad_id']);
     if (actividadId > 0) return 'Actividad #$actividadId';
 

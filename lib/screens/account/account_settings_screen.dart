@@ -17,6 +17,7 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
   bool _loading = true;
   bool _saving = false;
   bool _receiveWazeAlerts = true;
+  bool _isVialidadesUrbanas = false;
   String? _error;
 
   @override
@@ -32,10 +33,14 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
     });
 
     try {
+      final isVialidadesUrbanas = await AuthService.isVialidadesUrbanasUser();
       final settings = await AccountSettingsService.fetch();
       if (!mounted) return;
       setState(() {
-        _receiveWazeAlerts = settings.receiveWazeAlerts;
+        _isVialidadesUrbanas = isVialidadesUrbanas;
+        _receiveWazeAlerts = isVialidadesUrbanas
+            ? false
+            : settings.receiveWazeAlerts;
         _loading = false;
       });
     } catch (e) {
@@ -184,7 +189,7 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
                   ),
                   child: SwitchListTile.adaptive(
                     value: _receiveWazeAlerts,
-                    onChanged: _saving || _error != null
+                    onChanged: _saving || _error != null || _isVialidadesUrbanas
                         ? null
                         : _setReceiveWazeAlerts,
                     secondary: const CircleAvatar(
@@ -202,7 +207,9 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
                       ),
                     ),
                     subtitle: Text(
-                      _saving
+                      _isVialidadesUrbanas
+                          ? 'Desactivadas para la Unidad de Protección en Vialidades Urbanas.'
+                          : _saving
                           ? 'Guardando preferencia...'
                           : 'Avisos de choques y cierres reportados por Waze.',
                       style: TextStyle(

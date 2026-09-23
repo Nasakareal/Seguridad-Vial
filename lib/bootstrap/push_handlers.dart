@@ -9,12 +9,18 @@ import '../core/safe_payload.dart';
 import '../firebase_options.dart';
 import '../app/routes.dart';
 import '../services/comunicacion_notification_service.dart';
+import '../services/auth_service.dart';
 
 Map<String, dynamic>? _pendingPushTapData;
 
 @pragma('vm:entry-point')
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  final type = (message.data['type'] ?? '').toString().toUpperCase();
+  if ((type == 'WAZE_ACCIDENT' || type == 'WAZE_ROAD_CLOSED') &&
+      await AuthService.isVialidadesUrbanasUser()) {
+    return;
+  }
   await ComunicacionNotificationService.mostrarDesdeSegundoPlano(message);
 }
 

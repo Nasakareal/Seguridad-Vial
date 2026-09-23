@@ -29,4 +29,18 @@ void main() {
     expect(message, 'Validación del servidor');
     expect(NetworkStatusService.isOffline.value, isFalse);
   });
+
+  test('missing cached files never expose the technical path', () {
+    final message = NetworkErrorHelper.friendlyMessage(
+      const FileSystemException(
+        'Cannot retrieve length of file',
+        '/data/user/0/app/cache/scaled_missing.jpg',
+        OSError('No such file or directory', 2),
+      ),
+    );
+
+    expect(message, NetworkErrorHelper.missingLocalFileMessage);
+    expect(message, isNot(contains('/data/user/0')));
+    expect(message, isNot(contains('PathNotFoundException')));
+  });
 }

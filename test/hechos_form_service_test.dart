@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -233,5 +234,25 @@ void main() {
     );
 
     expect(error, 'Selecciona un municipio de Michoacan.');
+  });
+
+  test('missing cached photo uses a human message', () async {
+    SharedPreferences.setMockInitialValues(<String, Object>{
+      'auth_unidad_id': AuthService.unidadDelegacionesId,
+      'auth_role': 'Policia',
+    });
+
+    final error = await HechosFormService.validateBeforeSubmit(
+      data: validDelegacionesData(),
+      dictamenSelected: null,
+      fotoLugar: File('test/fixtures/photo_that_no_longer_exists.jpg'),
+    );
+
+    expect(
+      error,
+      'La foto del lugar ya no está disponible en el dispositivo. '
+      'Vuelve a tomarla o selecciónala nuevamente antes de guardar.',
+    );
+    expect(error, isNot(contains('PathNotFoundException')));
   });
 }

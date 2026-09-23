@@ -7,6 +7,7 @@ import '../core/globals.dart';
 import '../core/platform_support.dart';
 import '../bootstrap/push_handlers.dart';
 import '../services/comunicacion_notification_service.dart';
+import '../services/auth_service.dart';
 import 'routes.dart';
 
 class PushNavBinder extends StatefulWidget {
@@ -47,8 +48,9 @@ class _PushNavBinderState extends State<PushNavBinder> {
       return;
     }
 
-    FirebaseMessaging.instance.getInitialMessage().then((msg) {
+    FirebaseMessaging.instance.getInitialMessage().then((msg) async {
       if (msg == null) return;
+      if (await _suppressWazeForVialidades(msg)) return;
       final data = msg.data.map((k, v) => MapEntry(k.toString(), v));
       handlePushTap(data);
     });
@@ -60,6 +62,7 @@ class _PushNavBinderState extends State<PushNavBinder> {
         if (ComunicacionNotificationService.esComunicacion(message)) {
           return;
         }
+        if (await _suppressWazeForVialidades(message)) return;
 
         final n = message.notification;
         final title = n?.title ?? 'Aviso';
@@ -100,11 +103,12 @@ class _PushNavBinderState extends State<PushNavBinder> {
 
     _subOnOpen = FirebaseMessaging.onMessageOpenedApp.listen((
       RemoteMessage message,
-    ) {
+    ) async {
       try {
         if (ComunicacionNotificationService.esComunicacion(message)) {
           return;
         }
+        if (await _suppressWazeForVialidades(message)) return;
 
         final data = message.data.map((k, v) => MapEntry(k.toString(), v));
         handlePushTap(data);
@@ -112,6 +116,14 @@ class _PushNavBinderState extends State<PushNavBinder> {
         reportAppIssue('onMessageOpenedApp ERROR: $e\n\n$st');
       }
     });
+  }
+
+  Future<bool> _suppressWazeForVialidades(RemoteMessage message) async {
+    final type = (message.data['type'] ?? '').toString().toUpperCase();
+    if (type != 'WAZE_ACCIDENT' && type != 'WAZE_ROAD_CLOSED') {
+      return false;
+    }
+    return AuthService.isVialidadesUrbanasUser();
   }
 
   @override

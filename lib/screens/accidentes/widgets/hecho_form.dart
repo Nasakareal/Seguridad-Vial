@@ -546,6 +546,7 @@ class _HechoFormState extends State<HechoForm> {
         lower.contains('foto de situacion')) {
       return _fotoSituacionKey;
     }
+    if (lower.contains('foto 2 del lugar')) return _fotoLugar2Key;
     if (lower.contains('foto del lugar')) return _fotoLugarKey;
     if (lower.contains('folio')) return _folioFieldKey;
     if (lower.contains('daños patrimoniales') ||

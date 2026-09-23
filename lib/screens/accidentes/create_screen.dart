@@ -9,6 +9,7 @@ import '../../services/auth_service.dart';
 import '../../services/local_draft_service.dart';
 import '../../services/offline_sync_service.dart';
 import '../../services/hechos_form_service.dart';
+import '../../widgets/help_options_menu.dart';
 import 'widgets/hecho_form.dart';
 import 'ayuda/formulario_hecho_help_sheet.dart';
 
@@ -212,52 +213,32 @@ class _CreateHechoScreenState extends State<CreateHechoScreen> {
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       builder: (sheetContext) {
-        return Padding(
-          padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Row(
-                children: [
-                  Icon(Icons.help_outline, color: Colors.blue, size: 28),
-                  SizedBox(width: 10),
-                  Text(
-                    '¿En qué necesitas ayuda?',
-                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                  ),
-                ],
+        return HelpOptionsMenu(
+          description: 'Consulta cómo completar correctamente esta captura.',
+          children: [
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const CircleAvatar(
+                child: Icon(Icons.assignment_outlined),
               ),
-              const SizedBox(height: 8),
-              Text(
-                'Consulta cómo completar correctamente esta captura.',
-                style: TextStyle(color: Colors.grey.shade700),
+              title: const Text('Cómo llenar el formulario del hecho'),
+              subtitle: const Text(
+                'Paso a paso de qué información va en cada campo de la captura inicial.',
               ),
-              const SizedBox(height: 18),
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: const CircleAvatar(
-                  child: Icon(Icons.assignment_outlined),
-                ),
-                title: const Text('Cómo llenar el formulario del hecho'),
-                subtitle: const Text(
-                  'Paso a paso de qué información va en cada campo de la captura inicial.',
-                ),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () {
-                  Navigator.of(sheetContext).pop();
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () {
+                Navigator.of(sheetContext).pop();
 
-                  showModalBottomSheet(
-                    context: context,
-                    isScrollControlled: true,
-                    useSafeArea: true,
-                    backgroundColor: Colors.transparent,
-                    builder: (_) => const FormularioHechoHelpSheet(),
-                  );
-                },
-              ),
-            ],
-          ),
+                showModalBottomSheet(
+                  context: context,
+                  isScrollControlled: true,
+                  useSafeArea: true,
+                  backgroundColor: Colors.transparent,
+                  builder: (_) => const FormularioHechoHelpSheet(),
+                );
+              },
+            ),
+          ],
         );
       },
     );

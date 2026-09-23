@@ -98,6 +98,10 @@ class OfflineSyncService {
   }
 
   static Future<void> initialize() async {
+    if (await AuthService.isVialidadesUrbanasUser()) {
+      await _discardQueuedLocationForCurrentUser();
+    }
+
     if (!_initialized) {
       _initialized = true;
       _timer ??= Timer.periodic(const Duration(seconds: 25), (_) {
@@ -106,6 +110,27 @@ class OfflineSyncService {
     }
 
     await _refreshCounts();
+  }
+
+  static Future<void> _discardQueuedLocationForCurrentUser() async {
+    final ownerKey = (await AuthService.getSessionOwnerKey())?.trim();
+    if (ownerKey == null || ownerKey.isEmpty) return;
+
+    final queue = await _loadQueue();
+    final removed = queue.where((item) {
+      if (item.ownerKey != ownerKey) return false;
+      final path = Uri.tryParse(item.url)?.path.toLowerCase() ?? '';
+      return item.label.trim().toLowerCase() == 'ubicación' ||
+          item.label.trim().toLowerCase() == 'ubicacion' ||
+          path == '/api/location' ||
+          path == '/location';
+    }).toList();
+    if (removed.isEmpty) return;
+
+    await _saveQueue(queue.where((item) => !removed.contains(item)).toList());
+    for (final item in removed) {
+      await _cleanupOperationArtifacts(item);
+    }
   }
 
   static void dispose() {

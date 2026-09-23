@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:seguridad_vial_app/models/conduce_legalidad.dart';
 import 'package:seguridad_vial_app/screens/conduce_legalidad/conduce_legalidad_boleta_screen.dart';
@@ -37,6 +38,46 @@ void main() {
     expect(item.ticketOperativoTitle, 'OPERATIVO CONDUCE CON LEGALIDAD');
     expect(item.ticketFolioPrefix, 'CL');
     expect(item.ticketOperativoTitle, isNot(contains('PREVENCIÓN')));
+  });
+
+  testWidgets('la boleta muestra inventario y corralón con tamaño normal', (
+    tester,
+  ) async {
+    final item = operativo('conduce_legalidad');
+    const captura = ConduceLegalidadCaptura(
+      id: 12,
+      operativoId: 11,
+      canEdit: true,
+      vehiculos: <ConduceLegalidadVehiculo>[
+        ConduceLegalidadVehiculo(
+          placas: 'ABC-123-A',
+          numeroInventario: 'INV-2026-0042',
+          corralonId: 8,
+          corralon: 'CORRALÓN MORELIA',
+        ),
+      ],
+      personas: <ConduceLegalidadPersona>[],
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ConduceLegalidadBoletaScreen(
+          initialOperativo: item,
+          initialCaptura: captura,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('NÚMERO DE INVENTARIO:'), findsOneWidget);
+    expect(find.text('INV-2026-0042'), findsOneWidget);
+    expect(find.text('CORRALÓN DE DESTINO:'), findsOneWidget);
+    expect(find.text('CORRALÓN MORELIA'), findsOneWidget);
+    expect(
+      tester.widget<Text>(find.text('INV-2026-0042')).style?.fontSize,
+      isNull,
+    );
+    expect(tester.takeException(), isNull);
   });
 
   test('tickets de ambos operativos usan la dirección de su delegación', () {

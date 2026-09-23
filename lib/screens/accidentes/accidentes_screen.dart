@@ -16,11 +16,13 @@ import '../../services/reportes_service.dart';
 import '../../widgets/app_drawer.dart';
 import '../../widgets/account_drawer.dart';
 import '../../widgets/header_card.dart';
+import '../../widgets/help_options_menu.dart';
 
 import '../login_screen.dart';
 import 'edit_screen.dart';
 
 import 'widgets/hecho_card.dart';
+import 'ayuda/hecho_turnado_delegaciones_help_sheet.dart';
 import 'ayuda/siniestro_help_sheet.dart';
 
 class AccidentesScreen extends StatefulWidget {
@@ -829,61 +831,68 @@ class _AccidentesScreenState extends State<AccidentesScreen>
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       builder: (context) {
-        return Padding(
-          padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Row(
-                children: [
-                  Icon(Icons.help_outline, color: Colors.blue, size: 28),
-                  SizedBox(width: 10),
-                  Text(
-                    '¿En qué necesitas ayuda?',
-                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                  ),
-                ],
+        return HelpOptionsMenu(
+          description: 'Consulta información sobre el uso del sistema.',
+          children: [
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const CircleAvatar(child: Icon(Icons.add_road)),
+              title: const Text('Cómo Registrar un Siniestro'),
+              subtitle: const Text(
+                'Cómo iniciar correctamente la captura de un hecho.',
               ),
-              const SizedBox(height: 8),
-              Text(
-                'Consulta información sobre el uso del sistema.',
-                style: TextStyle(color: Colors.grey.shade700),
-              ),
-              const SizedBox(height: 18),
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: const CircleAvatar(child: Icon(Icons.add_road)),
-                title: const Text('Cómo Registrar un Siniestro'),
-                subtitle: const Text(
-                  'Cómo iniciar correctamente la captura de un hecho.',
-                ),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () {
-                  Navigator.of(context).pop();
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () {
+                Navigator.of(context).pop();
 
-                  showModalBottomSheet(
-                    context: this.context,
-                    isScrollControlled: true,
-                    useSafeArea: true,
-                    backgroundColor: Colors.transparent,
-                    builder: (_) => const SiniestroHelpSheet(),
-                  );
-                },
-              ),
-              const Divider(),
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: const CircleAvatar(child: Icon(Icons.support_agent)),
-                title: const Text('Problemas con el sistema'),
-                subtitle: const Text(
-                  'Errores de acceso, carga, fotografías o funcionamiento.',
+                showModalBottomSheet(
+                  context: this.context,
+                  isScrollControlled: true,
+                  useSafeArea: true,
+                  backgroundColor: Colors.transparent,
+                  builder: (_) => const SiniestroHelpSheet(),
+                );
+              },
+            ),
+            const Divider(),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const CircleAvatar(
+                backgroundColor: Color(0xFFEDE9FE),
+                child: Icon(
+                  Icons.assignment_turned_in_outlined,
+                  color: Color(0xFF6D28D9),
                 ),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () {},
               ),
-            ],
-          ),
+              title: const Text('Cómo poner un hecho turnado'),
+              subtitle: const Text(
+                'Paso a paso para Delegaciones: turnar, vincular y adjuntar la puesta.',
+              ),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () {
+                Navigator.of(context).pop();
+
+                showModalBottomSheet(
+                  context: this.context,
+                  isScrollControlled: true,
+                  useSafeArea: true,
+                  backgroundColor: Colors.transparent,
+                  builder: (_) => const HechoTurnadoDelegacionesHelpSheet(),
+                );
+              },
+            ),
+            const Divider(),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const CircleAvatar(child: Icon(Icons.support_agent)),
+              title: const Text('Problemas con el sistema'),
+              subtitle: const Text(
+                'Errores de acceso, carga, fotografías o funcionamiento.',
+              ),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () {},
+            ),
+          ],
         );
       },
     );

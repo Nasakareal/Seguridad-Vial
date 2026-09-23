@@ -1522,10 +1522,16 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
                     MunicipioAutocompleteField(
                       key: _municipioFieldKey,
                       controller: _municipioCtrl,
-                      decoration: _dec(
-                        'Municipio',
-                        validationTarget: ActividadValidationTarget.municipio,
-                      ),
+                      decoration:
+                          _dec(
+                            'Municipio',
+                            validationTarget:
+                                ActividadValidationTarget.municipio,
+                          ).copyWith(
+                            helperText:
+                                'Toca el campo o el boton de ubicacion para cambiarlo.',
+                            helperMaxLines: 2,
+                          ),
                       enabled: !_saving,
                       onChanged: (_) {
                         _clearFieldError(ActividadValidationTarget.municipio);

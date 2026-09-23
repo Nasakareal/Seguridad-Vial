@@ -806,15 +806,28 @@ class HechosFormService {
   }) async {
     if (file == null) return null;
 
-    final ext = file.path.split('.').last.toLowerCase();
-    const allowed = <String>{'jpg', 'jpeg', 'png', 'webp'};
-    if (!allowed.contains(ext)) {
-      return '$label debe estar en formato JPG, JPEG, PNG o WEBP.';
-    }
+    const unavailableInstruction =
+        'Vuelve a tomarla o selecciónala nuevamente antes de guardar.';
 
-    final size = await file.length();
-    if (size > _maxImageBytes) {
-      return '$label es muy pesada (máximo 5 MB).';
+    try {
+      if (!await file.exists()) {
+        return '$label ya no está disponible en el dispositivo. '
+            '$unavailableInstruction';
+      }
+
+      final ext = file.path.split('.').last.toLowerCase();
+      const allowed = <String>{'jpg', 'jpeg', 'png', 'webp'};
+      if (!allowed.contains(ext)) {
+        return '$label debe estar en formato JPG, JPEG, PNG o WEBP.';
+      }
+
+      final size = await file.length();
+      if (size > _maxImageBytes) {
+        return '$label es muy pesada (máximo 5 MB).';
+      }
+    } on FileSystemException {
+      return '$label ya no está disponible en el dispositivo. '
+          '$unavailableInstruction';
     }
 
     return null;

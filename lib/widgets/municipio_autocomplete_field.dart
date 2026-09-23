@@ -77,12 +77,23 @@ class _MunicipioAutocompleteFieldState
 
   @override
   Widget build(BuildContext context) {
+    final suffixIcon = widget.decoration.suffixIcon;
+
     return TextFormField(
       controller: widget.controller,
       enabled: widget.enabled,
       readOnly: true,
+      showCursor: false,
       decoration: widget.decoration.copyWith(
-        suffixIcon: widget.decoration.suffixIcon ?? const Icon(Icons.search),
+        suffixIcon:
+            suffixIcon ??
+            IconButton(
+              onPressed: widget.enabled ? _openPicker : null,
+              icon: const Icon(Icons.edit_location_alt_outlined),
+              tooltip: widget.controller.text.trim().isEmpty
+                  ? 'Elegir municipio'
+                  : 'Cambiar municipio',
+            ),
       ),
       validator: _validate,
       onTap: _openPicker,
@@ -125,13 +136,28 @@ class _MunicipioPickerSheetState extends State<_MunicipioPickerSheet> {
             children: [
               Row(
                 children: [
-                  const Expanded(
-                    child: Text(
-                      'Municipio',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w900,
-                      ),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          widget.currentValue.isEmpty
+                              ? 'Elegir municipio'
+                              : 'Cambiar municipio',
+                          style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                        if (widget.currentValue.isNotEmpty)
+                          Text(
+                            'Actual: ${widget.currentValue}',
+                            style: TextStyle(
+                              color: Colors.grey.shade700,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                      ],
                     ),
                   ),
                   IconButton(

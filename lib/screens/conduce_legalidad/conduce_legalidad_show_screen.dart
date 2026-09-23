@@ -14,6 +14,13 @@ import '../../services/conduce_legalidad_service.dart';
 import '../../services/conduce_legalidad_share_service.dart';
 import '../../widgets/safe_network_image.dart';
 import 'conduce_legalidad_module.dart';
+import 'ayuda/conduce_legalidad_action_help_sheet.dart';
+import 'ayuda/conduce_legalidad_alimentar_help_sheet.dart';
+import 'ayuda/conduce_legalidad_share_alimentacion_help_sheet.dart';
+import 'ayuda/conduce_legalidad_share_totals_help_sheet.dart';
+import 'ayuda/conduce_legalidad_ticket_alimentacion_help_sheet.dart';
+import 'ayuda/conduce_legalidad_iph_alimentacion_help_sheet.dart';
+import '../../widgets/help_options_menu.dart';
 
 class ConduceLegalidadShowScreen extends StatefulWidget {
   final int operativoId;
@@ -140,6 +147,269 @@ class _ConduceLegalidadShowScreenState extends State<ConduceLegalidadShowScreen>
         setState(() => _sharingCapturaId = null);
       }
     }
+  }
+
+  void _mostrarAyuda() {
+    final operativo = _operativo;
+    final capturas = operativo?.capturas ?? const <ConduceLegalidadCaptura>[];
+    final canFeed = (_meta?.abilities.canFeed ?? false) && _canFeedNow;
+    final canShareTotals =
+        (_meta?.abilities.canViewAllCapturas ?? false) && operativo != null;
+    final canClose =
+        (_meta?.abilities.canManageOperativos ?? false) &&
+        operativo?.estado == 'activo';
+    final canEdit = canFeed && capturas.any((captura) => captura.canEdit);
+    final canDelete = canFeed && capturas.any((captura) => captura.canDelete);
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      showDragHandle: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (sheetContext) {
+        final options = <Widget>[];
+
+        void addOption(Widget option) {
+          if (options.isNotEmpty) options.add(const Divider());
+          options.add(option);
+        }
+
+        if (canFeed) {
+          addOption(
+            _helpOption(
+              sheetContext: sheetContext,
+              icon: Icons.playlist_add_outlined,
+              color: const Color(0xFF2563EB),
+              title: 'Cómo agregar otra alimentación',
+              subtitle: 'Abrir una captura nueva dentro de este operativo.',
+              onOpen: () =>
+                  _showHelpSheet(const ConduceLegalidadAlimentarHelpSheet()),
+            ),
+          );
+        }
+
+        if (canShareTotals) {
+          addOption(
+            _helpOption(
+              sheetContext: sheetContext,
+              icon: Icons.share,
+              color: const Color(0xFF15803D),
+              title: 'Cómo compartir los totales',
+              subtitle:
+                  'Enviar el resumen acumulado del operativo desde el botón superior.',
+              onOpen: () =>
+                  _showHelpSheet(const ConduceLegalidadShareTotalsHelpSheet()),
+            ),
+          );
+        }
+
+        if (!widget.module.isAlcoholimetria) {
+          addOption(
+            _helpOption(
+              sheetContext: sheetContext,
+              icon: Icons.mark_chat_read_outlined,
+              color: const Color(0xFF16A34A),
+              title: 'Envío automático de la boleta',
+              subtitle:
+                  'Avisar al ciudadano al guardar, usando su teléfono capturado.',
+              onOpen: () => _showHelpSheet(
+                const ConduceLegalidadShareAlimentacionHelpSheet(),
+              ),
+            ),
+          );
+        }
+
+        if (capturas.isNotEmpty) {
+          addOption(
+            _helpOption(
+              sheetContext: sheetContext,
+              icon: Icons.receipt_long_outlined,
+              color: const Color(0xFFEA580C),
+              title: 'Cómo abrir e imprimir la boleta',
+              subtitle:
+                  'Usar el icono de boleta de una alimentación específica.',
+              onOpen: () => _showHelpSheet(
+                const ConduceLegalidadTicketAlimentacionHelpSheet(),
+              ),
+            ),
+          );
+          addOption(
+            _helpOption(
+              sheetContext: sheetContext,
+              icon: Icons.description_outlined,
+              color: const Color(0xFF7C3AED),
+              title: 'Cómo descargar el IPH',
+              subtitle:
+                  'Generar el documento desde las opciones de una alimentación.',
+              onOpen: () => _showHelpSheet(
+                const ConduceLegalidadIphAlimentacionHelpSheet(),
+              ),
+            ),
+          );
+        }
+
+        if (canEdit) {
+          addOption(
+            _helpOption(
+              sheetContext: sheetContext,
+              icon: Icons.edit_outlined,
+              color: const Color(0xFF0369A1),
+              title: 'Cómo editar una alimentación',
+              subtitle: 'Corregir una captura desde el menú de tres puntos.',
+              onOpen: () => _showActionHelp(
+                title: 'Editar una alimentación',
+                description:
+                    'La opción Editar aparece sólo en las capturas que tienes permitido modificar.',
+                icon: Icons.edit_outlined,
+                color: const Color(0xFF0369A1),
+                preview: const ConduceLegalidadCaptureCardPreview(
+                  highlighted: ConduceLegalidadCardControl.menu,
+                  selectedMenuItem: 'editar',
+                ),
+                steps: const [
+                  'Ubica la alimentación que necesitas corregir.',
+                  'Pulsa los tres puntos de su tarjeta y selecciona Editar.',
+                  'Modifica únicamente los datos necesarios.',
+                  'Pulsa Actualizar captura y espera la confirmación.',
+                ],
+              ),
+            ),
+          );
+        }
+
+        if (canDelete) {
+          addOption(
+            _helpOption(
+              sheetContext: sheetContext,
+              icon: Icons.delete_outline,
+              color: const Color(0xFFB91C1C),
+              title: 'Cómo eliminar una alimentación',
+              subtitle: 'Borrar una captura y todos sus datos relacionados.',
+              onOpen: () => _showActionHelp(
+                title: 'Eliminar una alimentación',
+                description:
+                    'Eliminar borra la narrativa, vehículo, personas y fotografías de esa captura.',
+                icon: Icons.delete_outline,
+                color: const Color(0xFFB91C1C),
+                preview: const ConduceLegalidadCaptureCardPreview(
+                  highlighted: ConduceLegalidadCardControl.menu,
+                  selectedMenuItem: 'eliminar',
+                ),
+                steps: const [
+                  'Ubica la alimentación que deseas eliminar.',
+                  'Pulsa los tres puntos y selecciona Eliminar.',
+                  'Lee la advertencia y confirma sólo si elegiste la captura correcta.',
+                  'Espera a que la tarjeta desaparezca del listado.',
+                ],
+                note: 'Esta acción no se puede deshacer.',
+              ),
+            ),
+          );
+        }
+
+        if (canClose) {
+          addOption(
+            _helpOption(
+              sheetContext: sheetContext,
+              icon: Icons.lock_outline,
+              color: const Color(0xFF92400E),
+              title: 'Cómo inactivar el operativo',
+              subtitle: 'Cerrar el punto para impedir nuevas alimentaciones.',
+              onOpen: () => _showActionHelp(
+                title: 'Inactivar el operativo',
+                description:
+                    'Usa esta opción cuando el trabajo en el punto haya terminado.',
+                icon: Icons.lock_outline,
+                color: const Color(0xFF92400E),
+                steps: const [
+                  'Pulsa los tres puntos de la barra superior.',
+                  'Selecciona Inactivar operativo.',
+                  'Confirma únicamente cuando ya no falten alimentaciones.',
+                ],
+                note:
+                    'Después de cerrarlo ya no se podrán agregar ni modificar capturas desde este operativo.',
+              ),
+            ),
+          );
+        }
+
+        return HelpOptionsMenu(
+          description:
+              'Sólo se muestran las acciones disponibles en este operativo.',
+          children: options.isEmpty
+              ? const [
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: Icon(Icons.visibility_outlined),
+                    title: Text('Operativo en modo consulta'),
+                    subtitle: Text(
+                      'En este momento no tienes acciones adicionales disponibles.',
+                    ),
+                  ),
+                ]
+              : options,
+        );
+      },
+    );
+  }
+
+  Widget _helpOption({
+    required BuildContext sheetContext,
+    required IconData icon,
+    required Color color,
+    required String title,
+    required String subtitle,
+    required VoidCallback onOpen,
+  }) {
+    return ListTile(
+      contentPadding: EdgeInsets.zero,
+      leading: CircleAvatar(
+        backgroundColor: color.withValues(alpha: .12),
+        child: Icon(icon, color: color),
+      ),
+      title: Text(title),
+      subtitle: Text(subtitle),
+      trailing: const Icon(Icons.chevron_right),
+      onTap: () {
+        Navigator.of(sheetContext).pop();
+        onOpen();
+      },
+    );
+  }
+
+  void _showHelpSheet(Widget child) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => child,
+    );
+  }
+
+  void _showActionHelp({
+    required String title,
+    required String description,
+    required IconData icon,
+    required Color color,
+    required List<String> steps,
+    String? note,
+    Widget? preview,
+  }) {
+    _showHelpSheet(
+      ConduceLegalidadActionHelpSheet(
+        title: title,
+        description: description,
+        icon: icon,
+        color: color,
+        steps: steps,
+        note: note,
+        preview: preview,
+      ),
+    );
   }
 
   Future<void> _addCaptura() async {
@@ -430,6 +700,12 @@ class _ConduceLegalidadShowScreenState extends State<ConduceLegalidadShowScreen>
                     )
                   : const Icon(Icons.share),
             ),
+          IconButton(
+            tooltip: 'Ayuda',
+            onPressed: _mostrarAyuda,
+            icon: const Icon(Icons.help_outline),
+          ),
+
           if (canClose)
             PopupMenuButton<String>(
               enabled: !_loading && !_updatingEstado,
@@ -887,6 +1163,11 @@ class _VehicleLine extends StatelessWidget {
                   style: const TextStyle(fontWeight: FontWeight.w800),
                 ),
                 Text(placas, style: TextStyle(color: Colors.grey.shade700)),
+                if ((vehiculo.numeroInventario ?? '').trim().isNotEmpty)
+                  Text(
+                    'Inventario: ${vehiculo.numeroInventario}',
+                    style: const TextStyle(fontWeight: FontWeight.w800),
+                  ),
                 if (fundamento.trim().isNotEmpty)
                   Text(
                     fundamento,

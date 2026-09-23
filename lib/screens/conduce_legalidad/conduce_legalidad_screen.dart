@@ -8,6 +8,12 @@ import '../../services/conduce_legalidad_share_service.dart';
 import '../../widgets/app_drawer.dart';
 import 'conduce_legalidad_module.dart';
 import 'conduce_legalidad_operativo_form_screen.dart';
+import 'ayuda/conduce_legalidad_help_sheet.dart';
+import 'ayuda/conduce_legalidad_share_totals_help_sheet.dart';
+import 'ayuda/conduce_legalidad_edit_help_sheet.dart';
+import 'ayuda/conduce_legalidad_alimentar_help_sheet.dart';
+import 'ayuda/conduce_legalidad_action_help_sheet.dart';
+import '../../widgets/help_options_menu.dart';
 
 enum _OperativosListMode { dia, activos, rango }
 
@@ -216,6 +222,7 @@ class _ConduceLegalidadScreenState extends State<ConduceLegalidadScreen>
     final punto = operativo.lugarConNumero.trim().isNotEmpty
         ? operativo.lugarConNumero
         : operativo.nombre;
+
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) {
@@ -238,18 +245,24 @@ class _ConduceLegalidadScreenState extends State<ConduceLegalidadScreen>
         );
       },
     );
+
     if (confirmed != true) return;
 
     setState(() => _deletingOperativoId = operativo.id);
+
     try {
       await ConduceLegalidadService.destroyOperativo(operativo.id);
+
       if (!mounted) return;
+
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Operativo eliminado correctamente.')),
       );
+
       await _load();
     } catch (e) {
       if (!mounted) return;
+
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text('No se pudo eliminar: $e')));
@@ -258,6 +271,164 @@ class _ConduceLegalidadScreenState extends State<ConduceLegalidadScreen>
         setState(() => _deletingOperativoId = null);
       }
     }
+  }
+
+  void _mostrarAyuda() {
+    final canCreate =
+        _canCreateLocal || (_meta?.abilities.canCreateOperativo ?? false);
+    final hasOperativos = _operativos.isNotEmpty;
+    final canShareTotals =
+        hasOperativos && (_meta?.abilities.canViewAllCapturas ?? false);
+    final canEdit = _operativos.any((operativo) => operativo.canEdit);
+    final canDelete = _operativos.any((operativo) => operativo.canDelete);
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      showDragHandle: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (sheetContext) {
+        final options = <Widget>[];
+
+        void addOption(Widget option) {
+          if (options.isNotEmpty) options.add(const Divider());
+          options.add(option);
+        }
+
+        if (canCreate) {
+          addOption(
+            _listHelpOption(
+              sheetContext: sheetContext,
+              icon: Icons.add_road_outlined,
+              color: const Color(0xFF2563EB),
+              title: 'Cómo activar un operativo',
+              subtitle:
+                  'Crear un nuevo operativo y registrar sus datos básicos.',
+              child: const ConduceLegalidadHelpSheet(),
+            ),
+          );
+        }
+
+        if (hasOperativos) {
+          addOption(
+            _listHelpOption(
+              sheetContext: sheetContext,
+              icon: Icons.playlist_add_outlined,
+              color: const Color(0xFF6D28D9),
+              title: 'Cómo alimentar un operativo',
+              subtitle:
+                  'Entrar a un operativo activo y registrar otra alimentación.',
+              child: const ConduceLegalidadAlimentarHelpSheet(),
+            ),
+          );
+        }
+
+        if (canShareTotals) {
+          addOption(
+            _listHelpOption(
+              sheetContext: sheetContext,
+              icon: Icons.share_outlined,
+              color: const Color(0xFF15803D),
+              title: 'Cómo compartir totales',
+              subtitle:
+                  'Enviar por WhatsApp los resultados acumulados del operativo.',
+              child: const ConduceLegalidadShareTotalsHelpSheet(),
+            ),
+          );
+        }
+
+        if (canEdit) {
+          addOption(
+            _listHelpOption(
+              sheetContext: sheetContext,
+              icon: Icons.edit_outlined,
+              color: const Color(0xFFEA580C),
+              title: 'Cómo editar un operativo',
+              subtitle: 'Modificar los datos del punto seleccionado.',
+              child: const ConduceLegalidadEditHelpSheet(),
+            ),
+          );
+        }
+
+        if (canDelete) {
+          addOption(
+            _listHelpOption(
+              sheetContext: sheetContext,
+              icon: Icons.delete_outline,
+              color: const Color(0xFFB91C1C),
+              title: 'Cómo eliminar un operativo',
+              subtitle:
+                  'Borrar un operativo disponible desde su menú de opciones.',
+              child: const ConduceLegalidadActionHelpSheet(
+                title: 'Eliminar un operativo',
+                description:
+                    'La opción aparece únicamente en los operativos que tienes permitido eliminar.',
+                icon: Icons.delete_outline,
+                color: Color(0xFFB91C1C),
+                steps: [
+                  'Ubica el operativo correcto en el listado.',
+                  'Pulsa los tres puntos de su tarjeta y selecciona Eliminar.',
+                  'Comprueba el nombre del punto mostrado en la confirmación.',
+                  'Confirma y espera a que desaparezca del listado.',
+                ],
+                note:
+                    'La eliminación puede afectar las capturas relacionadas y no se puede deshacer.',
+              ),
+            ),
+          );
+        }
+
+        return HelpOptionsMenu(
+          description:
+              'Sólo se muestran acciones disponibles en los operativos visibles.',
+          children: options.isEmpty
+              ? const [
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: Icon(Icons.visibility_outlined),
+                    title: Text('Sin acciones disponibles'),
+                    subtitle: Text(
+                      'Cuando exista un operativo habilitado podrás consultar aquí cómo alimentarlo.',
+                    ),
+                  ),
+                ]
+              : options,
+        );
+      },
+    );
+  }
+
+  Widget _listHelpOption({
+    required BuildContext sheetContext,
+    required IconData icon,
+    required Color color,
+    required String title,
+    required String subtitle,
+    required Widget child,
+  }) {
+    return ListTile(
+      contentPadding: EdgeInsets.zero,
+      leading: CircleAvatar(
+        backgroundColor: color.withValues(alpha: .12),
+        child: Icon(icon, color: color),
+      ),
+      title: Text(title),
+      subtitle: Text(subtitle),
+      trailing: const Icon(Icons.chevron_right),
+      onTap: () {
+        Navigator.of(sheetContext).pop();
+        showModalBottomSheet(
+          context: context,
+          isScrollControlled: true,
+          useSafeArea: true,
+          backgroundColor: Colors.transparent,
+          builder: (_) => child,
+        );
+      },
+    );
   }
 
   @override
@@ -325,7 +496,25 @@ class _ConduceLegalidadScreenState extends State<ConduceLegalidadScreen>
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 92),
       children: [
         _Header(meta: meta, module: widget.module),
-        const SizedBox(height: 14),
+        const SizedBox(height: 10),
+
+        Align(
+          alignment: Alignment.centerRight,
+          child: OutlinedButton.icon(
+            onPressed: _mostrarAyuda,
+            icon: const Icon(Icons.help_outline, size: 17),
+            label: const Text('Ayuda'),
+            style: OutlinedButton.styleFrom(
+              visualDensity: VisualDensity.compact,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              minimumSize: Size.zero,
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+          ),
+        ),
+
+        const SizedBox(height: 10),
+
         _OperativosFilters(
           canViewHistory: canCreate,
           mode: _listMode,

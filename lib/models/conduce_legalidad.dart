@@ -56,9 +56,14 @@ class ConduceLegalidadMeta {
     bool filterConduceLegalidadMotos = true,
   }) {
     final data = _map(json['data'] ?? json);
+    final fundamentosCorralonRaw =
+        filterConduceLegalidadMotos &&
+            _list(data['fundamentos_conduce_legalidad']).isNotEmpty
+        ? data['fundamentos_conduce_legalidad']
+        : data['fundamentos_corralon'];
     final fundamentosExpanded = _expandirFundamentosOperativos(
       _list(
-        data['fundamentos_corralon'],
+        fundamentosCorralonRaw,
       ).map((item) => ConduceLegalidadFundamento.fromJson(_map(item))),
     );
     final fundamentos = filterConduceLegalidadMotos
@@ -331,6 +336,11 @@ class ConduceLegalidadFundamento {
 
   bool get aplicaConduceLegalidadMotos {
     if (!retencionVehiculo) return false;
+
+    final ambito = (ambitoVehiculo ?? '').trim().toLowerCase();
+    if (ambito.isNotEmpty && ambito != 'general' && ambito != 'motocicleta') {
+      return false;
+    }
 
     final codigoText = (codigo ?? '').trim().toUpperCase();
     if (ConduceLegalidadMeta.fundamentosExcluidosOperativoCodigos.contains(
@@ -776,6 +786,7 @@ class ConduceLegalidadVehiculo {
   final String? placas;
   final String? estadoPlacas;
   final String? serie;
+  final String? numeroInventario;
   final int capacidadPersonas;
   final String? tipoServicio;
   final String? tarjetaCirculacionNombre;
@@ -810,6 +821,7 @@ class ConduceLegalidadVehiculo {
     this.placas,
     this.estadoPlacas,
     this.serie,
+    this.numeroInventario,
     this.capacidadPersonas = 0,
     this.tipoServicio,
     this.tarjetaCirculacionNombre,
@@ -851,6 +863,7 @@ class ConduceLegalidadVehiculo {
       placas: _str(json['placas']),
       estadoPlacas: _str(json['estado_placas']),
       serie: _str(json['serie']),
+      numeroInventario: _str(json['numero_inventario']),
       capacidadPersonas: _asInt(json['capacidad_personas']),
       tipoServicio: _str(json['tipo_servicio']),
       tarjetaCirculacionNombre: _str(json['tarjeta_circulacion_nombre']),
@@ -888,6 +901,7 @@ class ConduceLegalidadVehiculo {
     'placas': placas,
     'estado_placas': estadoPlacas,
     'serie': serie,
+    'numero_inventario': numeroInventario,
     'capacidad_personas': capacidadPersonas,
     'tipo_servicio': tipoServicio,
     'tarjeta_circulacion_nombre': tarjetaCirculacionNombre,
@@ -904,6 +918,31 @@ class ConduceLegalidadVehiculo {
     'motivo_retencion': motivoRetencion,
     'observaciones': observaciones,
   }..removeWhere((_, value) => value == null);
+}
+
+class ConduceLegalidadCapturaRequirements {
+  const ConduceLegalidadCapturaRequirements._();
+
+  static String? vehiculoError({
+    required bool isAlcoholimetria,
+    required List<ConduceLegalidadVehiculo> vehiculos,
+  }) {
+    if (isAlcoholimetria) return null;
+    if (vehiculos.isEmpty) {
+      return 'Agrega el vehículo antes de guardar la captura.';
+    }
+
+    final vehiculo = vehiculos.first;
+    if ((vehiculo.numeroInventario ?? '').trim().isEmpty) {
+      return 'Captura el número de inventario del vehículo.';
+    }
+    if (vehiculo.corralonId == null ||
+        (vehiculo.corralon ?? '').trim().isEmpty) {
+      return 'Selecciona el corralón al que se trasladará el vehículo.';
+    }
+
+    return null;
+  }
 }
 
 class ConduceLegalidadPersona {

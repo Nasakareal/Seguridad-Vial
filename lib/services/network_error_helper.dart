@@ -11,6 +11,9 @@ class NetworkErrorHelper {
   static const String offlineCaptureMessage =
       'Sin conexión estable. Puedes seguir capturando; lo que guardes se quedará pendiente y se sincronizará cuando vuelva la señal.';
 
+  static const String missingLocalFileMessage =
+      'Una fotografía o archivo seleccionado ya no está disponible en el dispositivo. Vuelve a seleccionarlo e intenta guardar otra vez.';
+
   static bool isConnectivityIssue(Object error) {
     if (error is TimeoutException ||
         error is SocketException ||
@@ -39,12 +42,20 @@ class NetworkErrorHelper {
     Object error, {
     String fallback = 'Ocurrió un error inesperado.',
   }) {
+    final raw = error.toString().trim();
+    final lower = raw.toLowerCase();
+    final isMissingLocalFile =
+        error is FileSystemException && error.osError?.errorCode == 2 ||
+        lower.contains('pathnotfoundexception') ||
+        lower.contains('no such file or directory') ||
+        lower.contains('cannot retrieve length of file');
+    if (isMissingLocalFile) return missingLocalFileMessage;
+
     if (isConnectivityIssue(error)) {
       NetworkStatusService.markOffline();
       return offlineCaptureMessage;
     }
 
-    final raw = error.toString().trim();
     if (raw.isEmpty) return fallback;
 
     final cleaned = raw.replaceFirst(RegExp(r'^Exception:\s*'), '').trim();

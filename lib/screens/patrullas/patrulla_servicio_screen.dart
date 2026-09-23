@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../services/patrulla_servicio_service.dart';
+import '../../widgets/help_options_menu.dart';
 import 'ayuda/patrulla_servicio_help_sheet.dart';
 
 class PatrullaServicioScreen extends StatefulWidget {
@@ -97,57 +98,36 @@ class _PatrullaServicioScreenState extends State<PatrullaServicioScreen>
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
-      builder: (sheetContext) => Padding(
-        padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Row(
-              children: [
-                Icon(Icons.help_outline, color: Colors.blue, size: 28),
-                SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    '¿En qué necesitas ayuda?',
-                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                  ),
-                ),
-              ],
+      builder: (sheetContext) => HelpOptionsMenu(
+        description:
+            'Consulta el proceso correcto para recibir, utilizar y entregar una patrulla.',
+        children: [
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: const CircleAvatar(
+              child: Icon(Icons.local_police_outlined),
             ),
-            const SizedBox(height: 8),
-            Text(
-              'Consulta el proceso correcto para recibir, utilizar y entregar una patrulla.',
-              style: TextStyle(color: Colors.grey.shade700),
+            title: const Text('Cómo usar el control de patrullas'),
+            subtitle: const Text(
+              'Guía paso a paso de recepción, inspección, servicio y entrega.',
             ),
-            const SizedBox(height: 18),
-            ListTile(
-              contentPadding: EdgeInsets.zero,
-              leading: const CircleAvatar(
-                child: Icon(Icons.local_police_outlined),
-              ),
-              title: const Text('Cómo usar el control de patrullas'),
-              subtitle: const Text(
-                'Guía paso a paso de recepción, inspección, servicio y entrega.',
-              ),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () {
-                Navigator.of(sheetContext).pop();
-                Future<void>.delayed(const Duration(milliseconds: 180), () {
-                  if (!mounted) return;
-                  showModalBottomSheet<void>(
-                    context: context,
-                    isScrollControlled: true,
-                    useSafeArea: true,
-                    backgroundColor: Colors.transparent,
-                    builder: (_) =>
-                        PatrullaServicioHelpSheet(initialPage: _tabs.index),
-                  );
-                });
-              },
-            ),
-          ],
-        ),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () {
+              Navigator.of(sheetContext).pop();
+              Future<void>.delayed(const Duration(milliseconds: 180), () {
+                if (!mounted) return;
+                showModalBottomSheet<void>(
+                  context: context,
+                  isScrollControlled: true,
+                  useSafeArea: true,
+                  backgroundColor: Colors.transparent,
+                  builder: (_) =>
+                      PatrullaServicioHelpSheet(initialPage: _tabs.index),
+                );
+              });
+            },
+          ),
+        ],
       ),
     );
   }

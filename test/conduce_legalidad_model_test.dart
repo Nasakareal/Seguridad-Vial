@@ -1,8 +1,36 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:seguridad_vial_app/data/conduce_legalidad_local_catalog.dart';
 import 'package:seguridad_vial_app/models/conduce_legalidad.dart';
 import 'package:seguridad_vial_app/screens/conduce_legalidad/conduce_legalidad_module.dart';
 
 void main() {
+  test(
+    'el catálogo local conserva fundamentos de ley y sólo ids portables',
+    () {
+      final meta = ConduceLegalidadMeta.fromJson({
+        'data': {
+          'abilities': const <String, dynamic>{'can_feed': true},
+          'fundamentos_conduce_legalidad': conduceLegalidadLocalFundamentos,
+          'fundamentos_corralon': conduceLegalidadLocalFundamentos,
+          'fundamentos_persona': const <Object>[],
+        },
+      });
+
+      expect(meta.fundamentosCorralon, isNotEmpty);
+      expect(
+        meta.fundamentosCorralon.map((item) => item.codigo),
+        contains('ART333_RIESGO_GRAVE_CONDUCCION_CONDICION'),
+      );
+      expect(meta.fundamentosCorralon.every((item) => item.id < 0), isTrue);
+      expect(
+        meta.fundamentosCorralon.every(
+          (item) => (item.codigo ?? '').trim().isNotEmpty,
+        ),
+        isTrue,
+      );
+    },
+  );
+
   test('each capture accepts at most one vehicle', () {
     expect(ConduceLegalidadCapturaLimits.maxVehiculos, 1);
     expect(ConduceLegalidadCapturaLimits.canAddVehiculo(0), isTrue);
@@ -263,6 +291,7 @@ void main() {
             'id': 7,
             'codigo': 'ART420_FIV_IA_B_TRANSPORTE_PUBLICO_ESCOLAR',
             'nombre': 'Transporte publico, escolar o de personal',
+            'ambito_vehiculo': 'transporte_publico',
             'retencion_vehiculo': true,
           },
           {
@@ -270,6 +299,20 @@ void main() {
             'codigo': 'ART519_FIV_IA_NO_MOVER_SINIESTRO_DANOS',
             'nombre':
                 'No mover vehiculos cuando el siniestro solo ocasiona danos',
+            'retencion_vehiculo': true,
+          },
+          {
+            'id': 22,
+            'codigo': 'ART436_AUTOMOVIL_ACERA',
+            'nombre': 'Automovil circula sobre acera',
+            'ambito_vehiculo': 'automovil',
+            'retencion_vehiculo': true,
+          },
+          {
+            'id': 23,
+            'codigo': 'ART420_CARGA_EXCESIVA',
+            'nombre': 'Camion con carga excesiva',
+            'ambito_vehiculo': 'carga',
             'retencion_vehiculo': true,
           },
           {
@@ -369,10 +412,40 @@ void main() {
     expect(codigos, isNot(contains('ART641_CERRAR_OBSTRUIR_CIRCULACION')));
     expect(codigos, isNot(contains('ART641_NO_RETIRAR_VEHICULO_OBRAS')));
     expect(codigos, isNot(contains('ART648_ASCENSO_DESCENSO_TIEMPO_EXCEDIDO')));
+    expect(codigos, isNot(contains('ART436_AUTOMOVIL_ACERA')));
+    expect(codigos, isNot(contains('ART420_CARGA_EXCESIVA')));
     expect(
       meta.fundamentosCorralon.first.narrativaSugerida,
       'Narrativa juridica sugerida.',
     );
+  });
+
+  test('meta prefers backend motorcycle catalog for Conduce Legalidad', () {
+    final meta = ConduceLegalidadMeta.fromJson({
+      'data': {
+        'abilities': {'can_feed': true},
+        'fundamentos_corralon': [
+          {
+            'id': 1,
+            'codigo': 'ART508_AUTOMOVIL',
+            'nombre': 'Automovil con alcohol',
+            'ambito_vehiculo': 'automovil',
+            'retencion_vehiculo': true,
+          },
+        ],
+        'fundamentos_conduce_legalidad': [
+          {
+            'id': 2,
+            'codigo': 'ART333_RIESGO_GRAVE',
+            'nombre': 'Conduccion o condicion fisica evidentemente peligrosa',
+            'ambito_vehiculo': 'general',
+            'retencion_vehiculo': true,
+          },
+        ],
+      },
+    });
+
+    expect(meta.fundamentosCorralon.single.codigo, 'ART333_RIESGO_GRAVE');
   });
 
   test(
@@ -633,6 +706,63 @@ void main() {
       );
     },
   );
+
+  test('vehicle keeps inventory number through api and local draft json', () {
+    final vehiculo = ConduceLegalidadVehiculo.fromJson({
+      'marca': 'ITALIKA',
+      'numero_inventario': 'INV-2026-0042',
+    });
+
+    expect(vehiculo.numeroInventario, 'INV-2026-0042');
+    expect(vehiculo.toJson()['numero_inventario'], 'INV-2026-0042');
+  });
+
+  test('Conduce requires one vehicle with inventory and destination yard', () {
+    expect(
+      ConduceLegalidadCapturaRequirements.vehiculoError(
+        isAlcoholimetria: false,
+        vehiculos: const [],
+      ),
+      contains('Agrega el vehículo'),
+    );
+    expect(
+      ConduceLegalidadCapturaRequirements.vehiculoError(
+        isAlcoholimetria: false,
+        vehiculos: const [ConduceLegalidadVehiculo()],
+      ),
+      contains('número de inventario'),
+    );
+    expect(
+      ConduceLegalidadCapturaRequirements.vehiculoError(
+        isAlcoholimetria: false,
+        vehiculos: const [ConduceLegalidadVehiculo(numeroInventario: 'INV-42')],
+      ),
+      contains('corralón'),
+    );
+    expect(
+      ConduceLegalidadCapturaRequirements.vehiculoError(
+        isAlcoholimetria: false,
+        vehiculos: const [
+          ConduceLegalidadVehiculo(
+            numeroInventario: 'INV-42',
+            corralonId: 8,
+            corralon: 'CORRALÓN MORELIA',
+          ),
+        ],
+      ),
+      isNull,
+    );
+  });
+
+  test('Alcoholimetría may be saved without a vehicle', () {
+    expect(
+      ConduceLegalidadCapturaRequirements.vehiculoError(
+        isAlcoholimetria: true,
+        vehiculos: const [],
+      ),
+      isNull,
+    );
+  });
 
   test('fundamento json keeps enough data for local draft restore', () {
     const fundamento = ConduceLegalidadFundamento(

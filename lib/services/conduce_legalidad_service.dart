@@ -5,6 +5,7 @@ import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../data/conduce_legalidad_local_catalog.dart';
 import '../models/conduce_legalidad.dart';
 import 'auth_service.dart';
 import 'network_error_helper.dart';
@@ -119,7 +120,11 @@ class ConduceLegalidadService {
           filterConduceLegalidadMotos: filterConduceLegalidadMotos,
         );
       }
-      rethrow;
+      final local = await _localMeta();
+      return ConduceLegalidadMeta.fromJson(
+        local,
+        filterConduceLegalidadMotos: filterConduceLegalidadMotos,
+      );
     }
   }
 
@@ -391,6 +396,32 @@ class ConduceLegalidadService {
       if (decoded is Map) return _map(decoded);
     } catch (_) {}
     return null;
+  }
+
+  static Future<Map<String, dynamic>> _localMeta() async {
+    final canFeed = await AuthService.canFeedConduceLegalidad();
+    final canCreate = await AuthService.canCreateConduceLegalidad();
+    final canManage = await AuthService.canManageConduceLegalidad();
+    return <String, dynamic>{
+      'ok': true,
+      'data': <String, dynamic>{
+        'operativo_nombre': 'Operativo conduce con legalidad',
+        'abilities': <String, dynamic>{
+          'can_feed': canFeed,
+          'can_create_operativo': canCreate,
+          'can_assign_scope': false,
+          'can_manage_operativos': canManage,
+          'can_view_all_capturas': canManage,
+          'scope': canManage ? 'all' : 'own',
+        },
+        'fundamentos_conduce_legalidad': conduceLegalidadLocalFundamentos,
+        'fundamentos_corralon': conduceLegalidadLocalFundamentos,
+        'fundamentos_actividad_corralon': conduceLegalidadLocalFundamentos,
+        'fundamentos_persona': const <Map<String, dynamic>>[],
+        'unidades': const <Map<String, dynamic>>[],
+        'delegaciones': const <Map<String, dynamic>>[],
+      },
+    };
   }
 
   static Map<String, dynamic> _decodeJson(http.Response res) {

@@ -91,6 +91,7 @@ class AuthService {
   static const String _mobileDeviceIdKey = 'mobile_device_id';
   static const String _strongPasswordConfirmedPrefix =
       'strong_password_confirmed_v1';
+  static const int unidadSiniestrosId = 1;
   static const int unidadDelegacionesId = 2;
   static const int unidadSeguridadVialId = 3;
   static const int unidadProteccionCarreterasId = 4;
@@ -1078,12 +1079,7 @@ class AuthService {
     if (!isVialidadesUrbanas) {
       return false;
     }
-
-    if (await isResponsableTurno() || await isSubdirectorRole()) {
-      return true;
-    }
-
-    return can('editar conduce legalidad');
+    return true;
   }
 
   static Future<bool> canCreateConduceLegalidad({bool refresh = false}) async {
@@ -1115,6 +1111,11 @@ class AuthService {
     }
 
     if (await isSuperadmin()) {
+      return true;
+    }
+
+    final payload = await getCurrentUserPayload(refresh: false);
+    if (await _isCurrentVialidadesUrbanasStrict(payload)) {
       return true;
     }
 
@@ -1163,6 +1164,11 @@ class AuthService {
     final unidadId = await getUnidadId();
     final payload = await getStoredUserPayload();
 
+    if (unidadId == unidadVialidadesUrbanasId ||
+        _payloadMatchesVialidadesUrbanasStrict(payload)) {
+      return false;
+    }
+
     final isSiniestros = unidadId == 1 || _payloadMatchesSiniestros(payload);
     if (isSiniestros && await isPerito()) {
       return true;
@@ -1179,13 +1185,6 @@ class AuthService {
         unidadId == unidadDelegacionesId ||
         _payloadMatchesDelegaciones(payload);
     if (isDelegaciones && await isDelegadoLocationTrackingRole()) {
-      return true;
-    }
-
-    final isVialidadesUrbanas =
-        unidadId == unidadVialidadesUrbanasId ||
-        _payloadMatchesVialidadesUrbanasStrict(payload);
-    if (isVialidadesUrbanas && await isAgenteVial()) {
       return true;
     }
 

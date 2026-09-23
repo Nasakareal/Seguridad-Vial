@@ -132,6 +132,16 @@ void main() {
     expect(nullData.toFields()['personas_detenidas'], '0');
   });
 
+  test('sends the corrected municipio when an activity is updated', () {
+    const data = ActividadUpsertData(
+      actividadCategoriaId: 1,
+      actividadSubcategoriaId: 2,
+      municipio: 'zamora',
+    );
+
+    expect(data.toFields()['municipio'], 'ZAMORA');
+  });
+
   test(
     'allows activity captures without timestamp when server clock is used',
     () async {

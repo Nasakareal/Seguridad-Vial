@@ -5,8 +5,10 @@ import '../../services/auth_service.dart';
 import '../../services/conduce_legalidad_service.dart';
 import '../../services/geo_service.dart';
 import '../../services/reverse_geocode_service.dart';
+import '../../widgets/help_options_menu.dart';
 import '../../widgets/municipio_autocomplete_field.dart';
 import 'conduce_legalidad_module.dart';
+import 'ayuda/conduce_legalidad_form_help_sheet.dart';
 
 class ConduceLegalidadOperativoFormScreen extends StatefulWidget {
   final ConduceLegalidadOperativo? initialOperativo;
@@ -65,6 +67,89 @@ class _ConduceLegalidadOperativoFormScreenState
     _coloniaCtrl.dispose();
     _coordenadasCtrl.dispose();
     super.dispose();
+  }
+
+  void _mostrarAyuda() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      showDragHandle: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (sheetContext) => HelpOptionsMenu(
+        description: _editing
+            ? 'Elige qué parte del operativo necesitas corregir.'
+            : 'Elige qué parte necesitas completar para activar el operativo.',
+        children: <Widget>[
+          _operativoHelpOption(
+            sheetContext: sheetContext,
+            title: 'Datos del operativo',
+            subtitle: 'Tipo, adscripción, fecha y hora disponibles.',
+            icon: Icons.fact_check_outlined,
+            color: const Color(0xFF2563EB),
+            topic: ConduceLegalidadOperativoFormHelpTopic.datos,
+          ),
+          const Divider(),
+          _operativoHelpOption(
+            sheetContext: sheetContext,
+            title: 'Ubicación y coordenadas',
+            subtitle: 'Municipio, lugar, colonia y ubicación GPS.',
+            icon: Icons.my_location_outlined,
+            color: const Color(0xFF7C3AED),
+            topic: ConduceLegalidadOperativoFormHelpTopic.ubicacion,
+          ),
+          const Divider(),
+          _operativoHelpOption(
+            sheetContext: sheetContext,
+            title: _editing ? 'Guardar los cambios' : 'Activar el operativo',
+            subtitle: _editing
+                ? 'Revisión final y botón Guardar cambios.'
+                : 'Revisión final y botón Activar operativo.',
+            icon: _editing ? Icons.save_outlined : Icons.play_circle_outline,
+            color: const Color(0xFF15803D),
+            topic: ConduceLegalidadOperativoFormHelpTopic.guardado,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _operativoHelpOption({
+    required BuildContext sheetContext,
+    required String title,
+    required String subtitle,
+    required IconData icon,
+    required Color color,
+    required ConduceLegalidadOperativoFormHelpTopic topic,
+  }) {
+    return ListTile(
+      contentPadding: EdgeInsets.zero,
+      leading: CircleAvatar(
+        backgroundColor: color.withValues(alpha: .12),
+        child: Icon(icon, color: color),
+      ),
+      title: Text(title),
+      subtitle: Text(subtitle),
+      trailing: const Icon(Icons.chevron_right),
+      onTap: () {
+        Navigator.of(sheetContext).pop();
+        showModalBottomSheet(
+          context: context,
+          isScrollControlled: true,
+          useSafeArea: true,
+          backgroundColor: Colors.transparent,
+          builder: (_) => ConduceLegalidadOperativoFormHelpSheet(
+            topic: topic,
+            operativoNombre: widget.module.operativoNombre,
+            isEditing: _editing,
+            canSetSchedule: _canSetSchedule,
+            canAssignOrganization: _isSuperadmin,
+          ),
+        );
+      },
+    );
   }
 
   void _hydrateInitialOperativo() {
@@ -339,6 +424,13 @@ class _ConduceLegalidadOperativoFormScreenState
     return Scaffold(
       appBar: AppBar(
         title: Text(_editing ? 'Editar operativo' : 'Activar operativo'),
+        actions: [
+          IconButton(
+            tooltip: 'Ayuda',
+            onPressed: _mostrarAyuda,
+            icon: const Icon(Icons.help_outline),
+          ),
+        ],
       ),
       body: Form(
         key: _formKey,
