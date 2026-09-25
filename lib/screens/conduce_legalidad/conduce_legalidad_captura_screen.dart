@@ -1164,6 +1164,7 @@ Future<ConduceLegalidadVehiculo?> showConduceLegalidadVehiculoModal(
   required String initialTipoGeneral,
   bool onlyMotorcycles = false,
   ConduceLegalidadVehiculo? initialVehiculo,
+  @visibleForTesting Future<List<Map<String, dynamic>>> Function()? gruasLoader,
 }) {
   return showModalBottomSheet<ConduceLegalidadVehiculo>(
     context: context,
@@ -1174,6 +1175,7 @@ Future<ConduceLegalidadVehiculo?> showConduceLegalidadVehiculoModal(
       initialTipoGeneral: initialTipoGeneral,
       onlyMotorcycles: onlyMotorcycles,
       initialVehiculo: initialVehiculo,
+      gruasLoader: gruasLoader,
     ),
   );
 }
@@ -1183,12 +1185,14 @@ class _VehiculoModal extends StatefulWidget {
   final String initialTipoGeneral;
   final bool onlyMotorcycles;
   final ConduceLegalidadVehiculo? initialVehiculo;
+  final Future<List<Map<String, dynamic>>> Function()? gruasLoader;
 
   const _VehiculoModal({
     required this.fundamentos,
     required this.initialTipoGeneral,
     this.onlyMotorcycles = false,
     this.initialVehiculo,
+    this.gruasLoader,
   });
 
   @override
@@ -1319,7 +1323,9 @@ class _VehiculoModalState extends State<_VehiculoModal> {
 
   Future<void> _cargarGruas() async {
     try {
-      final gruas = await GruasCatalogService.fetchSiniestrosGruas();
+      final gruas =
+          await (widget.gruasLoader ??
+              GruasCatalogService.fetchSiniestrosGruas)();
       if (!mounted) return;
       setState(() {
         _gruas = gruas;
@@ -1637,41 +1643,27 @@ class _VehiculoModalState extends State<_VehiculoModal> {
   }
 
   void _revealFirstValidationError() {
+    final issue = _firstFormValidationError(_formKey);
+    final message = issue?.message ?? 'Revisa los campos marcados en rojo.';
+    setState(() => _validationSummary = message);
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      final issue = _firstFormValidationError(_formKey);
-      final message = issue?.message ?? 'Revisa los campos marcados en rojo.';
-      setState(() => _validationSummary = message);
-      if (issue != null) {
+      final refreshedIssue = _firstFormValidationError(_formKey);
+      if (refreshedIssue != null) {
         Scrollable.ensureVisible(
-          issue.context,
+          refreshedIssue.context,
           duration: const Duration(milliseconds: 320),
           curve: Curves.easeOutCubic,
-          alignment: 0.18,
+          alignment: 0.08,
         );
       }
-      ScaffoldMessenger.of(context)
-        ..hideCurrentSnackBar()
-        ..showSnackBar(
-          SnackBar(
-            content: Text(message),
-            backgroundColor: Theme.of(context).colorScheme.error,
-          ),
-        );
     });
   }
 
   void _showValidationSummary(String message) {
     if (!mounted) return;
     setState(() => _validationSummary = message);
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(
-        SnackBar(
-          content: Text(message),
-          backgroundColor: Theme.of(context).colorScheme.error,
-        ),
-      );
   }
 
   @override
@@ -1717,7 +1709,7 @@ class _VehiculoModalState extends State<_VehiculoModal> {
           autovalidateMode: _validationAttempted
               ? AutovalidateMode.onUserInteraction
               : AutovalidateMode.disabled,
-          child: ListView(
+          child: Column(
             children: [
               _ModalHeader(
                 title: widget.initialVehiculo == null
@@ -1725,449 +1717,483 @@ class _VehiculoModalState extends State<_VehiculoModal> {
                     : 'Editar vehículo',
                 onClose: () => Navigator.pop(context),
               ),
-              if (_validationSummary != null) ...[
-                const SizedBox(height: 10),
-                Semantics(
-                  liveRegion: true,
-                  child: Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.errorContainer,
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(
-                        color: Theme.of(context).colorScheme.error,
-                      ),
-                    ),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Icon(
-                          Icons.error_outline,
-                          color: Theme.of(context).colorScheme.error,
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Text(
-                            _validationSummary!,
-                            style: TextStyle(
+              AnimatedSize(
+                duration: const Duration(milliseconds: 180),
+                curve: Curves.easeOut,
+                child: _validationSummary == null
+                    ? const SizedBox.shrink()
+                    : Padding(
+                        padding: const EdgeInsets.only(top: 10),
+                        child: Semantics(
+                          liveRegion: true,
+                          child: Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
                               color: Theme.of(
                                 context,
-                              ).colorScheme.onErrorContainer,
-                              fontWeight: FontWeight.w700,
+                              ).colorScheme.errorContainer,
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(
+                                color: Theme.of(context).colorScheme.error,
+                              ),
+                            ),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Icon(
+                                  Icons.error_outline,
+                                  color: Theme.of(context).colorScheme.error,
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Text(
+                                    _validationSummary!,
+                                    style: TextStyle(
+                                      color: Theme.of(
+                                        context,
+                                      ).colorScheme.onErrorContainer,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                         ),
-                      ],
+                      ),
+              ),
+              Expanded(
+                child: ListView(
+                  children: [
+                    const SizedBox(height: 12),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: OutlinedButton.icon(
+                        onPressed: _scanTarjeta,
+                        icon: const Icon(Icons.qr_code_scanner),
+                        label: const Text('Escanear tarjeta'),
+                      ),
                     ),
-                  ),
-                ),
-              ],
-              const SizedBox(height: 12),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: OutlinedButton.icon(
-                  onPressed: _scanTarjeta,
-                  icon: const Icon(Icons.qr_code_scanner),
-                  label: const Text('Escanear tarjeta'),
-                ),
-              ),
-              const SizedBox(height: 12),
-              DropdownButtonFormField<String>(
-                value: _tipoGeneralSeleccionado,
-                decoration: const InputDecoration(
-                  labelText: 'Tipo de vehiculo *',
-                  border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.directions_car),
-                ),
-                items: [
-                  const DropdownMenuItem<String>(
-                    value: null,
-                    child: Text('-- Seleccione --'),
-                  ),
-                  ...VehiculoTaxonomia.tiposGenerales
-                      .where(
-                        (item) =>
-                            !widget.onlyMotorcycles ||
-                            item['value'] == 'motocicleta',
-                      )
-                      .map((item) {
-                        return DropdownMenuItem<String>(
-                          value: item['value'],
-                          child: Text(item['label'] ?? ''),
-                        );
-                      }),
-                ],
-                onChanged: (value) {
-                  setState(() {
-                    _tipoGeneralSeleccionado = value;
-                    _tipoCarroceriaSeleccionada = null;
-                    _syncMarcaConTipoYCarroceria();
-                  });
-                },
-                validator: _tipoGeneralValidator,
-              ),
-              const SizedBox(height: 10),
-              DropdownButtonFormField<String>(
-                value: _tipoCarroceriaSeleccionada,
-                decoration: const InputDecoration(
-                  labelText: 'Carroceria *',
-                  border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.merge_type),
-                ),
-                items: carroceriasDisponibles.isEmpty
-                    ? const [
-                        DropdownMenuItem<String>(
-                          value: null,
-                          child: Text('-- Seleccione tipo primero --'),
-                        ),
-                      ]
-                    : [
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<String>(
+                      value: _tipoGeneralSeleccionado,
+                      decoration: const InputDecoration(
+                        labelText: 'Tipo de vehiculo *',
+                        border: OutlineInputBorder(),
+                        prefixIcon: Icon(Icons.directions_car),
+                      ),
+                      items: [
                         const DropdownMenuItem<String>(
                           value: null,
                           child: Text('-- Seleccione --'),
                         ),
-                        ...carroceriasDisponibles.map((carroceria) {
-                          return DropdownMenuItem<String>(
-                            value: carroceria,
-                            child: Text(carroceria),
-                          );
-                        }),
+                        ...VehiculoTaxonomia.tiposGenerales
+                            .where(
+                              (item) =>
+                                  !widget.onlyMotorcycles ||
+                                  item['value'] == 'motocicleta',
+                            )
+                            .map((item) {
+                              return DropdownMenuItem<String>(
+                                value: item['value'],
+                                child: Text(item['label'] ?? ''),
+                              );
+                            }),
                       ],
-                onChanged: carroceriasDisponibles.isEmpty
-                    ? null
-                    : (value) {
+                      onChanged: (value) {
                         setState(() {
-                          _tipoCarroceriaSeleccionada = value;
+                          _tipoGeneralSeleccionado = value;
+                          _tipoCarroceriaSeleccionada = null;
                           _syncMarcaConTipoYCarroceria();
                         });
                       },
-                validator: (value) {
-                  if ((_tipoGeneralSeleccionado ?? '').isEmpty) return null;
-                  return _tipoCarroceriaValidator(value);
-                },
-              ),
-              const SizedBox(height: 10),
-              MarcaVehiculoDropdown(
-                controller: _marcaCtrl,
-                tipoGeneral: _tipoGeneralSeleccionado,
-                carroceria: _tipoCarroceriaSeleccionada,
-                decoration: const InputDecoration(
-                  labelText: 'Marca *',
-                  border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.local_offer),
-                ),
-              ),
-              const SizedBox(height: 10),
-              _text(
-                _lineaCtrl,
-                'Linea *',
-                Icons.text_fields,
-                validator: (value) {
-                  final error = VehiculoFormService.validateRequiredText(
-                    value,
-                    max: 50,
-                    label: 'Línea',
-                  );
-                  return error == 'Requerido'
-                      ? 'Captura la línea del vehículo.'
-                      : error;
-                },
-              ),
-              _text(
-                _modeloCtrl,
-                'Modelo',
-                Icons.calendar_month,
-                validator: (value) => VehiculoFormService.validateOptionalText(
-                  value,
-                  max: 10,
-                  label: 'Modelo',
-                ),
-              ),
-              DropdownButtonFormField<String>(
-                value: colorSeleccionado.isEmpty ? null : colorSeleccionado,
-                decoration: const InputDecoration(
-                  labelText: 'Color *',
-                  border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.color_lens),
-                ),
-                items: [
-                  const DropdownMenuItem<String>(
-                    value: null,
-                    child: Text('-- Seleccione --'),
-                  ),
-                  ...coloresDisponibles.map((color) {
-                    return DropdownMenuItem<String>(
-                      value: color,
-                      child: Text(color),
-                    );
-                  }),
-                ],
-                onChanged: (value) => setState(() => _setColor(value)),
-                validator: (value) {
-                  final error = VehiculoFormService.validateRequiredText(
-                    value,
-                    max: 30,
-                    label: 'Color',
-                  );
-                  return error == 'Requerido'
-                      ? 'Selecciona el color del vehículo.'
-                      : error;
-                },
-              ),
-              const SizedBox(height: 10),
-              _text(
-                _placasCtrl,
-                'Placas',
-                Icons.credit_card,
-                validator: VehiculoFormService.validatePlacas,
-                onChanged: (_) => setState(() {}),
-              ),
-              DropdownButtonFormField<String>(
-                isExpanded: true,
-                value: tipoServicioSeleccionado,
-                decoration: const InputDecoration(
-                  labelText: 'Tipo de servicio de placa *',
-                  border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.miscellaneous_services),
-                ),
-                items: VehiculoFormService.tiposServicioPlaca.map((value) {
-                  return DropdownMenuItem<String>(
-                    value: value,
-                    child: Text(value),
-                  );
-                }).toList(),
-                onChanged: (value) {
-                  if (value == null) return;
-                  setState(() {
-                    _tipoServicioCtrl.text = value;
-                    if (VehiculoFormService.isTipoServicioPublicoFederal(
-                      value,
-                    )) {
-                      _estadoPlacasSeleccionado = null;
-                    }
-                  });
-                },
-                validator: VehiculoFormService.validateTipoServicioPlaca,
-              ),
-              if (requiereEstadoPlacas) ...[
-                const SizedBox(height: 10),
-                DropdownButtonFormField<String>(
-                  value: _estadoPlacasSeleccionado,
-                  decoration: const InputDecoration(
-                    labelText: 'Estado de placas *',
-                    border: OutlineInputBorder(),
-                    prefixIcon: Icon(Icons.map),
-                  ),
-                  items: [
-                    const DropdownMenuItem<String>(
-                      value: null,
-                      child: Text('-- Seleccione --'),
+                      validator: _tipoGeneralValidator,
                     ),
-                    ...EstadosRepublica.estados.map((estado) {
-                      return DropdownMenuItem<String>(
-                        value: estado['value'],
-                        child: Text(estado['label'] ?? ''),
-                      );
-                    }),
-                  ],
-                  onChanged: (value) {
-                    setState(() => _estadoPlacasSeleccionado = value);
-                  },
-                  validator: (value) {
-                    if (!requiereEstadoPlacas) return null;
-                    if ((value ?? '').trim().isEmpty) {
-                      return 'Requerido si capturas placas';
-                    }
-                    return null;
-                  },
-                ),
-              ],
-              const SizedBox(height: 10),
-              _text(
-                _serieCtrl,
-                'Serie/NIV',
-                Icons.confirmation_number,
-                validator: VehiculoFormService.validateSerie,
-              ),
-              _text(
-                _numeroInventarioCtrl,
-                widget.onlyMotorcycles
-                    ? 'Número de inventario *'
-                    : 'Número de inventario',
-                Icons.inventory_2_outlined,
-                helperText: widget.onlyMotorcycles
-                    ? 'Obligatorio para guardar y emitir la boleta.'
-                    : 'Se mostrará en la boleta.',
-                validator: (value) {
-                  if (widget.onlyMotorcycles && (value ?? '').trim().isEmpty) {
-                    return 'Captura el número de inventario';
-                  }
-                  return VehiculoFormService.validateOptionalText(
-                    value,
-                    max: 100,
-                    label: 'Número de inventario',
-                  );
-                },
-              ),
-              _text(
-                _capacidadCtrl,
-                'Capacidad de personas *',
-                Icons.people,
-                keyboardType: TextInputType.number,
-                validator: (value) {
-                  final error = VehiculoFormService.validateCapacidad(value);
-                  return error == 'Requerido'
-                      ? 'Captura la capacidad de personas.'
-                      : error;
-                },
-              ),
-              _text(_tarjetaCtrl, 'Nombre en tarjeta', Icons.badge),
-              _cargandoGruas
-                  ? const Padding(
-                      padding: EdgeInsets.only(bottom: 10),
-                      child: ListTile(
-                        contentPadding: EdgeInsets.zero,
-                        leading: SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        ),
-                        title: Text('Cargando gruas...'),
-                      ),
-                    )
-                  : DropdownButtonFormField<int?>(
-                      value: _gruaIdSeleccionada,
-                      isExpanded: true,
+                    const SizedBox(height: 10),
+                    DropdownButtonFormField<String>(
+                      value: _tipoCarroceriaSeleccionada,
                       decoration: const InputDecoration(
-                        labelText: 'Grua (empresa)',
+                        labelText: 'Carroceria *',
                         border: OutlineInputBorder(),
-                        prefixIcon: Icon(Icons.local_shipping),
+                        prefixIcon: Icon(Icons.merge_type),
                       ),
-                      items: [
-                        const DropdownMenuItem<int?>(
-                          value: null,
-                          child: Text('SIN GRUA / N/A'),
-                        ),
-                        ..._gruas
-                            .where((g) => GruasCatalogService.idOf(g) != null)
-                            .map((g) {
-                              final id = GruasCatalogService.idOf(g)!;
-                              return DropdownMenuItem<int?>(
-                                value: id,
-                                child: Text(
-                                  GruasCatalogService.displayName(g),
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              );
-                            }),
-                      ],
-                      onChanged: (value) {
-                        setState(() => _gruaIdSeleccionada = value);
+                      items: carroceriasDisponibles.isEmpty
+                          ? const [
+                              DropdownMenuItem<String>(
+                                value: null,
+                                child: Text('-- Seleccione tipo primero --'),
+                              ),
+                            ]
+                          : [
+                              const DropdownMenuItem<String>(
+                                value: null,
+                                child: Text('-- Seleccione --'),
+                              ),
+                              ...carroceriasDisponibles.map((carroceria) {
+                                return DropdownMenuItem<String>(
+                                  value: carroceria,
+                                  child: Text(carroceria),
+                                );
+                              }),
+                            ],
+                      onChanged: carroceriasDisponibles.isEmpty
+                          ? null
+                          : (value) {
+                              setState(() {
+                                _tipoCarroceriaSeleccionada = value;
+                                _syncMarcaConTipoYCarroceria();
+                              });
+                            },
+                      validator: (value) {
+                        if ((_tipoGeneralSeleccionado ?? '').isEmpty) {
+                          return null;
+                        }
+                        return _tipoCarroceriaValidator(value);
                       },
                     ),
-              const SizedBox(height: 10),
-              _cargandoGruas
-                  ? const SizedBox.shrink()
-                  : DropdownButtonFormField<int?>(
-                      value: _corralonGruaIdSeleccionada,
-                      isExpanded: true,
-                      decoration: InputDecoration(
-                        labelText: widget.onlyMotorcycles
-                            ? 'Corralón de destino *'
-                            : 'Corralón de destino',
+                    const SizedBox(height: 10),
+                    MarcaVehiculoDropdown(
+                      controller: _marcaCtrl,
+                      tipoGeneral: _tipoGeneralSeleccionado,
+                      carroceria: _tipoCarroceriaSeleccionada,
+                      decoration: const InputDecoration(
+                        labelText: 'Marca *',
                         border: OutlineInputBorder(),
-                        prefixIcon: Icon(Icons.warehouse),
+                        prefixIcon: Icon(Icons.local_offer),
                       ),
-                      items: [
-                        DropdownMenuItem<int?>(
-                          value: null,
-                          child: Text(
-                            widget.onlyMotorcycles
-                                ? '-- Selecciona corralón --'
-                                : 'SIN CORRALÓN / N/A',
-                          ),
-                        ),
-                        ..._gruas
-                            .where((g) => GruasCatalogService.idOf(g) != null)
-                            .map((g) {
-                              final id = GruasCatalogService.idOf(g)!;
-                              return DropdownMenuItem<int?>(
-                                value: id,
-                                child: Text(
-                                  GruasCatalogService.displayName(
-                                    g,
-                                    fallbackPrefix: 'CORRALON',
-                                  ),
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              );
-                            }),
-                      ],
-                      onChanged: (value) {
-                        setState(() => _corralonGruaIdSeleccionada = value);
+                    ),
+                    const SizedBox(height: 10),
+                    _text(
+                      _lineaCtrl,
+                      'Linea *',
+                      Icons.text_fields,
+                      validator: (value) {
+                        final error = VehiculoFormService.validateRequiredText(
+                          value,
+                          max: 50,
+                          label: 'Línea',
+                        );
+                        return error == 'Requerido'
+                            ? 'Captura la línea del vehículo.'
+                            : error;
                       },
+                    ),
+                    _text(
+                      _modeloCtrl,
+                      'Modelo',
+                      Icons.calendar_month,
                       validator: (value) =>
-                          widget.onlyMotorcycles && value == null
-                          ? 'Selecciona el corralón de destino'
-                          : null,
+                          VehiculoFormService.validateOptionalText(
+                            value,
+                            max: 10,
+                            label: 'Modelo',
+                          ),
                     ),
-              const SizedBox(height: 10),
-              DropdownButtonFormField<String>(
-                value: aseguradoraSeleccionada.isEmpty
-                    ? null
-                    : aseguradoraSeleccionada,
-                decoration: const InputDecoration(
-                  labelText: 'Aseguradora',
-                  border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.policy),
-                ),
-                items: [
-                  const DropdownMenuItem<String>(
-                    value: null,
-                    child: Text('-- Sin aseguradora --'),
-                  ),
-                  ...AseguradorasVehiculo.opciones.map((aseguradora) {
-                    return DropdownMenuItem<String>(
-                      value: aseguradora,
-                      child: Text(aseguradora),
-                    );
-                  }),
-                ],
-                onChanged: (value) => setState(() => _setAseguradora(value)),
-              ),
-              const SizedBox(height: 10),
-              SwitchListTile(
-                title: const Text('Antecedente del vehiculo'),
-                value: _antecedenteVehiculo,
-                onChanged: (value) =>
-                    setState(() => _antecedenteVehiculo = value),
-              ),
-              const SizedBox(height: 8),
-              const SizedBox(height: 8),
-              _text(
-                _motivoCtrl,
-                'Motivo de retencion',
-                Icons.report_problem_outlined,
-                maxLines: 3,
-              ),
-              _text(
-                _observacionesCtrl,
-                'Observaciones',
-                Icons.info_outline,
-                maxLines: 3,
-              ),
-              const SizedBox(height: 12),
-              ElevatedButton.icon(
-                onPressed: _submit,
-                icon: Icon(
-                  widget.initialVehiculo == null
-                      ? Icons.add
-                      : Icons.save_outlined,
-                ),
-                label: Text(
-                  widget.initialVehiculo == null
-                      ? 'Agregar vehículo'
-                      : 'Guardar cambios',
+                    DropdownButtonFormField<String>(
+                      value: colorSeleccionado.isEmpty
+                          ? null
+                          : colorSeleccionado,
+                      decoration: const InputDecoration(
+                        labelText: 'Color *',
+                        border: OutlineInputBorder(),
+                        prefixIcon: Icon(Icons.color_lens),
+                      ),
+                      items: [
+                        const DropdownMenuItem<String>(
+                          value: null,
+                          child: Text('-- Seleccione --'),
+                        ),
+                        ...coloresDisponibles.map((color) {
+                          return DropdownMenuItem<String>(
+                            value: color,
+                            child: Text(color),
+                          );
+                        }),
+                      ],
+                      onChanged: (value) => setState(() => _setColor(value)),
+                      validator: (value) {
+                        final error = VehiculoFormService.validateRequiredText(
+                          value,
+                          max: 30,
+                          label: 'Color',
+                        );
+                        return error == 'Requerido'
+                            ? 'Selecciona el color del vehículo.'
+                            : error;
+                      },
+                    ),
+                    const SizedBox(height: 10),
+                    _text(
+                      _placasCtrl,
+                      'Placas',
+                      Icons.credit_card,
+                      validator: VehiculoFormService.validatePlacas,
+                      onChanged: (_) => setState(() {}),
+                    ),
+                    DropdownButtonFormField<String>(
+                      isExpanded: true,
+                      value: tipoServicioSeleccionado,
+                      decoration: const InputDecoration(
+                        labelText: 'Tipo de servicio de placa *',
+                        border: OutlineInputBorder(),
+                        prefixIcon: Icon(Icons.miscellaneous_services),
+                      ),
+                      items: VehiculoFormService.tiposServicioPlaca.map((
+                        value,
+                      ) {
+                        return DropdownMenuItem<String>(
+                          value: value,
+                          child: Text(value),
+                        );
+                      }).toList(),
+                      onChanged: (value) {
+                        if (value == null) return;
+                        setState(() {
+                          _tipoServicioCtrl.text = value;
+                          if (VehiculoFormService.isTipoServicioPublicoFederal(
+                            value,
+                          )) {
+                            _estadoPlacasSeleccionado = null;
+                          }
+                        });
+                      },
+                      validator: VehiculoFormService.validateTipoServicioPlaca,
+                    ),
+                    if (requiereEstadoPlacas) ...[
+                      const SizedBox(height: 10),
+                      DropdownButtonFormField<String>(
+                        value: _estadoPlacasSeleccionado,
+                        decoration: const InputDecoration(
+                          labelText: 'Estado de placas *',
+                          border: OutlineInputBorder(),
+                          prefixIcon: Icon(Icons.map),
+                        ),
+                        items: [
+                          const DropdownMenuItem<String>(
+                            value: null,
+                            child: Text('-- Seleccione --'),
+                          ),
+                          ...EstadosRepublica.estados.map((estado) {
+                            return DropdownMenuItem<String>(
+                              value: estado['value'],
+                              child: Text(estado['label'] ?? ''),
+                            );
+                          }),
+                        ],
+                        onChanged: (value) {
+                          setState(() => _estadoPlacasSeleccionado = value);
+                        },
+                        validator: (value) {
+                          if (!requiereEstadoPlacas) return null;
+                          if ((value ?? '').trim().isEmpty) {
+                            return 'Requerido si capturas placas';
+                          }
+                          return null;
+                        },
+                      ),
+                    ],
+                    const SizedBox(height: 10),
+                    _text(
+                      _serieCtrl,
+                      'Serie/NIV',
+                      Icons.confirmation_number,
+                      validator: VehiculoFormService.validateSerie,
+                    ),
+                    _text(
+                      _numeroInventarioCtrl,
+                      widget.onlyMotorcycles
+                          ? 'Número de inventario *'
+                          : 'Número de inventario',
+                      Icons.inventory_2_outlined,
+                      helperText: widget.onlyMotorcycles
+                          ? 'Obligatorio para guardar y emitir la boleta.'
+                          : 'Se mostrará en la boleta.',
+                      validator: (value) {
+                        if (widget.onlyMotorcycles &&
+                            (value ?? '').trim().isEmpty) {
+                          return 'Captura el número de inventario';
+                        }
+                        return VehiculoFormService.validateOptionalText(
+                          value,
+                          max: 100,
+                          label: 'Número de inventario',
+                        );
+                      },
+                    ),
+                    _text(
+                      _capacidadCtrl,
+                      'Capacidad de personas *',
+                      Icons.people,
+                      keyboardType: TextInputType.number,
+                      validator: (value) {
+                        final error = VehiculoFormService.validateCapacidad(
+                          value,
+                        );
+                        return error == 'Requerido'
+                            ? 'Captura la capacidad de personas.'
+                            : error;
+                      },
+                    ),
+                    _text(_tarjetaCtrl, 'Nombre en tarjeta', Icons.badge),
+                    _cargandoGruas
+                        ? const Padding(
+                            padding: EdgeInsets.only(bottom: 10),
+                            child: ListTile(
+                              contentPadding: EdgeInsets.zero,
+                              leading: SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              ),
+                              title: Text('Cargando gruas...'),
+                            ),
+                          )
+                        : DropdownButtonFormField<int?>(
+                            value: _gruaIdSeleccionada,
+                            isExpanded: true,
+                            decoration: const InputDecoration(
+                              labelText: 'Grua (empresa)',
+                              border: OutlineInputBorder(),
+                              prefixIcon: Icon(Icons.local_shipping),
+                            ),
+                            items: [
+                              const DropdownMenuItem<int?>(
+                                value: null,
+                                child: Text('SIN GRUA / N/A'),
+                              ),
+                              ..._gruas
+                                  .where(
+                                    (g) => GruasCatalogService.idOf(g) != null,
+                                  )
+                                  .map((g) {
+                                    final id = GruasCatalogService.idOf(g)!;
+                                    return DropdownMenuItem<int?>(
+                                      value: id,
+                                      child: Text(
+                                        GruasCatalogService.displayName(g),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    );
+                                  }),
+                            ],
+                            onChanged: (value) {
+                              setState(() => _gruaIdSeleccionada = value);
+                            },
+                          ),
+                    const SizedBox(height: 10),
+                    _cargandoGruas
+                        ? const SizedBox.shrink()
+                        : DropdownButtonFormField<int?>(
+                            value: _corralonGruaIdSeleccionada,
+                            isExpanded: true,
+                            decoration: InputDecoration(
+                              labelText: widget.onlyMotorcycles
+                                  ? 'Corralón de destino *'
+                                  : 'Corralón de destino',
+                              border: OutlineInputBorder(),
+                              prefixIcon: Icon(Icons.warehouse),
+                            ),
+                            items: [
+                              DropdownMenuItem<int?>(
+                                value: null,
+                                child: Text(
+                                  widget.onlyMotorcycles
+                                      ? '-- Selecciona corralón --'
+                                      : 'SIN CORRALÓN / N/A',
+                                ),
+                              ),
+                              ..._gruas
+                                  .where(
+                                    (g) => GruasCatalogService.idOf(g) != null,
+                                  )
+                                  .map((g) {
+                                    final id = GruasCatalogService.idOf(g)!;
+                                    return DropdownMenuItem<int?>(
+                                      value: id,
+                                      child: Text(
+                                        GruasCatalogService.displayName(
+                                          g,
+                                          fallbackPrefix: 'CORRALON',
+                                        ),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    );
+                                  }),
+                            ],
+                            onChanged: (value) {
+                              setState(
+                                () => _corralonGruaIdSeleccionada = value,
+                              );
+                            },
+                            validator: (value) =>
+                                widget.onlyMotorcycles && value == null
+                                ? 'Selecciona el corralón de destino'
+                                : null,
+                          ),
+                    const SizedBox(height: 10),
+                    DropdownButtonFormField<String>(
+                      value: aseguradoraSeleccionada.isEmpty
+                          ? null
+                          : aseguradoraSeleccionada,
+                      decoration: const InputDecoration(
+                        labelText: 'Aseguradora',
+                        border: OutlineInputBorder(),
+                        prefixIcon: Icon(Icons.policy),
+                      ),
+                      items: [
+                        const DropdownMenuItem<String>(
+                          value: null,
+                          child: Text('-- Sin aseguradora --'),
+                        ),
+                        ...AseguradorasVehiculo.opciones.map((aseguradora) {
+                          return DropdownMenuItem<String>(
+                            value: aseguradora,
+                            child: Text(aseguradora),
+                          );
+                        }),
+                      ],
+                      onChanged: (value) =>
+                          setState(() => _setAseguradora(value)),
+                    ),
+                    const SizedBox(height: 10),
+                    SwitchListTile(
+                      title: const Text('Antecedente del vehiculo'),
+                      value: _antecedenteVehiculo,
+                      onChanged: (value) =>
+                          setState(() => _antecedenteVehiculo = value),
+                    ),
+                    const SizedBox(height: 8),
+                    const SizedBox(height: 8),
+                    _text(
+                      _motivoCtrl,
+                      'Motivo de retencion',
+                      Icons.report_problem_outlined,
+                      maxLines: 3,
+                    ),
+                    _text(
+                      _observacionesCtrl,
+                      'Observaciones',
+                      Icons.info_outline,
+                      maxLines: 3,
+                    ),
+                    const SizedBox(height: 12),
+                    ElevatedButton.icon(
+                      onPressed: _submit,
+                      icon: Icon(
+                        widget.initialVehiculo == null
+                            ? Icons.add
+                            : Icons.save_outlined,
+                      ),
+                      label: Text(
+                        widget.initialVehiculo == null
+                            ? 'Agregar vehículo'
+                            : 'Guardar cambios',
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],
