@@ -1,8 +1,9 @@
-enum FeedItemType { hecho, actividad, carreteras, vialidades }
+enum FeedItemType { hecho, actividad, carreteras, vialidades, conduceLegalidad }
 
 class FeedItem {
   final FeedItemType type;
   final int id;
+  final int? operativoId;
   final int userId;
   final String userName;
   final String resumen;
@@ -19,6 +20,7 @@ class FeedItem {
   const FeedItem({
     required this.type,
     required this.id,
+    this.operativoId,
     required this.userId,
     required this.userName,
     required this.resumen,
@@ -70,6 +72,7 @@ class FeedItem {
     return FeedItem(
       type: type,
       id: id,
+      operativoId: operativoId,
       userId: userId,
       userName: userName,
       resumen: resumen,
@@ -90,6 +93,7 @@ class FeedItem {
     if (s == 'HECHO') return FeedItemType.hecho;
     if (s == 'CARRETERAS') return FeedItemType.carreteras;
     if (s == 'VIALIDADES') return FeedItemType.vialidades;
+    if (s == 'CONDUCE_LEGALIDAD') return FeedItemType.conduceLegalidad;
     return FeedItemType.actividad;
   }
 
@@ -343,6 +347,7 @@ class FeedItem {
     return FeedItem(
       type: _parseType(json['type']),
       id: _asInt(json['id']),
+      operativoId: _asNullableInt(json['operativo_id']),
       userId: _asInt(json['user_id']),
       userName: (json['user_name'] ?? '').toString(),
       resumen: (json['resumen'] ?? '').toString(),

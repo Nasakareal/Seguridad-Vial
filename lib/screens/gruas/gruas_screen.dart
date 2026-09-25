@@ -12,6 +12,17 @@ import '../../services/gruas_share_service.dart';
 // CAMBIO: ahora importamos el SHOW
 import '../../screens/vehiculos/vehiculo_show_screen.dart';
 
+@visibleForTesting
+bool gruaMatchesUnidadFilter({
+  required bool isConduce,
+  required int unidadFiltroId,
+  required Iterable<int> unidadIds,
+}) {
+  // Conduce no es una unidad real. En la UI usa un id negativo que nunca
+  // vendrá en `unidad_ids`; su catálogo ya llega acotado por el endpoint.
+  return isConduce || unidadIds.contains(unidadFiltroId);
+}
+
 class GruasScreen extends StatefulWidget {
   const GruasScreen({super.key});
 
@@ -36,6 +47,7 @@ class _GruasScreenState extends State<GruasScreen> {
   final Set<int> _hiddenGruas = <int>{};
   bool _hideZero = false;
   int _unidadFiltroId = 1;
+  int _unidadRestringidaId = 1;
   int? _delegacionFiltroId;
   int? _delegacionUsoFiltroId;
   int? _gruaFiltroId;
@@ -73,7 +85,10 @@ class _GruasScreenState extends State<GruasScreen> {
     setState(() {
       _canChooseUnidadFiltro = canChooseUnidad;
       if (!canChooseUnidad) {
-        _unidadFiltroId = unidadId == AuthService.unidadDelegacionesId ? 2 : 1;
+        _unidadRestringidaId = unidadId == AuthService.unidadDelegacionesId
+            ? 2
+            : 1;
+        _unidadFiltroId = _unidadRestringidaId;
       }
       _cargandoAcceso = false;
     });
@@ -177,7 +192,10 @@ class _GruasScreenState extends State<GruasScreen> {
     });
 
     try {
-      final uri = _apiUri('/gruas', _baseFiltroParams());
+      final isConduce = _unidadFiltroId == _origenConduceLegalidadId;
+      final uri = isConduce
+          ? _apiUri('/conduce-legalidad/gruas-siniestros', const {})
+          : _apiUri('/gruas', _baseFiltroParams());
       final res = await http.get(uri, headers: await _headers());
 
       if (res.statusCode != 200) {
@@ -487,7 +505,13 @@ class _GruasScreenState extends State<GruasScreen> {
   List<Map<String, dynamic>> _unitFilteredGruasView() {
     return _gruasView.where((g) {
       final ids = _extractUnidadIds(g);
-      if (!ids.contains(_unidadFiltroId)) return false;
+      if (!gruaMatchesUnidadFilter(
+        isConduce: _unidadFiltroId == _origenConduceLegalidadId,
+        unidadFiltroId: _unidadFiltroId,
+        unidadIds: ids,
+      )) {
+        return false;
+      }
       if (_unidadFiltroId == 2 &&
           _delegacionFiltroId == _soloDelegacionesConServiciosId) {
         if (_toInt(g['servicios_semana']) <= 0) return false;
@@ -884,18 +908,27 @@ class _GruasScreenState extends State<GruasScreen> {
               ),
             )
           else
-            InputDecorator(
-              decoration: InputDecoration(
-                labelText: 'Unidad',
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
+            SegmentedButton<int>(
+              segments: [
+                ButtonSegment<int>(
+                  value: _unidadRestringidaId,
+                  label: Text(
+                    _unidadRestringidaId == 2 ? 'Delegaciones' : 'Servicios',
+                  ),
+                  icon: const Icon(Icons.local_shipping_outlined),
                 ),
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 10,
+                const ButtonSegment<int>(
+                  value: _origenConduceLegalidadId,
+                  label: Text('Conduce'),
+                  icon: Icon(Icons.two_wheeler),
                 ),
-              ),
-              child: Text(_unidadFiltroLabel()),
+              ],
+              showSelectedIcon: false,
+              selected: {_unidadFiltroId},
+              onSelectionChanged: (selection) {
+                if (selection.isEmpty) return;
+                _setUnidadFiltro(selection.first);
+              },
             ),
           if (_unidadFiltroId == 2) ...[
             const SizedBox(height: 12),

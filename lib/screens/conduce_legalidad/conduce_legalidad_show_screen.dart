@@ -51,6 +51,8 @@ class _ConduceLegalidadShowScreenState extends State<ConduceLegalidadShowScreen>
   ConduceLegalidadOperativo? _operativo;
   ConduceLegalidadMeta? _meta;
   bool _isSuperadmin = false;
+  bool _canManageCapturas = false;
+  int? _currentUserId;
   Timer? _feedingClosureTimer;
 
   @override
@@ -82,6 +84,8 @@ class _ConduceLegalidadShowScreenState extends State<ConduceLegalidadShowScreen>
 
     try {
       final isSuperadmin = await AuthService.isSuperadmin();
+      final canManageCapturas = await AuthService.canManageConduceLegalidad();
+      final currentUserId = await AuthService.getUserId();
       final meta = widget.module.applyMeta(
         await ConduceLegalidadService.fetchMeta(
           filterConduceLegalidadMotos: !widget.module.isAlcoholimetria,
@@ -95,6 +99,8 @@ class _ConduceLegalidadShowScreenState extends State<ConduceLegalidadShowScreen>
         _meta = meta;
         _operativo = operativo;
         _isSuperadmin = isSuperadmin;
+        _canManageCapturas = canManageCapturas;
+        _currentUserId = currentUserId;
         _loading = false;
       });
       _scheduleFeedingClosure(operativo);
@@ -425,6 +431,14 @@ class _ConduceLegalidadShowScreenState extends State<ConduceLegalidadShowScreen>
   }
 
   Future<void> _editCaptura(ConduceLegalidadCaptura captura) async {
+    if (!_canMutateCaptura(captura)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Sólo puedes editar tus propias alimentaciones.'),
+        ),
+      );
+      return;
+    }
     if (!_ensureCanFeed()) return;
     final changed = await Navigator.pushNamed(
       context,
@@ -434,6 +448,14 @@ class _ConduceLegalidadShowScreenState extends State<ConduceLegalidadShowScreen>
     if (changed == true && mounted) {
       await _load();
     }
+  }
+
+  bool _canMutateCaptura(ConduceLegalidadCaptura captura) {
+    if (_canManageCapturas) return true;
+    final currentUserId = _currentUserId;
+    return currentUserId != null &&
+        currentUserId > 0 &&
+        captura.createdBy == currentUserId;
   }
 
   Future<void> _openBoleta(ConduceLegalidadCaptura captura) async {
@@ -819,7 +841,7 @@ class _ConduceLegalidadShowScreenState extends State<ConduceLegalidadShowScreen>
               deleting: _deletingCapturaId == captura.id,
               sharing: _sharingCapturaId == captura.id,
               downloadingIph: _downloadingIphCapturaId == captura.id,
-              allowMutation: _canFeedNow,
+              allowMutation: _canFeedNow && _canMutateCaptura(captura),
               onTicket: () => _openBoleta(captura),
               onShare: () => _shareCaptura(captura),
               onDownloadIph: () => _downloadIph(captura),

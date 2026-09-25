@@ -457,9 +457,6 @@ class ConduceLegalidadService {
   }
 
   static String _messageFromBody(Map<String, dynamic> body) {
-    final message = (body['message'] ?? '').toString().trim();
-    if (message.isNotEmpty) return message;
-
     final errors = body['errors'];
     if (errors is Map) {
       for (final value in errors.values) {
@@ -470,6 +467,9 @@ class ConduceLegalidadService {
         if (text.isNotEmpty) return text;
       }
     }
+
+    final message = (body['message'] ?? '').toString().trim();
+    if (message.isNotEmpty) return message;
 
     return '';
   }

@@ -1297,4 +1297,38 @@ void main() {
       expect(access.message, contains('Turno B'));
     },
   );
+
+  test('low Vialidades roles cannot manage Conduce captures', () async {
+    for (final role in <String>['Agente Vial', 'Fenix', 'Motociclista']) {
+      SharedPreferences.setMockInitialValues(<String, Object>{
+        'auth_role': role,
+        'auth_unidad_id': AuthService.unidadVialidadesUrbanasId,
+        'auth_user_payload': jsonEncode(<String, Object>{
+          'id': 90,
+          'role': <String, Object>{'name': role},
+          'unidad_id': AuthService.unidadVialidadesUrbanasId,
+        }),
+      });
+
+      expect(
+        await AuthService.canManageConduceLegalidad(),
+        isFalse,
+        reason: role,
+      );
+    }
+  });
+
+  test('Responsable de Turno can manage Conduce captures', () async {
+    SharedPreferences.setMockInitialValues(<String, Object>{
+      'auth_role': 'Responsable de Turno',
+      'auth_unidad_id': AuthService.unidadVialidadesUrbanasId,
+      'auth_user_payload': jsonEncode(<String, Object>{
+        'id': 91,
+        'role': <String, Object>{'name': 'Responsable de Turno'},
+        'unidad_id': AuthService.unidadVialidadesUrbanasId,
+      }),
+    });
+
+    expect(await AuthService.canManageConduceLegalidad(), isTrue);
+  });
 }

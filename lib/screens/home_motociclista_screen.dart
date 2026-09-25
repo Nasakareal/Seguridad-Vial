@@ -105,6 +105,13 @@ class _HomeMotociclistaScreenState extends State<HomeMotociclistaScreen> {
             const SizedBox(height: 8),
             OutlinedButton.icon(
               onPressed: () =>
+                  Navigator.pushNamed(context, AppRoutes.conduceLegalidad),
+              icon: const Icon(Icons.two_wheeler_outlined),
+              label: const Text('Conduce con Legalidad'),
+            ),
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+              onPressed: () =>
                   Navigator.pushNamed(context, AppRoutes.offlineSyncErrors),
               icon: const Icon(Icons.sync_problem_outlined),
               label: const Text('Pendientes por enviar'),

@@ -19,6 +19,8 @@ class FeedItemCard extends StatelessWidget {
         return Icons.add_road;
       case FeedItemType.vialidades:
         return Icons.traffic;
+      case FeedItemType.conduceLegalidad:
+        return Icons.two_wheeler_outlined;
     }
   }
 
@@ -32,6 +34,8 @@ class FeedItemCard extends StatelessWidget {
         return 'CARRETERAS';
       case FeedItemType.vialidades:
         return 'VIALIDADES';
+      case FeedItemType.conduceLegalidad:
+        return 'CONDUCE CON LEGALIDAD';
     }
   }
 
@@ -52,7 +56,9 @@ class FeedItemCard extends StatelessWidget {
         ? item.resumen.trim()
         : 'Publicación';
     final actividadTaxonomia = _actividadTaxonomia;
-    final isActividad = item.type == FeedItemType.actividad;
+    final isActividad =
+        item.type == FeedItemType.actividad ||
+        item.type == FeedItemType.conduceLegalidad;
     final title = isActividad && actividadTaxonomia.isNotEmpty
         ? actividadTaxonomia
         : (item.userName.isNotEmpty ? item.userName : 'Usuario');

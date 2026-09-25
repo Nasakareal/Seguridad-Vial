@@ -15,6 +15,9 @@ class FeedPostCard extends StatelessWidget {
     if (item.type == FeedItemType.actividad) return 'PROXIMIDAD SOCIAL';
     if (item.type == FeedItemType.carreteras) return 'CARRETERAS';
     if (item.type == FeedItemType.vialidades) return 'VIALIDADES';
+    if (item.type == FeedItemType.conduceLegalidad) {
+      return 'CONDUCE CON LEGALIDAD';
+    }
     return 'PUBLICACIÓN';
   }
 
@@ -23,6 +26,9 @@ class FeedPostCard extends StatelessWidget {
     if (item.type == FeedItemType.actividad) return Icons.camera_alt;
     if (item.type == FeedItemType.carreteras) return Icons.add_road;
     if (item.type == FeedItemType.vialidades) return Icons.traffic;
+    if (item.type == FeedItemType.conduceLegalidad) {
+      return Icons.two_wheeler_outlined;
+    }
     return Icons.feed;
   }
 

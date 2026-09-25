@@ -37,7 +37,7 @@ class ConduceLegalidadCaptureFormHelpSheet extends StatelessWidget {
           steps: <String>[
             'Abre Fundamento del operativo y selecciona la infracción que corresponda.',
             'Si aplican varias infracciones, pulsa Añadir otro fundamento y selecciona cada una.',
-            'Revisa o completa la Narrativa; después captura Municipio y Lugar específico.',
+            'Revisa o completa la Narrativa. La ubicación se toma del punto del operativo para evitar duplicarla.',
           ],
           note:
               'Selecciona solamente fundamentos que realmente correspondan a esta intervención.',

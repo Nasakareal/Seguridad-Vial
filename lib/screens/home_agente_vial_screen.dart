@@ -250,6 +250,16 @@ class _PrimaryActions extends StatelessWidget {
             ),
           ],
         ),
+        const SizedBox(height: 8),
+        OutlinedButton.icon(
+          onPressed: () =>
+              Navigator.pushNamed(context, AppRoutes.conduceLegalidad),
+          icon: const Icon(Icons.two_wheeler_outlined),
+          label: const Text('Conduce con Legalidad'),
+          style: OutlinedButton.styleFrom(
+            minimumSize: const Size.fromHeight(48),
+          ),
+        ),
       ],
     );
   }

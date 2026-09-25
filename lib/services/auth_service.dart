@@ -1068,7 +1068,7 @@ class AuthService {
       await refreshCurrentUserAccess();
     }
 
-    if (await isSuperadmin() || await hasFullOperationalAccess()) {
+    if (await isSuperadmin()) {
       return true;
     }
 
@@ -1077,9 +1077,21 @@ class AuthService {
       payload,
     );
     if (!isVialidadesUrbanas) {
+      return await hasRoleName('administrador') ||
+          await hasRoleName('subdirector') ||
+          await can('editar conduce legalidad');
+    }
+
+    if (await isVialidadesUrbanasNoWazeRole()) {
       return false;
     }
-    return true;
+
+    return await isResponsableTurno() ||
+        await hasRoleName('rt') ||
+        await hasRoleName('administrador') ||
+        await hasRoleName('subdirector') ||
+        await hasRoleName('administrativo') ||
+        await can('editar conduce legalidad');
   }
 
   static Future<bool> canCreateConduceLegalidad({bool refresh = false}) async {

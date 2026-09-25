@@ -49,8 +49,6 @@ class _ConduceLegalidadCapturaScreenState
   final _formKey = GlobalKey<FormState>();
   final _contentErrorKey = GlobalKey();
   final _narrativaCtrl = TextEditingController();
-  final _municipioCtrl = TextEditingController(text: 'Morelia');
-  final _lugarCtrl = TextEditingController();
   final _observacionesCtrl = TextEditingController();
   late final LocalDraftAutosave _draft;
 
@@ -174,8 +172,6 @@ class _ConduceLegalidadCapturaScreenState
     _draft = LocalDraftAutosave(draftId: _draftId(), collect: _draftValues)
       ..attachTextControllers({
         'narrativa': _narrativaCtrl,
-        'municipio': _municipioCtrl,
-        'lugar': _lugarCtrl,
         'observaciones': _observacionesCtrl,
       });
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -189,8 +185,6 @@ class _ConduceLegalidadCapturaScreenState
     _feedingClosureTimer?.cancel();
     _draft.dispose();
     _narrativaCtrl.dispose();
-    _municipioCtrl.dispose();
-    _lugarCtrl.dispose();
     _observacionesCtrl.dispose();
     super.dispose();
   }
@@ -200,10 +194,6 @@ class _ConduceLegalidadCapturaScreenState
     if (captura == null) return;
 
     _narrativaCtrl.text = captura.narrativa ?? '';
-    _municipioCtrl.text = captura.municipio?.trim().isNotEmpty == true
-        ? captura.municipio!
-        : 'Morelia';
-    _lugarCtrl.text = captura.lugar ?? '';
     _observacionesCtrl.text = captura.observaciones ?? '';
     final fundamentos = captura.fundamentos;
     _fundamento = fundamentos.isNotEmpty
@@ -242,9 +232,6 @@ class _ConduceLegalidadCapturaScreenState
   void _applyLocalDraft(Map<String, dynamic> draft) {
     _narrativaCtrl.text =
         _stringValue(draft['narrativa']) ?? _narrativaCtrl.text;
-    _municipioCtrl.text =
-        _stringValue(draft['municipio']) ?? _municipioCtrl.text;
-    _lugarCtrl.text = _stringValue(draft['lugar']) ?? _lugarCtrl.text;
     _observacionesCtrl.text =
         _stringValue(draft['observaciones']) ?? _observacionesCtrl.text;
     if (draft['fundamentos'] is List) {
@@ -289,8 +276,6 @@ class _ConduceLegalidadCapturaScreenState
   Map<String, dynamic> _draftValues() {
     return <String, dynamic>{
       'narrativa': _narrativaCtrl.text,
-      'municipio': _municipioCtrl.text,
-      'lugar': _lugarCtrl.text,
       'observaciones': _observacionesCtrl.text,
       'licencia_punto_infraccion_id': _fundamento?.id,
       'fundamento': _fundamento?.toJson(),
@@ -678,8 +663,6 @@ class _ConduceLegalidadCapturaScreenState
       final payload = {
         'fecha': _dateForPayload(),
         'hora': _timeForPayload(),
-        'municipio': _emptyToNull(_municipioCtrl.text),
-        'lugar': _emptyToNull(_lugarCtrl.text),
         'narrativa': _emptyToNull(_narrativaCtrl.text),
         'observaciones': _emptyToNull(_observacionesCtrl.text),
         if (!_fundamentoLegacyNoDisponible) ...{
@@ -1027,24 +1010,11 @@ class _ConduceLegalidadCapturaScreenState
                     ),
                   ),
                   const SizedBox(height: 12),
-                  TextFormField(
-                    controller: _municipioCtrl,
-                    decoration: const InputDecoration(
-                      labelText: 'Municipio',
-                      border: OutlineInputBorder(),
-                      prefixIcon: Icon(Icons.location_city),
+                  if ((_operativo?.direccionCompleta ?? '').isNotEmpty)
+                    _AttentionPanel(
+                      text:
+                          'Ubicación del operativo: ${_operativo!.direccionCompleta}',
                     ),
-                  ),
-                  const SizedBox(height: 12),
-                  TextFormField(
-                    controller: _lugarCtrl,
-                    textCapitalization: TextCapitalization.sentences,
-                    decoration: const InputDecoration(
-                      labelText: 'Lugar especifico',
-                      border: OutlineInputBorder(),
-                      prefixIcon: Icon(Icons.place),
-                    ),
-                  ),
                   const SizedBox(height: 16),
                   _SectionTitle(
                     title: 'Vehículos',
@@ -1250,6 +1220,8 @@ class _VehiculoModalState extends State<_VehiculoModal> {
   int? _corralonGruaIdSeleccionada;
   bool _antecedenteVehiculo = false;
   String? _rawTarjeta;
+  bool _validationAttempted = false;
+  String? _validationSummary;
 
   @override
   void initState() {
@@ -1382,7 +1354,9 @@ class _VehiculoModalState extends State<_VehiculoModal> {
   }
 
   String? _tipoGeneralValidator(String? value) {
-    if ((value ?? '').trim().isEmpty) return 'Requerido';
+    if ((value ?? '').trim().isEmpty) {
+      return 'Selecciona el tipo de vehículo.';
+    }
     if (widget.onlyMotorcycles && value != 'motocicleta') {
       return 'Este operativo es exclusivo para motocicletas';
     }
@@ -1390,7 +1364,9 @@ class _VehiculoModalState extends State<_VehiculoModal> {
   }
 
   String? _tipoCarroceriaValidator(String? value) {
-    if ((value ?? '').trim().isEmpty) return 'Requerido';
+    if ((value ?? '').trim().isEmpty) {
+      return 'Selecciona la carrocería.';
+    }
     return null;
   }
 
@@ -1552,8 +1528,12 @@ class _VehiculoModalState extends State<_VehiculoModal> {
   }
 
   void _submit() {
+    setState(() {
+      _validationAttempted = true;
+      _validationSummary = null;
+    });
     if (!_formKey.currentState!.validate()) {
-      _scrollToFirstFormError(_formKey);
+      _revealFirstValidationError();
       return;
     }
 
@@ -1581,22 +1561,16 @@ class _VehiculoModalState extends State<_VehiculoModal> {
       requirePartesDanadas: false,
     );
     if (validationError != null) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(validationError)));
+      _showValidationSummary(validationError);
       return;
     }
 
     for (final fundamento in widget.fundamentos) {
       if (!fundamento.aplicaParaTipoGeneral(_tipoGeneralSeleccionado)) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'El fundamento “${fundamento.display}” no aplica para este tipo '
-              'de vehículo. Cambia el tipo o el fundamento en la pantalla '
-              'principal.',
-            ),
-          ),
+        _showValidationSummary(
+          'El fundamento “${fundamento.display}” no aplica para este tipo '
+          'de vehículo. Cambia el tipo o el fundamento en la pantalla '
+          'principal.',
         );
         return;
       }
@@ -1609,10 +1583,8 @@ class _VehiculoModalState extends State<_VehiculoModal> {
       _serieCtrl.text,
     ].any((value) => value.trim().isNotEmpty);
     if (!hasIdentity) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Captura placas, serie, marca o linea del vehiculo.'),
-        ),
+      _showValidationSummary(
+        'Captura placas, serie, marca o línea del vehículo.',
       );
       return;
     }
@@ -1664,6 +1636,44 @@ class _VehiculoModalState extends State<_VehiculoModal> {
     );
   }
 
+  void _revealFirstValidationError() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final issue = _firstFormValidationError(_formKey);
+      final message = issue?.message ?? 'Revisa los campos marcados en rojo.';
+      setState(() => _validationSummary = message);
+      if (issue != null) {
+        Scrollable.ensureVisible(
+          issue.context,
+          duration: const Duration(milliseconds: 320),
+          curve: Curves.easeOutCubic,
+          alignment: 0.18,
+        );
+      }
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            content: Text(message),
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
+        );
+    });
+  }
+
+  void _showValidationSummary(String message) {
+    if (!mounted) return;
+    setState(() => _validationSummary = message);
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(message),
+          backgroundColor: Theme.of(context).colorScheme.error,
+        ),
+      );
+  }
+
   @override
   Widget build(BuildContext context) {
     final carroceriasDisponibles = _carroceriasDeTipoGeneral(
@@ -1704,6 +1714,9 @@ class _VehiculoModalState extends State<_VehiculoModal> {
         ),
         child: Form(
           key: _formKey,
+          autovalidateMode: _validationAttempted
+              ? AutovalidateMode.onUserInteraction
+              : AutovalidateMode.disabled,
           child: ListView(
             children: [
               _ModalHeader(
@@ -1712,6 +1725,43 @@ class _VehiculoModalState extends State<_VehiculoModal> {
                     : 'Editar vehículo',
                 onClose: () => Navigator.pop(context),
               ),
+              if (_validationSummary != null) ...[
+                const SizedBox(height: 10),
+                Semantics(
+                  liveRegion: true,
+                  child: Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.errorContainer,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                        color: Theme.of(context).colorScheme.error,
+                      ),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(
+                          Icons.error_outline,
+                          color: Theme.of(context).colorScheme.error,
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            _validationSummary!,
+                            style: TextStyle(
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.onErrorContainer,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
               const SizedBox(height: 12),
               Align(
                 alignment: Alignment.centerLeft,
@@ -1812,11 +1862,16 @@ class _VehiculoModalState extends State<_VehiculoModal> {
                 _lineaCtrl,
                 'Linea *',
                 Icons.text_fields,
-                validator: (value) => VehiculoFormService.validateRequiredText(
-                  value,
-                  max: 50,
-                  label: 'Linea',
-                ),
+                validator: (value) {
+                  final error = VehiculoFormService.validateRequiredText(
+                    value,
+                    max: 50,
+                    label: 'Línea',
+                  );
+                  return error == 'Requerido'
+                      ? 'Captura la línea del vehículo.'
+                      : error;
+                },
               ),
               _text(
                 _modeloCtrl,
@@ -1848,11 +1903,16 @@ class _VehiculoModalState extends State<_VehiculoModal> {
                   }),
                 ],
                 onChanged: (value) => setState(() => _setColor(value)),
-                validator: (value) => VehiculoFormService.validateRequiredText(
-                  value,
-                  max: 30,
-                  label: 'Color',
-                ),
+                validator: (value) {
+                  final error = VehiculoFormService.validateRequiredText(
+                    value,
+                    max: 30,
+                    label: 'Color',
+                  );
+                  return error == 'Requerido'
+                      ? 'Selecciona el color del vehículo.'
+                      : error;
+                },
               ),
               const SizedBox(height: 10),
               _text(
@@ -1954,7 +2014,12 @@ class _VehiculoModalState extends State<_VehiculoModal> {
                 'Capacidad de personas *',
                 Icons.people,
                 keyboardType: TextInputType.number,
-                validator: VehiculoFormService.validateCapacidad,
+                validator: (value) {
+                  final error = VehiculoFormService.validateCapacidad(value);
+                  return error == 'Requerido'
+                      ? 'Captura la capacidad de personas.'
+                      : error;
+                },
               ),
               _text(_tarjetaCtrl, 'Nombre en tarjeta', Icons.badge),
               _cargandoGruas
@@ -3398,30 +3463,7 @@ class _WarningPanel extends StatelessWidget {
 
 void _scrollToFirstFormError(GlobalKey<FormState> formKey) {
   WidgetsBinding.instance.addPostFrameCallback((_) {
-    final formContext = formKey.currentContext;
-    if (formContext == null) return;
-
-    BuildContext? firstErrorContext;
-
-    void visit(Element element) {
-      if (firstErrorContext != null) return;
-      if (element is StatefulElement &&
-          element.state is FormFieldState<dynamic>) {
-        final fieldState = element.state as FormFieldState<dynamic>;
-        if (fieldState.hasError) {
-          firstErrorContext = element;
-          return;
-        }
-      }
-      element.visitChildren(visit);
-    }
-
-    final element = formContext;
-    if (element is Element) {
-      visit(element);
-    }
-
-    final target = firstErrorContext;
+    final target = _firstFormValidationError(formKey)?.context;
     if (target == null) return;
 
     Scrollable.ensureVisible(
@@ -3431,6 +3473,38 @@ void _scrollToFirstFormError(GlobalKey<FormState> formKey) {
       alignment: 0.12,
     );
   });
+}
+
+class _FormValidationError {
+  final BuildContext context;
+  final String message;
+
+  const _FormValidationError({required this.context, required this.message});
+}
+
+_FormValidationError? _firstFormValidationError(GlobalKey<FormState> formKey) {
+  final formContext = formKey.currentContext;
+  if (formContext == null) return null;
+
+  _FormValidationError? firstError;
+
+  void visit(Element element) {
+    if (firstError != null) return;
+    if (element is StatefulElement &&
+        element.state is FormFieldState<dynamic>) {
+      final fieldState = element.state as FormFieldState<dynamic>;
+      final errorText = fieldState.errorText?.trim() ?? '';
+      if (fieldState.hasError && errorText.isNotEmpty) {
+        firstError = _FormValidationError(context: element, message: errorText);
+        return;
+      }
+    }
+    element.visitChildren(visit);
+  }
+
+  final element = formContext;
+  if (element is Element) visit(element);
+  return firstError;
 }
 
 void _scrollToKey(GlobalKey key) {

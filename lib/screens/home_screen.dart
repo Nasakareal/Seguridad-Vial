@@ -255,6 +255,16 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         AppRoutes.dispositivosShow,
         arguments: {'dispositivoId': item.id},
       );
+      return;
+    }
+
+    if (item.type == FeedItemType.conduceLegalidad &&
+        item.operativoId != null) {
+      Navigator.pushNamed(
+        context,
+        AppRoutes.conduceLegalidadShow,
+        arguments: {'operativoId': item.operativoId, 'capturaId': item.id},
+      );
     }
   }
 

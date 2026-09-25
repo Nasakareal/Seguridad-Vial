@@ -77,4 +77,20 @@ void main() {
       'Delegación: Regional Centro • Unidad: DELEGACIONES',
     );
   });
+
+  test('parses Conduce con Legalidad feed destination', () {
+    final item = FeedItem.fromJson(<String, dynamic>{
+      'type': 'CONDUCE_LEGALIDAD',
+      'id': 44,
+      'operativo_id': 12,
+      'user_id': 9,
+      'user_name': 'Agente',
+      'resumen': 'Motocicleta remitida',
+      'unidad_id': 5,
+    });
+
+    expect(item.type, FeedItemType.conduceLegalidad);
+    expect(item.id, 44);
+    expect(item.operativoId, 12);
+  });
 }

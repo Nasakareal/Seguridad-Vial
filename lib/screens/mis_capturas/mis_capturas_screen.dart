@@ -181,6 +181,13 @@ class _MisCapturasScreenState extends State<MisCapturasScreen> {
         AppRoutes.vialidadesUrbanasDispositivoShow,
         arguments: {'dispositivoId': item.id},
       );
+    } else if (item.type == FeedItemType.conduceLegalidad &&
+        item.operativoId != null) {
+      await Navigator.pushNamed(
+        context,
+        AppRoutes.conduceLegalidadShow,
+        arguments: {'operativoId': item.operativoId, 'capturaId': item.id},
+      );
     }
 
     if (!mounted) return;
