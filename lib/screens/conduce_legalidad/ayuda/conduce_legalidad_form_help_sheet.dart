@@ -30,14 +30,15 @@ class ConduceLegalidadCaptureFormHelpSheet extends StatelessWidget {
         const ConduceLegalidadActionHelpSheet(
           title: 'Fundamento e intervención',
           description:
-              'Completa los datos generales que describen por qué y dónde se realizó la intervención.',
+              'Selecciona por qué se realizó la intervención; la ubicación general ya viene del operativo.',
           icon: Icons.gavel_outlined,
           color: Color(0xFF6D28D9),
           preview: _IntervencionPreview(),
           steps: <String>[
             'Abre Fundamento del operativo y selecciona la infracción que corresponda.',
             'Si aplican varias infracciones, pulsa Añadir otro fundamento y selecciona cada una.',
-            'Revisa o completa la Narrativa. La ubicación se toma del punto del operativo para evitar duplicarla.',
+            'La Narrativa se genera sola. Revísala y corrígela sólo si hace falta; puedes restaurarla con el botón automático.',
+            'Verifica la ubicación general mostrada. Esa misma se usa en el IPH y el ticket para evitar duplicarla.',
           ],
           note:
               'Selecciona solamente fundamentos que realmente correspondan a esta intervención.',

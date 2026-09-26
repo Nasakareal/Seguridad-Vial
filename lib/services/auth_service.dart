@@ -1099,7 +1099,7 @@ class AuthService {
       await refreshCurrentUserAccess();
     }
 
-    if (await canManageConduceLegalidad()) {
+    if (await isSuperadmin()) {
       return true;
     }
 
@@ -1112,7 +1112,15 @@ class AuthService {
       return false;
     }
 
-    return can('crear conduce legalidad');
+    if (await isVialidadesUrbanasNoWazeRole()) {
+      return false;
+    }
+
+    return await isResponsableTurno() ||
+        await _hasExactRoleName('rt') ||
+        await _hasExactRoleName('subdirector') ||
+        await _hasExactRoleName('administrador') ||
+        await _hasExactRoleName('administrativo');
   }
 
   static Future<bool> canSetConduceLegalidadSchedule({

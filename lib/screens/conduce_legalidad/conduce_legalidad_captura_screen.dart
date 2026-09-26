@@ -15,6 +15,7 @@ import '../../core/licencias/licencia_barcode_payload.dart';
 import '../../models/conduce_legalidad.dart';
 import '../../services/auth_service.dart';
 import '../../services/conduce_legalidad_persona_descriptor.dart';
+import '../../services/conduce_legalidad_narrativa_service.dart';
 import '../../services/conduce_legalidad_service.dart';
 import '../../services/gruas_catalog_service.dart';
 import '../../services/local_draft_service.dart';
@@ -56,6 +57,8 @@ class _ConduceLegalidadCapturaScreenState
   bool _saving = false;
   String? _metaError;
   String? _contentError;
+  String? _ultimaNarrativaAutomatica;
+  bool _narrativaEditadaPorUsuario = false;
   ConduceLegalidadMeta? _meta;
   ConduceLegalidadFundamento? _fundamento;
   final List<ConduceLegalidadFundamento?> _fundamentosAdicionales = [];
@@ -87,7 +90,8 @@ class _ConduceLegalidadCapturaScreenState
           _helpOption(
             sheetContext: sheetContext,
             title: 'Fundamento y datos de la intervención',
-            subtitle: 'Fundamentos, narrativa, municipio y lugar específico.',
+            subtitle:
+                'Fundamentos y narrativa; usa la ubicación general del operativo.',
             icon: Icons.gavel_outlined,
             color: const Color(0xFF6D28D9),
             topic: ConduceLegalidadCaptureFormHelpTopic.intervencion,
@@ -211,6 +215,15 @@ class _ConduceLegalidadCapturaScreenState
     _fotosExistentes
       ..clear()
       ..addAll(captura.fotos);
+
+    final generada = ConduceLegalidadNarrativaService.build(
+      _fundamentosSeleccionados,
+    );
+    if (generada.isNotEmpty && _narrativaCtrl.text.trim() == generada) {
+      _ultimaNarrativaAutomatica = generada;
+    } else {
+      _narrativaEditadaPorUsuario = _narrativaCtrl.text.trim().isNotEmpty;
+    }
   }
 
   String _draftId() {
@@ -271,11 +284,23 @@ class _ConduceLegalidadCapturaScreenState
         ..clear()
         ..addAll(_filesFromDraft(draft['fotos']));
     }
+
+    final narrativaAutomatica = _stringValue(draft['narrativa_automatica']);
+    final actual = _narrativaCtrl.text.trim();
+    _ultimaNarrativaAutomatica =
+        narrativaAutomatica != null && actual == narrativaAutomatica
+        ? narrativaAutomatica
+        : null;
+    _narrativaEditadaPorUsuario =
+        draft['narrativa_editada_por_usuario'] == true ||
+        (actual.isNotEmpty && _ultimaNarrativaAutomatica == null);
   }
 
   Map<String, dynamic> _draftValues() {
     return <String, dynamic>{
       'narrativa': _narrativaCtrl.text,
+      'narrativa_automatica': _ultimaNarrativaAutomatica,
+      'narrativa_editada_por_usuario': _narrativaEditadaPorUsuario,
       'observaciones': _observacionesCtrl.text,
       'licencia_punto_infraccion_id': _fundamento?.id,
       'fundamento': _fundamento?.toJson(),
@@ -523,7 +548,7 @@ class _ConduceLegalidadCapturaScreenState
       _fundamento = fundamento;
       _fundamentoLegacyNoDisponible = false;
     });
-    _aplicarNarrativaSugerida(fundamento);
+    _sincronizarNarrativaAutomatica();
     _draft.notifyChanged();
   }
 
@@ -548,12 +573,13 @@ class _ConduceLegalidadCapturaScreenState
     ConduceLegalidadFundamento? fundamento,
   ) {
     setState(() => _fundamentosAdicionales[index] = fundamento);
-    _aplicarNarrativaSugerida(fundamento);
+    _sincronizarNarrativaAutomatica();
     _draft.notifyChanged();
   }
 
   void _removeFundamentoAdicional(int index) {
     setState(() => _fundamentosAdicionales.removeAt(index));
+    _sincronizarNarrativaAutomatica();
     _draft.notifyChanged();
   }
 
@@ -574,14 +600,37 @@ class _ConduceLegalidadCapturaScreenState
         .toList();
   }
 
-  void _aplicarNarrativaSugerida(ConduceLegalidadFundamento? fundamento) {
-    final narrativa = (fundamento?.narrativaSugerida ?? '').trim();
-    if (narrativa.isEmpty) return;
-
+  void _sincronizarNarrativaAutomatica({bool forzar = false}) {
+    final narrativa = ConduceLegalidadNarrativaService.build(
+      _fundamentosSeleccionados,
+    );
     final actual = _narrativaCtrl.text.trim();
-    if (actual.contains(narrativa)) return;
+    final anterior = (_ultimaNarrativaAutomatica ?? '').trim();
+    final puedeReemplazar =
+        forzar ||
+        !_narrativaEditadaPorUsuario &&
+            (actual.isEmpty || (anterior.isNotEmpty && actual == anterior));
 
-    _narrativaCtrl.text = actual.isEmpty ? narrativa : '$actual\n\n$narrativa';
+    if (!puedeReemplazar) return;
+
+    _narrativaCtrl.text = narrativa;
+    _ultimaNarrativaAutomatica = narrativa.isEmpty ? null : narrativa;
+    _narrativaEditadaPorUsuario = false;
+    _draft.notifyChanged();
+  }
+
+  void _narrativaCambio(String value) {
+    final actual = value.trim();
+    final automatica = (_ultimaNarrativaAutomatica ?? '').trim();
+
+    if (actual.isEmpty) {
+      _ultimaNarrativaAutomatica = null;
+      _narrativaEditadaPorUsuario = false;
+      return;
+    }
+
+    _narrativaEditadaPorUsuario = automatica.isEmpty || actual != automatica;
+    if (_narrativaEditadaPorUsuario) _ultimaNarrativaAutomatica = null;
   }
 
   Future<void> _addPersona() async {
@@ -845,9 +894,9 @@ class _ConduceLegalidadCapturaScreenState
                     itemHeight: null,
                     menuMaxHeight: MediaQuery.of(context).size.height * .55,
                     decoration: const InputDecoration(
-                      labelText: 'Fundamento del operativo',
+                      labelText: 'Fundamento del operativo *',
                       helperText:
-                          'Aplica a toda la intervención, con vehículo, persona o ambos.',
+                          'Obligatorio. Aplica a toda la intervención, con vehículo, persona o ambos.',
                       border: OutlineInputBorder(),
                       prefixIcon: Icon(Icons.gavel_outlined),
                     ),
@@ -878,6 +927,9 @@ class _ConduceLegalidadCapturaScreenState
                       ),
                     ],
                     onChanged: _saving ? null : _setFundamento,
+                    validator: (value) => value == null
+                        ? 'Selecciona al menos un fundamento'
+                        : null,
                   ),
                   if (_fundamento != null) ...[
                     const SizedBox(height: 8),
@@ -1002,18 +1054,32 @@ class _ConduceLegalidadCapturaScreenState
                     minLines: 5,
                     maxLines: 12,
                     textCapitalization: TextCapitalization.sentences,
+                    onChanged: _narrativaCambio,
                     decoration: const InputDecoration(
                       labelText: 'Narrativa',
+                      helperText:
+                          'Se genera al elegir fundamentos. Puedes corregirla.',
                       border: OutlineInputBorder(),
                       alignLabelWithHint: true,
                       prefixIcon: Icon(Icons.notes),
+                    ),
+                  ),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: TextButton.icon(
+                      onPressed: _saving || _fundamentosSeleccionados.isEmpty
+                          ? null
+                          : () => _sincronizarNarrativaAutomatica(forzar: true),
+                      icon: const Icon(Icons.auto_awesome_outlined),
+                      label: const Text('Restaurar narrativa automática'),
                     ),
                   ),
                   const SizedBox(height: 12),
                   if ((_operativo?.direccionCompleta ?? '').isNotEmpty)
                     _AttentionPanel(
                       text:
-                          'Ubicación del operativo: ${_operativo!.direccionCompleta}',
+                          'Ubicación general: ${_operativo!.direccionCompleta}\n'
+                          'Se usará automáticamente en el IPH y el ticket; no necesitas capturar otra ubicación.',
                     ),
                   const SizedBox(height: 16),
                   _SectionTitle(

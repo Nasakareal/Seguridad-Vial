@@ -40,6 +40,7 @@ class _ConduceLegalidadOperativoFormScreenState
   bool _locating = false;
   bool _canSetSchedule = false;
   bool _isSuperadmin = false;
+  bool _canCreate = false;
   bool _loadingAccess = true;
   String? _organizationError;
   List<ConduceLegalidadRef> _unidades = const <ConduceLegalidadRef>[];
@@ -186,11 +187,24 @@ class _ConduceLegalidadOperativoFormScreenState
       });
     }
 
+    final canCreate = _editing || await AuthService.canCreateConduceLegalidad();
+    if (!canCreate) {
+      if (!mounted) return;
+      setState(() {
+        _canCreate = false;
+        _canSetSchedule = false;
+        _isSuperadmin = false;
+        _loadingAccess = false;
+      });
+      return;
+    }
+
     final canSetSchedule = await AuthService.canSetConduceLegalidadSchedule();
     final isSuperadmin = await AuthService.isSuperadmin();
     if (!isSuperadmin) {
       if (!mounted) return;
       setState(() {
+        _canCreate = canCreate;
         _canSetSchedule = canSetSchedule;
         _isSuperadmin = false;
         _loadingAccess = false;
@@ -225,6 +239,7 @@ class _ConduceLegalidadOperativoFormScreenState
           : null;
 
       setState(() {
+        _canCreate = canCreate;
         _canSetSchedule = canSetSchedule;
         _isSuperadmin = true;
         _unidades = meta.unidades;
@@ -241,6 +256,7 @@ class _ConduceLegalidadOperativoFormScreenState
     } catch (e) {
       if (!mounted) return;
       setState(() {
+        _canCreate = canCreate;
         _canSetSchedule = canSetSchedule;
         _isSuperadmin = true;
         _loadingAccess = false;
@@ -363,6 +379,21 @@ class _ConduceLegalidadOperativoFormScreenState
 
   Future<void> _submit() async {
     if (_saving) return;
+    if (!_editing) {
+      final canCreate = await AuthService.canCreateConduceLegalidad();
+      if (!mounted) return;
+      if (!canCreate) {
+        setState(() => _canCreate = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Tu rol puede alimentar operativos existentes, pero no activarlos.',
+            ),
+          ),
+        );
+        return;
+      }
+    }
     if (!_formKey.currentState!.validate()) return;
 
     setState(() => _saving = true);
@@ -421,6 +452,53 @@ class _ConduceLegalidadOperativoFormScreenState
 
   @override
   Widget build(BuildContext context) {
+    if (_loadingAccess) {
+      return Scaffold(
+        appBar: AppBar(
+          title: Text(_editing ? 'Editar operativo' : 'Activar operativo'),
+        ),
+        body: const Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    if (!_editing && !_canCreate) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Acceso restringido')),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.lock_outline,
+                  size: 52,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  'Tu rol no puede activar operativos',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'Puedes entrar a un operativo activo y alimentar sus capturas.',
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 20),
+                FilledButton.icon(
+                  onPressed: () => Navigator.maybePop(context),
+                  icon: const Icon(Icons.arrow_back),
+                  label: const Text('Volver a operativos'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
     return Scaffold(
       appBar: AppBar(
         title: Text(_editing ? 'Editar operativo' : 'Activar operativo'),

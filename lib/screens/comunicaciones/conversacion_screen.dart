@@ -519,7 +519,7 @@ class _ConversacionScreenState extends State<ConversacionScreen> {
       child: Container(
         padding: const EdgeInsets.fromLTRB(8, 7, 8, 8),
         decoration: BoxDecoration(
-          color: Theme.of(context).scaffoldBackgroundColor,
+          color: Theme.of(context).colorScheme.surface,
           border: Border(
             top: BorderSide(
               color: Theme.of(context).dividerColor.withOpacity(.25),

@@ -80,8 +80,9 @@ class _ConduceLegalidadScreenState extends State<ConduceLegalidadScreen>
         filterConduceLegalidadMotos: !widget.module.isAlcoholimetria,
       );
       final meta = widget.module.applyMeta(rawMeta);
-      final canCreate = canCreateLocal || rawMeta.abilities.canCreateOperativo;
-      final effectiveMode = canCreate ? _listMode : _OperativosListMode.activos;
+      final effectiveMode = canCreateLocal
+          ? _listMode
+          : _OperativosListMode.activos;
       final operativos = (await ConduceLegalidadService.fetchOperativos(
         incluirCerrados: effectiveMode != _OperativosListMode.activos,
         tipoOperativo: widget.module.id,
@@ -98,7 +99,7 @@ class _ConduceLegalidadScreenState extends State<ConduceLegalidadScreen>
       )).where(widget.module.ownsOperativo);
       if (!mounted) return;
       setState(() {
-        _canCreateLocal = canCreate;
+        _canCreateLocal = canCreateLocal;
         _meta = meta;
         _listMode = effectiveMode;
         _operativos = operativos.toList();
@@ -159,6 +160,20 @@ class _ConduceLegalidadScreenState extends State<ConduceLegalidadScreen>
   }
 
   Future<void> _openCreate() async {
+    final canCreate = await AuthService.canCreateConduceLegalidad();
+    if (!mounted) return;
+    if (!canCreate) {
+      setState(() => _canCreateLocal = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Tu rol puede alimentar operativos existentes, pero no activarlos.',
+          ),
+        ),
+      );
+      return;
+    }
+
     final changed = await Navigator.pushNamed(
       context,
       widget.module.createRoute,
@@ -274,8 +289,7 @@ class _ConduceLegalidadScreenState extends State<ConduceLegalidadScreen>
   }
 
   void _mostrarAyuda() {
-    final canCreate =
-        _canCreateLocal || (_meta?.abilities.canCreateOperativo ?? false);
+    final canCreate = _canCreateLocal;
     final hasOperativos = _operativos.isNotEmpty;
     final canShareTotals =
         hasOperativos && (_meta?.abilities.canViewAllCapturas ?? false);
@@ -434,8 +448,7 @@ class _ConduceLegalidadScreenState extends State<ConduceLegalidadScreen>
   @override
   Widget build(BuildContext context) {
     final meta = _meta;
-    final canCreate =
-        _canCreateLocal || (meta?.abilities.canCreateOperativo ?? false);
+    final canCreate = _canCreateLocal;
 
     return Scaffold(
       drawer: const AppDrawer(trackingOn: false),
@@ -495,7 +508,7 @@ class _ConduceLegalidadScreenState extends State<ConduceLegalidadScreen>
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 92),
       children: [
-        _Header(meta: meta, module: widget.module),
+        _Header(meta: meta, module: widget.module, canCreate: canCreate),
         const SizedBox(height: 10),
 
         Align(
@@ -690,8 +703,13 @@ class _OperativosFilters extends StatelessWidget {
 class _Header extends StatelessWidget {
   final ConduceLegalidadMeta? meta;
   final ConduceLegalidadModule module;
+  final bool canCreate;
 
-  const _Header({required this.meta, required this.module});
+  const _Header({
+    required this.meta,
+    required this.module,
+    required this.canCreate,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -728,9 +746,7 @@ class _Header extends StatelessWidget {
             spacing: 8,
             runSpacing: 8,
             children: [
-              _Chip(
-                text: abilities.canCreateOperativo ? 'Puede activar' : 'Apoyo',
-              ),
+              _Chip(text: canCreate ? 'Puede activar' : 'Solo alimenta'),
               _Chip(
                 text: abilities.scope == 'all' ? 'Vista total' : 'Vista propia',
               ),

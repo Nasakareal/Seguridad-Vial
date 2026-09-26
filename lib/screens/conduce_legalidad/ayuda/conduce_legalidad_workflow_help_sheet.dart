@@ -47,7 +47,7 @@ class _ConduceLegalidadWorkflowHelpSheetState
     _HelpTopic(
       title: 'Fundamento y datos',
       intro:
-          'Esta parte identifica por qué se realizó la intervención y dónde ocurrió.',
+          'Esta parte identifica por qué se realizó la intervención. La ubicación ya viene del operativo.',
       icon: Icons.gavel_outlined,
       color: Color(0xFF6D28D9),
       action: 'Añadir otro fundamento',
@@ -55,15 +55,15 @@ class _ConduceLegalidadWorkflowHelpSheetState
       steps: <String>[
         'Selecciona el Fundamento del operativo que corresponda a la conducta observada.',
         'Si existen varias infracciones, pulsa Añadir otro fundamento y selecciona cada una por separado.',
-        'En Narrativa explica brevemente qué ocurrió, sin repetir únicamente el fundamento.',
-        'Confirma Municipio y escribe el Lugar específico donde se realizó la intervención.',
+        'La Narrativa se completa sola con los fundamentos. Revísala y corrígela únicamente si hace falta.',
+        'Confirma que la ubicación general mostrada corresponda al punto del operativo; esa misma se usará en el IPH y el ticket.',
       ],
       tip:
           'Debajo de cada fundamento se muestra su texto legal y la sanción. Revísalos antes de continuar.',
       demoIcons: <IconData>[
         Icons.gavel_outlined,
         Icons.notes_outlined,
-        Icons.place_outlined,
+        Icons.auto_awesome_outlined,
       ],
       highlightedIcon: 0,
     ),

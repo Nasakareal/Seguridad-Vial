@@ -1318,6 +1318,94 @@ void main() {
     }
   });
 
+  test(
+    'low Vialidades roles cannot create Conduce operatives even with permission',
+    () async {
+      for (final role in <String>[
+        'Agente Vial',
+        'Agente Vial Pie Tierra',
+        'Fenix',
+        'Fénix',
+        'Motociclista',
+      ]) {
+        SharedPreferences.setMockInitialValues(<String, Object>{
+          'auth_token': 'token-prueba',
+          'auth_role': role,
+          'auth_unidad_id': AuthService.unidadVialidadesUrbanasId,
+          'auth_user_payload': jsonEncode(<String, Object>{
+            'id': 190,
+            'role': <String, Object>{'name': role},
+            'unidad_id': AuthService.unidadVialidadesUrbanasId,
+          }),
+          'auth_perms': <String>['crear conduce legalidad'],
+        });
+
+        expect(
+          await AuthService.canCreateConduceLegalidad(),
+          isFalse,
+          reason: role,
+        );
+        expect(
+          await AuthService.canFeedConduceLegalidad(),
+          isTrue,
+          reason: '$role debe poder alimentar',
+        );
+      }
+    },
+  );
+
+  test('only authorized Vialidades roles create Conduce operatives', () async {
+    for (final role in <String>[
+      'RT',
+      'Responsable de Turno',
+      'Subdirector',
+      'Administrador',
+      'Administrativo',
+    ]) {
+      SharedPreferences.setMockInitialValues(<String, Object>{
+        'auth_role': role,
+        'auth_unidad_id': AuthService.unidadVialidadesUrbanasId,
+        'auth_user_payload': jsonEncode(<String, Object>{
+          'id': 191,
+          'role': <String, Object>{'name': role},
+          'unidad_id': AuthService.unidadVialidadesUrbanasId,
+        }),
+        'auth_perms': <String>[],
+      });
+
+      expect(
+        await AuthService.canCreateConduceLegalidad(),
+        isTrue,
+        reason: role,
+      );
+    }
+  });
+
+  test('only Superadmin creates globally outside Vialidades', () async {
+    SharedPreferences.setMockInitialValues(<String, Object>{
+      'auth_role': 'Administrador',
+      'auth_unidad_id': AuthService.unidadSeguridadVialId,
+      'auth_user_payload': jsonEncode(<String, Object>{
+        'id': 192,
+        'role': <String, Object>{'name': 'Administrador'},
+        'unidad_id': AuthService.unidadSeguridadVialId,
+      }),
+      'auth_perms': <String>['crear conduce legalidad'],
+    });
+    expect(await AuthService.canCreateConduceLegalidad(), isFalse);
+
+    SharedPreferences.setMockInitialValues(<String, Object>{
+      'auth_role': 'Superadmin',
+      'auth_unidad_id': AuthService.unidadSeguridadVialId,
+      'auth_user_payload': jsonEncode(<String, Object>{
+        'id': 193,
+        'role': <String, Object>{'name': 'Superadmin'},
+        'unidad_id': AuthService.unidadSeguridadVialId,
+      }),
+    });
+    expect(await AuthService.canCreateConduceLegalidad(), isTrue);
+  });
+
   test('Responsable de Turno can manage Conduce captures', () async {
     SharedPreferences.setMockInitialValues(<String, Object>{
       'auth_role': 'Responsable de Turno',

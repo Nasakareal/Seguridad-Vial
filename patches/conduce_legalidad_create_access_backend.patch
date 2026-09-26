@@ -1,0 +1,116 @@
+diff --git a/app/Http/Controllers/Api/ConduceLegalidadController.php b/app/Http/Controllers/Api/ConduceLegalidadController.php
+--- a/app/Http/Controllers/Api/ConduceLegalidadController.php
++++ b/app/Http/Controllers/Api/ConduceLegalidadController.php
+@@ -3573,15 +3573,32 @@ class ConduceLegalidadController extends Controller
+     private function canCreateOperativo($user): bool
+     {
+         if (!$user) {
+             return false;
+         }
+ 
++        if ($user->hasRole('Superadmin')) {
++            return true;
++        }
++
+         if ($this->isDelegacionesUser($user) && $user->hasRole('Delegado')) {
+             return true;
+         }
+ 
+-        return $this->canManage($user)
+-            || ($this->isVialidadesUser($user) && $user->can('crear conduce legalidad'));
++        if (!$this->isVialidadesUser($user)) {
++            return false;
++        }
++
++        if ($user->hasAnyRole(['Agente Vial', 'Fenix', 'Fénix', 'Motociclista'])) {
++            return false;
++        }
++
++        return $user->hasAnyRole([
++            'Responsable de Turno',
++            'RT',
++            'Subdirector',
++            'Administrador',
++            'Administrativo',
++        ]);
+     }
+ 
+     private function operativoRulesForUser($user, ?ConduceLegalidadOperativo $operativo = null): array
+diff --git a/tests/Unit/ConduceLegalidadOperativoAccessTest.php b/tests/Unit/ConduceLegalidadOperativoAccessTest.php
+--- a/tests/Unit/ConduceLegalidadOperativoAccessTest.php
++++ b/tests/Unit/ConduceLegalidadOperativoAccessTest.php
+@@ -20,6 +20,40 @@ class ConduceLegalidadOperativoAccessTest extends TestCase
+         $this->assertFalse($this->canCreate($this->user('Policia')));
+     }
+ 
++    public function test_low_vialidades_roles_cannot_create_even_with_permission(): void
++    {
++        foreach (['Agente Vial', 'Fenix', 'Fénix', 'Motociclista'] as $role) {
++            $user = $this->user($role, 5, null, 10, ['crear conduce legalidad']);
++            $this->assertFalse($this->canCreate($user), $role);
++        }
++    }
++
++    public function test_only_authorized_vialidades_roles_can_create(): void
++    {
++        foreach ([
++            'Responsable de Turno',
++            'RT',
++            'Subdirector',
++            'Administrador',
++            'Administrativo',
++        ] as $role) {
++            $this->assertTrue(
++                $this->canCreate($this->user($role, 5, null)),
++                $role
++            );
++        }
++    }
++
++    public function test_only_superadmin_can_create_globally_outside_vialidades(): void
++    {
++        $this->assertFalse(
++            $this->canCreate($this->user('Administrador', 1, null))
++        );
++        $this->assertTrue(
++            $this->canCreate($this->user('Superadmin', 1, null))
++        );
++    }
++
+     public function test_low_vialidades_role_cannot_manage_other_users_captures(): void
+     {
+         $user = $this->user('Agente Vial', 5, null, 10);
+@@ -228,19 +262,21 @@ class ConduceLegalidadOperativoAccessTest extends TestCase
+         return $method->invoke(new ConduceLegalidadController(), $user, $captura);
+     }
+ 
+-    private function user(string $role, int $unidadId = 2, ?int $delegacionId = 15, int $id = 1)
++    private function user(string $role, int $unidadId = 2, ?int $delegacionId = 15, int $id = 1, array $permissions = [])
+     {
+-        return new class ($role, $unidadId, $delegacionId, $id) {
++        return new class ($role, $unidadId, $delegacionId, $id, $permissions) {
+             public int $id;
+             public int $unidad_id;
+             public ?int $delegacion_id;
+             public object $unidad;
+             private string $role;
++            private array $permissions;
+ 
+-            public function __construct(string $role, int $unidadId, ?int $delegacionId, int $id)
++            public function __construct(string $role, int $unidadId, ?int $delegacionId, int $id, array $permissions)
+             {
+                 $this->id = $id;
+                 $this->role = $role;
++                $this->permissions = $permissions;
+                 $this->unidad_id = $unidadId;
+                 $this->delegacion_id = $delegacionId;
+                 $this->unidad = (object) ['slug' => $unidadId === 2 ? 'delegaciones' : 'otra'];
+@@ -258,7 +294,7 @@ class ConduceLegalidadOperativoAccessTest extends TestCase
+ 
+             public function can(string $permission): bool
+             {
+-                return false;
++                return in_array($permission, $this->permissions, true);
+             }
+         };
+     }

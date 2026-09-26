@@ -13,27 +13,21 @@ import 'conversacion_screen.dart';
 
 class ComunicacionesScreen extends StatefulWidget {
   final ComunicacionService service;
+  final Stream<ComunicacionPushEvento>? eventos;
 
-  const ComunicacionesScreen({super.key, required this.service});
+  const ComunicacionesScreen({super.key, required this.service, this.eventos});
 
   @override
   State<ComunicacionesScreen> createState() => _ComunicacionesScreenState();
 }
 
 class _ComunicacionesScreenState extends State<ComunicacionesScreen> {
-  final ComunicacionNotificationService _notificationService =
-      ComunicacionNotificationService.instance;
-
   StreamSubscription<ComunicacionPushEvento>? _pushSubscription;
 
   List<ComunicacionDestinatario> _recibidas = [];
   List<Comunicacion> _enviadas = [];
 
   Map<String, bool> _capacidades = {};
-
-  int _noLeidas = 0;
-  int _totalRecibidas = 0;
-  int _totalEnviadas = 0;
 
   bool _cargando = true;
   String? _error;
@@ -44,7 +38,9 @@ class _ComunicacionesScreenState extends State<ComunicacionesScreen> {
 
     _cargar();
 
-    _pushSubscription = _notificationService.eventos.listen((evento) {
+    final eventos =
+        widget.eventos ?? ComunicacionNotificationService.instance.eventos;
+    _pushSubscription = eventos.listen((evento) {
       if (evento.accion == ComunicacionPushAccion.recibida) {
         _cargar(silencioso: true);
       }
@@ -76,12 +72,6 @@ class _ComunicacionesScreenState extends State<ComunicacionesScreen> {
         _recibidas = bandeja.recibidas;
         _enviadas = bandeja.enviadas;
         _capacidades = bandeja.capacidades;
-        _noLeidas = bandeja.noLeidas;
-
-        _totalRecibidas = bandeja.paginacionRecibidas.total;
-
-        _totalEnviadas = bandeja.paginacionEnviadas.total;
-
         _cargando = false;
         _error = null;
       });
@@ -202,14 +192,115 @@ class _ComunicacionesScreenState extends State<ComunicacionesScreen> {
     }).length;
   }
 
+  List<_ResumenChat> get _chats {
+    final agrupados = <int, _ResumenChat>{};
+
+    void agregar({
+      required Comunicacion mensaje,
+      required ComunicacionUsuario usuario,
+      required bool noLeido,
+    }) {
+      if (usuario.id <= 0) return;
+
+      final anterior = agrupados[usuario.id];
+      final cantidadNoLeida = (anterior?.noLeidos ?? 0) + (noLeido ? 1 : 0);
+      final esMasReciente =
+          anterior == null || _esPosterior(mensaje, anterior.ultimoMensaje);
+
+      agrupados[usuario.id] = _ResumenChat(
+        usuario: esMasReciente ? usuario : anterior.usuario,
+        ultimoMensaje: esMasReciente ? mensaje : anterior.ultimoMensaje,
+        noLeidos: cantidadNoLeida,
+      );
+    }
+
+    for (final registro in _recibidas) {
+      final mensaje = registro.comunicacion;
+      if (mensaje == null || !mensaje.esMensaje) continue;
+
+      agregar(
+        mensaje: mensaje,
+        usuario:
+            mensaje.remitente ??
+            ComunicacionUsuario(id: mensaje.remitenteUserId, nombre: 'Usuario'),
+        noLeido: !registro.estaLeido,
+      );
+    }
+
+    for (final mensaje in _enviadas) {
+      if (!mensaje.esMensaje || mensaje.destinatarioUserId == null) continue;
+
+      agregar(
+        mensaje: mensaje,
+        usuario:
+            mensaje.destinatario ??
+            ComunicacionUsuario(
+              id: mensaje.destinatarioUserId!,
+              nombre: 'Usuario',
+            ),
+        noLeido: false,
+      );
+    }
+
+    final resultado = agrupados.values.toList();
+    resultado.sort(
+      (a, b) => _compararMensajesRecientes(b.ultimoMensaje, a.ultimoMensaje),
+    );
+    return resultado;
+  }
+
+  int get _mensajesNoLeidos =>
+      _chats.fold(0, (total, chat) => total + chat.noLeidos);
+
+  int get _comunicacionesNoLeidas => _recibidas.where((registro) {
+    final comunicacion = registro.comunicacion;
+    return comunicacion != null &&
+        !comunicacion.esMensaje &&
+        !registro.estaLeido;
+  }).length;
+
+  int get _totalComunicacionesRecibidas => _recibidas.where((registro) {
+    return registro.comunicacion?.esMensaje == false;
+  }).length;
+
+  int get _totalComunicacionesEnviadas =>
+      _enviadas.where((comunicacion) => !comunicacion.esMensaje).length;
+
+  Future<void> _nuevoChat() async {
+    final usuario = await showModalBottomSheet<ComunicacionUsuario>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: Theme.of(context).colorScheme.surface,
+      builder: (_) => SelectorUsuarioSheet(service: widget.service),
+    );
+
+    if (usuario == null || !mounted) return;
+
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) =>
+            ConversacionScreen(service: widget.service, usuario: usuario),
+      ),
+    );
+
+    if (mounted) await _cargar(silencioso: true);
+  }
+
   @override
   Widget build(BuildContext context) {
     return DefaultTabController(
-      length: 2,
+      length: 3,
       child: Scaffold(
         appBar: AppBar(
           title: const Text('Comunicaciones'),
           actions: [
+            if (_capacidades['mensaje'] == true)
+              IconButton(
+                tooltip: 'Nuevo chat',
+                onPressed: _nuevoChat,
+                icon: const Icon(Icons.chat_outlined),
+              ),
             if (_puedeCrearComunicacion)
               IconButton(
                 tooltip: 'Nueva comunicación',
@@ -223,15 +314,34 @@ class _ComunicacionesScreenState extends State<ComunicacionesScreen> {
             ),
           ],
           bottom: TabBar(
+            isScrollable: true,
             tabs: [
               Tab(
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Text('Recibidas'),
-                    if (_noLeidas > 0) ...[
+                    const Text('Chats'),
+                    if (_mensajesNoLeidos > 0) ...[
                       const SizedBox(width: 7),
-                      _BadgeNumero(numero: _noLeidas, color: Colors.red),
+                      _BadgeNumero(
+                        numero: _mensajesNoLeidos,
+                        color: Colors.green,
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              Tab(
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text('Recibidas'),
+                    if (_comunicacionesNoLeidas > 0) ...[
+                      const SizedBox(width: 7),
+                      _BadgeNumero(
+                        numero: _comunicacionesNoLeidas,
+                        color: Colors.red,
+                      ),
                     ],
                   ],
                 ),
@@ -241,12 +351,12 @@ class _ComunicacionesScreenState extends State<ComunicacionesScreen> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     const Text('Enviadas'),
-                    if (_totalEnviadas > 0) ...[
+                    if (_totalComunicacionesEnviadas > 0) ...[
                       const SizedBox(width: 7),
                       Text(
-                        _totalEnviadas > 999
+                        _totalComunicacionesEnviadas > 999
                             ? '999+'
-                            : _totalEnviadas.toString(),
+                            : _totalComunicacionesEnviadas.toString(),
                         style: const TextStyle(fontSize: 11),
                       ),
                     ],
@@ -277,10 +387,56 @@ class _ComunicacionesScreenState extends State<ComunicacionesScreen> {
       return _EstadoError(mensaje: _error!, onRetry: _cargar);
     }
 
-    return TabBarView(children: [_listaRecibidas(), _listaEnviadas()]);
+    return TabBarView(
+      children: [_listaChats(), _listaRecibidas(), _listaEnviadas()],
+    );
+  }
+
+  Widget _listaChats() {
+    final chats = _chats;
+
+    return RefreshIndicator(
+      onRefresh: _cargar,
+      child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(12, 12, 12, 100),
+        children: [
+          if (chats.isEmpty)
+            _EstadoVacio(
+              icon: Icons.forum_outlined,
+              titulo: 'Sin conversaciones',
+              descripcion: 'Inicia un chat directo con otro usuario.',
+            )
+          else
+            ...chats.map(
+              (chat) => Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: _TarjetaChat(
+                  chat: chat,
+                  onTap: () async {
+                    await Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => ConversacionScreen(
+                          service: widget.service,
+                          usuario: chat.usuario,
+                        ),
+                      ),
+                    );
+                    if (mounted) await _cargar(silencioso: true);
+                  },
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
   }
 
   Widget _listaRecibidas() {
+    final recibidas = _recibidas
+        .where((item) => item.comunicacion?.esMensaje == false)
+        .toList();
+
     return RefreshIndicator(
       onRefresh: _cargar,
       child: ListView(
@@ -288,19 +444,19 @@ class _ComunicacionesScreenState extends State<ComunicacionesScreen> {
         padding: const EdgeInsets.fromLTRB(12, 12, 12, 100),
         children: [
           _ResumenPrincipal(
-            totalRecibidas: _totalRecibidas,
-            noLeidas: _noLeidas,
+            totalRecibidas: _totalComunicacionesRecibidas,
+            noLeidas: _comunicacionesNoLeidas,
             pendientesEnterado: _pendientesEnterado,
           ),
           const SizedBox(height: 14),
-          if (_recibidas.isEmpty)
+          if (recibidas.isEmpty)
             const _EstadoVacio(
               icon: Icons.inbox_outlined,
               titulo: 'Sin comunicaciones',
               descripcion: 'No tienes comunicaciones recibidas.',
             )
           else
-            ..._recibidas.map((registro) {
+            ...recibidas.map((registro) {
               final comunicacion = registro.comunicacion;
 
               if (comunicacion == null) {
@@ -321,22 +477,24 @@ class _ComunicacionesScreenState extends State<ComunicacionesScreen> {
   }
 
   Widget _listaEnviadas() {
+    final enviadas = _enviadas.where((item) => !item.esMensaje).toList();
+
     return RefreshIndicator(
       onRefresh: _cargar,
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.fromLTRB(12, 12, 12, 100),
         children: [
-          _ResumenEnviadas(total: _totalEnviadas),
+          _ResumenEnviadas(total: _totalComunicacionesEnviadas),
           const SizedBox(height: 14),
-          if (_enviadas.isEmpty)
+          if (enviadas.isEmpty)
             const _EstadoVacio(
               icon: Icons.send_outlined,
               titulo: 'Sin comunicaciones enviadas',
               descripcion: 'Todavía no has enviado comunicaciones.',
             )
           else
-            ..._enviadas.map(
+            ...enviadas.map(
               (comunicacion) => Padding(
                 padding: const EdgeInsets.only(bottom: 8),
                 child: _TarjetaEnviada(
@@ -404,6 +562,136 @@ class _ResumenPrincipal extends StatelessWidget {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ResumenChat {
+  final ComunicacionUsuario usuario;
+  final Comunicacion ultimoMensaje;
+  final int noLeidos;
+
+  const _ResumenChat({
+    required this.usuario,
+    required this.ultimoMensaje,
+    required this.noLeidos,
+  });
+}
+
+class _TarjetaChat extends StatelessWidget {
+  final _ResumenChat chat;
+  final VoidCallback onTap;
+
+  const _TarjetaChat({required this.chat, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final mensaje = chat.ultimoMensaje;
+    final tienePendientes = chat.noLeidos > 0;
+    final texto = mensaje.tieneTexto
+        ? mensaje.contenido!.trim()
+        : mensaje.tieneImagenes
+        ? 'Imagen adjunta'
+        : 'Mensaje';
+    final preview = mensaje.esMio ? 'Tú: $texto' : texto;
+
+    return Material(
+      color: tienePendientes
+          ? Colors.green.withValues(alpha: .08)
+          : Theme.of(context).cardColor,
+      borderRadius: BorderRadius.circular(14),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(14),
+        child: Container(
+          padding: const EdgeInsets.all(13),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: tienePendientes
+                  ? Colors.green.withValues(alpha: .35)
+                  : Theme.of(context).dividerColor.withOpacity(.25),
+            ),
+          ),
+          child: Row(
+            children: [
+              CircleAvatar(
+                radius: 23,
+                child: Text(
+                  chat.usuario.iniciales,
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            chat.usuario.nombreVisible,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: tienePendientes
+                                  ? FontWeight.w700
+                                  : FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          _fechaCorta(mensaje.enviadoAt),
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                      ],
+                    ),
+                    if (chat.usuario.detalle.isNotEmpty) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        chat.usuario.detalle,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    ],
+                    const SizedBox(height: 5),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            preview,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontWeight: tienePendientes
+                                  ? FontWeight.w600
+                                  : FontWeight.normal,
+                              color: Theme.of(
+                                context,
+                              ).textTheme.bodyMedium?.color?.withOpacity(.75),
+                            ),
+                          ),
+                        ),
+                        if (tienePendientes) ...[
+                          const SizedBox(width: 10),
+                          _BadgeNumero(
+                            numero: chat.noLeidos,
+                            color: Colors.green,
+                          ),
+                        ],
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -993,6 +1281,26 @@ IconData _iconoTipo(String tipo) {
     default:
       return Icons.mail_outline;
   }
+}
+
+bool _esPosterior(Comunicacion candidato, Comunicacion actual) {
+  return _compararMensajesRecientes(candidato, actual) > 0;
+}
+
+int _compararMensajesRecientes(Comunicacion a, Comunicacion b) {
+  final fechaA = a.enviadoAt;
+  final fechaB = b.enviadoAt;
+
+  if (fechaA != null && fechaB != null) {
+    final comparacion = fechaA.compareTo(fechaB);
+    if (comparacion != 0) return comparacion;
+  } else if (fechaA != null) {
+    return 1;
+  } else if (fechaB != null) {
+    return -1;
+  }
+
+  return a.id.compareTo(b.id);
 }
 
 Color _colorTipo(String tipo, BuildContext context) {

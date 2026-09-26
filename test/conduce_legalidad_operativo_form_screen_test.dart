@@ -28,7 +28,11 @@ void main() {
   testWidgets('administrator sees operativo date and time fields', (
     tester,
   ) async {
-    _setSession(role: 'Administrador', roleId: 3);
+    _setSession(
+      role: 'Administrador',
+      roleId: 3,
+      unidadId: AuthService.unidadVialidadesUrbanasId,
+    );
 
     await tester.pumpWidget(
       const MaterialApp(home: ConduceLegalidadOperativoFormScreen()),
@@ -39,6 +43,25 @@ void main() {
     expect(find.byIcon(Icons.schedule), findsOneWidget);
     expect(find.text('Unidad responsable *'), findsNothing);
     expect(find.text('Delegación específica *'), findsNothing);
+  });
+
+  testWidgets('low Vialidades role cannot open the activation form', (
+    tester,
+  ) async {
+    _setSession(
+      role: 'Agente Vial',
+      roleId: 12,
+      unidadId: AuthService.unidadVialidadesUrbanasId,
+    );
+
+    await tester.pumpWidget(
+      const MaterialApp(home: ConduceLegalidadOperativoFormScreen()),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Tu rol no puede activar operativos'), findsOneWidget);
+    expect(find.text('Activar operativo'), findsNothing);
+    expect(find.text('Municipio *'), findsNothing);
   });
 
   testWidgets(
@@ -86,16 +109,20 @@ Future<http.Response> _metaResponse(http.Request request) async {
   );
 }
 
-void _setSession({required String role, int? roleId}) {
+void _setSession({
+  required String role,
+  int? roleId,
+  int unidadId = AuthService.unidadDelegacionesId,
+}) {
   SharedPreferences.setMockInitialValues(<String, Object>{
     'auth_token': 'test-token',
     'auth_role': role,
     if (roleId != null) 'auth_role_id': roleId,
-    'auth_unidad_id': AuthService.unidadDelegacionesId,
+    'auth_unidad_id': unidadId,
     'auth_user_payload': jsonEncode(<String, Object>{
       'id': 300 + (roleId ?? 0),
       'role': <String, Object>{if (roleId != null) 'id': roleId, 'name': role},
-      'unidad_id': AuthService.unidadDelegacionesId,
+      'unidad_id': unidadId,
     }),
   });
 }

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -219,8 +220,8 @@ class _ComunicacionCreateScreenState extends State<ComunicacionCreateScreen> {
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      builder: (_) => _SelectorUsuarioSheet(service: widget.service),
+      backgroundColor: Theme.of(context).colorScheme.surface,
+      builder: (_) => SelectorUsuarioSheet(service: widget.service),
     );
 
     if (usuario == null || !mounted) {
@@ -1051,17 +1052,19 @@ class _ComunicacionCreateScreenState extends State<ComunicacionCreateScreen> {
   }
 }
 
-class _SelectorUsuarioSheet extends StatefulWidget {
+class SelectorUsuarioSheet extends StatefulWidget {
   final ComunicacionService service;
 
-  const _SelectorUsuarioSheet({required this.service});
+  const SelectorUsuarioSheet({super.key, required this.service});
 
   @override
-  State<_SelectorUsuarioSheet> createState() => _SelectorUsuarioSheetState();
+  State<SelectorUsuarioSheet> createState() => _SelectorUsuarioSheetState();
 }
 
-class _SelectorUsuarioSheetState extends State<_SelectorUsuarioSheet> {
+class _SelectorUsuarioSheetState extends State<SelectorUsuarioSheet> {
   final TextEditingController _buscarController = TextEditingController();
+
+  Timer? _debounceBusqueda;
 
   List<ComunicacionUsuario> _usuarios = [];
 
@@ -1076,8 +1079,14 @@ class _SelectorUsuarioSheetState extends State<_SelectorUsuarioSheet> {
 
   @override
   void dispose() {
+    _debounceBusqueda?.cancel();
     _buscarController.dispose();
     super.dispose();
+  }
+
+  void _programarBusqueda(String _) {
+    _debounceBusqueda?.cancel();
+    _debounceBusqueda = Timer(const Duration(milliseconds: 350), _buscar);
   }
 
   Future<void> _buscar() async {
@@ -1124,65 +1133,69 @@ class _SelectorUsuarioSheetState extends State<_SelectorUsuarioSheet> {
   Widget build(BuildContext context) {
     final teclado = MediaQuery.of(context).viewInsets.bottom;
 
-    return Padding(
-      padding: EdgeInsets.only(bottom: teclado),
-      child: SizedBox(
-        height: MediaQuery.of(context).size.height * .78,
-        child: Column(
-          children: [
-            const SizedBox(height: 10),
-            Container(
-              width: 42,
-              height: 4,
-              decoration: BoxDecoration(
-                color: Theme.of(context).dividerColor,
-                borderRadius: BorderRadius.circular(20),
+    return Material(
+      color: Theme.of(context).colorScheme.surface,
+      child: Padding(
+        padding: EdgeInsets.only(bottom: teclado),
+        child: SizedBox(
+          height: MediaQuery.of(context).size.height * .78,
+          child: Column(
+            children: [
+              const SizedBox(height: 10),
+              Container(
+                width: 42,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Theme.of(context).dividerColor,
+                  borderRadius: BorderRadius.circular(20),
+                ),
               ),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 14, 8, 10),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      'Seleccionar usuario',
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.bold,
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 14, 8, 10),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'Seleccionar usuario',
+                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                     ),
-                  ),
-                  IconButton(
-                    onPressed: () {
-                      Navigator.of(context).pop();
-                    },
-                    icon: const Icon(Icons.close),
-                  ),
-                ],
+                    IconButton(
+                      onPressed: () {
+                        Navigator.of(context).pop();
+                      },
+                      icon: const Icon(Icons.close),
+                    ),
+                  ],
+                ),
               ),
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: TextField(
-                controller: _buscarController,
-                autofocus: true,
-                textInputAction: TextInputAction.search,
-                onSubmitted: (_) => _buscar(),
-                decoration: InputDecoration(
-                  hintText: 'Nombre, apellido o correo...',
-                  prefixIcon: const Icon(Icons.search),
-                  suffixIcon: IconButton(
-                    onPressed: _buscar,
-                    icon: const Icon(Icons.arrow_forward),
-                  ),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(14),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: TextField(
+                  controller: _buscarController,
+                  autofocus: true,
+                  textInputAction: TextInputAction.search,
+                  onChanged: _programarBusqueda,
+                  onSubmitted: (_) => _buscar(),
+                  decoration: InputDecoration(
+                    hintText: 'Nombre, apellido o correo...',
+                    prefixIcon: const Icon(Icons.search),
+                    suffixIcon: IconButton(
+                      onPressed: _buscar,
+                      icon: const Icon(Icons.arrow_forward),
+                    ),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
                   ),
                 ),
               ),
-            ),
-            const SizedBox(height: 10),
-            Expanded(child: _construirResultados()),
-          ],
+              const SizedBox(height: 10),
+              Expanded(child: _construirResultados()),
+            ],
+          ),
         ),
       ),
     );
