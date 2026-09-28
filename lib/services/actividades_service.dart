@@ -1056,7 +1056,7 @@ class ActividadesService {
   static Future<List<ActividadRef>> fetchUnidadesFiltro() async {
     final headers = await _headersJson();
     final uri = Uri.parse(
-      '${AuthService.baseUrl}/estadisticas-actividades/catalogos/unidades',
+      '${AuthService.baseUrl}/actividades/catalogos/unidades',
     );
     final resp = await http
         .get(uri, headers: headers)
@@ -1079,7 +1079,7 @@ class ActividadesService {
   static Future<List<ActividadRef>> fetchDelegacionesFiltro() async {
     final headers = await _headersJson();
     final uri = Uri.parse(
-      '${AuthService.baseUrl}/estadisticas-actividades/catalogos/delegaciones',
+      '${AuthService.baseUrl}/actividades/catalogos/delegaciones',
     );
     final resp = await http
         .get(uri, headers: headers)

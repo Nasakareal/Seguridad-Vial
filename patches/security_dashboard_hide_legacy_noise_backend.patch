@@ -1,0 +1,104 @@
+diff --git a/app/Http/Controllers/SecurityEventController.php b/app/Http/Controllers/SecurityEventController.php
+--- a/app/Http/Controllers/SecurityEventController.php
++++ b/app/Http/Controllers/SecurityEventController.php
+@@ -24,7 +24,7 @@ class SecurityEventController extends Controller
+             'search' => ['nullable', 'string', 'max:120'],
+         ]);
+ 
+-        $query = SecurityEvent::query()->with('user:id,name,email');
++        $query = SecurityEvent::withoutKnownOperationalNoise()->with('user:id,name,email');
+         $this->applyFilters($query, $filters);
+ 
+         $events = $query
+@@ -33,7 +33,8 @@ class SecurityEventController extends Controller
+             ->appends($request->query());
+ 
+         $since = Carbon::now()->subDay();
+-        $summaryBase = SecurityEvent::query()->where('last_seen_at', '>=', $since);
++        $summaryBase = SecurityEvent::withoutKnownOperationalNoise()
++            ->where('last_seen_at', '>=', $since);
+ 
+         $summary = [
+             'total' => (int) (clone $summaryBase)->sum('occurrences'),
+@@ -43,7 +45,7 @@ class SecurityEventController extends Controller
+             'ips' => (int) (clone $summaryBase)->whereNotNull('ip_address')->distinct()->count('ip_address'),
+         ];
+ 
+-        $topIps = SecurityEvent::query()
++        $topIps = SecurityEvent::withoutKnownOperationalNoise()
+             ->where('last_seen_at', '>=', $since)
+             ->whereNotNull('ip_address')
+             ->select([
+diff --git a/app/Models/SecurityEvent.php b/app/Models/SecurityEvent.php
+--- a/app/Models/SecurityEvent.php
++++ b/app/Models/SecurityEvent.php
+@@ -47,6 +47,25 @@ class SecurityEvent extends Model
+         return $this->belongsTo(User::class);
+     }
+ 
++    public function scopeWithoutKnownOperationalNoise($query)
++    {
++        return $query->whereRaw(
++            "NOT (
++                (COALESCE(method, '') = ? AND COALESCE(status_code, 0) = ? AND COALESCE(path, '') = ?)
++                OR (COALESCE(method, '') = ? AND COALESCE(status_code, 0) = ? AND COALESCE(path, '') IN (?, ?, ?))
++                OR (COALESCE(method, '') = ? AND COALESCE(status_code, 0) = ? AND COALESCE(path, '') = ?)
++            )",
++            [
++                'GET', 401, '/api/app/version',
++                'GET', 403,
++                '/api/agente-upec-home/filtros',
++                '/api/estadisticas-actividades/catalogos/unidades',
++                '/api/estadisticas-actividades/catalogos/delegaciones',
++                'POST', 503, '/api/whatsapp/webhook',
++            ]
++        );
++    }
++
+     public function intentLabel(): string
+     {
+         if (!empty($this->metadata['intent'])) {
+diff --git a/tests/Feature/SecurityEventDashboardTest.php b/tests/Feature/SecurityEventDashboardTest.php
+--- a/tests/Feature/SecurityEventDashboardTest.php
++++ b/tests/Feature/SecurityEventDashboardTest.php
+@@ -56,6 +56,40 @@ class SecurityEventDashboardTest extends TestCase
+             ->assertSee('Intención probable');
+     }
+ 
++    public function test_dashboard_hides_known_operational_noise_without_deleting_it(): void
++    {
++        $user = $this->userWithSettingsPermission();
++        $role = Role::firstOrCreate(['name' => 'Superadmin', 'guard_name' => 'web']);
++        $user->assignRole($role);
++
++        SecurityEvent::create([
++            'occurred_at' => now(),
++            'first_seen_at' => now(),
++            'last_seen_at' => now(),
++            'bucket_at' => now()->startOfMinute(),
++            'occurrences' => 25,
++            'severity' => 'high',
++            'category' => 'authorization',
++            'event_code' => 'access_denied',
++            'description' => 'Ruido operativo heredado',
++            'ip_address' => '192.0.2.199',
++            'method' => 'GET',
++            'path' => '/api/agente-upec-home/filtros',
++            'status_code' => 403,
++            'fingerprint' => hash('sha256', 'legacy-noise-dashboard-test'),
++        ]);
++
++        $this->actingAs($user)
++            ->get('/admin/settings/security-events')
++            ->assertOk()
++            ->assertDontSee('Ruido operativo heredado')
++            ->assertDontSee('192.0.2.199');
++
++        $this->assertDatabaseHas('security_events', [
++            'fingerprint' => hash('sha256', 'legacy-noise-dashboard-test'),
++        ]);
++    }
++
+     public function test_non_superadmin_cannot_open_security_dashboard(): void
+     {
+         $user = $this->userWithSettingsPermission();

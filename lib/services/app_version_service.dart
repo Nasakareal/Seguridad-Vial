@@ -82,10 +82,15 @@ class AppVersionService {
   }
 
   static Future<Map<String, dynamic>> _fetchPolicy() async {
+    final token = await AuthService.getToken();
     final res = await http
         .get(
           Uri.parse('${AuthService.baseUrl}/app/version'),
-          headers: {'Accept': 'application/json'},
+          headers: {
+            'Accept': 'application/json',
+            if (token != null && token.trim().isNotEmpty)
+              'Authorization': 'Bearer ${token.trim()}',
+          },
         )
         .timeout(const Duration(seconds: 10));
 

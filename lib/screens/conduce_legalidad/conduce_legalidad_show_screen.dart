@@ -633,6 +633,41 @@ class _ConduceLegalidadShowScreenState extends State<ConduceLegalidadShowScreen>
     }
   }
 
+  Future<void> _confirmReopenOperativo() async {
+    final operativo = _operativo;
+    if (!_isSuperadmin ||
+        operativo == null ||
+        operativo.estado == 'activo' ||
+        _updatingEstado) {
+      return;
+    }
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Activar operativo nuevamente'),
+          content: const Text(
+            'Al activarlo se podran agregar capturas nuevamente a este punto.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancelar'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Activar'),
+            ),
+          ],
+        );
+      },
+    );
+    if (confirmed == true) {
+      await _reopenOperativo();
+    }
+  }
+
   Future<void> _closeOperativo() async {
     final operativo = _operativo;
     if (operativo == null) return;
@@ -654,6 +689,34 @@ class _ConduceLegalidadShowScreenState extends State<ConduceLegalidadShowScreen>
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text('No se pudo cerrar: $e')));
+    } finally {
+      if (mounted) {
+        setState(() => _updatingEstado = false);
+      }
+    }
+  }
+
+  Future<void> _reopenOperativo() async {
+    final operativo = _operativo;
+    if (!_isSuperadmin || operativo == null) return;
+
+    setState(() => _updatingEstado = true);
+    try {
+      await ConduceLegalidadService.updateOperativo(operativo.id, {
+        'estado': 'activo',
+        'hora_cierre': null,
+      });
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Operativo activado correctamente.')),
+      );
+      Navigator.pop(context, true);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('No se pudo activar: $e')));
     } finally {
       if (mounted) {
         setState(() => _updatingEstado = false);
@@ -703,6 +766,8 @@ class _ConduceLegalidadShowScreenState extends State<ConduceLegalidadShowScreen>
     final canClose =
         (_meta?.abilities.canManageOperativos ?? false) &&
         operativo?.estado == 'activo';
+    final canReopen =
+        _isSuperadmin && operativo != null && operativo.estado != 'activo';
     final canShareTotals =
         (_meta?.abilities.canViewAllCapturas ?? false) && operativo != null;
 
@@ -728,23 +793,35 @@ class _ConduceLegalidadShowScreenState extends State<ConduceLegalidadShowScreen>
             icon: const Icon(Icons.help_outline),
           ),
 
-          if (canClose)
+          if (canClose || canReopen)
             PopupMenuButton<String>(
               enabled: !_loading && !_updatingEstado,
               onSelected: (value) {
                 if (value == 'cerrar') {
                   _confirmCloseOperativo();
+                } else if (value == 'activar') {
+                  _confirmReopenOperativo();
                 }
               },
-              itemBuilder: (context) => const [
-                PopupMenuItem<String>(
-                  value: 'cerrar',
-                  child: ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    leading: Icon(Icons.lock_outline),
-                    title: Text('Inactivar operativo'),
+              itemBuilder: (context) => [
+                if (canClose)
+                  const PopupMenuItem<String>(
+                    value: 'cerrar',
+                    child: ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: Icon(Icons.lock_outline),
+                      title: Text('Inactivar operativo'),
+                    ),
                   ),
-                ),
+                if (canReopen)
+                  const PopupMenuItem<String>(
+                    value: 'activar',
+                    child: ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: Icon(Icons.lock_open_outlined),
+                      title: Text('Activar operativo nuevamente'),
+                    ),
+                  ),
               ],
             ),
           IconButton(

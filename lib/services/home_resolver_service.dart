@@ -38,6 +38,10 @@ class HomeResolverService {
   }
 
   static Future<bool> isAgenteUpecHomeAvailable() async {
+    if (!await AuthService.isAgenteUpec()) {
+      return false;
+    }
+
     return _isAvailable('agente-upec-home/filtros');
   }
 

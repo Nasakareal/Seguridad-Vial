@@ -1,0 +1,69 @@
+diff --git a/app/Http/Controllers/Api/ConduceLegalidadController.php b/app/Http/Controllers/Api/ConduceLegalidadController.php
+--- a/app/Http/Controllers/Api/ConduceLegalidadController.php
++++ b/app/Http/Controllers/Api/ConduceLegalidadController.php
+@@ -401,5 +401,10 @@ class ConduceLegalidadController extends Controller
+         $validated = $request->validate($this->operativoRulesForUser($user, $operativo));
+         $oldEstado = $operativo->estado;
++        $requestedEstado = $validated['estado'] ?? $oldEstado;
++        if ($oldEstado !== 'activo' && $requestedEstado === 'activo') {
++            abort_unless($this->canReactivateOperativo($user), 403);
++        }
++
+         $scope = $this->resolveOperativoScope($user, $validated, $operativo);
+         $tipoOperativo = array_key_exists('tipo_operativo', $validated)
+             ? $this->tipoOperativo(
+@@ -451,6 +456,11 @@ class ConduceLegalidadController extends Controller
+             $operativo->hora_cierre = $operativo->hora_cierre ?: now()->format('H:i:s');
+         }
+ 
++        if ($oldEstado !== 'activo' && $operativo->estado === 'activo') {
++            $operativo->closed_by = null;
++            $operativo->hora_cierre = null;
++        }
++
+         $operativo->save();
+         $operativo->load(['creador', 'actualizador', 'cerrador']);
+ 
+@@ -3740,6 +3750,11 @@ class ConduceLegalidadController extends Controller
+         ];
+     }
+ 
++    private function canReactivateOperativo($user): bool
++    {
++        return $user && $user->hasRole('Superadmin');
++    }
++
+     private function canManage($user): bool
+     {
+         if (!$user) {
+diff --git a/tests/Unit/ConduceLegalidadOperativoAccessTest.php b/tests/Unit/ConduceLegalidadOperativoAccessTest.php
+--- a/tests/Unit/ConduceLegalidadOperativoAccessTest.php
++++ b/tests/Unit/ConduceLegalidadOperativoAccessTest.php
+@@ -46,6 +46,12 @@ class ConduceLegalidadOperativoAccessTest extends TestCase
+         );
+     }
+ 
++    public function test_only_superadmin_can_reactivate_operatives(): void
++    {
++        $this->assertTrue($this->canReactivate($this->user('Superadmin')));
++        $this->assertFalse($this->canReactivate($this->user('Administrador')));
++    }
++
+     public function test_low_vialidades_role_cannot_manage_other_users_captures(): void
+     {
+         $user = $this->user('Agente Vial', 5, null, 10);
+@@ -220,6 +226,14 @@ class ConduceLegalidadOperativoAccessTest extends TestCase
+         return $method->invoke(new ConduceLegalidadController(), $user);
+     }
+ 
++    private function canReactivate($user): bool
++    {
++        $method = new ReflectionMethod(ConduceLegalidadController::class, 'canReactivateOperativo');
++        $method->setAccessible(true);
++
++        return $method->invoke(new ConduceLegalidadController(), $user);
++    }
++
+     private function canManage($user): bool
+     {
+         $method = new ReflectionMethod(ConduceLegalidadController::class, 'canManage');

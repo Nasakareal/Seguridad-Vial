@@ -94,7 +94,14 @@ class LocationFlagService {
         )
         .timeout(const Duration(seconds: 5));
 
-    if (res.statusCode != 200) return false;
+    if (res.statusCode == 401 || res.statusCode == 403) return false;
+    if (res.statusCode != 200) {
+      throw http.ClientException(
+        'No se pudo verificar temporalmente el permiso de ubicación '
+        '(HTTP ${res.statusCode}).',
+        res.request?.url,
+      );
+    }
 
     final j = jsonDecode(res.body);
 

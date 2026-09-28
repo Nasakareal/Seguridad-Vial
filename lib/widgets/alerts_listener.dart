@@ -15,7 +15,10 @@ class AlertsListener extends StatefulWidget {
   State<AlertsListener> createState() => _AlertsListenerState();
 }
 
-class _AlertsListenerState extends State<AlertsListener> {
+class _AlertsListenerState extends State<AlertsListener>
+    with WidgetsBindingObserver {
+  static const Duration _pollInterval = Duration(seconds: 30);
+
   Timer? _timer;
   bool _busy = false;
   int? _lastShownAlertId;
@@ -23,16 +26,40 @@ class _AlertsListenerState extends State<AlertsListener> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
 
     // arranca 3s después para dar tiempo a que cargue token/pantalla
     Future.delayed(const Duration(seconds: 3), () {
+      if (!mounted) return;
       _checkOnce();
-      _timer = Timer.periodic(const Duration(seconds: 15), (_) => _checkOnce());
+      _startPolling();
     });
+  }
+
+  void _startPolling() {
+    _timer?.cancel();
+    _timer = Timer.periodic(_pollInterval, (_) => _checkOnce());
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _checkOnce();
+      _startPolling();
+      return;
+    }
+
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.detached) {
+      _timer?.cancel();
+      _timer = null;
+    }
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _timer?.cancel();
     super.dispose();
   }

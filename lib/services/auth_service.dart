@@ -109,6 +109,7 @@ class AuthService {
 
   static DateTime? _constanciasManejoServerClockSnapshot;
   static Stopwatch? _constanciasManejoServerClockStopwatch;
+  static Future<Map<String, dynamic>>? _currentUserProfileRefresh;
 
   static String get baseUrl => _baseUrl;
 
@@ -1855,10 +1856,22 @@ class AuthService {
   }
 
   static Future<Map<String, dynamic>> _refreshCurrentUserProfile() async {
-    return _fetchAndStoreCurrentUserProfile(
+    final pending = _currentUserProfileRefresh;
+    if (pending != null) return pending;
+
+    final refresh = _fetchAndStoreCurrentUserProfile(
       endpoint: '$_baseUrl/me',
       fallbackError: 'No se pudo obtener el usuario actual.',
     );
+    _currentUserProfileRefresh = refresh;
+
+    try {
+      return await refresh;
+    } finally {
+      if (identical(_currentUserProfileRefresh, refresh)) {
+        _currentUserProfileRefresh = null;
+      }
+    }
   }
 
   static Future<Map<String, dynamic>> _fetchAndStoreCurrentUserProfile({

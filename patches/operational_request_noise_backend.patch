@@ -1,0 +1,88 @@
+diff --git a/app/Http/Middleware/LogSecurityEvents.php b/app/Http/Middleware/LogSecurityEvents.php
+--- a/app/Http/Middleware/LogSecurityEvents.php
++++ b/app/Http/Middleware/LogSecurityEvents.php
+@@ -102,5 +102,9 @@ class LogSecurityEvents
+     private function eventForStatus(int $status, Request $request): ?array
+     {
++        if ($this->isExpectedClientRejection($request, $status)) {
++            return null;
++        }
++
+         $events = [
+             401 => [
+                 'code' => 'authentication_required',
+@@ -162,6 +166,28 @@ class LogSecurityEvents
+         return null;
+     }
+ 
++    private function isExpectedClientRejection(Request $request, int $status): bool
++    {
++        $method = strtoupper((string) $request->method());
++        $path = '/' . ltrim((string) $request->path(), '/');
++
++        if ($method === 'GET' && $status === 401 && $path === '/api/app/version') {
++            return true;
++        }
++
++        if ($method === 'GET' && $status === 403) {
++            return in_array($path, [
++                '/api/agente-upec-home/filtros',
++                '/api/estadisticas-actividades/catalogos/unidades',
++                '/api/estadisticas-actividades/catalogos/delegaciones',
++            ], true);
++        }
++
++        return $method === 'POST'
++            && $status === 503
++            && $path === '/api/whatsapp/webhook';
++    }
++
+     private function requestContext(Request $request, $source = null): array
+     {
+         $route = $request->route();
+diff --git a/routes/api.php b/routes/api.php
+--- a/routes/api.php
++++ b/routes/api.php
+@@ -390,6 +390,8 @@ Route::middleware('auth:sanctum')->group(function () {
+     });
+ 
+     Route::prefix('actividades')->group(function () {
++        Route::get('/catalogos/unidades', [EstadisticasActividadesController::class, 'catalogoUnidades'])->middleware('can:ver actividades')->name('api.actividades.catalogos.unidades');
++        Route::get('/catalogos/delegaciones', [EstadisticasActividadesController::class, 'catalogoDelegaciones'])->middleware('can:ver actividades')->name('api.actividades.catalogos.delegaciones');
+         Route::get('/categorias', [ActividadController::class, 'categorias'])->name('api.actividades.categorias');
+         Route::get('/subcategorias/{categoria}', [ActividadController::class, 'subcategorias'])->whereNumber('categoria')->name('api.actividades.subcategorias');
+         Route::get('/informe/diario', [ActividadController::class, 'informeDiario'])->name('api.actividades.informe.diario');
+diff --git a/tests/Unit/SecurityLoggingTest.php b/tests/Unit/SecurityLoggingTest.php
+--- a/tests/Unit/SecurityLoggingTest.php
++++ b/tests/Unit/SecurityLoggingTest.php
+@@ -128,6 +128,30 @@ class SecurityLoggingTest extends TestCase
+         $middleware->handle($request, fn () => $response);
+     }
+ 
++    public function test_known_legacy_client_rejections_do_not_pollute_security_events(): void
++    {
++        $recorder = Mockery::mock(SecurityEventRecorder::class);
++        $recorder->shouldNotReceive('record');
++        $middleware = new LogSecurityEvents($recorder);
++
++        $cases = [
++            ['GET', '/api/app/version', 401],
++            ['GET', '/api/agente-upec-home/filtros', 403],
++            ['GET', '/api/estadisticas-actividades/catalogos/unidades', 403],
++            ['GET', '/api/estadisticas-actividades/catalogos/delegaciones', 403],
++            ['POST', '/api/whatsapp/webhook', 503],
++        ];
++
++        foreach ($cases as [$method, $path, $status]) {
++            $request = Request::create($path, $method);
++            $response = response('', $status);
++
++            $handled = $middleware->handle($request, fn () => $response);
++
++            $this->assertSame($status, $handled->getStatusCode());
++        }
++    }
++
+     public function test_historical_events_can_explain_probable_endpoint_intent(): void
+     {
+         $profileCheck = new SecurityEvent(['method' => 'GET', 'path' => '/api/me']);
