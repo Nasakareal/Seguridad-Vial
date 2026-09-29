@@ -71,6 +71,7 @@ class AppAccountDrawer extends StatelessWidget {
     }
     final canViewCalea = await AuthService.can('ver calea');
     final canUsePatrol = await AuthService.can('ver patrullas');
+    final canViewDailyPatrolLog = await AuthService.canViewDailyPatrolLog();
     final canUseTrafficPriority =
         await AuthService.isSuperadmin() ||
         await AuthService.hasFullOperationalAccess() ||
@@ -98,6 +99,7 @@ class AppAccountDrawer extends StatelessWidget {
       canUseWorkshopTrafficLights: canUseWorkshopTrafficLights,
       canViewCalea: canViewCalea,
       canUsePatrol: canUsePatrol,
+      canViewDailyPatrolLog: canViewDailyPatrolLog,
     );
   }
 
@@ -242,6 +244,17 @@ class AppAccountDrawer extends StatelessWidget {
                                   arguments: 'historial',
                                 ),
                               ),
+                              if (summary?.canViewDailyPatrolLog == true)
+                                DrawerActionTile(
+                                  icon: Icons.calendar_view_day_rounded,
+                                  title: 'Bitácora diaria del equipo',
+                                  subtitle:
+                                      'Entrega, recepción y servicios por día',
+                                  onTap: () => _goTo(
+                                    context,
+                                    AppRoutes.patrullaBitacoraDiaria,
+                                  ),
+                                ),
                             ]),
                           ),
                         ),
@@ -448,6 +461,7 @@ class _AccountSummary {
   final bool canUseWorkshopTrafficLights;
   final bool canViewCalea;
   final bool canUsePatrol;
+  final bool canViewDailyPatrolLog;
 
   const _AccountSummary({
     required this.name,
@@ -460,6 +474,7 @@ class _AccountSummary {
     required this.canUseWorkshopTrafficLights,
     required this.canViewCalea,
     required this.canUsePatrol,
+    required this.canViewDailyPatrolLog,
   });
 }
 

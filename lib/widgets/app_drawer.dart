@@ -827,6 +827,16 @@ class AppDrawer extends StatelessWidget {
                               AppRoutes.herramientasReconstructorTransito2d,
                             ),
                           ),
+                          if (isSuperadmin)
+                            _DrawerSubItem(
+                              icon: Icons.badge_outlined,
+                              label: 'Emisión de licencias',
+                              subtitle: 'Examen, constancia e historial',
+                              onTap: () => _nav(
+                                context,
+                                AppRoutes.herramientasLicenciasEmision,
+                              ),
+                            ),
                         ],
                       ),
 

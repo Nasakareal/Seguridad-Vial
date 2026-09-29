@@ -460,6 +460,10 @@ class AuthService {
     return role.trim().toLowerCase() == 'perito';
   }
 
+  static Future<bool> canViewDailyPatrolLog() async {
+    return await can('ver patrullas') && !await isPerito();
+  }
+
   static Future<bool> isAgenteUpec() async {
     final roleId = await getRoleId();
     if (roleId == 11) return true;

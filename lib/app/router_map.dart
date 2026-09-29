@@ -25,6 +25,7 @@ import '../screens/account/account_settings_screen.dart';
 import '../screens/account/profile_screen.dart';
 import '../screens/mis_capturas/mis_capturas_screen.dart';
 import '../screens/patrullas/patrulla_servicio_screen.dart';
+import '../screens/patrullas/patrulla_bitacora_diaria_screen.dart';
 import '../screens/notes/user_notes_screen.dart';
 import '../screens/settings/personal_incidencia_form_screen.dart';
 import '../screens/settings/personal_show_screen.dart';
@@ -65,6 +66,7 @@ import '../screens/herramientas/velocidad_huella_frenado_screen.dart';
 import '../screens/herramientas/velocidad_deformacion_laminas_screen.dart';
 import '../screens/herramientas/rnd_faltas_administrativas_screen.dart';
 import '../screens/herramientas/reconstructor_transito_2d_screen.dart';
+import '../screens/herramientas/licencias_emision_screen.dart';
 
 import '../screens/mapa/mapa_patrullas_screen.dart';
 import '../screens/mapa/mapa_incidencias_screen.dart';
@@ -128,6 +130,7 @@ import '../screens/vialidades_urbanas/vialidades_urbanas_screen.dart';
 import '../screens/pendientes/pendientes_cortes_screen.dart';
 import '../screens/pendientes/pendiente_corte_show_screen.dart';
 import '../widgets/constancias_manejo_schedule_guard.dart';
+import '../widgets/superadmin_guard.dart';
 
 final Map<String, WidgetBuilder> appRoutesMap = {
   AppRoutes.login: (context) => const LoginScreen(),
@@ -152,6 +155,8 @@ final Map<String, WidgetBuilder> appRoutesMap = {
       initialSection: section is String ? section : 'servicio',
     );
   },
+  AppRoutes.patrullaBitacoraDiaria: (context) =>
+      const PatrullaBitacoraDiariaScreen(),
   AppRoutes.notes: (context) => const UserNotesScreen(),
   AppRoutes.comunicaciones: (context) => _ComunicacionesServiceLoader(
     builder: (service) => ComunicacionesScreen(service: service),
@@ -216,6 +221,10 @@ final Map<String, WidgetBuilder> appRoutesMap = {
       const RndFaltasAdministrativasScreen(),
   AppRoutes.herramientasReconstructorTransito2d: (context) =>
       const ReconstructorTransito2dScreen(),
+  AppRoutes.herramientasLicenciasEmision: (context) => const SuperadminGuard(
+    title: 'Emisión de licencias',
+    child: LicenciasEmisionScreen(),
+  ),
 
   AppRoutes.controlUbicacion: (context) => const ControlUbicacionScreen(),
   AppRoutes.controlSemaforico: (context) => const ControlSemaforicoScreen(),

@@ -25,4 +25,22 @@ void main() {
 
     expect(source, isNot(contains('Información incompleta')));
   });
+
+  test('RND form reuses all clothing selectors in the generated message', () {
+    final source = File(
+      'lib/screens/herramientas/rnd_faltas_administrativas_screen.dart',
+    ).readAsStringSync();
+
+    expect(source, contains('Vestimenta de la persona'));
+    expect(source, contains('Prenda superior *'));
+    expect(source, contains('Color superior *'));
+    expect(source, contains('Prenda inferior *'));
+    expect(source, contains('Color inferior *'));
+    expect(source, contains('Calzado *'));
+    expect(source, contains('Color calzado *'));
+    expect(
+      source,
+      contains('ConduceLegalidadPersonaDescriptor.buildDescription'),
+    );
+  });
 }

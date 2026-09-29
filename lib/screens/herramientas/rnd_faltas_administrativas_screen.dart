@@ -4,6 +4,7 @@ import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../services/auth_service.dart';
+import '../../services/conduce_legalidad_persona_descriptor.dart';
 import '../../services/tracking_service.dart';
 import '../../widgets/account_drawer.dart';
 import '../../widgets/app_drawer.dart';
@@ -44,6 +45,12 @@ class _RndFaltasAdministrativasScreenState
   String _lesiones = _lesionesOptions.first.value;
   String _delincuenciaOrganizada = _delincuenciaOptions.first.value;
   String _complexion = _complexionOptions.first.value;
+  String _prendaSuperior = _prendaSuperiorOptions.first.value;
+  String _colorSuperior = _colorVestimentaOptions.first.value;
+  String _prendaInferior = _prendaInferiorOptions.first.value;
+  String _colorInferior = _colorVestimentaOptions.first.value;
+  String _calzado = _calzadoOptions.first.value;
+  String _colorCalzado = _colorVestimentaOptions.first.value;
   String _tipoUnidad = 'Patrulla';
   String _destino = _destinoJusticiaCivica;
   String _ruta = _rutaOptions.first.value;
@@ -160,6 +167,14 @@ class _RndFaltasAdministrativasScreenState
     final rutaTexto = rutaDetalle.isEmpty
         ? 'Del lugar de detención a $_destino, por $_ruta.'
         : 'Del lugar de detención a $_destino, por $_ruta. Detalle: $rutaDetalle.';
+    final vestimenta = ConduceLegalidadPersonaDescriptor.buildDescription(
+      prendaSuperior: _prendaSuperior,
+      colorSuperior: _colorSuperior,
+      prendaInferior: _prendaInferior,
+      colorInferior: _colorInferior,
+      calzado: _calzado,
+      colorCalzado: _colorCalzado,
+    );
 
     return [
       '🚨 DATOS PARA RND DE FALTAS ADMINISTRATIVAS 🚨',
@@ -189,6 +204,7 @@ class _RndFaltasAdministrativasScreenState
       'Lesiones visibles: $_lesiones',
       'Delincuencia organizada: $_delincuenciaOrganizada',
       'Complexión: $_complexion',
+      vestimenta ?? 'Vestimenta: PENDIENTE',
       '',
       '🚔 TRASLADO',
       'Ruta: $rutaTexto',
@@ -240,6 +256,12 @@ class _RndFaltasAdministrativasScreenState
       _lesiones = _lesionesOptions.first.value;
       _delincuenciaOrganizada = _delincuenciaOptions.first.value;
       _complexion = _complexionOptions.first.value;
+      _prendaSuperior = _prendaSuperiorOptions.first.value;
+      _colorSuperior = _colorVestimentaOptions.first.value;
+      _prendaInferior = _prendaInferiorOptions.first.value;
+      _colorInferior = _colorVestimentaOptions.first.value;
+      _calzado = _calzadoOptions.first.value;
+      _colorCalzado = _colorVestimentaOptions.first.value;
       _tipoUnidad = 'Patrulla';
       _destino = _destinoJusticiaCivica;
       _ruta = _rutaOptions.first.value;
@@ -433,6 +455,49 @@ class _RndFaltasAdministrativasScreenState
                   value: _complexion,
                   options: _complexionOptions,
                   onChanged: (value) => setState(() => _complexion = value),
+                ),
+                const _FormSubsection('Vestimenta de la persona'),
+                _dropdown(
+                  label: 'Prenda superior *',
+                  icon: Icons.checkroom_outlined,
+                  value: _prendaSuperior,
+                  options: _prendaSuperiorOptions,
+                  onChanged: (value) => setState(() => _prendaSuperior = value),
+                ),
+                _dropdown(
+                  label: 'Color superior *',
+                  icon: Icons.palette_outlined,
+                  value: _colorSuperior,
+                  options: _colorVestimentaOptions,
+                  onChanged: (value) => setState(() => _colorSuperior = value),
+                ),
+                _dropdown(
+                  label: 'Prenda inferior *',
+                  icon: Icons.checkroom_outlined,
+                  value: _prendaInferior,
+                  options: _prendaInferiorOptions,
+                  onChanged: (value) => setState(() => _prendaInferior = value),
+                ),
+                _dropdown(
+                  label: 'Color inferior *',
+                  icon: Icons.palette_outlined,
+                  value: _colorInferior,
+                  options: _colorVestimentaOptions,
+                  onChanged: (value) => setState(() => _colorInferior = value),
+                ),
+                _dropdown(
+                  label: 'Calzado *',
+                  icon: Icons.directions_walk_outlined,
+                  value: _calzado,
+                  options: _calzadoOptions,
+                  onChanged: (value) => setState(() => _calzado = value),
+                ),
+                _dropdown(
+                  label: 'Color calzado *',
+                  icon: Icons.palette_outlined,
+                  value: _colorCalzado,
+                  options: _colorVestimentaOptions,
+                  onChanged: (value) => setState(() => _colorCalzado = value),
                 ),
               ],
             ),
@@ -655,6 +720,35 @@ class _Header extends StatelessWidget {
   }
 }
 
+class _FormSubsection extends StatelessWidget {
+  final String title;
+
+  const _FormSubsection(this.title);
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 4, bottom: 12),
+      child: Row(
+        children: [
+          const Expanded(child: Divider()),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10),
+            child: Text(
+              title,
+              style: const TextStyle(
+                color: Color(0xFF2563EB),
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ),
+          const Expanded(child: Divider()),
+        ],
+      ),
+    );
+  }
+}
+
 class _Section extends StatelessWidget {
   final IconData icon;
   final String title;
@@ -706,6 +800,24 @@ class _Option {
 
   const _Option(this.value, this.label);
 }
+
+final _prendaSuperiorOptions = ConduceLegalidadPersonaDescriptor
+    .prendaSuperiorOptions
+    .map((value) => _Option(value, value))
+    .toList(growable: false);
+
+final _prendaInferiorOptions = ConduceLegalidadPersonaDescriptor
+    .prendaInferiorOptions
+    .map((value) => _Option(value, value))
+    .toList(growable: false);
+
+final _calzadoOptions = ConduceLegalidadPersonaDescriptor.calzadoOptions
+    .map((value) => _Option(value, value))
+    .toList(growable: false);
+
+final _colorVestimentaOptions = ConduceLegalidadPersonaDescriptor.colorOptions
+    .map((value) => _Option(value, value))
+    .toList(growable: false);
 
 const _barandillasWhatsappNumber = '5214433163728';
 const _destinoJusticiaCivica =

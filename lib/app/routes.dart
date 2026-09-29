@@ -14,6 +14,7 @@ class AppRoutes {
   static const String changePassword = '/profile/change-password';
   static const String misCapturas = '/mis-capturas';
   static const String patrullaServicio = '/patrullas/servicio';
+  static const String patrullaBitacoraDiaria = '/patrullas/bitacora-diaria';
   static const String notes = '/notes';
   static const String settings = '/settings';
   static const String users = '/settings/users';
@@ -65,6 +66,8 @@ class AppRoutes {
       '/herramientas/solicitar-rnd-faltas';
   static const String herramientasReconstructorTransito2d =
       '/herramientas/reconstructor-transito-2d';
+  static const String herramientasLicenciasEmision =
+      '/herramientas/emision-licencias';
 
   static const String controlUbicacion = '/control-ubicacion';
   static const String controlSemaforico = '/control-semaforico';

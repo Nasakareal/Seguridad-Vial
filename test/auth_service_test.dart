@@ -27,6 +27,26 @@ void main() {
     expect(await AuthService.getPermissions(), contains('crear hechos'));
   });
 
+  test('perito cannot view the team daily patrol log', () async {
+    SharedPreferences.setMockInitialValues(<String, Object>{
+      'auth_role': 'Perito',
+      'auth_role_id': 4,
+      'auth_perms': <String>['ver patrullas'],
+    });
+
+    expect(await AuthService.canViewDailyPatrolLog(), isFalse);
+  });
+
+  test('non perito with patrol permission can view the daily log', () async {
+    SharedPreferences.setMockInitialValues(<String, Object>{
+      'auth_role': 'Administrador',
+      'auth_role_id': 3,
+      'auth_perms': <String>['ver patrullas'],
+    });
+
+    expect(await AuthService.canViewDailyPatrolLog(), isTrue);
+  });
+
   test(
     'siniestros perito role id is not confused with excluded unit id',
     () async {

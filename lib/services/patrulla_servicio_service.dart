@@ -69,6 +69,20 @@ class PatrullaServicioService {
         .toList();
   }
 
+  static Future<Map<String, dynamic>> bitacoraDiaria(DateTime fecha) async {
+    final value =
+        '${fecha.year.toString().padLeft(4, '0')}-'
+        '${fecha.month.toString().padLeft(2, '0')}-'
+        '${fecha.day.toString().padLeft(2, '0')}';
+    final uri = Uri.parse(
+      '$_base/bitacora-diaria',
+    ).replace(queryParameters: <String, String>{'fecha': value});
+    final response = await http
+        .get(uri, headers: await _headers())
+        .timeout(const Duration(seconds: 30));
+    return _decode(response);
+  }
+
   static Future<Map<String, dynamic>> recibir({
     required int patrullaId,
     required Map<String, String> fields,
