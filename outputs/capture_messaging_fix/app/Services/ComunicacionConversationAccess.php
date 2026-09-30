@@ -6,27 +6,56 @@ use App\Models\User;
 
 class ComunicacionConversationAccess
 {
-    public static function recipients(User $actor, bool $global)
+    /**
+     * Users the actor may discover to start a new direct conversation.
+     */
+    public static function discoverableRecipients(User $actor, bool $global)
     {
-        $ordinary = User::query()->visibleFor($actor)->select('users.id');
+        $query = User::query()
+            ->visibleFor($actor)
+            ->where('estado', 'Activo')
+            ->where('users.id', '!=', $actor->id);
+
         if (!$global) {
             $actor->unidad_id
-                ? $ordinary->where('unidad_id', $actor->unidad_id)
-                : $ordinary->whereRaw('1 = 0');
+                ? $query->where('unidad_id', $actor->unidad_id)
+                : $query->whereRaw('1 = 0');
         }
+
+        return $query;
+    }
+
+    /**
+     * Users the actor may message. Existing direct conversations remain
+     * replyable even when the other participant is outside the directory.
+     */
+    public static function messageableRecipients(User $actor, bool $global)
+    {
+        $discoverable = self::discoverableRecipients($actor, $global)
+            ->select('users.id');
 
         return User::query()->where('estado', 'Activo')
             ->where('users.id', '!=', $actor->id)
-            ->where(function ($query) use ($ordinary, $actor) {
-                $query->whereIn('users.id', $ordinary)
-                    // An existing incoming direct message authorizes a reply,
-                    // even if the sender is outside the recipient's directory.
-                    ->orWhereExists(function ($incoming) use ($actor) {
-                        $incoming->selectRaw('1')->from('comunicaciones')
-                            ->whereColumn('comunicaciones.remitente_user_id', 'users.id')
-                            ->where('comunicaciones.destinatario_user_id', $actor->id)
+            ->where(function ($query) use ($discoverable, $actor) {
+                $query->whereIn('users.id', $discoverable)
+                    ->orWhereExists(function ($conversation) use ($actor) {
+                        $conversation->selectRaw('1')
+                            ->from('comunicaciones')
                             ->where('comunicaciones.tipo', 'mensaje')
-                            ->where('comunicaciones.alcance', 'usuario');
+                            ->where('comunicaciones.alcance', 'usuario')
+                            ->where(function ($participants) use ($actor) {
+                                $participants
+                                    ->where(function ($incoming) use ($actor) {
+                                        $incoming
+                                            ->whereColumn('comunicaciones.remitente_user_id', 'users.id')
+                                            ->where('comunicaciones.destinatario_user_id', $actor->id);
+                                    })
+                                    ->orWhere(function ($outgoing) use ($actor) {
+                                        $outgoing
+                                            ->where('comunicaciones.remitente_user_id', $actor->id)
+                                            ->whereColumn('comunicaciones.destinatario_user_id', 'users.id');
+                                    });
+                            });
                     });
             });
     }

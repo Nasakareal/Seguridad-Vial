@@ -131,10 +131,28 @@
       text-transform: uppercase;
     }
 
-    .supervisor {
-      margin-top: 8px;
-      text-align: center;
+    .leadership {
+      margin: 5px 0 2px;
+      padding: 7px;
+      border-left: 3px solid var(--ink);
+      background: var(--soft);
+    }
+
+    .leadership-item + .leadership-item {
+      margin-top: 7px;
+    }
+
+    .leadership-label {
+      color: var(--muted);
+      font-size: 9px;
       font-weight: 800;
+      letter-spacing: .03em;
+      text-transform: uppercase;
+    }
+
+    .leadership-name {
+      margin-top: 2px;
+      font-weight: 900;
     }
 
     @page {
@@ -306,6 +324,20 @@
       </div>
 
       <div class="divider"></div>
+      <div class="section">Responsables del Operativo</div>
+      <div class="leadership">
+        <div class="leadership-item">
+          <div class="leadership-label">Coordinador del Agrupamiento de Seguridad Vial</div>
+          <div class="leadership-name">Lic. Luis Roberto Rosiles Soberanis</div>
+        </div>
+        <div class="leadership-item">
+          <div class="leadership-label">Supervisión operativa</div>
+          <div class="leadership-name">Luis Eduardo Lugo Ordorica</div>
+          <div>Subdirector de Vialidades Urbanas</div>
+        </div>
+      </div>
+
+      <div class="divider"></div>
       <div class="section">Agente</div>
       <div class="row">
         <div class="label">Nombre:</div>
@@ -324,10 +356,6 @@
       <div class="block-label">Firma autografa/electronica:</div>
       <div class="signature"></div>
       <div class="footer">Previsualizacion local</div>
-      <div class="supervisor">
-        <div>Supervisó: Luis Eduardo Lugo Ordorica</div>
-        <div>Subdirector de Vialidades Urbanas</div>
-      </div>
     </article>
   </main>
 </body>

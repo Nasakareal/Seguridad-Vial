@@ -594,10 +594,10 @@ class ComunicacionController extends Controller
             ])
             ->findOrFail($otroUsuarioId);
 
-        $puedeEnviarActualmente = $this
-            ->queryUsuariosParaMensajeIndividual($actor)
-            ->whereKey($otroUsuarioId)
-            ->exists();
+        $puedeEnviarActualmente = $this->usuarioPermitidoParaMensaje(
+            $actor,
+            $otroUsuarioId
+        );
 
         $existeConversacion = Comunicacion::query()
             ->where('tipo', 'mensaje')
@@ -1115,10 +1115,15 @@ class ComunicacionController extends Controller
         }
 
         if ($data['alcance'] === 'usuario') {
-            return $this->queryUsuariosParaMensajeIndividual($actor)
-                ->whereKey(
-                    $data['destinatario_user_id']
-                )
+            $userId = (int) $data['destinatario_user_id'];
+
+            if (!$this->usuarioPermitidoParaMensaje($actor, $userId)) {
+                return collect();
+            }
+
+            return User::query()
+                ->whereKey($userId)
+                ->where('estado', 'Activo')
                 ->pluck('id')
                 ->unique()
                 ->values();
@@ -1129,7 +1134,10 @@ class ComunicacionController extends Controller
 
     private function queryUsuariosParaMensajeIndividual(User $actor)
     {
-        return \App\Services\ComunicacionConversationAccess::recipients($actor, $this->actorTieneAlcanceGlobal($actor));
+        return \App\Services\ComunicacionConversationAccess::discoverableRecipients(
+            $actor,
+            $this->actorTieneAlcanceGlobal($actor)
+        );
     }
 
     private function usuarioPermitidoParaMensaje(
@@ -1143,8 +1151,10 @@ class ComunicacionController extends Controller
             return false;
         }
 
-        return $this
-            ->queryUsuariosParaMensajeIndividual($actor)
+        return \App\Services\ComunicacionConversationAccess::messageableRecipients(
+            $actor,
+            $this->actorTieneAlcanceGlobal($actor)
+        )
             ->whereKey($userId)
             ->exists();
     }

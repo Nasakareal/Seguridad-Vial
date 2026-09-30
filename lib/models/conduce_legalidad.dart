@@ -433,6 +433,11 @@ class ConduceLegalidadFundamento {
 }
 
 class ConduceLegalidadOperativo {
+  static const String ticketCoordinadorNombre =
+      'Lic. Luis Roberto Rosiles Soberanis';
+  static const String ticketCoordinadorCargo =
+      'Coordinador del Agrupamiento de Seguridad Vial';
+
   static const Duration alcoholimetriaFeedingWindow = Duration(hours: 8);
 
   final int id;
@@ -623,6 +628,12 @@ class ConduceLegalidadCaptura {
   final List<ConduceLegalidadFundamento> fundamentos;
   final int? createdBy;
   final ConduceLegalidadUserRef? creador;
+  final String? agenteNombre;
+  final String? agenteNombres;
+  final String? agenteApellidoPaterno;
+  final String? agenteApellidoMaterno;
+  final String? agenteNumeroPlaca;
+  final String? agenteAdscripcion;
   final ConduceLegalidadRef? unidad;
   final ConduceLegalidadRef? delegacion;
   final String? fecha;
@@ -651,6 +662,12 @@ class ConduceLegalidadCaptura {
     this.fundamentos = const <ConduceLegalidadFundamento>[],
     this.createdBy,
     this.creador,
+    this.agenteNombre,
+    this.agenteNombres,
+    this.agenteApellidoPaterno,
+    this.agenteApellidoMaterno,
+    this.agenteNumeroPlaca,
+    this.agenteAdscripcion,
     this.unidad,
     this.delegacion,
     this.fecha,
@@ -707,6 +724,12 @@ class ConduceLegalidadCaptura {
       fundamentos: fundamentos,
       createdBy: _nullableInt(json['created_by']),
       creador: ConduceLegalidadUserRef.tryParse(json['creador']),
+      agenteNombre: _str(json['agente_nombre']),
+      agenteNombres: _str(json['agente_nombres']),
+      agenteApellidoPaterno: _str(json['agente_apellido_paterno']),
+      agenteApellidoMaterno: _str(json['agente_apellido_materno']),
+      agenteNumeroPlaca: _str(json['agente_numero_placa']),
+      agenteAdscripcion: _str(json['agente_adscripcion']),
       unidad: ConduceLegalidadRef.tryParse(json['unidad']),
       delegacion: ConduceLegalidadRef.tryParse(json['delegacion']),
       fecha: _str(json['fecha']),

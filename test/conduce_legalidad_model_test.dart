@@ -4,6 +4,31 @@ import 'package:seguridad_vial_app/models/conduce_legalidad.dart';
 import 'package:seguridad_vial_app/screens/conduce_legalidad/conduce_legalidad_module.dart';
 
 void main() {
+  test('captura conserva la identidad escrita del agente', () {
+    final captura = ConduceLegalidadCaptura.fromJson({
+      'id': 15,
+      'operativo_id': 4,
+      'agente_nombre': 'Ana María Pérez López',
+      'agente_nombres': 'Ana María',
+      'agente_apellido_paterno': 'Pérez',
+      'agente_apellido_materno': 'López',
+      'agente_numero_placa': 'PLACA-7788',
+      'agente_adscripcion': 'Unidad de Protección en Vialidades Urbanas',
+      'vehiculos': <dynamic>[],
+      'personas': <dynamic>[],
+    });
+
+    expect(captura.agenteNombre, 'Ana María Pérez López');
+    expect(captura.agenteNombres, 'Ana María');
+    expect(captura.agenteApellidoPaterno, 'Pérez');
+    expect(captura.agenteApellidoMaterno, 'López');
+    expect(captura.agenteNumeroPlaca, 'PLACA-7788');
+    expect(
+      captura.agenteAdscripcion,
+      'Unidad de Protección en Vialidades Urbanas',
+    );
+  });
+
   test(
     'el catálogo local conserva fundamentos de ley y sólo ids portables',
     () {

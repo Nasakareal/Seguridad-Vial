@@ -587,10 +587,20 @@ class _BoletaPaper extends StatelessWidget {
             const SizedBox(height: 4),
             const _HandwrittenLines(lines: 3),
             const _TicketDivider(),
+            const _TicketSection('RESPONSABLES DEL OPERATIVO'),
+            _TicketBlock(label: _coordinadorCargo, value: _coordinadorNombre),
+            _TicketBlock(
+              label: 'Supervisión operativa',
+              value: '$_supervisorNombre\n$_supervisorCargo',
+            ),
+            const _TicketDivider(),
             const _TicketSection('AGENTE'),
             _TicketPair(
               label: 'Nombre',
-              value: _value(captura.creador?.nombre, fallback: 'No capturado'),
+              value: _value(
+                captura.agenteNombre ?? captura.creador?.nombre,
+                fallback: 'No capturado',
+              ),
             ),
             _TicketPair(label: 'No. placa', value: _placaAgente),
             _TicketBlock(label: 'Adscripcion', value: _adscripcionAgente),
@@ -603,17 +613,6 @@ class _BoletaPaper extends StatelessWidget {
               preview
                   ? 'PREVISUALIZACION LOCAL'
                   : 'Captura #${captura.id} / Operativo #${operativo.id}',
-              textAlign: TextAlign.center,
-              style: const TextStyle(fontWeight: FontWeight.w800),
-            ),
-            const SizedBox(height: 5),
-            Text(
-              'Supervisó: $_supervisorNombre',
-              textAlign: TextAlign.center,
-              style: const TextStyle(fontWeight: FontWeight.w800),
-            ),
-            Text(
-              _supervisorCargo,
               textAlign: TextAlign.center,
               style: const TextStyle(fontWeight: FontWeight.w800),
             ),
@@ -632,6 +631,12 @@ class _BoletaPaper extends StatelessWidget {
   String get _supervisorNombre => operativo.ticketSupervisorNombre;
 
   String get _supervisorCargo => operativo.ticketSupervisorCargo;
+
+  String get _coordinadorNombre =>
+      ConduceLegalidadOperativo.ticketCoordinadorNombre;
+
+  String get _coordinadorCargo =>
+      ConduceLegalidadOperativo.ticketCoordinadorCargo;
 
   String get _lugar {
     final operativoDireccion = operativo.direccionCompleta;
@@ -694,14 +699,15 @@ class _BoletaPaper extends StatelessWidget {
 
   String get _placaAgente {
     return _value(
-      captura.creador?.placa,
+      captura.agenteNumeroPlaca ?? captura.creador?.placa,
       fallback: 'Pendiente de captura en Personal',
     );
   }
 
   String get _adscripcionAgente {
     return _value(
-      captura.creador?.adscripcion ??
+      captura.agenteAdscripcion ??
+          captura.creador?.adscripcion ??
           captura.unidad?.nombre ??
           captura.delegacion?.nombre,
       fallback: 'Pendiente de unidad',
@@ -914,10 +920,20 @@ void _writeThermalTicket(
   ticket.blank();
   ticket.line(ThermalTicketRowFormatter.repeat('_', ticket.width));
   ticket.rule();
+  ticket.section('RESPONSABLES DEL OPERATIVO');
+  ticket.block(data.coordinadorCargo, data.coordinadorNombre);
+  ticket.block(
+    'Supervisión operativa',
+    '${data.supervisorNombre}\n${data.supervisorCargo}',
+  );
+  ticket.rule();
   ticket.section('AGENTE');
   ticket.pair(
     'Nombre',
-    _value(data.captura.creador?.nombre, fallback: 'No capturado'),
+    _value(
+      data.captura.agenteNombre ?? data.captura.creador?.nombre,
+      fallback: 'No capturado',
+    ),
   );
   ticket.pair('No. placa', data.placaAgente);
   ticket.block('Adscripcion', data.adscripcionAgente);
@@ -930,9 +946,6 @@ void _writeThermalTicket(
   ticket.center(
     'Captura #${data.captura.id} / Operativo #${data.operativo.id}',
   );
-  ticket.blank();
-  ticket.center('Supervisó: ${data.supervisorNombre}');
-  ticket.center(data.supervisorCargo);
 }
 
 class _BoletaTicketData {
@@ -960,6 +973,12 @@ class _BoletaTicketData {
   String get supervisorNombre => operativo.ticketSupervisorNombre;
 
   String get supervisorCargo => operativo.ticketSupervisorCargo;
+
+  String get coordinadorNombre =>
+      ConduceLegalidadOperativo.ticketCoordinadorNombre;
+
+  String get coordinadorCargo =>
+      ConduceLegalidadOperativo.ticketCoordinadorCargo;
 
   String get lugar {
     final operativoDireccion = operativo.direccionCompleta;
@@ -1022,14 +1041,15 @@ class _BoletaTicketData {
 
   String get placaAgente {
     return _value(
-      captura.creador?.placa,
+      captura.agenteNumeroPlaca ?? captura.creador?.placa,
       fallback: 'Pendiente de captura en Personal',
     );
   }
 
   String get adscripcionAgente {
     return _value(
-      captura.creador?.adscripcion ??
+      captura.agenteAdscripcion ??
+          captura.creador?.adscripcion ??
           captura.unidad?.nombre ??
           captura.delegacion?.nombre,
       fallback: 'Pendiente de unidad',

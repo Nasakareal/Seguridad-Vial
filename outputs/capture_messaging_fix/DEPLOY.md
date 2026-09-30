@@ -31,7 +31,10 @@ No se cambiaron credenciales de Firebase ni se enviaron mensajes de prueba reale
   mostrarse con icono y grupo propios, sin poder descartarse hasta abrirlas.
 - En Apple se agrupan en el hilo `comunicaciones_prioritarias`; iOS no permite
   bloquear el descarte manual de una notificación.
-- Los destinatarios pueden abrir y responder al superadmin que les escribió.
+- Los destinatarios pueden abrir y responder al superadmin o coordinador que les
+  escribió, aunque esté fuera de su unidad.
+- Los contactos fuera de la unidad no aparecen en el directorio para iniciar un
+  chat; una conversación existente solamente habilita la respuesta dentro del hilo.
 
 La detección por contenido evita coincidencias exactas; no intenta decidir que dos
 eventos con datos diferentes sean el mismo. Los registros históricos no se borran

@@ -69,12 +69,26 @@ class CaptureMessagingRegressionTest extends TestCase
     public function test_recipient_can_reply_to_incoming_superadmin_but_not_unrelated_users(): void
     {
         $actor = User::findOrFail(2);
-        $this->assertFalse(ComunicacionConversationAccess::recipients($actor, false)->whereKey(1)->exists());
+        $this->assertFalse(ComunicacionConversationAccess::discoverableRecipients($actor, false)->whereKey(1)->exists());
+        $this->assertFalse(ComunicacionConversationAccess::messageableRecipients($actor, false)->whereKey(1)->exists());
         $this->incoming();
-        $this->assertTrue(ComunicacionConversationAccess::recipients($actor, false)->whereKey(1)->exists());
-        $this->assertFalse(ComunicacionConversationAccess::recipients($actor, false)->whereKey(3)->exists());
+        $this->assertFalse(ComunicacionConversationAccess::discoverableRecipients($actor, false)->whereKey(1)->exists());
+        $this->assertTrue(ComunicacionConversationAccess::messageableRecipients($actor, false)->whereKey(1)->exists());
+        $this->assertFalse(ComunicacionConversationAccess::messageableRecipients($actor, false)->whereKey(3)->exists());
+
+        $controller = new \App\Http\Controllers\Api\ComunicacionController();
+        $resolver = new \ReflectionMethod($controller, 'resolverDestinatarios');
+        $resolver->setAccessible(true);
+        $this->assertSame(
+            [1],
+            $resolver->invoke($controller, $actor, [
+                'alcance' => 'usuario',
+                'destinatario_user_id' => 1,
+            ])->all()
+        );
+
         DB::table('users')->where('id', 1)->update(['estado' => 'Inactivo']);
-        $this->assertFalse(ComunicacionConversationAccess::recipients($actor, false)->whereKey(1)->exists());
+        $this->assertFalse(ComunicacionConversationAccess::messageableRecipients($actor, false)->whereKey(1)->exists());
     }
 
     public function test_push_targets_only_recipients_and_contains_chat_navigation(): void
@@ -104,6 +118,7 @@ class CaptureMessagingRegressionTest extends TestCase
         $data = $response->getData(true);
         $this->assertSame(200, $response->getStatusCode());
         $this->assertSame(1, $data['usuario']['id']);
+        $this->assertTrue($data['usuario']['puede_enviar']);
         $this->assertCount(1, $data['mensajes']);
         $this->assertNotNull(DB::table('comunicacion_destinatarios')->where('user_id', 2)->value('leido_at'));
     }

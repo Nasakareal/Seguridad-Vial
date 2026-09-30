@@ -38,6 +38,14 @@ void main() {
     expect(item.ticketOperativoTitle, 'OPERATIVO CONDUCE CON LEGALIDAD');
     expect(item.ticketFolioPrefix, 'CL');
     expect(item.ticketOperativoTitle, isNot(contains('PREVENCIÓN')));
+    expect(
+      ConduceLegalidadOperativo.ticketCoordinadorNombre,
+      'Lic. Luis Roberto Rosiles Soberanis',
+    );
+    expect(
+      ConduceLegalidadOperativo.ticketCoordinadorCargo,
+      'Coordinador del Agrupamiento de Seguridad Vial',
+    );
   });
 
   testWidgets('la boleta muestra inventario y corralón con tamaño normal', (
@@ -47,6 +55,9 @@ void main() {
     const captura = ConduceLegalidadCaptura(
       id: 12,
       operativoId: 11,
+      agenteNombre: 'Ana María Pérez López',
+      agenteNumeroPlaca: 'PLACA-7788',
+      agenteAdscripcion: 'Unidad de Protección en Vialidades Urbanas',
       canEdit: true,
       vehiculos: <ConduceLegalidadVehiculo>[
         ConduceLegalidadVehiculo(
@@ -73,6 +84,26 @@ void main() {
     expect(find.text('INV-2026-0042'), findsOneWidget);
     expect(find.text('CORRALÓN DE DESTINO:'), findsOneWidget);
     expect(find.text('CORRALÓN MORELIA'), findsOneWidget);
+    expect(find.text('Ana María Pérez López'), findsOneWidget);
+    expect(find.text('PLACA-7788'), findsOneWidget);
+    expect(
+      find.text('Unidad de Protección en Vialidades Urbanas'),
+      findsOneWidget,
+    );
+    expect(
+      find.text('Coordinador del Agrupamiento de Seguridad Vial:'),
+      findsOneWidget,
+    );
+    expect(find.text('Lic. Luis Roberto Rosiles Soberanis'), findsOneWidget);
+    expect(find.text('RESPONSABLES DEL OPERATIVO'), findsOneWidget);
+    expect(
+      tester.getTopLeft(find.text('Lic. Luis Roberto Rosiles Soberanis')).dy,
+      lessThan(tester.getTopLeft(find.text('AGENTE')).dy),
+    );
+    expect(
+      tester.getTopLeft(find.text('AGENTE')).dy,
+      lessThan(tester.getTopLeft(find.text('Firma autógrafa/electrónica:')).dy),
+    );
     expect(
       tester.widget<Text>(find.text('INV-2026-0042')).style?.fontSize,
       isNull,

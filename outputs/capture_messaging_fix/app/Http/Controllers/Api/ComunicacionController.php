@@ -625,10 +625,10 @@ class ComunicacionController extends Controller
             ])
             ->findOrFail($user->id);
 
-        $puedeEnviar = $this
-            ->queryUsuariosParaMensajeIndividual($actor)
-            ->whereKey($otroUsuario->id)
-            ->exists();
+        $puedeEnviar = $this->usuarioPermitidoParaMensaje(
+            $actor,
+            (int) $otroUsuario->id
+        );
 
         $existeConversacion = Comunicacion::query()
             ->where('tipo', 'mensaje')
@@ -1428,10 +1428,15 @@ class ComunicacionController extends Controller
         }
 
         if ($data['alcance'] === 'usuario') {
-            return $this->queryUsuariosParaMensajeIndividual($actor)
-                ->whereKey(
-                    $data['destinatario_user_id']
-                )
+            $userId = (int) $data['destinatario_user_id'];
+
+            if (!$this->usuarioPermitidoParaMensaje($actor, $userId)) {
+                return collect();
+            }
+
+            return User::query()
+                ->whereKey($userId)
+                ->where('estado', 'Activo')
                 ->pluck('id')
                 ->unique()
                 ->values();
@@ -1442,7 +1447,10 @@ class ComunicacionController extends Controller
 
     private function queryUsuariosParaMensajeIndividual(User $actor)
     {
-        return \App\Services\ComunicacionConversationAccess::recipients($actor, $this->actorTieneAlcanceGlobal($actor));
+        return \App\Services\ComunicacionConversationAccess::discoverableRecipients(
+            $actor,
+            $this->actorTieneAlcanceGlobal($actor)
+        );
     }
 
 
@@ -1458,8 +1466,10 @@ class ComunicacionController extends Controller
             return false;
         }
 
-        return $this
-            ->queryUsuariosParaMensajeIndividual($actor)
+        return \App\Services\ComunicacionConversationAccess::messageableRecipients(
+            $actor,
+            $this->actorTieneAlcanceGlobal($actor)
+        )
             ->whereKey($userId)
             ->exists();
     }

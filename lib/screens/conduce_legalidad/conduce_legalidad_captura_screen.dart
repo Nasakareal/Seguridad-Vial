@@ -47,8 +47,15 @@ class ConduceLegalidadCapturaScreen extends StatefulWidget {
 
 class _ConduceLegalidadCapturaScreenState
     extends State<ConduceLegalidadCapturaScreen> {
+  static const _agenteAdscripcionDefault =
+      'Unidad de Protección en Vialidades Urbanas';
+
   final _formKey = GlobalKey<FormState>();
   final _contentErrorKey = GlobalKey();
+  final _agenteNombresCtrl = TextEditingController();
+  final _agenteApellidoPaternoCtrl = TextEditingController();
+  final _agenteApellidoMaternoCtrl = TextEditingController();
+  final _agentePlacaCtrl = TextEditingController();
   final _narrativaCtrl = TextEditingController();
   final _observacionesCtrl = TextEditingController();
   late final LocalDraftAutosave _draft;
@@ -175,6 +182,10 @@ class _ConduceLegalidadCapturaScreenState
     _hydrateInitialCaptura();
     _draft = LocalDraftAutosave(draftId: _draftId(), collect: _draftValues)
       ..attachTextControllers({
+        'agente_nombres': _agenteNombresCtrl,
+        'agente_apellido_paterno': _agenteApellidoPaternoCtrl,
+        'agente_apellido_materno': _agenteApellidoMaternoCtrl,
+        'agente_numero_placa': _agentePlacaCtrl,
         'narrativa': _narrativaCtrl,
         'observaciones': _observacionesCtrl,
       });
@@ -188,6 +199,10 @@ class _ConduceLegalidadCapturaScreenState
   void dispose() {
     _feedingClosureTimer?.cancel();
     _draft.dispose();
+    _agenteNombresCtrl.dispose();
+    _agenteApellidoPaternoCtrl.dispose();
+    _agenteApellidoMaternoCtrl.dispose();
+    _agentePlacaCtrl.dispose();
     _narrativaCtrl.dispose();
     _observacionesCtrl.dispose();
     super.dispose();
@@ -197,6 +212,12 @@ class _ConduceLegalidadCapturaScreenState
     final captura = widget.initialCaptura;
     if (captura == null) return;
 
+    final partesAgente = _partesAgenteInicial(captura);
+    _agenteNombresCtrl.text = partesAgente[0];
+    _agenteApellidoPaternoCtrl.text = partesAgente[1];
+    _agenteApellidoMaternoCtrl.text = partesAgente[2];
+    _agentePlacaCtrl.text =
+        captura.agenteNumeroPlaca ?? captura.creador?.placa ?? '';
     _narrativaCtrl.text = captura.narrativa ?? '';
     _observacionesCtrl.text = captura.observaciones ?? '';
     final fundamentos = captura.fundamentos;
@@ -243,6 +264,16 @@ class _ConduceLegalidadCapturaScreenState
   }
 
   void _applyLocalDraft(Map<String, dynamic> draft) {
+    _agenteNombresCtrl.text =
+        _stringValue(draft['agente_nombres']) ?? _agenteNombresCtrl.text;
+    _agenteApellidoPaternoCtrl.text =
+        _stringValue(draft['agente_apellido_paterno']) ??
+        _agenteApellidoPaternoCtrl.text;
+    _agenteApellidoMaternoCtrl.text =
+        _stringValue(draft['agente_apellido_materno']) ??
+        _agenteApellidoMaternoCtrl.text;
+    _agentePlacaCtrl.text =
+        _stringValue(draft['agente_numero_placa']) ?? _agentePlacaCtrl.text;
     _narrativaCtrl.text =
         _stringValue(draft['narrativa']) ?? _narrativaCtrl.text;
     _observacionesCtrl.text =
@@ -298,6 +329,10 @@ class _ConduceLegalidadCapturaScreenState
 
   Map<String, dynamic> _draftValues() {
     return <String, dynamic>{
+      'agente_nombres': _agenteNombresCtrl.text,
+      'agente_apellido_paterno': _agenteApellidoPaternoCtrl.text,
+      'agente_apellido_materno': _agenteApellidoMaternoCtrl.text,
+      'agente_numero_placa': _agentePlacaCtrl.text,
       'narrativa': _narrativaCtrl.text,
       'narrativa_automatica': _ultimaNarrativaAutomatica,
       'narrativa_editada_por_usuario': _narrativaEditadaPorUsuario,
@@ -382,6 +417,37 @@ class _ConduceLegalidadCapturaScreenState
     final text = (value ?? '').toString().trim();
     return text.isEmpty ? null : text;
   }
+
+  List<String> _partesAgenteInicial(ConduceLegalidadCaptura captura) {
+    final nombres = (captura.agenteNombres ?? '').trim();
+    final paterno = (captura.agenteApellidoPaterno ?? '').trim();
+    final materno = (captura.agenteApellidoMaterno ?? '').trim();
+    if (nombres.isNotEmpty || paterno.isNotEmpty || materno.isNotEmpty) {
+      return [nombres, paterno, materno];
+    }
+
+    final completo = (captura.agenteNombre ?? captura.creador?.nombre ?? '')
+        .trim();
+    final tokens = completo
+        .split(RegExp(r'\s+'))
+        .where((token) => token.isNotEmpty)
+        .toList();
+    if (tokens.length >= 3) {
+      return [
+        tokens.sublist(0, tokens.length - 2).join(' '),
+        tokens[tokens.length - 2],
+        tokens.last,
+      ];
+    }
+    if (tokens.length == 2) return [tokens.first, tokens.last, ''];
+    return [completo, '', ''];
+  }
+
+  String get _agenteNombreCompleto => [
+    _agenteNombresCtrl.text.trim(),
+    _agenteApellidoPaternoCtrl.text.trim(),
+    _agenteApellidoMaternoCtrl.text.trim(),
+  ].where((value) => value.isNotEmpty).join(' ');
 
   ConduceLegalidadFundamento? _canonicalFundamento(
     ConduceLegalidadFundamento? current,
@@ -712,6 +778,12 @@ class _ConduceLegalidadCapturaScreenState
       final payload = {
         'fecha': _dateForPayload(),
         'hora': _timeForPayload(),
+        'agente_nombre': _agenteNombreCompleto,
+        'agente_nombres': _agenteNombresCtrl.text.trim(),
+        'agente_apellido_paterno': _agenteApellidoPaternoCtrl.text.trim(),
+        'agente_apellido_materno': _agenteApellidoMaternoCtrl.text.trim(),
+        'agente_numero_placa': _agentePlacaCtrl.text.trim(),
+        'agente_adscripcion': _agenteAdscripcionDefault,
         'narrativa': _emptyToNull(_narrativaCtrl.text),
         'observaciones': _emptyToNull(_observacionesCtrl.text),
         if (!_fundamentoLegacyNoDisponible) ...{
@@ -888,6 +960,76 @@ class _ConduceLegalidadCapturaScreenState
                     ),
                     const SizedBox(height: 12),
                   ],
+                  const _FormSectionLabel('AGENTE ACTUANTE'),
+                  TextFormField(
+                    controller: _agenteNombresCtrl,
+                    enabled: !_saving,
+                    textCapitalization: TextCapitalization.words,
+                    textInputAction: TextInputAction.next,
+                    decoration: const InputDecoration(
+                      labelText: 'Nombre(s) del agente *',
+                      border: OutlineInputBorder(),
+                      prefixIcon: Icon(Icons.badge_outlined),
+                    ),
+                    validator: (value) => (value ?? '').trim().isEmpty
+                        ? 'Captura el nombre o nombres del agente'
+                        : null,
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: _agenteApellidoPaternoCtrl,
+                    enabled: !_saving,
+                    textCapitalization: TextCapitalization.words,
+                    textInputAction: TextInputAction.next,
+                    decoration: const InputDecoration(
+                      labelText: 'Apellido paterno *',
+                      border: OutlineInputBorder(),
+                      prefixIcon: Icon(Icons.person_outline),
+                    ),
+                    validator: (value) => (value ?? '').trim().isEmpty
+                        ? 'Captura el apellido paterno'
+                        : null,
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: _agenteApellidoMaternoCtrl,
+                    enabled: !_saving,
+                    textCapitalization: TextCapitalization.words,
+                    textInputAction: TextInputAction.next,
+                    decoration: const InputDecoration(
+                      labelText: 'Apellido materno (opcional)',
+                      helperText:
+                          'Los campos se enviarán separados al ticket y al IPH.',
+                      border: OutlineInputBorder(),
+                      prefixIcon: Icon(Icons.person_outline),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: _agentePlacaCtrl,
+                    enabled: !_saving,
+                    textCapitalization: TextCapitalization.characters,
+                    textInputAction: TextInputAction.done,
+                    decoration: const InputDecoration(
+                      labelText: 'Número de placa *',
+                      border: OutlineInputBorder(),
+                      prefixIcon: Icon(Icons.pin_outlined),
+                    ),
+                    validator: (value) => (value ?? '').trim().isEmpty
+                        ? 'Captura el número de placa del agente'
+                        : null,
+                  ),
+                  const SizedBox(height: 12),
+                  const InputDecorator(
+                    decoration: InputDecoration(
+                      labelText: 'Adscripción',
+                      helperText: 'Se asigna automáticamente.',
+                      border: OutlineInputBorder(),
+                      prefixIcon: Icon(Icons.account_balance_outlined),
+                    ),
+                    child: Text(_agenteAdscripcionDefault),
+                  ),
+                  const SizedBox(height: 20),
                   DropdownButtonFormField<ConduceLegalidadFundamento?>(
                     value: _fundamento,
                     isExpanded: true,
