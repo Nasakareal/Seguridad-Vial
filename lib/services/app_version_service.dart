@@ -46,9 +46,15 @@ class AppVersionService {
           policy.latestVersion.isNotEmpty &&
           _compareSemver(current, policy.latestVersion) < 0;
       final needsUpdate = belowMin || belowLatest;
+      final hasUpdateDestination = _hasUsableUpdateDestination(
+        marketUrl: policy.marketUrl,
+        storeUrl: policy.storeUrl,
+      );
       if (!context.mounted) return;
 
-      if (policy.force && needsUpdate) {
+      // Nunca bloquear la aplicación si el servidor no entregó una URL real
+      // de descarga. Un botón sin destino deja a todos los usuarios atrapados.
+      if (policy.force && needsUpdate && hasUpdateDestination) {
         await _showForcedDialog(
           context: context,
           message: policy.message.isEmpty
@@ -60,7 +66,10 @@ class AppVersionService {
         return;
       }
 
-      if (!policy.force && needsUpdate && context.mounted) {
+      if (!policy.force &&
+          needsUpdate &&
+          hasUpdateDestination &&
+          context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
@@ -237,17 +246,36 @@ class AppVersionService {
     required String marketUrl,
     required String storeUrl,
   }) async {
-    if (Platform.isAndroid && marketUrl.isNotEmpty) {
-      if (await _launchExternal(marketUrl)) return;
+    // Esta aplicación se distribuye como APK interno. La URL HTTPS tiene
+    // prioridad para no abrir Google Play/Mi App Mall con un paquete inexistente.
+    if (_isHttpUrl(storeUrl)) {
+      if (await _launchExternal(storeUrl)) return;
     }
 
     if (Platform.isIOS && _isIosStoreUrl(marketUrl)) {
       if (await _launchExternal(marketUrl)) return;
     }
 
-    if (storeUrl.isNotEmpty) {
-      await _launchExternal(storeUrl);
+    if (Platform.isAndroid && marketUrl.isNotEmpty) {
+      await _launchExternal(marketUrl);
     }
+  }
+
+  static bool _hasUsableUpdateDestination({
+    required String marketUrl,
+    required String storeUrl,
+  }) {
+    if (_isHttpUrl(storeUrl)) return true;
+    if (Platform.isIOS) return _isIosStoreUrl(marketUrl);
+    return Platform.isAndroid &&
+        Uri.tryParse(marketUrl.trim())?.scheme == 'market';
+  }
+
+  static bool _isHttpUrl(String url) {
+    final uri = Uri.tryParse(url.trim());
+    return uri != null &&
+        (uri.scheme == 'https' || uri.scheme == 'http') &&
+        uri.host.isNotEmpty;
   }
 
   static bool _isIosStoreUrl(String url) {
