@@ -173,7 +173,6 @@ class _ConstanciasManejoScreenState extends State<ConstanciasManejoScreen> {
       final resumen = await ConstanciasManejoService.resumenDiario();
       await Share.share(
         resumen.textoParaCompartir(nombreUsuario: resumen.informadoPor),
-        subject: 'Resultados de examenes - ${resumen.moduloNombre}',
       );
     } catch (e) {
       _showSnack(ConstanciasManejoService.cleanExceptionMessage(e));

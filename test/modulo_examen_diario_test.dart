@@ -37,4 +37,61 @@ void main() {
       endsWith('INFORMA: Respetuosamente Bertha Mijayli Alcantar Almonte'),
     );
   });
+
+  test(
+    'conserva la estructura completa aunque todos los conteos sean cero',
+    () {
+      const registro = ModuloExamenDiario(
+        id: 0,
+        fecha: '2026-10-05',
+        moduloNombre: 'Av. Lázaro Cárdenas (Casa Cuna)',
+        servicioPublico: 0,
+        automovilista: 0,
+        chofer: 0,
+        motociclista: 0,
+        permiso: 0,
+        total: 0,
+        hombres: 0,
+        mujeres: 0,
+        aprobados: 0,
+        reprobados: 0,
+        folios: null,
+        informadoPor: 'Bertha Mijayli Alcantar Almonte',
+        createdAt: null,
+        updatedAt: null,
+      );
+
+      expect(
+        registro.textoParaCompartir(),
+        '''GUARDIA CIVIL SEGURIDAD VIAL ESTATAL
+
+MÓDULO DE LICENCIA
+Av. Lázaro Cárdenas (Casa Cuna)
+
+RESULTADOS DE EXÁMENES REALIZADOS
+
+05/Octubre/2026
+
+Servicio Público: 00
+Automovilista: 00
+Chófer: 00
+Motociclista: 00
+Permiso: 00
+
+Hombre: 00
+Mujeres: 00
+
+Aprobado: 00
+Reprobados: 00
+
+Total: 00
+
+Folios
+
+Sin folios
+
+INFORMA: Respetuosamente Bertha Mijayli Alcantar Almonte''',
+      );
+    },
+  );
 }
