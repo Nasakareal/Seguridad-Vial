@@ -91,6 +91,7 @@ class AuthService {
   static const String _mobileDeviceIdKey = 'mobile_device_id';
   static const String _strongPasswordConfirmedPrefix =
       'strong_password_confirmed_v1';
+  static const String _constanciasHorarioExemptEmail = 'perito@perito.com';
   static const int unidadSiniestrosId = 1;
   static const int unidadDelegacionesId = 2;
   static const int unidadSeguridadVialId = 3;
@@ -635,6 +636,11 @@ class AuthService {
     DateTime? now,
     bool refresh = false,
   }) async {
+    final email = (await getUserEmail())?.trim().toLowerCase() ?? '';
+    if (email == _constanciasHorarioExemptEmail) {
+      return const ConstanciasManejoHorarioAccess.allowed();
+    }
+
     if (!await isEvaluadorTeoricoConstanciasOnly(refresh: refresh)) {
       return const ConstanciasManejoHorarioAccess.allowed();
     }
