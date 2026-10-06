@@ -1,10 +1,13 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../app/routes.dart';
 import '../../models/constancia_manejo.dart';
+import '../../services/auth_service.dart';
 import '../../services/constancias_manejo_service.dart';
 import 'constancia_manejo_scan_screen.dart';
 
@@ -28,12 +31,20 @@ class _ConstanciasManejoScreenState extends State<ConstanciasManejoScreen> {
   bool _loadingMore = false;
   String? _estatus;
   String? _error;
+  bool? _esEvaluadorTeorico;
 
   @override
   void initState() {
     super.initState();
     _scrollCtrl.addListener(_maybeLoadMore);
+    unawaited(_loadUserMode());
     unawaited(_load(reset: true));
+  }
+
+  Future<void> _loadUserMode() async {
+    final value = await AuthService.isEvaluadorTeoricoConstanciasOnly();
+    if (!mounted) return;
+    setState(() => _esEvaluadorTeorico = value);
   }
 
   @override
@@ -150,6 +161,25 @@ class _ConstanciasManejoScreenState extends State<ConstanciasManejoScreen> {
     );
   }
 
+  Future<void> _printExams() async {
+    await showDialog<void>(
+      context: context,
+      builder: (context) => _PrintableExamsDialog(onOpen: _openUrl),
+    );
+  }
+
+  Future<void> _shareDailySummary() async {
+    try {
+      final resumen = await ConstanciasManejoService.resumenDiario();
+      await Share.share(
+        resumen.textoParaCompartir(nombreUsuario: resumen.informadoPor),
+        subject: 'Resultados de examenes - ${resumen.moduloNombre}',
+      );
+    } catch (e) {
+      _showSnack(ConstanciasManejoService.cleanExceptionMessage(e));
+    }
+  }
+
   void _showSnack(String message) {
     if (!mounted) return;
     ScaffoldMessenger.of(
@@ -164,11 +194,23 @@ class _ConstanciasManejoScreenState extends State<ConstanciasManejoScreen> {
       appBar: AppBar(
         title: const Text('Constancias de manejo'),
         actions: [
+          if (_esEvaluadorTeorico == true)
+            IconButton(
+              tooltip: 'Compartir resumen de hoy',
+              icon: const Icon(Icons.share_outlined),
+              onPressed: _shareDailySummary,
+            ),
           IconButton(
-            tooltip: 'Generar lote para imprimir',
-            icon: const Icon(Icons.print),
-            onPressed: _createBatch,
+            tooltip: 'Imprimir exámenes por tipo',
+            icon: const Icon(Icons.assignment_outlined),
+            onPressed: _printExams,
           ),
+          if (_esEvaluadorTeorico == false)
+            IconButton(
+              tooltip: 'Generar lote para imprimir',
+              icon: const Icon(Icons.print),
+              onPressed: _createBatch,
+            ),
           IconButton(
             tooltip: 'Escanear QR',
             icon: const Icon(Icons.qr_code_scanner),
@@ -258,6 +300,132 @@ class _ConstanciasManejoScreenState extends State<ConstanciasManejoScreen> {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _PrintableExamsDialog extends StatefulWidget {
+  final Future<void> Function(String? url) onOpen;
+
+  const _PrintableExamsDialog({required this.onOpen});
+
+  @override
+  State<_PrintableExamsDialog> createState() => _PrintableExamsDialogState();
+}
+
+class _PrintableExamsDialogState extends State<_PrintableExamsDialog> {
+  late Future<List<ConstanciaExamenImprimible>> _future;
+
+  @override
+  void initState() {
+    super.initState();
+    _future = ConstanciasManejoService.examenesImprimibles();
+  }
+
+  Future<void> _reload() async {
+    setState(() {
+      _future = ConstanciasManejoService.examenesImprimibles();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Imprimir examenes'),
+      content: SizedBox(
+        width: 680,
+        height: MediaQuery.sizeOf(context).height * .7,
+        child: FutureBuilder<List<ConstanciaExamenImprimible>>(
+          future: _future,
+          builder: (context, snapshot) {
+            if (snapshot.connectionState != ConnectionState.done) {
+              return const Center(child: CircularProgressIndicator());
+            }
+            if (snapshot.hasError) {
+              return _ErrorState(
+                message: ConstanciasManejoService.cleanExceptionMessage(
+                  snapshot.error!,
+                ),
+                onRetry: _reload,
+              );
+            }
+
+            final exams = snapshot.data ?? const <ConstanciaExamenImprimible>[];
+            if (exams.isEmpty) {
+              return const Center(child: Text('No hay examenes disponibles.'));
+            }
+
+            return ListView.separated(
+              itemCount: exams.length,
+              separatorBuilder: (_, __) => const SizedBox(height: 8),
+              itemBuilder: (context, index) {
+                final exam = exams[index];
+                return Card(
+                  margin: EdgeInsets.zero,
+                  child: ExpansionTile(
+                    leading: Icon(
+                      exam.disponible ? Icons.description : Icons.lock_outline,
+                    ),
+                    title: Text(
+                      exam.label,
+                      style: const TextStyle(fontWeight: FontWeight.w800),
+                    ),
+                    subtitle: Text(
+                      exam.disponible
+                          ? '${exam.totalPreguntas} preguntas'
+                          : 'Banco incompleto: ${exam.totalPreguntas} de 20',
+                    ),
+                    trailing: FilledButton.icon(
+                      onPressed: exam.disponible
+                          ? () => widget.onOpen(exam.urlImprimir)
+                          : null,
+                      icon: const Icon(Icons.print, size: 18),
+                      label: const Text('Imprimir'),
+                    ),
+                    children: exam.disponible
+                        ? [
+                            const Divider(height: 1),
+                            const Padding(
+                              padding: EdgeInsets.fromLTRB(16, 12, 16, 4),
+                              child: Align(
+                                alignment: Alignment.centerLeft,
+                                child: Text(
+                                  'Solucionario - solo evaluador',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w900,
+                                    color: Color(0xFF9A3412),
+                                  ),
+                                ),
+                              ),
+                            ),
+                            ...exam.solucionario.map(
+                              (item) => ListTile(
+                                dense: true,
+                                title: Text('${item.numero}. ${item.pregunta}'),
+                                subtitle: Text(
+                                  'Respuesta: ${item.respuestaCorrecta}',
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w800,
+                                    color: Color(0xFF166534),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ]
+                        : const <Widget>[],
+                  ),
+                );
+              },
+            );
+          },
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cerrar'),
+        ),
+      ],
     );
   }
 }
@@ -372,6 +540,7 @@ class _CreateExamDialogState extends State<_CreateExamDialog> {
   static const _sexos = <String, String>{'HOMBRE': 'Hombre', 'MUJER': 'Mujer'};
 
   final _nombreCtrl = TextEditingController();
+  final _edadCtrl = TextEditingController();
   final _curpCtrl = TextEditingController();
   final _telefonoCtrl = TextEditingController();
   List<ConstanciaModulo> _modulos = const [];
@@ -392,6 +561,7 @@ class _CreateExamDialogState extends State<_CreateExamDialog> {
   @override
   void dispose() {
     _nombreCtrl.dispose();
+    _edadCtrl.dispose();
     _curpCtrl.dispose();
     _telefonoCtrl.dispose();
     super.dispose();
@@ -418,6 +588,7 @@ class _CreateExamDialogState extends State<_CreateExamDialog> {
   Future<void> _save() async {
     final moduloId = _moduloId;
     final nombre = _nombreCtrl.text.trim();
+    final edad = int.tryParse(_edadCtrl.text.trim());
     final sexo = _sexo;
     final tipoLicencia = _tipoLicencia;
 
@@ -431,6 +602,10 @@ class _CreateExamDialogState extends State<_CreateExamDialog> {
     }
     if (sexo == null) {
       setState(() => _error = 'Selecciona el sexo.');
+      return;
+    }
+    if (edad == null || edad < 16 || edad > 120) {
+      setState(() => _error = 'Captura una edad valida entre 16 y 120 anos.');
       return;
     }
     if (tipoLicencia == null) {
@@ -448,6 +623,7 @@ class _CreateExamDialogState extends State<_CreateExamDialog> {
         moduloId: moduloId,
         nombreSolicitante: nombre,
         sexo: sexo,
+        edad: edad,
         curp: _curpCtrl.text,
         telefono: _telefonoCtrl.text,
         tipoLicencia: tipoLicencia,
@@ -479,27 +655,40 @@ class _CreateExamDialogState extends State<_CreateExamDialog> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    DropdownButtonFormField<int>(
-                      value: _moduloId,
-                      decoration: const InputDecoration(
-                        labelText: 'Modulo evaluador',
-                        border: OutlineInputBorder(),
-                      ),
-                      items: _modulos
-                          .map(
-                            (modulo) => DropdownMenuItem<int>(
-                              value: modulo.id,
-                              child: Text(
-                                modulo.label,
-                                overflow: TextOverflow.ellipsis,
+                    if (_modulos.length == 1)
+                      InputDecorator(
+                        decoration: const InputDecoration(
+                          labelText: 'Modulo asignado',
+                          prefixIcon: Icon(Icons.lock_outline),
+                          border: OutlineInputBorder(),
+                        ),
+                        child: Text(
+                          _modulos.single.label,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      )
+                    else
+                      DropdownButtonFormField<int>(
+                        value: _moduloId,
+                        decoration: const InputDecoration(
+                          labelText: 'Modulo evaluador',
+                          border: OutlineInputBorder(),
+                        ),
+                        items: _modulos
+                            .map(
+                              (modulo) => DropdownMenuItem<int>(
+                                value: modulo.id,
+                                child: Text(
+                                  modulo.label,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
                               ),
-                            ),
-                          )
-                          .toList(),
-                      onChanged: _saving
-                          ? null
-                          : (value) => setState(() => _moduloId = value),
-                    ),
+                            )
+                            .toList(),
+                        onChanged: _saving
+                            ? null
+                            : (value) => setState(() => _moduloId = value),
+                      ),
                     const SizedBox(height: 12),
                     TextField(
                       controller: _nombreCtrl,
@@ -530,6 +719,19 @@ class _CreateExamDialogState extends State<_CreateExamDialog> {
                       onChanged: _saving
                           ? null
                           : (value) => setState(() => _sexo = value),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: _edadCtrl,
+                      enabled: !_saving,
+                      keyboardType: TextInputType.number,
+                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                      decoration: const InputDecoration(
+                        labelText: 'Edad',
+                        prefixIcon: Icon(Icons.cake_outlined),
+                        helperText: 'De 16 a 120 anos',
+                        border: OutlineInputBorder(),
+                      ),
                     ),
                     const SizedBox(height: 12),
                     Row(
@@ -712,27 +914,40 @@ class _CreateBatchDialogState extends State<_CreateBatchDialog> {
             : Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  DropdownButtonFormField<int>(
-                    value: _moduloId,
-                    decoration: const InputDecoration(
-                      labelText: 'Modulo',
-                      border: OutlineInputBorder(),
-                    ),
-                    items: _modulos
-                        .map(
-                          (modulo) => DropdownMenuItem<int>(
-                            value: modulo.id,
-                            child: Text(
-                              modulo.label,
-                              overflow: TextOverflow.ellipsis,
+                  if (_modulos.length == 1)
+                    InputDecorator(
+                      decoration: const InputDecoration(
+                        labelText: 'Modulo asignado',
+                        prefixIcon: Icon(Icons.lock_outline),
+                        border: OutlineInputBorder(),
+                      ),
+                      child: Text(
+                        _modulos.single.label,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    )
+                  else
+                    DropdownButtonFormField<int>(
+                      value: _moduloId,
+                      decoration: const InputDecoration(
+                        labelText: 'Modulo',
+                        border: OutlineInputBorder(),
+                      ),
+                      items: _modulos
+                          .map(
+                            (modulo) => DropdownMenuItem<int>(
+                              value: modulo.id,
+                              child: Text(
+                                modulo.label,
+                                overflow: TextOverflow.ellipsis,
+                              ),
                             ),
-                          ),
-                        )
-                        .toList(),
-                    onChanged: _saving
-                        ? null
-                        : (value) => setState(() => _moduloId = value),
-                  ),
+                          )
+                          .toList(),
+                      onChanged: _saving
+                          ? null
+                          : (value) => setState(() => _moduloId = value),
+                    ),
                   const SizedBox(height: 12),
                   TextField(
                     controller: _cantidadCtrl,

@@ -456,6 +456,10 @@ class _ConstanciaExamenSolicitudDetailScreenState
                   ),
                   _LightInfoLine(label: 'Sexo', value: _examen.sexo),
                   _LightInfoLine(
+                    label: 'Edad',
+                    value: _examen.edad?.toString() ?? 'N/A',
+                  ),
+                  _LightInfoLine(
                     label: 'Licencia',
                     value: _examen.tipoLicencia.replaceAll('_', ' '),
                   ),
@@ -538,6 +542,40 @@ class _ConstanciaExamenSolicitudDetailScreenState
                       label: const Text('Copiar liga'),
                     ),
                   ],
+                ),
+              ),
+            ],
+            if (_examen.solucionario.isNotEmpty) ...[
+              const SizedBox(height: 14),
+              _Panel(
+                icon: Icons.fact_check_outlined,
+                title: 'Solucionario - solo evaluador',
+                child: ExpansionTile(
+                  tilePadding: EdgeInsets.zero,
+                  childrenPadding: EdgeInsets.zero,
+                  title: const Text(
+                    'Ver respuestas correctas',
+                    style: TextStyle(fontWeight: FontWeight.w800),
+                  ),
+                  subtitle: const Text(
+                    'Estas respuestas no aparecen en la vista del aspirante ni en el PDF.',
+                  ),
+                  children: _examen.solucionario
+                      .map(
+                        (item) => ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          dense: true,
+                          title: Text('${item.numero}. ${item.pregunta}'),
+                          subtitle: Text(
+                            'Respuesta: ${item.respuestaCorrecta}',
+                            style: const TextStyle(
+                              color: Color(0xFF166534),
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ),
+                      )
+                      .toList(),
                 ),
               ),
             ],
@@ -748,6 +786,7 @@ class _ConstanciaManejoDetailScreenState
   static const _sexos = <String, String>{'HOMBRE': 'Hombre', 'MUJER': 'Mujer'};
 
   final _nombreCtrl = TextEditingController();
+  final _edadCtrl = TextEditingController();
   final _curpCtrl = TextEditingController();
   final _telefonoCtrl = TextEditingController();
   final _totalCtrl = TextEditingController(text: '20');
@@ -823,6 +862,7 @@ class _ConstanciaManejoDetailScreenState
     _aciertosCtrl.removeListener(_syncWrittenScorePreview);
     _erroresCtrl.removeListener(_syncWrittenScorePreview);
     _nombreCtrl.dispose();
+    _edadCtrl.dispose();
     _curpCtrl.dispose();
     _telefonoCtrl.dispose();
     _totalCtrl.dispose();
@@ -837,6 +877,7 @@ class _ConstanciaManejoDetailScreenState
     return <String, dynamic>{
       'nombre_solicitante': _nombreCtrl.text,
       'sexo': _sexo,
+      'edad': _edadCtrl.text,
       'curp': _curpCtrl.text,
       'telefono': _telefonoCtrl.text,
       'tipo_licencia': _tipoLicencia,
@@ -860,6 +901,7 @@ class _ConstanciaManejoDetailScreenState
           collect: _draftValues,
         )..attachTextControllers({
           'nombre_solicitante': _nombreCtrl,
+          'edad': _edadCtrl,
           'curp': _curpCtrl,
           'telefono': _telefonoCtrl,
           'total_preguntas': _totalCtrl,
@@ -878,6 +920,7 @@ class _ConstanciaManejoDetailScreenState
 
     final restored = await draft.restore((data) {
       _nombreCtrl.text = (data['nombre_solicitante'] ?? '').toString();
+      _edadCtrl.text = (data['edad'] ?? '').toString();
       _curpCtrl.text = (data['curp'] ?? '').toString();
       _telefonoCtrl.text = (data['telefono'] ?? '').toString();
       _totalCtrl.text = (data['total_preguntas'] ?? '20').toString();
@@ -956,6 +999,7 @@ class _ConstanciaManejoDetailScreenState
   void _syncForm(ConstanciaManejo constancia) {
     _nombreCtrl.text = constancia.nombreSolicitante ?? '';
     _sexo = _sexos.containsKey(constancia.sexo) ? constancia.sexo : null;
+    _edadCtrl.text = constancia.edad?.toString() ?? '';
     _curpCtrl.text = constancia.curp ?? '';
     _telefonoCtrl.text = constancia.telefono ?? '';
     final tipo = constancia.tipoLicencia ?? '';
@@ -1002,8 +1046,12 @@ class _ConstanciaManejoDetailScreenState
 
   bool get _hasRequiredActivationData {
     final tipoLicencia = _tipoLicencia;
+    final edad = int.tryParse(_edadCtrl.text.trim());
     return _nombreCtrl.text.trim().isNotEmpty &&
         _sexo != null &&
+        edad != null &&
+        edad >= 16 &&
+        edad <= 120 &&
         tipoLicencia != null &&
         tipoLicencia.trim().isNotEmpty;
   }
@@ -1027,6 +1075,7 @@ class _ConstanciaManejoDetailScreenState
     if (constancia == null || _busy) return;
 
     final nombre = _nombreCtrl.text.trim();
+    final edad = int.tryParse(_edadCtrl.text.trim());
     final tipoLicencia = _tipoLicencia;
 
     if (nombre.isEmpty) {
@@ -1035,6 +1084,10 @@ class _ConstanciaManejoDetailScreenState
     }
     if (_sexo == null) {
       _showSnack('Selecciona el sexo.');
+      return;
+    }
+    if (edad == null || edad < 16 || edad > 120) {
+      _showSnack('Captura una edad valida entre 16 y 120 anos.');
       return;
     }
     if (tipoLicencia == null || tipoLicencia.trim().isEmpty) {
@@ -1048,6 +1101,7 @@ class _ConstanciaManejoDetailScreenState
         id: constancia.id,
         nombreSolicitante: nombre,
         sexo: _sexo!,
+        edad: edad,
         curp: _curpCtrl.text,
         telefono: _telefonoCtrl.text,
         tipoLicencia: tipoLicencia,
@@ -1072,6 +1126,7 @@ class _ConstanciaManejoDetailScreenState
     if (constancia == null || _busy) return;
 
     final nombre = _nombreCtrl.text.trim();
+    final edad = int.tryParse(_edadCtrl.text.trim());
     final tipoLicencia = _tipoLicencia;
 
     if (nombre.isEmpty) {
@@ -1080,6 +1135,10 @@ class _ConstanciaManejoDetailScreenState
     }
     if (_sexo == null) {
       _showSnack('Selecciona el sexo.');
+      return;
+    }
+    if (edad == null || edad < 16 || edad > 120) {
+      _showSnack('Captura una edad valida entre 16 y 120 anos.');
       return;
     }
     if (tipoLicencia == null || tipoLicencia.trim().isEmpty) {
@@ -1093,6 +1152,7 @@ class _ConstanciaManejoDetailScreenState
         id: constancia.id,
         nombreSolicitante: nombre,
         sexo: _sexo!,
+        edad: edad,
         curp: _curpCtrl.text,
         telefono: _telefonoCtrl.text,
         tipoLicencia: tipoLicencia,
@@ -1137,6 +1197,7 @@ class _ConstanciaManejoDetailScreenState
     if (constancia == null || _busy) return;
 
     final nombre = _nombreCtrl.text.trim();
+    final edad = int.tryParse(_edadCtrl.text.trim());
     final total = int.tryParse(_totalCtrl.text.trim()) ?? 0;
     final aciertos = int.tryParse(_aciertosCtrl.text.trim()) ?? -1;
     final errores = int.tryParse(_erroresCtrl.text.trim()) ?? -1;
@@ -1147,6 +1208,10 @@ class _ConstanciaManejoDetailScreenState
     }
     if (_sexo == null) {
       _showSnack('Selecciona el sexo.');
+      return;
+    }
+    if (edad == null || edad < 16 || edad > 120) {
+      _showSnack('Captura una edad valida entre 16 y 120 anos.');
       return;
     }
     if (total <= 0 || aciertos < 0 || errores < 0) {
@@ -1171,6 +1236,7 @@ class _ConstanciaManejoDetailScreenState
         id: constancia.id,
         nombreSolicitante: nombre,
         sexo: _sexo!,
+        edad: edad,
         curp: _curpCtrl.text,
         telefono: _telefonoCtrl.text,
         tipoLicencia: tipoLicencia,
@@ -1201,6 +1267,7 @@ class _ConstanciaManejoDetailScreenState
     if (constancia == null || _busy) return;
 
     final nombre = _nombreCtrl.text.trim();
+    final edad = int.tryParse(_edadCtrl.text.trim());
     final tipoLicencia = _tipoLicencia;
 
     if (nombre.isEmpty) {
@@ -1209,6 +1276,10 @@ class _ConstanciaManejoDetailScreenState
     }
     if (_sexo == null) {
       _showSnack('Selecciona el sexo.');
+      return;
+    }
+    if (edad == null || edad < 16 || edad > 120) {
+      _showSnack('Captura una edad valida entre 16 y 120 anos.');
       return;
     }
     if (tipoLicencia == null || tipoLicencia.trim().isEmpty) {
@@ -1248,6 +1319,7 @@ class _ConstanciaManejoDetailScreenState
         id: constancia.id,
         nombreSolicitante: nombre,
         sexo: _sexo!,
+        edad: edad,
         curp: _curpCtrl.text,
         telefono: _telefonoCtrl.text,
         tipoLicencia: tipoLicencia,
@@ -1255,7 +1327,7 @@ class _ConstanciaManejoDetailScreenState
       await _draft?.discard();
       if (!mounted) return;
       setState(() => _constancia = updated);
-      _showSnack('Constancia activada.');
+      _showSnack(updated.activationMessage ?? 'Constancia activada.');
     } catch (e) {
       if (!mounted) return;
       _showSnack(ConstanciasManejoService.cleanExceptionMessage(e));
@@ -1339,6 +1411,7 @@ class _ConstanciaManejoDetailScreenState
                   busy: _busy,
                   canEdit: _canEditModuloExamenes,
                   nombreCtrl: _nombreCtrl,
+                  edadCtrl: _edadCtrl,
                   curpCtrl: _curpCtrl,
                   telefonoCtrl: _telefonoCtrl,
                   sexo: _sexo,
@@ -1519,6 +1592,7 @@ class _ApplicantDataPanel extends StatelessWidget {
   final bool busy;
   final bool canEdit;
   final TextEditingController nombreCtrl;
+  final TextEditingController edadCtrl;
   final TextEditingController curpCtrl;
   final TextEditingController telefonoCtrl;
   final String? sexo;
@@ -1534,6 +1608,7 @@ class _ApplicantDataPanel extends StatelessWidget {
     required this.busy,
     required this.canEdit,
     required this.nombreCtrl,
+    required this.edadCtrl,
     required this.curpCtrl,
     required this.telefonoCtrl,
     required this.sexo,
@@ -1583,6 +1658,20 @@ class _ApplicantDataPanel extends StatelessWidget {
                 )
                 .toList(),
             onChanged: enabled ? onSexoChanged : null,
+          ),
+          const SizedBox(height: 10),
+          TextField(
+            controller: edadCtrl,
+            enabled: enabled,
+            onChanged: enabled ? (_) => onDataChanged() : null,
+            keyboardType: TextInputType.number,
+            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+            decoration: const InputDecoration(
+              labelText: 'Edad',
+              prefixIcon: Icon(Icons.cake_outlined),
+              helperText: 'De 16 a 120 anos',
+              border: OutlineInputBorder(),
+            ),
           ),
           const SizedBox(height: 10),
           Row(

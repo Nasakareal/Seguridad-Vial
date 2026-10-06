@@ -7,6 +7,7 @@ class ConstanciaManejo {
   final int? delegacionId;
   final String? nombreSolicitante;
   final String? sexo;
+  final int? edad;
   final String? curp;
   final String? telefono;
   final String? tipoLicencia;
@@ -30,6 +31,9 @@ class ConstanciaManejo {
   final bool puedeCapturarImpreso;
   final bool puedeImprimir;
   final bool puedeActivar;
+  final String? activationMessage;
+  final bool whatsappSent;
+  final String? whatsappStatus;
 
   const ConstanciaManejo({
     required this.id,
@@ -40,6 +44,7 @@ class ConstanciaManejo {
     required this.delegacionId,
     required this.nombreSolicitante,
     required this.sexo,
+    required this.edad,
     required this.curp,
     required this.telefono,
     required this.tipoLicencia,
@@ -63,6 +68,9 @@ class ConstanciaManejo {
     required this.puedeCapturarImpreso,
     required this.puedeImprimir,
     required this.puedeActivar,
+    required this.activationMessage,
+    required this.whatsappSent,
+    required this.whatsappStatus,
   });
 
   bool get tieneAccesoTemporal =>
@@ -104,6 +112,7 @@ class ConstanciaManejo {
       delegacionId: _readInt(json['delegacion_id']),
       nombreSolicitante: _readNullableString(json['nombre_solicitante']),
       sexo: _readNullableString(json['sexo']),
+      edad: _readInt(json['edad']),
       curp: _readNullableString(json['curp']),
       telefono: _readNullableString(json['telefono']),
       tipoLicencia: _readNullableString(json['tipo_licencia']),
@@ -141,6 +150,9 @@ class ConstanciaManejo {
       puedeCapturarImpreso: _readBool(json['puede_capturar_impreso']),
       puedeImprimir: _readBool(json['puede_imprimir']),
       puedeActivar: _readBool(json['puede_activar']),
+      activationMessage: _readNullableString(json['_response_message']),
+      whatsappSent: _readBool(json['_whatsapp_sent']),
+      whatsappStatus: _readNullableString(json['_whatsapp_status']),
     );
   }
 }
@@ -223,6 +235,7 @@ class ConstanciaExamenSolicitud {
   final String? constanciaFolio;
   final String nombreSolicitante;
   final String sexo;
+  final int? edad;
   final String? curp;
   final String? telefono;
   final String tipoLicencia;
@@ -240,6 +253,7 @@ class ConstanciaExamenSolicitud {
   final String? qrExamenBase64;
   final bool puedeCapturarImpreso;
   final bool puedeActivarConstancia;
+  final List<ConstanciaExamenSolucion> solucionario;
 
   const ConstanciaExamenSolicitud({
     required this.id,
@@ -252,6 +266,7 @@ class ConstanciaExamenSolicitud {
     required this.constanciaFolio,
     required this.nombreSolicitante,
     required this.sexo,
+    required this.edad,
     required this.curp,
     required this.telefono,
     required this.tipoLicencia,
@@ -269,6 +284,7 @@ class ConstanciaExamenSolicitud {
     required this.qrExamenBase64,
     required this.puedeCapturarImpreso,
     required this.puedeActivarConstancia,
+    required this.solucionario,
   });
 
   bool get aprobado => estatus.trim().toUpperCase() == 'APROBADO';
@@ -291,6 +307,7 @@ class ConstanciaExamenSolicitud {
       constanciaFolio: _readNullableString(json['constancia_folio']),
       nombreSolicitante: _readNullableString(json['nombre_solicitante']) ?? '',
       sexo: _readNullableString(json['sexo']) ?? '',
+      edad: _readInt(json['edad']),
       curp: _readNullableString(json['curp']),
       telefono: _readNullableString(json['telefono']),
       tipoLicencia: _readNullableString(json['tipo_licencia']) ?? '',
@@ -308,6 +325,56 @@ class ConstanciaExamenSolicitud {
       qrExamenBase64: _readNullableString(json['qr_examen_base64']),
       puedeCapturarImpreso: _readBool(json['puede_capturar_impreso']),
       puedeActivarConstancia: _readBool(json['puede_activar_constancia']),
+      solucionario: _readSolucionario(json['solucionario']),
+    );
+  }
+}
+
+class ConstanciaExamenSolucion {
+  final int numero;
+  final String pregunta;
+  final String respuestaCorrecta;
+
+  const ConstanciaExamenSolucion({
+    required this.numero,
+    required this.pregunta,
+    required this.respuestaCorrecta,
+  });
+
+  factory ConstanciaExamenSolucion.fromJson(Map<String, dynamic> json) {
+    return ConstanciaExamenSolucion(
+      numero: _readInt(json['numero']) ?? 0,
+      pregunta: (json['pregunta'] ?? '').toString(),
+      respuestaCorrecta: (json['respuesta_correcta'] ?? '').toString(),
+    );
+  }
+}
+
+class ConstanciaExamenImprimible {
+  final String tipoLicencia;
+  final String label;
+  final int totalPreguntas;
+  final bool disponible;
+  final String? urlImprimir;
+  final List<ConstanciaExamenSolucion> solucionario;
+
+  const ConstanciaExamenImprimible({
+    required this.tipoLicencia,
+    required this.label,
+    required this.totalPreguntas,
+    required this.disponible,
+    required this.urlImprimir,
+    required this.solucionario,
+  });
+
+  factory ConstanciaExamenImprimible.fromJson(Map<String, dynamic> json) {
+    return ConstanciaExamenImprimible(
+      tipoLicencia: (json['tipo_licencia'] ?? '').toString(),
+      label: (json['label'] ?? '').toString(),
+      totalPreguntas: _readInt(json['total_preguntas']) ?? 0,
+      disponible: _readBool(json['disponible']),
+      urlImprimir: _readNullableString(json['url_imprimir']),
+      solucionario: _readSolucionario(json['solucionario']),
     );
   }
 }
@@ -368,4 +435,16 @@ bool _readBool(dynamic value) {
   if (value is bool) return value;
   final text = value?.toString().trim().toLowerCase() ?? '';
   return text == 'true' || text == '1' || text == 'si' || text == 'yes';
+}
+
+List<ConstanciaExamenSolucion> _readSolucionario(dynamic raw) {
+  if (raw is! List) return const <ConstanciaExamenSolucion>[];
+  return raw
+      .whereType<Map>()
+      .map(
+        (item) =>
+            ConstanciaExamenSolucion.fromJson(Map<String, dynamic>.from(item)),
+      )
+      .where((item) => item.numero > 0 && item.pregunta.trim().isNotEmpty)
+      .toList();
 }

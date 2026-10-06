@@ -374,6 +374,17 @@ class AppDrawer extends StatelessWidget {
                             onTap: () =>
                                 _nav(context, AppRoutes.constanciasManejo),
                           ),
+                        if (_allowed(perms, permActividades))
+                          _DrawerItem(
+                            icon: Icons.photo_library,
+                            label: 'Actividades',
+                            subtitle: 'Subir actividades del día',
+                            onTap: () => _nav(
+                              context,
+                              AppRoutes.actividades,
+                              requiredPerm: permActividades,
+                            ),
+                          ),
                         const SizedBox(height: 12),
                         const DrawerSectionLabel(label: 'Consulta'),
                         _DrawerGroup(

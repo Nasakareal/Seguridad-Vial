@@ -52,6 +52,7 @@ class UsersMeta {
   final List<UserCatalogItem> turnos;
   final List<UserCatalogItem> patrullas;
   final List<UserCatalogItem> delegaciones;
+  final List<UserCatalogItem> constanciaModulos;
   final List<UserCatalogItem> destacamentos;
 
   const UsersMeta({
@@ -60,6 +61,7 @@ class UsersMeta {
     required this.turnos,
     required this.patrullas,
     required this.delegaciones,
+    required this.constanciaModulos,
     required this.destacamentos,
   });
 
@@ -69,6 +71,7 @@ class UsersMeta {
       turnos = const <UserCatalogItem>[],
       patrullas = const <UserCatalogItem>[],
       delegaciones = const <UserCatalogItem>[],
+      constanciaModulos = const <UserCatalogItem>[],
       destacamentos = const <UserCatalogItem>[];
 
   factory UsersMeta.fromJson(Map<String, dynamic> json) {
@@ -78,6 +81,7 @@ class UsersMeta {
       turnos: _list(json['turnos']),
       patrullas: _list(json['patrullas']),
       delegaciones: _list(json['delegaciones']),
+      constanciaModulos: _list(json['constancia_modulos']),
       destacamentos: _list(json['destacamentos']),
     );
   }

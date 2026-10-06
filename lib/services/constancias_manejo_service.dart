@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 
 import '../models/constancia_manejo.dart';
+import '../models/modulo_examen_diario.dart';
 import 'auth_service.dart';
 
 class ConstanciasManejoService {
@@ -256,6 +257,54 @@ class ConstanciasManejoService {
         .toList();
   }
 
+  static Future<List<ConstanciaExamenImprimible>> examenesImprimibles() async {
+    final resp = await http
+        .get(
+          Uri.parse('$_base/examenes-imprimibles'),
+          headers: await authHeaders(json: false),
+        )
+        .timeout(const Duration(seconds: 20));
+
+    if (resp.statusCode < 200 || resp.statusCode >= 300) {
+      throw Exception(_parseBackendError(resp.body, resp.statusCode));
+    }
+
+    final raw = jsonDecode(resp.body);
+    final data = raw is Map<String, dynamic> ? raw['data'] : null;
+    if (data is! List) return const <ConstanciaExamenImprimible>[];
+
+    return data
+        .whereType<Map>()
+        .map(
+          (item) => ConstanciaExamenImprimible.fromJson(
+            Map<String, dynamic>.from(item),
+          ),
+        )
+        .where((item) => item.tipoLicencia.trim().isNotEmpty)
+        .toList();
+  }
+
+  static Future<ModuloExamenDiario> resumenDiario() async {
+    final resp = await http
+        .get(
+          Uri.parse('$_base/resumen-diario'),
+          headers: await authHeaders(json: false),
+        )
+        .timeout(const Duration(seconds: 20));
+
+    if (resp.statusCode < 200 || resp.statusCode >= 300) {
+      throw Exception(_parseBackendError(resp.body, resp.statusCode));
+    }
+
+    final raw = jsonDecode(resp.body);
+    final data = raw is Map<String, dynamic> ? raw['data'] : null;
+    if (data is! Map) {
+      throw Exception('Respuesta invalida del servidor.');
+    }
+
+    return ModuloExamenDiario.fromJson(Map<String, dynamic>.from(data));
+  }
+
   static Future<ConstanciasManejoCreateResult> crearLote({
     required int moduloId,
     required int cantidad,
@@ -309,6 +358,7 @@ class ConstanciasManejoService {
     required int moduloId,
     required String nombreSolicitante,
     required String sexo,
+    required int edad,
     required String tipoLicencia,
     required String modalidad,
     String? curp,
@@ -322,6 +372,7 @@ class ConstanciasManejoService {
             'modulo_id': moduloId,
             'nombre_solicitante': nombreSolicitante.trim(),
             'sexo': sexo.trim(),
+            'edad': edad,
             'curp': curp?.trim(),
             'telefono': telefono?.trim(),
             'tipo_licencia': tipoLicencia.trim(),
@@ -337,6 +388,7 @@ class ConstanciasManejoService {
     required int id,
     required String nombreSolicitante,
     required String sexo,
+    required int edad,
     required String tipoLicencia,
     String? curp,
     String? telefono,
@@ -348,6 +400,7 @@ class ConstanciasManejoService {
           body: jsonEncode(<String, dynamic>{
             'nombre_solicitante': nombreSolicitante.trim(),
             'sexo': sexo.trim(),
+            'edad': edad,
             'curp': curp?.trim(),
             'telefono': telefono?.trim(),
             'tipo_licencia': tipoLicencia.trim(),
@@ -362,6 +415,7 @@ class ConstanciasManejoService {
     required int id,
     required String nombreSolicitante,
     required String sexo,
+    required int edad,
     required String tipoLicencia,
     String? curp,
     String? telefono,
@@ -373,6 +427,7 @@ class ConstanciasManejoService {
           body: jsonEncode(<String, dynamic>{
             'nombre_solicitante': nombreSolicitante.trim(),
             'sexo': sexo.trim(),
+            'edad': edad,
             'curp': curp?.trim(),
             'telefono': telefono?.trim(),
             'tipo_licencia': tipoLicencia.trim(),
@@ -479,6 +534,7 @@ class ConstanciasManejoService {
     required int id,
     required String nombreSolicitante,
     required String sexo,
+    required int edad,
     required String tipoLicencia,
     required int totalPreguntas,
     required int aciertos,
@@ -495,6 +551,7 @@ class ConstanciasManejoService {
           body: jsonEncode(<String, dynamic>{
             'nombre_solicitante': nombreSolicitante.trim(),
             'sexo': sexo.trim(),
+            'edad': edad,
             'curp': curp?.trim(),
             'telefono': telefono?.trim(),
             'tipo_licencia': tipoLicencia.trim(),
@@ -556,6 +613,7 @@ class ConstanciasManejoService {
     required int id,
     String? nombreSolicitante,
     String? sexo,
+    int? edad,
     String? curp,
     String? telefono,
     String? tipoLicencia,
@@ -568,6 +626,7 @@ class ConstanciasManejoService {
             if (nombreSolicitante != null)
               'nombre_solicitante': nombreSolicitante.trim(),
             if (sexo != null) 'sexo': sexo.trim(),
+            if (edad != null) 'edad': edad,
             if (curp != null) 'curp': curp.trim(),
             if (telefono != null) 'telefono': telefono.trim(),
             if (tipoLicencia != null) 'tipo_licencia': tipoLicencia.trim(),
@@ -587,7 +646,14 @@ class ConstanciasManejoService {
     if (raw is Map<String, dynamic>) {
       final data = raw['constancia'] ?? raw['data'];
       if (data is Map) {
-        return ConstanciaManejo.fromJson(Map<String, dynamic>.from(data));
+        final payload = Map<String, dynamic>.from(data);
+        final whatsapp = raw['whatsapp'];
+        payload['_response_message'] = raw['message'];
+        if (whatsapp is Map) {
+          payload['_whatsapp_sent'] = whatsapp['sent'];
+          payload['_whatsapp_status'] = whatsapp['status'];
+        }
+        return ConstanciaManejo.fromJson(payload);
       }
       if (raw.containsKey('id')) {
         return ConstanciaManejo.fromJson(raw);

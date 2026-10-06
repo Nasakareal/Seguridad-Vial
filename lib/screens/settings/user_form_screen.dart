@@ -59,6 +59,7 @@ class _UserFormScreenState extends State<UserFormScreen> {
   int? _turnoId;
   int? _patrullaId;
   int? _delegacionId;
+  int? _constanciaModuloId;
   int? _destacamentoId;
   String _estado = 'Activo';
   Set<int> _unidadesExtra = <int>{};
@@ -142,6 +143,9 @@ class _UserFormScreenState extends State<UserFormScreen> {
     _patrullaId = _readInt(user['patrulla_id']) ?? _nestedId(user['patrulla']);
     _delegacionId =
         _readInt(user['delegacion_id']) ?? _nestedId(user['delegacion']);
+    _constanciaModuloId =
+        _readInt(user['constancia_modulo_id']) ??
+        _nestedId(user['constancia_modulo']);
     _destacamentoId =
         _readInt(user['destacamento_id']) ?? _nestedId(user['destacamento']);
     _compartirUbicacion = _readBool(
@@ -247,6 +251,9 @@ class _UserFormScreenState extends State<UserFormScreen> {
     if (_unidadId != AuthService.unidadDelegacionesId) {
       _delegacionId = null;
     }
+    if (_unidadId != AuthService.unidadSiniestrosId) {
+      _constanciaModuloId = null;
+    }
     if (_unidadId != AuthService.unidadProteccionCarreterasId) {
       _destacamentoId = null;
     }
@@ -317,6 +324,7 @@ class _UserFormScreenState extends State<UserFormScreen> {
       'turno_id': _turnoId,
       'patrulla_id': _patrullaId,
       'delegacion_id': _delegacionId,
+      'constancia_modulo_id': _constanciaModuloId,
       'destacamento_id': _destacamentoId,
       'unidades_ids': unidadesExtra,
       'compartir_ubicacion': _compartirUbicacion,
@@ -478,6 +486,7 @@ class _UserFormScreenState extends State<UserFormScreen> {
     final selectedRole = _find(_meta.roles, _roleId);
     final forcedUnitName = selectedRole?.unidadEfectivaNombre;
     final showDelegacion = _unidadId == AuthService.unidadDelegacionesId;
+    final showConstanciaModulo = _unidadId == AuthService.unidadSiniestrosId;
     final showDestacamento =
         _unidadId == AuthService.unidadProteccionCarreterasId;
 
@@ -668,6 +677,25 @@ class _UserFormScreenState extends State<UserFormScreen> {
                             items: _meta.delegaciones,
                             onChanged: (value) =>
                                 setState(() => _delegacionId = value),
+                          ),
+                        ],
+                        if (showConstanciaModulo) ...[
+                          const SizedBox(height: 12),
+                          _dropdown(
+                            label: 'Modulo de examenes de manejo',
+                            value: _constanciaModuloId,
+                            items: _meta.constanciaModulos,
+                            nullLabel: 'Sin modulo asignado',
+                            onChanged: (value) =>
+                                setState(() => _constanciaModuloId = value),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            'El usuario solo podra capturar y consultar constancias de este modulo.',
+                            style: TextStyle(
+                              color: Colors.grey.shade700,
+                              fontSize: 12,
+                            ),
                           ),
                         ],
                         if (showDestacamento) ...[
