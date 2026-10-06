@@ -320,7 +320,7 @@ void main() {
   );
 
   test(
-    'agente vial uses vialidades home and hourly tracking profile',
+    'agente vial uses vialidades home without location tracking or Waze',
     () async {
       SharedPreferences.setMockInitialValues(<String, Object>{
         'auth_role': 'Agente Vial',
@@ -343,11 +343,59 @@ void main() {
       expect(await AuthService.isVialidadesUrbanasNoWazeRole(), isTrue);
       expect(await HomeResolverService.isAgenteVialHomeAvailable(), isTrue);
       expect(await AuthService.canCreateHechos(), isFalse);
-      expect(await AuthService.canShareLocationTracking(), isTrue);
+      expect(await AuthService.canShareLocationTracking(), isFalse);
+      expect(await AuthService.shouldAskLocation(), isFalse);
       expect(
         await AuthService.getLocationTrackingIntervalProfile(),
-        AuthService.locationTrackingIntervalHourly,
+        AuthService.locationTrackingIntervalDefault,
       );
+    },
+  );
+
+  test(
+    'all exclusive Vialidades roles keep location tracking disabled',
+    () async {
+      for (final role in <(String, int)>[
+        ('Agente Vial', 12),
+        ('Agente Vial Pie Tierra', 12),
+        ('Motociclista', 0),
+        ('Fenix', 0),
+        ('Responsable de Turno', 13),
+        ('Administrativo', 5),
+        ('Administrador', 3),
+        ('Subdirector', 2),
+      ]) {
+        SharedPreferences.setMockInitialValues(<String, Object>{
+          'auth_role': role.$1,
+          if (role.$2 > 0) 'auth_role_id': role.$2,
+          'auth_unidad_id': AuthService.unidadVialidadesUrbanasId,
+          'auth_user_payload': jsonEncode(<String, Object>{
+            'id': 500 + role.$2,
+            'role': <String, Object>{
+              if (role.$2 > 0) 'id': role.$2,
+              'name': role.$1,
+            },
+            'unidad_id': AuthService.unidadVialidadesUrbanasId,
+            'unidad': <String, Object>{
+              'id': AuthService.unidadVialidadesUrbanasId,
+              'nombre': 'PROTECCIÓN EN VIALIDADES URBANAS',
+              'slug': 'vialidades-urbanas',
+            },
+          }),
+        });
+
+        expect(
+          await AuthService.canShareLocationTracking(),
+          isFalse,
+          reason: role.$1,
+        );
+        expect(await AuthService.shouldAskLocation(), isFalse, reason: role.$1);
+        expect(
+          await AuthService.getLocationTrackingIntervalProfile(),
+          AuthService.locationTrackingIntervalDefault,
+          reason: role.$1,
+        );
+      }
     },
   );
 
@@ -807,7 +855,7 @@ void main() {
   );
 
   test(
-    'siniestros evaluador teorico is limited to constancias without push or location',
+    'siniestros evaluador teorico can capture activities without push or location',
     () async {
       SharedPreferences.setMockInitialValues(<String, Object>{
         'auth_role': 'Evaluador Teórico',
@@ -842,6 +890,8 @@ void main() {
       final permissions = await AuthService.getPermissions();
       expect(permissions, contains('ver modulo examenes'));
       expect(permissions, contains('editar modulo examenes'));
+      expect(permissions, contains('ver actividades'));
+      expect(permissions, contains('crear actividades'));
       expect(permissions, contains('ver sustento legal'));
       expect(permissions, isNot(contains('ver hechos')));
       expect(permissions, isNot(contains('crear hechos')));
@@ -873,9 +923,19 @@ void main() {
       final fridayAfternoon = await AuthService.constanciasManejoHorarioAccess(
         now: DateTime(2026, 7, 3, 15),
       );
-      expect(fridayAfternoon.allowed, isFalse);
-      expect(fridayAfternoon.nextAvailableAt, DateTime.utc(2026, 7, 6, 8));
-      expect(fridayAfternoon.message, contains('lunes 06/07/2026 a las 08:00'));
+      expect(fridayAfternoon.allowed, isTrue);
+
+      final fridayClosingTime =
+          await AuthService.constanciasManejoHorarioAccess(
+            now: DateTime(2026, 7, 3, 16),
+          );
+      expect(fridayClosingTime.allowed, isFalse);
+      expect(fridayClosingTime.nextAvailableAt, DateTime.utc(2026, 7, 6, 8));
+      expect(
+        fridayClosingTime.message,
+        contains('lunes 06/07/2026 a las 08:00'),
+      );
+      expect(fridayClosingTime.message, contains('08:00 a 16:00'));
 
       final saturday = await AuthService.constanciasManejoHorarioAccess(
         now: DateTime(2026, 7, 4, 10),
@@ -891,6 +951,28 @@ void main() {
       expect(mondayMorning.message, contains('lunes 06/07/2026 a las 08:00'));
     },
   );
+
+  test('perito test account bypasses constancias schedule', () async {
+    SharedPreferences.setMockInitialValues(<String, Object>{
+      'auth_user_email': 'Perito@Perito.com',
+      'auth_role': 'Evaluador Teórico',
+      'auth_unidad_id': 1,
+      'auth_user_payload': jsonEncode(<String, Object>{
+        'id': 66,
+        'email': 'Perito@Perito.com',
+        'role': <String, Object>{'name': 'Evaluador Teórico'},
+        'unidad_id': 1,
+      }),
+    });
+
+    final access = await AuthService.constanciasManejoHorarioAccess(
+      now: DateTime(2026, 7, 4, 23, 30),
+    );
+
+    expect(access.applies, isFalse);
+    expect(access.allowed, isTrue);
+    expect(access.nextAvailableAt, isNull);
+  });
 
   test(
     'superadmin administrador and subdirector bypass evaluador constancias schedule',

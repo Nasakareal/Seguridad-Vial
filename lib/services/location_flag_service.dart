@@ -8,26 +8,46 @@ class LocationFlagService {
   static int? _routeOwner;
   static bool _routeAllowed = false;
   static DateTime? _routeCheckedAt;
+  static Future<bool>? _activeCheck;
 
   static Future<bool> isEnabledForRoute() async {
+    return isEnabledForMe();
+  }
+
+  static Future<bool> isEnabledForMe({bool forceRefresh = false}) async {
     final owner = await AuthService.getUserId();
     if (owner != _routeOwner) {
       _routeOwner = owner;
       _routeAllowed = false;
       _routeCheckedAt = null;
+      _activeCheck = null;
     }
-    if (_routeCheckedAt != null &&
+
+    if (!forceRefresh &&
+        _routeCheckedAt != null &&
         DateTime.now().difference(_routeCheckedAt!) <
             const Duration(seconds: 45)) {
       return _routeAllowed;
     }
+
+    final active = _activeCheck;
+    if (active != null) return active;
+
     _routeCheckedAt = DateTime.now();
+    final check = _fetchEnabledForMe();
+    _activeCheck = check;
+
     try {
-      _routeAllowed = await isEnabledForMe();
+      _routeAllowed = await check;
     } catch (_) {
       // Keep the last explicit authorization while offline; the server also
       // verifies the shift at each sample's capture time before accepting it.
+    } finally {
+      if (identical(_activeCheck, check)) {
+        _activeCheck = null;
+      }
     }
+
     return _routeAllowed;
   }
 
@@ -80,7 +100,7 @@ class LocationFlagService {
     return null;
   }
 
-  static Future<bool> isEnabledForMe() async {
+  static Future<bool> _fetchEnabledForMe() async {
     final token = await AuthService.getToken();
     if (token == null || token.isEmpty) return false;
 
