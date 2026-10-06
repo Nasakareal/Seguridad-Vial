@@ -68,6 +68,68 @@ class ModuloExamenDiario {
       return fecha.isEmpty ? 'Sin fecha' : fecha;
     }
   }
+
+  String get fechaReporte {
+    const meses = <int, String>{
+      1: 'Enero',
+      2: 'Febrero',
+      3: 'Marzo',
+      4: 'Abril',
+      5: 'Mayo',
+      6: 'Junio',
+      7: 'Julio',
+      8: 'Agosto',
+      9: 'Septiembre',
+      10: 'Octubre',
+      11: 'Noviembre',
+      12: 'Diciembre',
+    };
+
+    try {
+      final parsed = DateTime.parse(fecha);
+      final day = parsed.day.toString().padLeft(2, '0');
+      return '$day/${meses[parsed.month]}/${parsed.year}';
+    } catch (_) {
+      return fechaCorta;
+    }
+  }
+
+  String textoParaCompartir({String? nombreUsuario}) {
+    String count(int value) => value.toString().padLeft(2, '0');
+    final foliosTexto = (folios ?? '').trim();
+    final informa = (nombreUsuario ?? informadoPor ?? '').trim();
+
+    return [
+      'GUARDIA CIVIL SEGURIDAD VIAL ESTATAL',
+      '',
+      'MÓDULO DE LICENCIA',
+      moduloNombre.trim().isEmpty ? 'Sin módulo' : moduloNombre.trim(),
+      '',
+      'RESULTADOS DE EXÁMENES REALIZADOS',
+      '',
+      fechaReporte,
+      '',
+      'Servicio Público: ${count(servicioPublico)}',
+      'Automovilista: ${count(automovilista)}',
+      'Chófer: ${count(chofer)}',
+      'Motociclista: ${count(motociclista)}',
+      'Permiso: ${count(permiso)}',
+      '',
+      'Hombre: ${count(hombres)}',
+      'Mujeres: ${count(mujeres)}',
+      '',
+      'Aprobado: ${count(aprobados)}',
+      'Reprobados: ${count(reprobados)}',
+      '',
+      'Total: ${count(total)}',
+      '',
+      'Folios',
+      '',
+      foliosTexto.isEmpty ? 'Sin folios' : foliosTexto,
+      '',
+      'INFORMA: Respetuosamente ${informa.isEmpty ? 'Sin nombre' : informa}',
+    ].join('\n');
+  }
 }
 
 class ModuloExamenDiarioPage {

@@ -34,6 +34,9 @@ class AppDrawer extends StatelessWidget {
         route == AppRoutes.constanciasManejo ||
         route == AppRoutes.constanciasManejoScanner ||
         route == AppRoutes.constanciasManejoDetalle ||
+        route == AppRoutes.actividades ||
+        route == AppRoutes.actividadesCreate ||
+        route == AppRoutes.actividadesShow ||
         route == AppRoutes.herramientasVelocidadFrenado ||
         route == AppRoutes.herramientasVelocidadDeformacion ||
         route == AppRoutes.herramientasRndFaltas ||
@@ -62,7 +65,7 @@ class AppDrawer extends StatelessWidget {
       messenger.showSnackBar(
         const SnackBar(
           content: Text(
-            'Este rol solo tiene acceso a Constancias, Herramientas y Sustento Legal.',
+            'Este rol solo tiene acceso a Constancias, Actividades, Herramientas y Sustento Legal.',
           ),
         ),
       );

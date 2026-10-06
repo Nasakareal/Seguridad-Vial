@@ -1,8 +1,10 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../../models/modulo_examen_diario.dart';
+import '../../services/auth_service.dart';
 import '../../services/modulo_examenes_diarios_service.dart';
 
 class ModuloExamenesDiariosScreen extends StatefulWidget {
@@ -142,6 +144,14 @@ class _ModuloExamenesDiariosScreenState
     }
   }
 
+  Future<void> _share(ModuloExamenDiario registro) async {
+    final nombre = await AuthService.getUserName();
+    await Share.share(
+      registro.textoParaCompartir(nombreUsuario: nombre),
+      subject: 'Resultados de examenes - ${registro.moduloNombre}',
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -243,6 +253,7 @@ class _ModuloExamenesDiariosScreenState
                                   registro: item,
                                   onEdit: () => _openForm(item),
                                   onDelete: () => _delete(item),
+                                  onShare: () => _share(item),
                                 );
                               },
                               separatorBuilder: (_, __) =>
@@ -262,11 +273,13 @@ class _RegistroCard extends StatelessWidget {
   final ModuloExamenDiario registro;
   final VoidCallback onEdit;
   final VoidCallback onDelete;
+  final VoidCallback onShare;
 
   const _RegistroCard({
     required this.registro,
     required this.onEdit,
     required this.onDelete,
+    required this.onShare,
   });
 
   @override
@@ -330,6 +343,12 @@ class _RegistroCard extends StatelessWidget {
                       icon: const Icon(Icons.edit),
                       label: const Text('Editar'),
                     ),
+                  ),
+                  const SizedBox(width: 8),
+                  IconButton.outlined(
+                    tooltip: 'Compartir por WhatsApp',
+                    onPressed: onShare,
+                    icon: const Icon(Icons.share_outlined),
                   ),
                   const SizedBox(width: 8),
                   IconButton.outlined(
@@ -433,10 +452,17 @@ class _ModuloExamenDiarioDialogState extends State<_ModuloExamenDiarioDialog> {
       _foliosCtrl.text = registro.folios ?? '';
       _informadoPorCtrl.text = registro.informadoPor ?? '';
     }
+    unawaited(_loadCurrentUserName());
 
     for (final ctrl in _tipoCtrls) {
       ctrl.addListener(_refreshTotal);
     }
+  }
+
+  Future<void> _loadCurrentUserName() async {
+    final nombre = await AuthService.getUserName();
+    if (!mounted || (nombre ?? '').trim().isEmpty) return;
+    setState(() => _informadoPorCtrl.text = nombre!.trim());
   }
 
   @override
@@ -506,7 +532,6 @@ class _ModuloExamenDiarioDialogState extends State<_ModuloExamenDiarioDialog> {
           'aprobados': _intValue(_aprobadosCtrl),
           'reprobados': _intValue(_reprobadosCtrl),
           'folios': _foliosCtrl.text.trim(),
-          'informado_por': _informadoPorCtrl.text.trim(),
         },
       );
       if (!mounted) return;
@@ -601,10 +626,9 @@ class _ModuloExamenDiarioDialogState extends State<_ModuloExamenDiarioDialog> {
               const SizedBox(height: 12),
               TextField(
                 controller: _informadoPorCtrl,
-                enabled: !_saving,
-                textCapitalization: TextCapitalization.words,
+                readOnly: true,
                 decoration: const InputDecoration(
-                  labelText: 'Informado por',
+                  labelText: 'Informa (usuario actual)',
                   prefixIcon: Icon(Icons.person),
                   border: OutlineInputBorder(),
                 ),

@@ -653,7 +653,7 @@ class AuthService {
 
     final current = trustedNow;
     final start = DateTime.utc(current.year, current.month, current.day, 8);
-    final end = DateTime.utc(current.year, current.month, current.day, 15);
+    final end = DateTime.utc(current.year, current.month, current.day, 16);
     final isWorkday =
         current.weekday >= DateTime.monday &&
         current.weekday <= DateTime.friday;
@@ -669,7 +669,7 @@ class AuthService {
       allowed: false,
       nextAvailableAt: next,
       message:
-          'Modulo bloqueado por horario. El turno LICENCIAS L-V solo permite activar constancias de lunes a viernes de 08:00 a 15:00. Podras activar constancias el $nextLabel.',
+          'Modulo bloqueado por horario. El turno LICENCIAS L-V solo permite activar constancias de lunes a viernes de 08:00 a 16:00. Podras activar constancias el $nextLabel.',
     );
   }
 
@@ -2902,8 +2902,11 @@ class AuthService {
       const allowed = <String>{
         'ver modulo examenes',
         'editar modulo examenes',
+        'ver actividades',
+        'crear actividades',
         'ver sustento legal',
       };
+      normalized.addAll(const <String>{'ver actividades', 'crear actividades'});
       return normalized.where(allowed.contains).toList();
     }
 
