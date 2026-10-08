@@ -6,6 +6,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import '../core/globals.dart';
 import '../core/safe_payload.dart';
 import '../services/comunicacion_notification_service.dart';
+import '../services/waze_notification_service.dart';
 import 'push_handlers.dart';
 
 const AndroidNotificationChannel svAlertasChannel = AndroidNotificationChannel(
@@ -82,6 +83,9 @@ Future<void> initLocalNotifications() async {
   if (androidPlugin != null) {
     await androidPlugin.createNotificationChannel(svAlertasChannel);
     await androidPlugin.createNotificationChannel(svGuardiaChannel);
+    await androidPlugin.createNotificationChannel(
+      WazeNotificationService.channel,
+    );
   }
 }
 

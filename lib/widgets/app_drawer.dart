@@ -106,7 +106,9 @@ class AppDrawer extends StatelessWidget {
       }
     }
 
-    if (current == route) return;
+    // La misma pantalla puede abrirse con el filtro de otra unidad desde los
+    // submenús de Coordinación/Superadmin.
+    if (current == route && arguments == null) return;
 
     if (route == AppRoutes.home) {
       if (constanciasOnly) {
@@ -143,7 +145,11 @@ class AppDrawer extends StatelessWidget {
       return;
     }
 
-    navigator.pushNamed(route, arguments: arguments);
+    if (current == route) {
+      navigator.pushReplacementNamed(route, arguments: arguments);
+    } else {
+      navigator.pushNamed(route, arguments: arguments);
+    }
   }
 
   Future<bool> _hasRequiredUnitAccess(int requiredUnitId) async {
@@ -246,6 +252,193 @@ class AppDrawer extends StatelessWidget {
     );
   }
 
+  _DrawerSubItem _statisticsLink(
+    BuildContext context, {
+    required IconData icon,
+    required String label,
+    required String route,
+    required int unidadId,
+    required String unidadNombre,
+    String? requiredPerm,
+  }) {
+    return _DrawerSubItem(
+      icon: icon,
+      label: label,
+      subtitle: 'Datos filtrados de $unidadNombre',
+      onTap: () => _nav(
+        context,
+        route,
+        requiredPerm: requiredPerm,
+        arguments: <String, dynamic>{
+          'unidad_id': unidadId,
+          'unidad_nombre': unidadNombre,
+        },
+      ),
+    );
+  }
+
+  _DrawerSubItem _statisticsReportLink(
+    BuildContext context, {
+    required IconData icon,
+    required String label,
+    required String report,
+  }) {
+    return _DrawerSubItem(
+      icon: icon,
+      label: label,
+      subtitle: 'Reporte e indicadores',
+      onTap: () => _nav(
+        context,
+        AppRoutes.estadisticasReporte,
+        arguments: <String, dynamic>{'reporte': report, 'titulo': label},
+      ),
+    );
+  }
+
+  List<Widget> _statisticsForUnit(
+    BuildContext context, {
+    required int unidadId,
+    required String unidadNombre,
+    required bool showHechos,
+    required bool showActividades,
+    required bool showAseguramientos,
+    required bool showCarreteras,
+    required bool bypassHechosPermission,
+    required bool bypassActividadesPermission,
+  }) {
+    final hechos = _statisticsLink(
+      context,
+      icon: Icons.car_crash,
+      label: 'Panel de Siniestros',
+      route: AppRoutes.estadisticasGlobales,
+      unidadId: unidadId,
+      unidadNombre: unidadNombre,
+      requiredPerm: bypassHechosPermission ? null : permEstadisticasGlobales,
+    );
+    final actividades = _statisticsLink(
+      context,
+      icon: Icons.photo_library,
+      label: 'Panel de Actividades',
+      route: AppRoutes.estadisticasActividades,
+      unidadId: unidadId,
+      unidadNombre: unidadNombre,
+      requiredPerm: bypassActividadesPermission
+          ? null
+          : permEstadisticasActividades,
+    );
+    final aseguramientos = _statisticsLink(
+      context,
+      icon: Icons.inventory_2,
+      label: unidadId == AuthService.unidadProteccionCarreterasId
+          ? 'Aseguramientos'
+          : 'Panel de Aseguramientos',
+      route: AppRoutes.estadisticasAseguramientos,
+      unidadId: unidadId,
+      unidadNombre: unidadNombre,
+    );
+
+    if (unidadId == AuthService.unidadProteccionCarreterasId) {
+      return <Widget>[
+        if (showCarreteras)
+          _statisticsReportLink(
+            context,
+            icon: Icons.table_chart,
+            label: 'Concentrado',
+            report: 'carreteras-concentrado',
+          ),
+        if (showCarreteras)
+          _statisticsReportLink(
+            context,
+            icon: Icons.show_chart,
+            label: 'Panel Carreteras',
+            report: 'carreteras-panel',
+          ),
+        if (showCarreteras)
+          _statisticsReportLink(
+            context,
+            icon: Icons.leaderboard,
+            label: 'Puestas por elemento',
+            report: 'carreteras-elementos',
+          ),
+        if (showCarreteras)
+          _statisticsReportLink(
+            context,
+            icon: Icons.military_tech,
+            label: 'Rendimiento operativo',
+            report: 'carreteras-rendimiento',
+          ),
+        if (showCarreteras)
+          _statisticsReportLink(
+            context,
+            icon: Icons.medical_information,
+            label: 'Incapacidades del personal',
+            report: 'carreteras-incapacidades',
+          ),
+        if (showAseguramientos) aseguramientos,
+      ];
+    }
+
+    if (unidadId == AuthService.unidadCulturaVialId) {
+      return <Widget>[
+        _statisticsReportLink(
+          context,
+          icon: Icons.dashboard,
+          label: 'Panel General de Estadísticas',
+          report: 'fomento-panel',
+        ),
+        if (showActividades) actividades,
+        if (showAseguramientos) aseguramientos,
+        _statisticsReportLink(
+          context,
+          icon: Icons.leaderboard,
+          label: 'Servicios por personal',
+          report: 'fomento-servicios-personal',
+        ),
+      ];
+    }
+
+    return <Widget>[
+      if (showHechos) hechos,
+      if (unidadId == AuthService.unidadSiniestrosId && showHechos)
+        _statisticsReportLink(
+          context,
+          icon: Icons.leaderboard,
+          label: 'Rendimiento de Peritos',
+          report: 'siniestros-rendimiento-peritos',
+        ),
+      if (showActividades) actividades,
+      if (showAseguramientos) aseguramientos,
+      if (unidadId == AuthService.unidadSiniestrosId && showHechos)
+        _statisticsReportLink(
+          context,
+          icon: Icons.analytics,
+          label: 'Resumen Ejecutivo',
+          report: 'siniestros-resumen-ejecutivo',
+        ),
+      if (unidadId == AuthService.unidadSiniestrosId && showHechos)
+        _DrawerSubItem(
+          icon: Icons.polyline,
+          label: 'Mapa de Choques por Zona',
+          subtitle: 'Mapa y distribución de incidencias',
+          onTap: () => _nav(context, AppRoutes.mapaIncidencias),
+        ),
+      if (unidadId == AuthService.unidadDelegacionesId) ...[
+        _statisticsReportLink(
+          context,
+          icon: Icons.directions_run,
+          label: 'Panel de Actividades Físicas',
+          report: 'delegaciones-actividades-fisicas',
+        ),
+        _statisticsReportLink(
+          context,
+          icon: Icons.fact_check,
+          label: 'Control envío INEGI',
+          report: 'delegaciones-control-inegi',
+        ),
+      ],
+    ];
+  }
+
   @override
   Widget build(BuildContext context) {
     return Drawer(
@@ -338,6 +531,16 @@ class AppDrawer extends StatelessWidget {
                     permEstadisticasActividades,
                     all: canBypassEstadisticasPerm,
                   );
+                  final canSeeEstadisticasCarreteras =
+                      canBypassEstadisticasPerm ||
+                      perms.contains('ver estadisticas carreteras');
+                  final canSeeAseguramientos =
+                      canSeeEstadisticasGlobales ||
+                      canSeeEstadisticasActividades ||
+                      canSeeEstadisticasCarreteras;
+                  final canSeeAllUnitStatistics =
+                      isSuperadmin ||
+                      unidadId == AuthService.unidadSeguridadVialId;
                   final canSeeMapaPatrullas =
                       snap.data?.canViewMapaPatrullas ?? false;
                   final canSeeMapaIncidencias = _allowed(
@@ -468,41 +671,150 @@ class AppDrawer extends StatelessWidget {
                         ),
 
                       if (canSeeEstadisticasGlobales ||
-                          canSeeEstadisticasActividades)
+                          canSeeEstadisticasActividades ||
+                          canSeeAseguramientos)
                         _DrawerGroup(
                           icon: Icons.insights,
                           label: 'Estadísticas',
                           subtitle: 'Siniestros, actividades e indicadores',
-                          children: [
-                            if (canSeeEstadisticasGlobales)
-                              _DrawerSubItem(
-                                icon: Icons.car_crash,
-                                label: 'Siniestros',
-                                subtitle: 'Indicadores y hechos filtrados',
-                                onTap: () => _nav(
+                          children: canSeeAllUnitStatistics
+                              ? <Widget>[
+                                  _DrawerGroup(
+                                    icon: Icons.car_crash,
+                                    label: 'Unidad Siniestros',
+                                    children: _statisticsForUnit(
+                                      context,
+                                      unidadId: AuthService.unidadSiniestrosId,
+                                      unidadNombre: 'Siniestros',
+                                      showHechos: canSeeEstadisticasGlobales,
+                                      showActividades:
+                                          canSeeEstadisticasActividades,
+                                      showAseguramientos: canSeeAseguramientos,
+                                      showCarreteras:
+                                          canSeeEstadisticasCarreteras,
+                                      bypassHechosPermission:
+                                          canBypassEstadisticasPerm ||
+                                          _allowed(perms, permEstadisticas),
+                                      bypassActividadesPermission:
+                                          canBypassEstadisticasPerm,
+                                    ),
+                                  ),
+                                  _DrawerGroup(
+                                    icon: Icons.apartment,
+                                    label: 'Unidad Delegaciones',
+                                    children: _statisticsForUnit(
+                                      context,
+                                      unidadId:
+                                          AuthService.unidadDelegacionesId,
+                                      unidadNombre: 'Delegaciones',
+                                      showHechos: canSeeEstadisticasGlobales,
+                                      showActividades:
+                                          canSeeEstadisticasActividades,
+                                      showAseguramientos: canSeeAseguramientos,
+                                      showCarreteras:
+                                          canSeeEstadisticasCarreteras,
+                                      bypassHechosPermission:
+                                          canBypassEstadisticasPerm ||
+                                          _allowed(perms, permEstadisticas),
+                                      bypassActividadesPermission:
+                                          canBypassEstadisticasPerm,
+                                    ),
+                                  ),
+                                  _DrawerGroup(
+                                    icon: Icons.route,
+                                    label: 'Unidad Carreteras',
+                                    children: _statisticsForUnit(
+                                      context,
+                                      unidadId: AuthService
+                                          .unidadProteccionCarreterasId,
+                                      unidadNombre: 'Carreteras',
+                                      showHechos: false,
+                                      showActividades:
+                                          canSeeEstadisticasActividades,
+                                      showAseguramientos: canSeeAseguramientos,
+                                      showCarreteras:
+                                          canSeeEstadisticasCarreteras,
+                                      bypassHechosPermission:
+                                          canBypassEstadisticasPerm ||
+                                          _allowed(perms, permEstadisticas),
+                                      bypassActividadesPermission:
+                                          canBypassEstadisticasPerm,
+                                    ),
+                                  ),
+                                  _DrawerGroup(
+                                    icon: Icons.traffic,
+                                    label: 'Unidad Vialidades Urbanas',
+                                    children: _statisticsForUnit(
+                                      context,
+                                      unidadId:
+                                          AuthService.unidadVialidadesUrbanasId,
+                                      unidadNombre: 'Vialidades Urbanas',
+                                      showHechos: false,
+                                      showActividades:
+                                          canSeeEstadisticasActividades,
+                                      showAseguramientos: canSeeAseguramientos,
+                                      showCarreteras:
+                                          canSeeEstadisticasCarreteras,
+                                      bypassHechosPermission:
+                                          canBypassEstadisticasPerm ||
+                                          _allowed(perms, permEstadisticas),
+                                      bypassActividadesPermission:
+                                          canBypassEstadisticasPerm,
+                                    ),
+                                  ),
+                                  _DrawerGroup(
+                                    icon: Icons.school,
+                                    label: 'Unidad Cultura Vial',
+                                    children: _statisticsForUnit(
+                                      context,
+                                      unidadId: AuthService.unidadCulturaVialId,
+                                      unidadNombre: 'Cultura Vial',
+                                      showHechos: false,
+                                      showActividades:
+                                          canSeeEstadisticasActividades,
+                                      showAseguramientos: canSeeAseguramientos,
+                                      showCarreteras:
+                                          canSeeEstadisticasCarreteras,
+                                      bypassHechosPermission:
+                                          canBypassEstadisticasPerm ||
+                                          _allowed(perms, permEstadisticas),
+                                      bypassActividadesPermission:
+                                          canBypassEstadisticasPerm,
+                                    ),
+                                  ),
+                                ]
+                              : _statisticsForUnit(
                                   context,
-                                  AppRoutes.estadisticasGlobales,
-                                  requiredPerm:
+                                  unidadId: unidadId ?? 0,
+                                  unidadNombre: switch (unidadId) {
+                                    AuthService.unidadSiniestrosId =>
+                                      'Siniestros',
+                                    AuthService.unidadDelegacionesId =>
+                                      'Delegaciones',
+                                    AuthService.unidadProteccionCarreterasId =>
+                                      'Carreteras',
+                                    AuthService.unidadVialidadesUrbanasId =>
+                                      'Vialidades Urbanas',
+                                    AuthService.unidadCulturaVialId =>
+                                      'Cultura Vial',
+                                    _ => 'tu unidad',
+                                  },
+                                  showHechos:
+                                      canSeeEstadisticasGlobales &&
+                                      (unidadId ==
+                                              AuthService.unidadSiniestrosId ||
+                                          unidadId ==
+                                              AuthService.unidadDelegacionesId),
+                                  showActividades:
+                                      canSeeEstadisticasActividades,
+                                  showAseguramientos: canSeeAseguramientos,
+                                  showCarreteras: canSeeEstadisticasCarreteras,
+                                  bypassHechosPermission:
                                       canBypassEstadisticasPerm ||
-                                          _allowed(perms, permEstadisticas)
-                                      ? null
-                                      : permEstadisticasGlobales,
+                                      _allowed(perms, permEstadisticas),
+                                  bypassActividadesPermission:
+                                      canBypassEstadisticasPerm,
                                 ),
-                              ),
-                            if (canSeeEstadisticasActividades)
-                              _DrawerSubItem(
-                                icon: Icons.photo_library,
-                                label: 'Actividades',
-                                subtitle: 'Indicadores y capturas filtradas',
-                                onTap: () => _nav(
-                                  context,
-                                  AppRoutes.estadisticasActividades,
-                                  requiredPerm: canBypassEstadisticasPerm
-                                      ? null
-                                      : permEstadisticasActividades,
-                                ),
-                              ),
-                          ],
                         ),
 
                       const SizedBox(height: 12),

@@ -86,6 +86,8 @@ import '../screens/busqueda/hechos_busqueda_screen.dart';
 import '../screens/estadisticas/estadisticas_globales_home_screen.dart';
 import '../screens/estadisticas/estadisticas_globales_hechos_screen.dart';
 import '../screens/estadisticas/estadisticas_actividades_home_screen.dart';
+import '../screens/estadisticas/estadisticas_aseguramientos_screen.dart';
+import '../screens/estadisticas/estadisticas_reporte_screen.dart';
 
 import '../screens/dictamenes/dictamenes_screen.dart';
 import '../screens/dictamenes/dictamen_create_screen.dart';
@@ -238,12 +240,40 @@ final Map<String, WidgetBuilder> appRoutesMap = {
 
   AppRoutes.hechosBuscar: (context) => const HechosBusquedaScreen(),
 
-  AppRoutes.estadisticasGlobales: (context) =>
-      const EstadisticasGlobalesHomeScreen(),
+  AppRoutes.estadisticasGlobales: (context) {
+    final args = ModalRoute.of(context)?.settings.arguments;
+    final values = args is Map ? args : const <String, dynamic>{};
+    return EstadisticasGlobalesHomeScreen(
+      unidadId: int.tryParse('${values['unidad_id'] ?? ''}'),
+      unidadNombre: values['unidad_nombre']?.toString(),
+    );
+  },
   AppRoutes.estadisticasGlobalesHechos: (context) =>
       const EstadisticasGlobalesHechosScreen(),
-  AppRoutes.estadisticasActividades: (context) =>
-      const EstadisticasActividadesHomeScreen(),
+  AppRoutes.estadisticasActividades: (context) {
+    final args = ModalRoute.of(context)?.settings.arguments;
+    final values = args is Map ? args : const <String, dynamic>{};
+    return EstadisticasActividadesHomeScreen(
+      unidadId: int.tryParse('${values['unidad_id'] ?? ''}'),
+      unidadNombre: values['unidad_nombre']?.toString(),
+    );
+  },
+  AppRoutes.estadisticasAseguramientos: (context) {
+    final args = ModalRoute.of(context)?.settings.arguments;
+    final values = args is Map ? args : const <String, dynamic>{};
+    return EstadisticasAseguramientosScreen(
+      unidadId: int.tryParse('${values['unidad_id'] ?? ''}'),
+      unidadNombre: values['unidad_nombre']?.toString(),
+    );
+  },
+  AppRoutes.estadisticasReporte: (context) {
+    final args = ModalRoute.of(context)?.settings.arguments;
+    final values = args is Map ? args : const <String, dynamic>{};
+    return EstadisticasReporteScreen(
+      reporte: values['reporte']?.toString() ?? '',
+      titulo: values['titulo']?.toString() ?? 'Reporte estadístico',
+    );
+  },
 
   AppRoutes.dictamenes: (context) => const DictamenesScreen(),
   AppRoutes.dictamenesCreate: (context) => const DictamenCreateScreen(),

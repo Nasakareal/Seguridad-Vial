@@ -16,7 +16,14 @@ import '../../widgets/account_drawer.dart';
 import '../../widgets/app_drawer.dart';
 
 class EstadisticasActividadesHomeScreen extends StatefulWidget {
-  const EstadisticasActividadesHomeScreen({super.key});
+  final int? unidadId;
+  final String? unidadNombre;
+
+  const EstadisticasActividadesHomeScreen({
+    super.key,
+    this.unidadId,
+    this.unidadNombre,
+  });
 
   @override
   State<EstadisticasActividadesHomeScreen> createState() =>
@@ -79,6 +86,7 @@ class _EstadisticasActividadesHomeScreenState
   @override
   void initState() {
     super.initState();
+    _unidadId = widget.unidadId;
     _setDefaultDates();
     _bootstrapAccessAndLoad();
   }
@@ -139,7 +147,9 @@ class _EstadisticasActividadesHomeScreenState
 
   Future<void> _bootstrapAccessAndLoad() async {
     try {
-      final canFilterUnidad = await AuthService.hasFullOperationalAccess();
+      final canFilterUnidad =
+          widget.unidadId == null &&
+          await AuthService.hasFullOperationalAccess();
       final canFilterDelegacion =
           canFilterUnidad || await AuthService.isDelegacionesUser();
       if (!mounted) return;
@@ -234,7 +244,8 @@ class _EstadisticasActividadesHomeScreenState
         _lastPage = lp <= 0 ? 1 : lp;
         _loading = false;
 
-        if (_unidadId != null &&
+        if (_canFilterUnidad &&
+            _unidadId != null &&
             !_unidades.any((u) => _asInt(u['id']) == _unidadId)) {
           _unidadId = null;
           _delegacionId = null;
@@ -370,7 +381,11 @@ class _EstadisticasActividadesHomeScreenState
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Estadísticas de Actividades'),
+        title: Text(
+          (widget.unidadNombre ?? '').trim().isEmpty
+              ? 'Estadísticas de Actividades'
+              : 'Actividades · ${widget.unidadNombre}',
+        ),
         actions: [
           IconButton(
             onPressed: (_loading || _busy) ? null : _exportCsv,

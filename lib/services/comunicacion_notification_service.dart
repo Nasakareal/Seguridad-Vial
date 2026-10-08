@@ -138,6 +138,8 @@ class ComunicacionNotificationService {
 
   static const String appleThreadIdentifier = 'comunicaciones_prioritarias';
 
+  static const int groupSummaryId = 19001001;
+
   final FirebaseMessaging _messaging = FirebaseMessaging.instance;
 
   final StreamController<ComunicacionPushEvento> _eventosController =
@@ -398,6 +400,7 @@ class ComunicacionNotificationService {
       details,
       payload: evento.toPayload(),
     );
+    await _mostrarResumenGrupo();
   }
 
   /// Los pushes de comunicaciones son data-only en Android para que incluso
@@ -469,6 +472,34 @@ class ComunicacionNotificationService {
       cuerpo,
       NotificationDetails(android: details),
       payload: evento.toPayload(),
+    );
+    await _mostrarResumenGrupo();
+  }
+
+  static Future<void> _mostrarResumenGrupo() {
+    return localNotifications.show(
+      groupSummaryId,
+      'Mensajes, anuncios y órdenes',
+      'Comunicaciones prioritarias',
+      const NotificationDetails(
+        android: AndroidNotificationDetails(
+          channelId,
+          channelName,
+          channelDescription: channelDescription,
+          icon: 'ic_stat_comunicacion',
+          importance: Importance.max,
+          priority: Priority.high,
+          groupKey: androidGroupKey,
+          setAsGroupSummary: true,
+          groupAlertBehavior: GroupAlertBehavior.children,
+          playSound: false,
+          enableVibration: false,
+          onlyAlertOnce: true,
+          autoCancel: true,
+          category: AndroidNotificationCategory.message,
+          visibility: NotificationVisibility.private,
+        ),
+      ),
     );
   }
 

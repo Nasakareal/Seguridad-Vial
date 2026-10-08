@@ -1,6 +1,7 @@
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:seguridad_vial_app/services/comunicacion_notification_service.dart';
+import 'package:seguridad_vial_app/services/waze_notification_service.dart';
 
 void main() {
   group('ComunicacionNotificationService', () {
@@ -45,5 +46,41 @@ void main() {
         expect(restored.puedeAbrirConversacion, isTrue);
       },
     );
+
+    test('comunicaciones y Waze usan canales y grupos distintos', () {
+      expect(
+        ComunicacionNotificationService.channelId,
+        isNot(WazeNotificationService.channelId),
+      );
+      expect(
+        ComunicacionNotificationService.androidGroupKey,
+        isNot(WazeNotificationService.androidGroupKey),
+      );
+      expect(
+        ComunicacionNotificationService.groupSummaryId,
+        isNot(WazeNotificationService.groupSummaryId),
+      );
+    });
+
+    test('reconoce únicamente los tipos push de Waze', () {
+      expect(
+        WazeNotificationService.esWaze(
+          const RemoteMessage(data: {'type': 'WAZE_ACCIDENT'}),
+        ),
+        isTrue,
+      );
+      expect(
+        WazeNotificationService.esWaze(
+          const RemoteMessage(data: {'type': 'WAZE_ROAD_CLOSED'}),
+        ),
+        isTrue,
+      );
+      expect(
+        WazeNotificationService.esWaze(
+          const RemoteMessage(data: {'type': 'HECHO_48H'}),
+        ),
+        isFalse,
+      );
+    });
   });
 }

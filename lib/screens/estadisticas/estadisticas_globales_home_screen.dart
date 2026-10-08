@@ -15,7 +15,14 @@ import '../../widgets/app_drawer.dart';
 import '../../app/routes.dart';
 
 class EstadisticasGlobalesHomeScreen extends StatefulWidget {
-  const EstadisticasGlobalesHomeScreen({super.key});
+  final int? unidadId;
+  final String? unidadNombre;
+
+  const EstadisticasGlobalesHomeScreen({
+    super.key,
+    this.unidadId,
+    this.unidadNombre,
+  });
 
   @override
   State<EstadisticasGlobalesHomeScreen> createState() =>
@@ -84,6 +91,7 @@ class _EstadisticasGlobalesHomeScreenState
   @override
   void initState() {
     super.initState();
+    _unidadOrgId = widget.unidadId ?? 0;
     _setDefaultDates();
     _loadDelegaciones();
     _loadAll(resetPage: true);
@@ -557,7 +565,11 @@ class _EstadisticasGlobalesHomeScreenState
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Estadísticas Globales'),
+        title: Text(
+          (widget.unidadNombre ?? '').trim().isEmpty
+              ? 'Estadísticas Globales'
+              : 'Siniestros · ${widget.unidadNombre}',
+        ),
         actions: [
           IconButton(
             onPressed: (_loading || _busy) ? null : _exportCsv,
@@ -700,14 +712,21 @@ class _EstadisticasGlobalesHomeScreenState
                             ),
                           ],
                         ),
-                        const SizedBox(height: 12),
-                        Row(
-                          children: [
-                            Expanded(child: _unidadDropdown()),
-                            const SizedBox(width: 12),
-                            Expanded(child: _delegacionDropdown()),
-                          ],
-                        ),
+                        if (widget.unidadId == null ||
+                            widget.unidadId ==
+                                AuthService.unidadDelegacionesId) ...[
+                          const SizedBox(height: 12),
+                          if (widget.unidadId == null)
+                            Row(
+                              children: [
+                                Expanded(child: _unidadDropdown()),
+                                const SizedBox(width: 12),
+                                Expanded(child: _delegacionDropdown()),
+                              ],
+                            )
+                          else
+                            _delegacionDropdown(),
+                        ],
                         const SizedBox(height: 12),
                         TextField(
                           controller: _q,

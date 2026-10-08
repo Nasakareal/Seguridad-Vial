@@ -85,6 +85,9 @@ class AppRoutes {
   static const String estadisticasGlobalesHechos =
       '/estadisticas-globales/hechos';
   static const String estadisticasActividades = '/estadisticas-actividades';
+  static const String estadisticasAseguramientos =
+      '/estadisticas-aseguramientos';
+  static const String estadisticasReporte = '/estadisticas/reporte';
 
   static const String dictamenes = '/dictamenes';
   static const String dictamenesCreate = '/dictamenes/create';

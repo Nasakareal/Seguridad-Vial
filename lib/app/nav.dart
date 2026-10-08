@@ -8,6 +8,7 @@ import '../core/platform_support.dart';
 import '../bootstrap/push_handlers.dart';
 import '../services/comunicacion_notification_service.dart';
 import '../services/auth_service.dart';
+import '../services/waze_notification_service.dart';
 import 'routes.dart';
 
 class PushNavBinder extends StatefulWidget {
@@ -63,6 +64,10 @@ class _PushNavBinderState extends State<PushNavBinder> {
           return;
         }
         if (await _suppressWazeForVialidades(message)) return;
+        if (WazeNotificationService.esWaze(message)) {
+          await WazeNotificationService.mostrar(message);
+          return;
+        }
 
         final n = message.notification;
         final title = n?.title ?? 'Aviso';
