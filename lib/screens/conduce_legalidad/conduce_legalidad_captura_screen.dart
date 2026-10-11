@@ -709,6 +709,17 @@ class _ConduceLegalidadCapturaScreenState
     _draft.notifyChanged();
   }
 
+  Future<void> _editPersona(int index) async {
+    final persona = await showConduceLegalidadPersonaModal(
+      context,
+      isAlcoholimetria: widget.module.isAlcoholimetria,
+      initialPersona: _personas[index],
+    );
+    if (persona == null || !mounted) return;
+    setState(() => _personas[index] = persona);
+    _draft.notifyChanged();
+  }
+
   Future<void> _submit() async {
     if (_saving) return;
     if (!_canFeedNow) {
@@ -1266,6 +1277,7 @@ class _ConduceLegalidadCapturaScreenState
                     ..._personas.asMap().entries.map(
                       (entry) => _PersonTile(
                         persona: entry.value,
+                        onEdit: () => _editPersona(entry.key),
                         onRemove: () {
                           setState(() => _personas.removeAt(entry.key));
                           _draft.notifyChanged();
@@ -2446,19 +2458,24 @@ class _VehiculoModalState extends State<_VehiculoModal> {
 Future<ConduceLegalidadPersona?> showConduceLegalidadPersonaModal(
   BuildContext context, {
   required bool isAlcoholimetria,
+  ConduceLegalidadPersona? initialPersona,
 }) {
   return showModalBottomSheet<ConduceLegalidadPersona>(
     context: context,
     isScrollControlled: true,
     useSafeArea: true,
-    builder: (_) => _PersonaModal(isAlcoholimetria: isAlcoholimetria),
+    builder: (_) => _PersonaModal(
+      isAlcoholimetria: isAlcoholimetria,
+      initialPersona: initialPersona,
+    ),
   );
 }
 
 class _PersonaModal extends StatefulWidget {
   final bool isAlcoholimetria;
+  final ConduceLegalidadPersona? initialPersona;
 
-  const _PersonaModal({required this.isAlcoholimetria});
+  const _PersonaModal({required this.isAlcoholimetria, this.initialPersona});
 
   @override
   State<_PersonaModal> createState() => _PersonaModalState();
@@ -2479,7 +2496,6 @@ class _PersonaModalState extends State<_PersonaModal> {
   final _numeroLicenciaCtrl = TextEditingController();
 
   String? _sexo;
-  String? _edadAproximada;
   String? _complexion;
   String? _estatura;
   String? _tez;
@@ -2496,6 +2512,46 @@ class _PersonaModalState extends State<_PersonaModal> {
   String? _rawLicencia;
   String? _nacionalidad;
   String? _estadoCivil;
+
+  bool get _editing => widget.initialPersona != null;
+
+  @override
+  void initState() {
+    super.initState();
+    final persona = widget.initialPersona;
+    if (persona == null) return;
+
+    _nombreCtrl.text = persona.nombreCompleto ?? '';
+    _nombresCtrl.text = persona.nombres ?? persona.nombre ?? '';
+    _apellidoPaternoCtrl.text = persona.apellidoPaterno ?? '';
+    _apellidoMaternoCtrl.text = persona.apellidoMaterno ?? '';
+    _edadLibreCtrl.text = widget.isAlcoholimetria
+        ? persona.edadTexto ?? persona.edad?.toString() ?? ''
+        : persona.edad?.toString() ?? '';
+    _telefonoCtrl.text = persona.telefono ?? '';
+    _domicilioCtrl.text = persona.domicilio ?? '';
+    _ocupacionCtrl.text = persona.ocupacion ?? '';
+    _tipoLicenciaCtrl.text = persona.tipoLicencia ?? '';
+    _estadoLicenciaCtrl.text = persona.estadoLicencia ?? '';
+    _numeroLicenciaCtrl.text = persona.numeroLicencia ?? '';
+    _sexo = persona.sexo;
+    _complexion = persona.complexion;
+    _estatura = persona.estatura;
+    _tez = persona.tez;
+    _cabello = persona.cabello;
+    _prendaSuperior = persona.prendaSuperior;
+    _colorSuperior = persona.colorSuperior;
+    _prendaInferior = persona.prendaInferior;
+    _colorInferior = persona.colorInferior;
+    _calzado = persona.calzado;
+    _colorCalzado = persona.colorCalzado;
+    _rasgos.addAll(persona.rasgosVisibles);
+    _vigencia = DateTime.tryParse(persona.vigenciaLicencia ?? '');
+    _permanente = persona.permanente;
+    _rawLicencia = persona.rawLicenciaQr;
+    _nacionalidad = persona.nacionalidad;
+    _estadoCivil = persona.estadoCivil;
+  }
 
   @override
   void dispose() {
@@ -2534,13 +2590,13 @@ class _PersonaModalState extends State<_PersonaModal> {
     setState(() {
       _rawLicencia = parsed.rawText;
       if (setText(_numeroLicenciaCtrl, parsed.numeroLicencia)) applied += 1;
+      final edad = _edadDesdeFecha(parsed.fechaNacimiento);
       if (widget.isAlcoholimetria) {
         if (setText(_nombresCtrl, parsed.nombre)) applied += 1;
-        final edad = _edadDesdeFecha(parsed.fechaNacimiento);
-        if (edad != null && setText(_edadLibreCtrl, edad.toString())) {
-          applied += 1;
-        }
       } else if (setText(_nombreCtrl, parsed.nombre)) {
+        applied += 1;
+      }
+      if (edad != null && setText(_edadLibreCtrl, edad.toString())) {
         applied += 1;
       }
       if (setText(_tipoLicenciaCtrl, parsed.tipoLicencia)) applied += 1;
@@ -2596,6 +2652,7 @@ class _PersonaModalState extends State<_PersonaModal> {
     Navigator.pop(
       context,
       ConduceLegalidadPersona(
+        id: widget.initialPersona?.id,
         nombre: _empty(nombreCompleto),
         nombres: widget.isAlcoholimetria ? _empty(_nombresCtrl.text) : null,
         apellidoPaterno: widget.isAlcoholimetria
@@ -2609,11 +2666,7 @@ class _PersonaModalState extends State<_PersonaModal> {
         sexo: _sexo,
         nacionalidad: _nacionalidad,
         ocupacion: _empty(_ocupacionCtrl.text),
-        edad: widget.isAlcoholimetria
-            ? _edadNumerica(_edadLibreCtrl.text)
-            : ConduceLegalidadPersonaDescriptor.edadAproximadaToInt(
-                _edadAproximada,
-              ),
+        edad: _edadNumerica(_edadLibreCtrl.text),
         edadTexto: widget.isAlcoholimetria ? _empty(_edadLibreCtrl.text) : null,
         estadoCivil: widget.isAlcoholimetria ? _estadoCivil : null,
         tipoLicencia: _empty(_tipoLicenciaCtrl.text),
@@ -2624,7 +2677,12 @@ class _PersonaModalState extends State<_PersonaModal> {
             : _date(_vigencia!),
         permanente: _permanente,
         rawLicenciaQr: _rawLicencia,
-        edadAproximada: _edadAproximada,
+        licenciaPuntoInfraccionId:
+            widget.initialPersona?.licenciaPuntoInfraccionId,
+        infraccionCodigo: widget.initialPersona?.infraccionCodigo,
+        fundamentoLegal: widget.initialPersona?.fundamentoLegal,
+        infraccion: widget.initialPersona?.infraccion,
+        edadAproximada: widget.initialPersona?.edadAproximada,
         complexion: _complexion,
         estatura: _estatura,
         tez: _tez,
@@ -2636,13 +2694,15 @@ class _PersonaModalState extends State<_PersonaModal> {
         calzado: _calzado,
         colorCalzado: _colorCalzado,
         rasgosVisibles: _rasgos.toList(),
+        observaciones: widget.initialPersona?.observaciones,
       ),
     );
   }
 
   String? _descripcionPersona() {
+    if (!widget.isAlcoholimetria) return null;
     return ConduceLegalidadPersonaDescriptor.buildDescription(
-      edadAproximada: widget.isAlcoholimetria ? null : _edadAproximada,
+      edadAproximada: null,
       complexion: _complexion,
       estatura: _estatura,
       tez: _tez,
@@ -2688,6 +2748,13 @@ class _PersonaModalState extends State<_PersonaModal> {
     return (value ?? '').trim().isEmpty ? 'Captura este dato.' : null;
   }
 
+  String? _telefonoValidator(String? value) {
+    if (!widget.isAlcoholimetria && (value ?? '').trim().isEmpty) {
+      return 'Captura el telefono para enviar la boleta por WhatsApp.';
+    }
+    return VehiculoFormService.validateTelefono(value);
+  }
+
   @override
   Widget build(BuildContext context) {
     final licenciaWarning = _licenciaWarningText();
@@ -2706,7 +2773,7 @@ class _PersonaModalState extends State<_PersonaModal> {
           child: ListView(
             children: [
               _ModalHeader(
-                title: 'Agregar persona',
+                title: _editing ? 'Editar persona' : 'Agregar persona',
                 onClose: () => Navigator.pop(context),
               ),
               const SizedBox(height: 12),
@@ -2742,43 +2809,49 @@ class _PersonaModalState extends State<_PersonaModal> {
                 _text(_nombreCtrl, 'Nombre', Icons.person),
               _text(
                 _telefonoCtrl,
-                'Telefono',
+                widget.isAlcoholimetria
+                    ? 'Telefono'
+                    : 'Telefono para WhatsApp *',
                 Icons.phone,
                 keyboardType: TextInputType.phone,
                 formatters: [
                   FilteringTextInputFormatter.digitsOnly,
                   LengthLimitingTextInputFormatter(10),
                 ],
-                validator: VehiculoFormService.validateTelefono,
+                validator: _telefonoValidator,
               ),
               _text(_domicilioCtrl, 'Domicilio', Icons.home),
-              _select(
-                label: 'Nacionalidad',
-                icon: Icons.public_outlined,
-                value: _nacionalidad,
-                options: ConduceLegalidadPersonaDescriptor.nacionalidadOptions,
-                isRequired: true,
-                onChanged: (value) => setState(() => _nacionalidad = value),
-              ),
-              DropdownButtonFormField<String>(
-                value: _sexo,
-                decoration: const InputDecoration(
-                  labelText: 'Sexo',
-                  border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.badge),
+              if (widget.isAlcoholimetria) ...[
+                _select(
+                  label: 'Nacionalidad',
+                  icon: Icons.public_outlined,
+                  value: _nacionalidad,
+                  options:
+                      ConduceLegalidadPersonaDescriptor.nacionalidadOptions,
+                  isRequired: true,
+                  onChanged: (value) => setState(() => _nacionalidad = value),
                 ),
-                items: const [
-                  DropdownMenuItem(value: null, child: Text('Sin dato')),
-                  DropdownMenuItem(
-                    value: 'MASCULINO',
-                    child: Text('MASCULINO'),
+                DropdownButtonFormField<String>(
+                  value: _sexo,
+                  decoration: const InputDecoration(
+                    labelText: 'Sexo',
+                    border: OutlineInputBorder(),
+                    prefixIcon: Icon(Icons.badge),
                   ),
-                  DropdownMenuItem(value: 'FEMENINO', child: Text('FEMENINO')),
-                ],
-                onChanged: (value) => setState(() => _sexo = value),
-              ),
-              const SizedBox(height: 10),
-              if (widget.isAlcoholimetria)
+                  items: const [
+                    DropdownMenuItem(value: null, child: Text('Sin dato')),
+                    DropdownMenuItem(
+                      value: 'MASCULINO',
+                      child: Text('MASCULINO'),
+                    ),
+                    DropdownMenuItem(
+                      value: 'FEMENINO',
+                      child: Text('FEMENINO'),
+                    ),
+                  ],
+                  onChanged: (value) => setState(() => _sexo = value),
+                ),
+                const SizedBox(height: 10),
                 _select(
                   label: 'Estado civil *',
                   icon: Icons.people_outline,
@@ -2792,7 +2865,8 @@ class _PersonaModalState extends State<_PersonaModal> {
                   isRequired: true,
                   onChanged: (value) => setState(() => _estadoCivil = value),
                 ),
-              _text(_ocupacionCtrl, 'Ocupacion', Icons.work_outline),
+                _text(_ocupacionCtrl, 'Ocupacion', Icons.work_outline),
+              ],
               if (widget.isAlcoholimetria)
                 _text(
                   _edadLibreCtrl,
@@ -2802,16 +2876,18 @@ class _PersonaModalState extends State<_PersonaModal> {
                   validator: _requiredText,
                 )
               else
-                _select(
-                  label: 'Edad aproximada',
-                  icon: Icons.cake_outlined,
-                  value: _edadAproximada,
-                  options:
-                      ConduceLegalidadPersonaDescriptor.edadAproximadaOptions,
-                  isRequired: true,
-                  onChanged: (value) => setState(() => _edadAproximada = value),
+                _text(
+                  _edadLibreCtrl,
+                  'Edad',
+                  Icons.cake_outlined,
+                  keyboardType: TextInputType.number,
+                  formatters: [
+                    FilteringTextInputFormatter.digitsOnly,
+                    LengthLimitingTextInputFormatter(3),
+                  ],
+                  validator: VehiculoFormService.validateEdad,
                 ),
-              _descripcionFisicaSection(),
+              if (widget.isAlcoholimetria) _descripcionFisicaSection(),
               SwitchListTile(
                 title: const Text('Licencia permanente'),
                 value: _permanente,
@@ -2849,12 +2925,12 @@ class _PersonaModalState extends State<_PersonaModal> {
                 _AttentionPanel(text: licenciaWarning),
                 const SizedBox(height: 10),
               ],
-              _descripcionPreview(),
+              if (widget.isAlcoholimetria) _descripcionPreview(),
               const SizedBox(height: 12),
               ElevatedButton.icon(
                 onPressed: _submit,
-                icon: const Icon(Icons.add),
-                label: const Text('Agregar persona'),
+                icon: Icon(_editing ? Icons.save_outlined : Icons.add),
+                label: Text(_editing ? 'Guardar cambios' : 'Agregar persona'),
               ),
             ],
           ),
@@ -2959,6 +3035,10 @@ class _PersonaModalState extends State<_PersonaModal> {
     required ValueChanged<String?> onChanged,
     bool isRequired = false,
   }) {
+    final availableOptions = <String>[
+      if ((value ?? '').trim().isNotEmpty && !options.contains(value)) value!,
+      ...options,
+    ];
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: DropdownButtonFormField<String>(
@@ -2974,7 +3054,7 @@ class _PersonaModalState extends State<_PersonaModal> {
             value: null,
             child: Text('Seleccionar'),
           ),
-          ...options.map(
+          ...availableOptions.map(
             (option) => DropdownMenuItem<String>(
               value: option,
               child: Text(option, overflow: TextOverflow.ellipsis),
@@ -3502,9 +3582,14 @@ class _FotosPickerPanel extends StatelessWidget {
 
 class _PersonTile extends StatelessWidget {
   final ConduceLegalidadPersona persona;
+  final VoidCallback onEdit;
   final VoidCallback onRemove;
 
-  const _PersonTile({required this.persona, required this.onRemove});
+  const _PersonTile({
+    required this.persona,
+    required this.onEdit,
+    required this.onRemove,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -3514,7 +3599,7 @@ class _PersonTile extends StatelessWidget {
       else if ((persona.edadAproximada ?? '').trim().isNotEmpty)
         persona.edadAproximada!
       else if (persona.edad != null)
-        '${persona.edad} anos aprox.',
+        '${persona.edad} anos',
       if ((persona.estadoCivil ?? '').trim().isNotEmpty) persona.estadoCivil!,
       if ((persona.numeroLicencia ?? '').trim().isNotEmpty)
         'Lic. ${persona.numeroLicencia}',
@@ -3526,6 +3611,7 @@ class _PersonTile extends StatelessWidget {
       icon: Icons.badge_outlined,
       title: persona.nombreCompleto ?? 'Persona',
       subtitle: detalles.join(' - '),
+      onEdit: onEdit,
       onRemove: onRemove,
     );
   }

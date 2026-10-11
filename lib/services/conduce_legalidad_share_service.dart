@@ -64,6 +64,18 @@ class ConduceLegalidadShareService {
         .toList();
     final archivos = await _descargarArchivosTemporales(fotos);
 
+    final tieneDocumentos = archivos.any(
+      (archivo) => archivo.path.toLowerCase().endsWith('.docx'),
+    );
+    if (tieneDocumentos) {
+      await Share.shareXFiles(
+        archivos,
+        text: texto.isEmpty ? null : texto,
+        subject: payload.title,
+      );
+      return;
+    }
+
     if (texto.isNotEmpty) {
       _pendingImages = archivos;
       _awaitingReturnFromWhatsappText = archivos.isNotEmpty;
@@ -142,7 +154,9 @@ class ConduceLegalidadShareService {
         if (usados.add(path)) {
           final file = File(path);
           await file.writeAsBytes(resp.bodyBytes, flush: true);
-          archivos.add(XFile(file.path));
+          archivos.add(
+            XFile(file.path, mimeType: resp.headers['content-type']),
+          );
         }
       } catch (_) {}
     }
@@ -152,6 +166,11 @@ class ConduceLegalidadShareService {
 
   static String _resolverExtension({String? contentType, required String url}) {
     final ct = (contentType ?? '').toLowerCase();
+    if (ct.contains(
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    )) {
+      return 'docx';
+    }
     if (ct.contains('png')) return 'png';
     if (ct.contains('webp')) return 'webp';
     if (ct.contains('gif')) return 'gif';
@@ -159,6 +178,7 @@ class ConduceLegalidadShareService {
     if (ct.contains('jpg') || ct.contains('jpeg')) return 'jpg';
 
     final cleanUrl = url.split('?').first.toLowerCase();
+    if (cleanUrl.endsWith('.docx')) return 'docx';
     if (cleanUrl.endsWith('.png')) return 'png';
     if (cleanUrl.endsWith('.webp')) return 'webp';
     if (cleanUrl.endsWith('.gif')) return 'gif';

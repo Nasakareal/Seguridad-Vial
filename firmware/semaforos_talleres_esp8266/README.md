@@ -53,3 +53,12 @@ La app sólo cambia nombres y duraciones. El firmware conserva este orden:
 6. ambos rojo
 
 Límites: verdes 5–180 s, ámbar 2–10 s y todo rojo 1–10 s.
+
+## Modos de operación
+
+- **Ciclo manual:** desde la app se editan nombres y tiempos, se guarda el
+  plan y después se inicia. El orden seguro de fases nunca se altera.
+- **Destello ámbar:** ambos nodos alternan 500 ms encendido y 500 ms apagado.
+  Si el secundario pierde el enlace durante más de 1.5 s, pasa a rojo.
+- **Todo rojo / paro:** detiene cualquier ciclo o destello y coloca ambos
+  nodos en rojo.

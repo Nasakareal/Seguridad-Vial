@@ -930,25 +930,34 @@ void main() {
             now: DateTime(2026, 7, 3, 16),
           );
       expect(fridayClosingTime.allowed, isFalse);
-      expect(fridayClosingTime.nextAvailableAt, DateTime.utc(2026, 7, 6, 8));
+      expect(fridayClosingTime.nextAvailableAt, DateTime.utc(2026, 7, 6, 6));
       expect(
         fridayClosingTime.message,
-        contains('lunes 06/07/2026 a las 08:00'),
+        contains('lunes 06/07/2026 a las 06:00'),
       );
-      expect(fridayClosingTime.message, contains('08:00 a 16:00'));
+      expect(fridayClosingTime.message, contains('06:00 a 16:00'));
 
       final saturday = await AuthService.constanciasManejoHorarioAccess(
         now: DateTime(2026, 7, 4, 10),
       );
       expect(saturday.allowed, isFalse);
-      expect(saturday.nextAvailableAt, DateTime.utc(2026, 7, 6, 8));
+      expect(saturday.nextAvailableAt, DateTime.utc(2026, 7, 6, 6));
 
-      final mondayMorning = await AuthService.constanciasManejoHorarioAccess(
-        now: DateTime(2026, 7, 6, 7, 30),
+      final mondayBeforeOpening =
+          await AuthService.constanciasManejoHorarioAccess(
+            now: DateTime(2026, 7, 6, 5, 59),
+          );
+      expect(mondayBeforeOpening.allowed, isFalse);
+      expect(mondayBeforeOpening.nextAvailableAt, DateTime.utc(2026, 7, 6, 6));
+      expect(
+        mondayBeforeOpening.message,
+        contains('lunes 06/07/2026 a las 06:00'),
       );
-      expect(mondayMorning.allowed, isFalse);
-      expect(mondayMorning.nextAvailableAt, DateTime.utc(2026, 7, 6, 8));
-      expect(mondayMorning.message, contains('lunes 06/07/2026 a las 08:00'));
+
+      final mondayOpening = await AuthService.constanciasManejoHorarioAccess(
+        now: DateTime(2026, 7, 6, 6),
+      );
+      expect(mondayOpening.allowed, isTrue);
     },
   );
 

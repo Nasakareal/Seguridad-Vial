@@ -76,6 +76,7 @@ void main() {
   test('interpreta estado de los dos nodos', () {
     final status = TrafficControllerStatus.fromJson({
       'running': true,
+      'flashing': false,
       'peer_linked': true,
       'emergency_all_red': false,
       'mode': 'Ciclo sincronizado',
@@ -94,6 +95,7 @@ void main() {
   test('admite estado autónomo del maestro sin secundario', () {
     final status = TrafficControllerStatus.fromJson({
       'running': true,
+      'flashing': false,
       'peer_linked': false,
       'emergency_all_red': false,
       'mode': 'Ciclo autónomo del maestro',
@@ -110,6 +112,23 @@ void main() {
     expect(status.nodeB.online, isFalse);
   });
 
+  test('interpreta destello ámbar y estado apagado', () {
+    final status = TrafficControllerStatus.fromJson({
+      'running': false,
+      'flashing': true,
+      'peer_linked': true,
+      'mode': 'Destello ámbar sincronizado',
+      'phase': 'Destello ámbar',
+      'node_a': {'online': true, 'color': 'yellow'},
+      'node_b': {'online': true, 'color': 'off'},
+    });
+
+    expect(status.flashing, isTrue);
+    expect(status.running, isFalse);
+    expect(status.nodeA.color, TrafficLightColor.yellow);
+    expect(status.nodeB.color, TrafficLightColor.off);
+  });
+
   test('envía iniciar aunque el secundario no esté enlazado', () async {
     SharedPreferences.setMockInitialValues({});
     final service = TrafficControllerService(
@@ -118,6 +137,7 @@ void main() {
         expect(request.url.toString(), 'http://192.168.4.1/api/start');
         return http.Response(
           '{"running":true,"peer_linked":false,'
+          '"flashing":false,'
           '"emergency_all_red":false,'
           '"mode":"Ciclo autónomo del maestro"}',
           200,
@@ -129,6 +149,26 @@ void main() {
 
     expect(status.running, isTrue);
     expect(status.peerLinked, isFalse);
+    service.dispose();
+  });
+
+  test('envía la orden de destello al maestro', () async {
+    SharedPreferences.setMockInitialValues({});
+    final service = TrafficControllerService(
+      client: MockClient((request) async {
+        expect(request.method, 'POST');
+        expect(request.url.toString(), 'http://192.168.4.1/api/flash');
+        return http.Response(
+          '{"running":false,"flashing":true,"peer_linked":false,'
+          '"mode":"Destello ámbar del maestro"}',
+          200,
+        );
+      }),
+    );
+
+    final status = await service.startFlashing();
+
+    expect(status.flashing, isTrue);
     service.dispose();
   });
 }

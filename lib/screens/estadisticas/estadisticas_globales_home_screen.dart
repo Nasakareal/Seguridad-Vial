@@ -59,6 +59,8 @@ class _EstadisticasGlobalesHomeScreenState
   String _group = 'day'; // day|month
   int _unidadOrgId = 0;
   int? _delegacionId;
+  bool _canFilterOrigenHechos = false;
+  String _origenHechos = 'ambas';
 
   final TextEditingController _q = TextEditingController();
   final TextEditingController _vehPlacas = TextEditingController();
@@ -93,8 +95,33 @@ class _EstadisticasGlobalesHomeScreenState
     super.initState();
     _unidadOrgId = widget.unidadId ?? 0;
     _setDefaultDates();
+    _initialize();
+  }
+
+  Future<void> _initialize() async {
+    var canFilterOrigenHechos = false;
+
+    try {
+      final isSuperadmin = await AuthService.isSuperadmin();
+      final unidadId = await AuthService.getUnidadId();
+      canFilterOrigenHechos =
+          isSuperadmin || unidadId == AuthService.unidadSeguridadVialId;
+    } catch (_) {}
+
+    if (!mounted) return;
+
+    setState(() {
+      _canFilterOrigenHechos = canFilterOrigenHechos;
+      if (canFilterOrigenHechos) {
+        // La vista web inicia con ambos orígenes. No se debe enviar además
+        // unidad_org_id porque limitaría el resultado a una sola unidad.
+        _origenHechos = 'ambas';
+        _unidadOrgId = 0;
+      }
+    });
+
     _loadDelegaciones();
-    _loadAll(resetPage: true);
+    await _loadAll(resetPage: true);
   }
 
   @override
@@ -143,7 +170,9 @@ class _EstadisticasGlobalesHomeScreenState
     if (_vehTipo.trim().isNotEmpty) p['veh_tipo'] = _vehTipo.trim();
     if (_conLesionados.trim().isNotEmpty) p['con_lesionados'] = _conLesionados;
     if (_conFallecidos.trim().isNotEmpty) p['con_fallecidos'] = _conFallecidos;
-    if (_unidadOrgId > 0) {
+    if (_canFilterOrigenHechos) {
+      p['origen_hechos'] = _origenHechos;
+    } else if (_unidadOrgId > 0) {
       p['unidad_org_id'] = _unidadOrgId;
     }
     if (_delegacionId != null && _delegacionId! > 0) {
@@ -712,7 +741,16 @@ class _EstadisticasGlobalesHomeScreenState
                             ),
                           ],
                         ),
-                        if (widget.unidadId == null ||
+                        if (_canFilterOrigenHechos) ...[
+                          const SizedBox(height: 12),
+                          Row(
+                            children: [
+                              Expanded(child: _origenHechosDropdown()),
+                              const SizedBox(width: 12),
+                              Expanded(child: _delegacionDropdown()),
+                            ],
+                          ),
+                        ] else if (widget.unidadId == null ||
                             widget.unidadId ==
                                 AuthService.unidadDelegacionesId) ...[
                           const SizedBox(height: 12),
@@ -1069,7 +1107,10 @@ class _EstadisticasGlobalesHomeScreenState
     final selected = _delegacionId ?? 0;
     final enabled =
         !_loadingDelegaciones &&
-        (_unidadOrgId == 0 || _unidadOrgId == AuthService.unidadDelegacionesId);
+        (_canFilterOrigenHechos
+            ? _origenHechos != 'siniestros'
+            : (_unidadOrgId == 0 ||
+                  _unidadOrgId == AuthService.unidadDelegacionesId));
     final items = <DropdownMenuItem<int>>[
       const DropdownMenuItem(value: 0, child: Text('(Todas)')),
     ];
@@ -1106,6 +1147,36 @@ class _EstadisticasGlobalesHomeScreenState
             ? 'Delegación (cargando...)'
             : 'Delegación',
         border: const OutlineInputBorder(),
+      ),
+    );
+  }
+
+  Widget _origenHechosDropdown() {
+    return DropdownButtonFormField<String>(
+      value: _origenHechos,
+      isExpanded: true,
+      items: const [
+        DropdownMenuItem(
+          value: 'ambas',
+          child: Text('Siniestros + Delegaciones'),
+        ),
+        DropdownMenuItem(value: 'siniestros', child: Text('Solo Siniestros')),
+        DropdownMenuItem(
+          value: 'delegaciones',
+          child: Text('Solo Delegaciones'),
+        ),
+      ],
+      onChanged: (value) {
+        setState(() {
+          _origenHechos = value ?? 'ambas';
+          if (_origenHechos == 'siniestros') {
+            _delegacionId = null;
+          }
+        });
+      },
+      decoration: const InputDecoration(
+        labelText: 'Origen',
+        border: OutlineInputBorder(),
       ),
     );
   }

@@ -175,6 +175,17 @@ class ConstanciasManejoService {
     return _decodeExamenSolicitud(resp);
   }
 
+  static Future<ConstanciaExamenSolicitud> fetchExamen(int id) async {
+    final resp = await http
+        .get(
+          Uri.parse('$_base/examenes/$id'),
+          headers: await authHeaders(json: false),
+        )
+        .timeout(const Duration(seconds: 15));
+
+    return _decodeExamenSolicitud(resp);
+  }
+
   static Future<ConstanciaManejo> fetch(int id) async {
     final resp = await http
         .get(Uri.parse('$_base/$id'), headers: await authHeaders(json: false))
@@ -225,6 +236,60 @@ class ConstanciasManejoService {
         : <String, dynamic>{};
 
     return ConstanciasManejoPage(
+      items: items,
+      currentPage: _readInt(pagination['current_page']) ?? page,
+      lastPage: _readInt(pagination['last_page']) ?? page,
+      total: _readInt(pagination['total']) ?? items.length,
+    );
+  }
+
+  static Future<ConstanciaExamenSolicitudesPage> examenes({
+    String? estatus,
+    String? modalidad,
+    String? buscar,
+    bool sinConstancia = false,
+    int page = 1,
+    int perPage = 25,
+  }) async {
+    final query = <String, String>{
+      'page': page.toString(),
+      'per_page': perPage.toString(),
+      if ((estatus ?? '').trim().isNotEmpty) 'estatus': estatus!.trim(),
+      if ((modalidad ?? '').trim().isNotEmpty) 'modalidad': modalidad!.trim(),
+      if ((buscar ?? '').trim().isNotEmpty) 'buscar': buscar!.trim(),
+      if (sinConstancia) 'sin_constancia': '1',
+    };
+
+    final uri = Uri.parse('$_base/examenes').replace(queryParameters: query);
+    final resp = await http
+        .get(uri, headers: await authHeaders(json: false))
+        .timeout(const Duration(seconds: 15));
+
+    if (resp.statusCode < 200 || resp.statusCode >= 300) {
+      throw Exception(_parseBackendError(resp.body, resp.statusCode));
+    }
+
+    final raw = jsonDecode(resp.body);
+    if (raw is! Map<String, dynamic>) {
+      throw Exception('Respuesta invalida del servidor.');
+    }
+
+    final list = raw['data'];
+    final items = list is List
+        ? list
+              .whereType<Map>()
+              .map(
+                (item) => ConstanciaExamenSolicitud.fromJson(
+                  Map<String, dynamic>.from(item),
+                ),
+              )
+              .toList()
+        : <ConstanciaExamenSolicitud>[];
+    final pagination = raw['pagination'] is Map
+        ? Map<String, dynamic>.from(raw['pagination'] as Map)
+        : <String, dynamic>{};
+
+    return ConstanciaExamenSolicitudesPage(
       items: items,
       currentPage: _readInt(pagination['current_page']) ?? page,
       lastPage: _readInt(pagination['last_page']) ?? page,

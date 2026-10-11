@@ -368,9 +368,7 @@ class _ConstanciaExamenSolicitudDetailScreenState
     if (_busy) return;
     setState(() => _busy = true);
     try {
-      final updated = await ConstanciasManejoService.buscarExamenPorQr(
-        _examen.token,
-      );
+      final updated = await ConstanciasManejoService.fetchExamen(_examen.id);
       if (!mounted) return;
       _syncExam(updated);
       setState(() => _examen = updated);

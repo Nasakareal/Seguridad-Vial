@@ -153,6 +153,27 @@ class _SemaforosTalleresScreenState extends State<SemaforosTalleresScreen> {
     );
   }
 
+  Future<void> _startFlashing() async {
+    final peerLinked = _status?.peerLinked == true;
+    if (!await _confirm(
+      'Activar destello ámbar',
+      peerLinked
+          ? 'Los dos controladores destellarán en ámbar. Confirma que no '
+                'haya un ciclo vial activo antes de continuar.'
+          : 'El secundario no está enlazado. Sólo el maestro destellará en '
+                'ámbar; el secundario permanecerá en rojo seguro.',
+      action: 'Activar destello',
+    )) {
+      return;
+    }
+    await _run(
+      _service.startFlashing,
+      peerLinked
+          ? 'Destello ámbar sincronizado activado.'
+          : 'Destello ámbar activado únicamente en el maestro.',
+    );
+  }
+
   Future<void> _run(
     Future<TrafficControllerStatus> Function() operation,
     String success,
@@ -354,7 +375,9 @@ class _SemaforosTalleresScreenState extends State<SemaforosTalleresScreen> {
             children: [
               Expanded(
                 child: OutlinedButton.icon(
-                  onPressed: _busy || status?.running != true
+                  onPressed:
+                      _busy ||
+                          (status?.running != true && status?.flashing != true)
                       ? null
                       : () => _run(_service.stop, 'Ciclo detenido en rojo.'),
                   icon: const Icon(Icons.pause_circle_outline),
@@ -364,22 +387,44 @@ class _SemaforosTalleresScreenState extends State<SemaforosTalleresScreen> {
               const SizedBox(width: 10),
               Expanded(
                 child: FilledButton.icon(
-                  onPressed: _busy || status?.running == true ? null : _start,
+                  onPressed:
+                      _busy ||
+                          status?.running == true ||
+                          status?.flashing == true
+                      ? null
+                      : _start,
                   icon: const Icon(Icons.play_circle_outline),
                   label: const Text('Iniciar ciclo'),
                 ),
               ),
             ],
           ),
+          const SizedBox(height: 8),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton.tonalIcon(
+              onPressed:
+                  _busy || status?.running == true || status?.flashing == true
+                  ? null
+                  : _startFlashing,
+              icon: const Icon(Icons.warning_amber_rounded),
+              label: Text(
+                status?.flashing == true
+                    ? 'Destello ámbar activo'
+                    : 'Activar destello ámbar',
+              ),
+            ),
+          ),
           const Divider(height: 32),
           Text(
-            'Fases y tiempos',
+            'Ciclo manual para operativos',
             style: Theme.of(context).textTheme.titleLarge,
           ),
           const SizedBox(height: 4),
           const Text(
-            'El orden seguro no se puede alterar: A verde → A ámbar → todo '
-            'rojo → B verde → B ámbar → todo rojo.',
+            'Puedes modificar y guardar los tiempos antes de iniciar. El '
+            'orden seguro no se puede alterar: A verde → A ámbar → todo rojo '
+            '→ B verde → B ámbar → todo rojo.',
           ),
           const SizedBox(height: 12),
           _MovementEditor(
@@ -451,6 +496,7 @@ class _SignalCard extends StatelessWidget {
       TrafficLightColor.green => Colors.green,
       TrafficLightColor.yellow => Colors.amber,
       TrafficLightColor.red => Colors.red,
+      TrafficLightColor.off => Colors.grey.shade800,
       _ => Colors.grey,
     };
     return Card(

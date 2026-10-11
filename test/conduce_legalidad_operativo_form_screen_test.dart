@@ -5,6 +5,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:seguridad_vial_app/screens/conduce_legalidad/conduce_legalidad_operativo_form_screen.dart';
+import 'package:seguridad_vial_app/screens/conduce_legalidad/conduce_legalidad_module.dart';
+import 'package:seguridad_vial_app/models/conduce_legalidad.dart';
 import 'package:seguridad_vial_app/services/auth_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -43,6 +45,61 @@ void main() {
     expect(find.byIcon(Icons.schedule), findsOneWidget);
     expect(find.text('Unidad responsable *'), findsNothing);
     expect(find.text('Delegación específica *'), findsNothing);
+    expect(find.text('Persona que firmará los IPH'), findsOneWidget);
+    expect(find.text('Nombre(s) del firmante *'), findsOneWidget);
+    expect(find.text('Apellido paterno del firmante *'), findsOneWidget);
+    expect(find.text('Apellido materno del firmante *'), findsOneWidget);
+  });
+
+  testWidgets('Alcoholimetría does not request an IPH signer', (tester) async {
+    _setSession(
+      role: 'Administrador',
+      roleId: 3,
+      unidadId: AuthService.unidadVialidadesUrbanasId,
+    );
+
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: ConduceLegalidadOperativoFormScreen(
+          module: ConduceLegalidadModule.alcoholimetria,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Persona que firmará los IPH'), findsNothing);
+    expect(find.text('Nombre(s) del firmante *'), findsNothing);
+  });
+
+  testWidgets('editing restores the saved IPH signer', (tester) async {
+    _setSession(
+      role: 'Administrador',
+      roleId: 3,
+      unidadId: AuthService.unidadVialidadesUrbanasId,
+    );
+
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: ConduceLegalidadOperativoFormScreen(
+          initialOperativo: ConduceLegalidadOperativo(
+            id: 22,
+            nombre: 'Operativo conduce con legalidad',
+            tipoOperativo: 'conduce_legalidad',
+            firmanteIphNombres: 'Laura Beatriz',
+            firmanteIphApellidoPaterno: 'Ramírez',
+            firmanteIphApellidoMaterno: 'Torres',
+            estado: 'activo',
+            totalCapturas: 0,
+            misCapturas: 0,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Laura Beatriz'), findsOneWidget);
+    expect(find.text('Ramírez'), findsOneWidget);
+    expect(find.text('Torres'), findsOneWidget);
   });
 
   testWidgets('low Vialidades role cannot open the activation form', (

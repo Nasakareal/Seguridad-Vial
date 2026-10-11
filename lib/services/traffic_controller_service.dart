@@ -86,6 +86,9 @@ class TrafficControllerService {
   Future<TrafficControllerStatus> stop() =>
       _send('POST', '/api/stop', const {});
 
+  Future<TrafficControllerStatus> startFlashing() =>
+      _send('POST', '/api/flash', const {});
+
   Future<TrafficControllerStatus> emergencyAllRed() =>
       _send('POST', '/api/emergency-red', const {});
 

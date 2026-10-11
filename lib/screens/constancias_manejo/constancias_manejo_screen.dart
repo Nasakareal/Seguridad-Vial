@@ -9,6 +9,7 @@ import '../../app/routes.dart';
 import '../../models/constancia_manejo.dart';
 import '../../services/auth_service.dart';
 import '../../services/constancias_manejo_service.dart';
+import 'constancia_examenes_screen.dart';
 import 'constancia_manejo_scan_screen.dart';
 
 class ConstanciasManejoScreen extends StatefulWidget {
@@ -161,6 +162,14 @@ class _ConstanciasManejoScreenState extends State<ConstanciasManejoScreen> {
     );
   }
 
+  Future<void> _openExamHistory() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const ConstanciaExamenesScreen()),
+    );
+    if (mounted) unawaited(_load(reset: true));
+  }
+
   Future<void> _printExams() async {
     await showDialog<void>(
       context: context,
@@ -193,6 +202,11 @@ class _ConstanciasManejoScreenState extends State<ConstanciasManejoScreen> {
       appBar: AppBar(
         title: const Text('Constancias de manejo'),
         actions: [
+          IconButton(
+            tooltip: 'Exámenes registrados',
+            icon: const Icon(Icons.history_edu_outlined),
+            onPressed: _openExamHistory,
+          ),
           if (_esEvaluadorTeorico == true)
             IconButton(
               tooltip: 'Compartir resumen de hoy',
@@ -233,6 +247,27 @@ class _ConstanciasManejoScreenState extends State<ConstanciasManejoScreen> {
       body: SafeArea(
         child: Column(
           children: [
+            if (_esEvaluadorTeorico == true)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(14, 12, 14, 0),
+                child: Card(
+                  margin: EdgeInsets.zero,
+                  child: ListTile(
+                    leading: const CircleAvatar(
+                      child: Icon(Icons.assignment_outlined),
+                    ),
+                    title: const Text(
+                      'Exámenes registrados',
+                      style: TextStyle(fontWeight: FontWeight.w900),
+                    ),
+                    subtitle: const Text(
+                      'Retoma un examen y activa su constancia.',
+                    ),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: _openExamHistory,
+                  ),
+                ),
+              ),
             _Filters(
               searchCtrl: _searchCtrl,
               selectedStatus: _estatus,

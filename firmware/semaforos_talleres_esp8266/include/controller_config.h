@@ -30,3 +30,5 @@ constexpr bool OUTPUT_ACTIVE_LOW = true;
 constexpr uint32_t PEER_TIMEOUT_MS = 1500;
 constexpr uint32_t SYNC_INTERVAL_MS = 200;
 constexpr uint32_t BREAK_BEFORE_MAKE_US = 20000;
+// Destello vial: 500 ms encendido + 500 ms apagado (60 destellos/minuto).
+constexpr uint32_t FLASH_HALF_PERIOD_MS = 500;

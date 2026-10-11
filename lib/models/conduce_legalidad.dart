@@ -462,6 +462,9 @@ class ConduceLegalidadOperativo {
   final String? objetivo;
   final String? narrativa;
   final String? observaciones;
+  final String? firmanteIphNombres;
+  final String? firmanteIphApellidoPaterno;
+  final String? firmanteIphApellidoMaterno;
   final String estado;
   final DateTime? createdAt;
   final DateTime? feedingClosesAt;
@@ -497,6 +500,9 @@ class ConduceLegalidadOperativo {
     this.objetivo,
     this.narrativa,
     this.observaciones,
+    this.firmanteIphNombres,
+    this.firmanteIphApellidoPaterno,
+    this.firmanteIphApellidoMaterno,
     required this.estado,
     this.createdAt,
     this.feedingClosesAt,
@@ -530,6 +536,17 @@ class ConduceLegalidadOperativo {
 
   bool get isDelegaciones =>
       unidadId == 2 || delegacionId != null || delegacion != null;
+
+  String get firmanteIphNombreCompleto =>
+      <String?>[
+            firmanteIphNombres,
+            firmanteIphApellidoPaterno,
+            firmanteIphApellidoMaterno,
+          ]
+          .whereType<String>()
+          .map((value) => value.trim())
+          .where((value) => value.isNotEmpty)
+          .join(' ');
 
   String get ticketSupervisorNombre {
     final nombre = supervisor?.nombre.trim();
@@ -600,6 +617,9 @@ class ConduceLegalidadOperativo {
       objetivo: _str(json['objetivo']),
       narrativa: _str(json['narrativa']),
       observaciones: _str(json['observaciones']),
+      firmanteIphNombres: _str(json['firmante_iph_nombres']),
+      firmanteIphApellidoPaterno: _str(json['firmante_iph_apellido_paterno']),
+      firmanteIphApellidoMaterno: _str(json['firmante_iph_apellido_materno']),
       estado: _str(json['estado']) ?? 'activo',
       createdAt: _dateTime(json['created_at']),
       feedingClosesAt: _dateTime(json['alimentacion_cierra_en']),

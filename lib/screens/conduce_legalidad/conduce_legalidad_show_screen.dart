@@ -13,6 +13,7 @@ import '../../services/auth_service.dart';
 import '../../services/conduce_legalidad_service.dart';
 import '../../services/conduce_legalidad_share_service.dart';
 import '../../widgets/safe_network_image.dart';
+import 'conduce_legalidad_captura_show_screen.dart';
 import 'conduce_legalidad_module.dart';
 import 'ayuda/conduce_legalidad_action_help_sheet.dart';
 import 'ayuda/conduce_legalidad_alimentar_help_sheet.dart';
@@ -448,6 +449,21 @@ class _ConduceLegalidadShowScreenState extends State<ConduceLegalidadShowScreen>
     if (changed == true && mounted) {
       await _load();
     }
+  }
+
+  Future<void> _openCapturaDetail(ConduceLegalidadCaptura captura) async {
+    final operativo = _operativo;
+    if (operativo == null) return;
+
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => ConduceLegalidadCapturaShowScreen(
+          operativo: operativo,
+          captura: captura,
+          module: widget.module,
+        ),
+      ),
+    );
   }
 
   bool _canMutateCaptura(ConduceLegalidadCaptura captura) {
@@ -919,6 +935,7 @@ class _ConduceLegalidadShowScreenState extends State<ConduceLegalidadShowScreen>
               sharing: _sharingCapturaId == captura.id,
               downloadingIph: _downloadingIphCapturaId == captura.id,
               allowMutation: _canFeedNow && _canMutateCaptura(captura),
+              onTap: () => _openCapturaDetail(captura),
               onTicket: () => _openBoleta(captura),
               onShare: () => _shareCaptura(captura),
               onDownloadIph: () => _downloadIph(captura),
@@ -976,6 +993,27 @@ class _OperativoHeader extends StatelessWidget {
             ].whereType<String>().where((v) => v.trim().isNotEmpty).join(' | '),
             style: const TextStyle(color: Colors.white70),
           ),
+          if (!operativo.isAlcoholimetria &&
+              operativo.firmanteIphNombreCompleto.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Icon(
+                  Icons.draw_outlined,
+                  size: 18,
+                  color: Colors.white70,
+                ),
+                const SizedBox(width: 7),
+                Expanded(
+                  child: Text(
+                    'Firma IPH: ${operativo.firmanteIphNombreCompleto}',
+                    style: const TextStyle(color: Colors.white70),
+                  ),
+                ),
+              ],
+            ),
+          ],
           const SizedBox(height: 12),
           Wrap(
             spacing: 8,
@@ -999,6 +1037,7 @@ class _CapturaCard extends StatelessWidget {
   final bool sharing;
   final bool downloadingIph;
   final bool allowMutation;
+  final VoidCallback onTap;
   final VoidCallback onTicket;
   final VoidCallback onShare;
   final VoidCallback onDownloadIph;
@@ -1012,6 +1051,7 @@ class _CapturaCard extends StatelessWidget {
     required this.sharing,
     required this.downloadingIph,
     required this.allowMutation,
+    required this.onTap,
     required this.onTicket,
     required this.onShare,
     required this.onDownloadIph,
@@ -1031,158 +1071,200 @@ class _CapturaCard extends StatelessWidget {
     ].whereType<String>().where((v) => v.trim().isNotEmpty).join(' ');
     final busy = deleting || sharing || downloadingIph;
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: highlighted ? const Color(0xFFEFF6FF) : Colors.white,
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: busy ? null : onTap,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(
-          color: highlighted ? Colors.blue : Colors.grey.shade200,
-          width: highlighted ? 1.5 : 1,
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (highlighted) ...[
-            const Row(
-              children: [
-                Icon(Icons.search, size: 18, color: Colors.blue),
-                SizedBox(width: 6),
-                Text(
-                  'Resultado encontrado',
-                  style: TextStyle(
-                    color: Colors.blue,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-              ],
+        child: Container(
+          margin: const EdgeInsets.only(bottom: 12),
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: highlighted ? const Color(0xFFEFF6FF) : Colors.white,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+              color: highlighted ? Colors.blue : Colors.grey.shade200,
+              width: highlighted ? 1.5 : 1,
             ),
-            const SizedBox(height: 10),
-          ],
-          Row(
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Icon(Icons.person_outline, size: 20),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  creator,
-                  style: const TextStyle(fontWeight: FontWeight.w900),
-                ),
-              ),
-              if (busy)
-                const Padding(
-                  padding: EdgeInsets.only(left: 8),
-                  child: SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  ),
-                )
-              else ...[
-                IconButton(
-                  tooltip: 'Boleta',
-                  onPressed: onTicket,
-                  visualDensity: VisualDensity.compact,
-                  icon: const Icon(Icons.receipt_long_outlined),
-                ),
-                IconButton(
-                  tooltip: 'Compartir WhatsApp',
-                  onPressed: onShare,
-                  visualDensity: VisualDensity.compact,
-                  icon: const Icon(Icons.share_outlined),
-                ),
-                PopupMenuButton<String>(
-                  tooltip: 'Opciones',
-                  itemBuilder: (context) => [
-                    const PopupMenuItem<String>(
-                      value: 'iph',
-                      child: ListTile(
-                        contentPadding: EdgeInsets.zero,
-                        leading: Icon(Icons.description_outlined),
-                        title: Text('Descargar IPH'),
+              if (highlighted) ...[
+                const Row(
+                  children: [
+                    Icon(Icons.search, size: 18, color: Colors.blue),
+                    SizedBox(width: 6),
+                    Text(
+                      'Resultado encontrado',
+                      style: TextStyle(
+                        color: Colors.blue,
+                        fontWeight: FontWeight.w900,
                       ),
                     ),
-                    if (captura.canEdit && allowMutation)
-                      const PopupMenuItem<String>(
-                        value: 'editar',
-                        child: ListTile(
-                          contentPadding: EdgeInsets.zero,
-                          leading: Icon(Icons.edit_outlined),
-                          title: Text('Editar'),
-                        ),
-                      ),
-                    if (captura.canDelete && allowMutation)
-                      const PopupMenuItem<String>(
-                        value: 'eliminar',
-                        child: ListTile(
-                          contentPadding: EdgeInsets.zero,
-                          leading: Icon(
-                            Icons.delete_outline,
-                            color: Colors.red,
-                          ),
-                          title: Text('Eliminar'),
-                        ),
-                      ),
                   ],
-                  onSelected: (value) {
-                    if (value == 'iph') {
-                      onDownloadIph();
-                    } else if (value == 'editar') {
-                      onEdit();
-                    } else if (value == 'eliminar') {
-                      onDelete();
-                    }
-                  },
+                ),
+                const SizedBox(height: 10),
+              ],
+              Row(
+                children: [
+                  const Icon(Icons.person_outline, size: 20),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      creator,
+                      style: const TextStyle(fontWeight: FontWeight.w900),
+                    ),
+                  ),
+                  if (busy)
+                    const Padding(
+                      padding: EdgeInsets.only(left: 8),
+                      child: SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                    )
+                  else ...[
+                    IconButton(
+                      tooltip: 'Boleta',
+                      onPressed: onTicket,
+                      visualDensity: VisualDensity.compact,
+                      icon: const Icon(Icons.receipt_long_outlined),
+                    ),
+                    IconButton(
+                      tooltip: 'Compartir WhatsApp',
+                      onPressed: onShare,
+                      visualDensity: VisualDensity.compact,
+                      icon: const Icon(Icons.share_outlined),
+                    ),
+                    PopupMenuButton<String>(
+                      tooltip: 'Opciones',
+                      itemBuilder: (context) => [
+                        const PopupMenuItem<String>(
+                          value: 'iph',
+                          child: ListTile(
+                            contentPadding: EdgeInsets.zero,
+                            leading: Icon(Icons.description_outlined),
+                            title: Text('Descargar IPH'),
+                          ),
+                        ),
+                        if (captura.canEdit && allowMutation)
+                          const PopupMenuItem<String>(
+                            value: 'editar',
+                            child: ListTile(
+                              contentPadding: EdgeInsets.zero,
+                              leading: Icon(Icons.edit_outlined),
+                              title: Text('Editar'),
+                            ),
+                          ),
+                        if (captura.canDelete && allowMutation)
+                          const PopupMenuItem<String>(
+                            value: 'eliminar',
+                            child: ListTile(
+                              contentPadding: EdgeInsets.zero,
+                              leading: Icon(
+                                Icons.delete_outline,
+                                color: Colors.red,
+                              ),
+                              title: Text('Eliminar'),
+                            ),
+                          ),
+                      ],
+                      onSelected: (value) {
+                        if (value == 'iph') {
+                          onDownloadIph();
+                        } else if (value == 'editar') {
+                          onEdit();
+                        } else if (value == 'eliminar') {
+                          onDelete();
+                        }
+                      },
+                    ),
+                  ],
+                ],
+              ),
+              if (timestamp.isNotEmpty) ...[
+                const SizedBox(height: 4),
+                Text(
+                  timestamp,
+                  style: TextStyle(color: Colors.grey.shade700, fontSize: 12),
                 ),
               ],
+              if ((captura.lugar ?? '').trim().isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Text(
+                  captura.lugar!,
+                  style: TextStyle(color: Colors.grey.shade700),
+                ),
+              ],
+              if ((captura.narrativa ?? '').trim().isNotEmpty) ...[
+                const SizedBox(height: 10),
+                Text(
+                  captura.narrativa!,
+                  maxLines: 3,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  _SmallPill(
+                    icon: Icons.directions_car,
+                    text: '$vehicleCount vehiculos',
+                  ),
+                  _SmallPill(
+                    icon: Icons.groups_outlined,
+                    text: '$peopleCount personas',
+                  ),
+                  _SmallPill(
+                    icon: Icons.photo_library,
+                    text: '$photoCount fotos',
+                  ),
+                ],
+              ),
+              if (captura.fotos.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                _FotosGrid(fotos: captura.fotos),
+              ],
+              if (captura.vehiculos.isNotEmpty) ...[
+                const Divider(height: 22),
+                ...captura.vehiculos.map(_VehicleLine.new),
+              ],
+              if (captura.personas.isNotEmpty) ...[
+                const Divider(height: 22),
+                ...captura.personas.map(_PersonLine.new),
+              ],
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Icon(
+                    Icons.visibility_outlined,
+                    size: 17,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      'Toca para ver todos los datos y fotografías',
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.primary,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 12.5,
+                      ),
+                    ),
+                  ),
+                  Icon(
+                    Icons.chevron_right,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+                ],
+              ),
             ],
           ),
-          if (timestamp.isNotEmpty) ...[
-            const SizedBox(height: 4),
-            Text(
-              timestamp,
-              style: TextStyle(color: Colors.grey.shade700, fontSize: 12),
-            ),
-          ],
-          if ((captura.lugar ?? '').trim().isNotEmpty) ...[
-            const SizedBox(height: 8),
-            Text(captura.lugar!, style: TextStyle(color: Colors.grey.shade700)),
-          ],
-          if ((captura.narrativa ?? '').trim().isNotEmpty) ...[
-            const SizedBox(height: 10),
-            Text(captura.narrativa!),
-          ],
-          const SizedBox(height: 10),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              _SmallPill(
-                icon: Icons.directions_car,
-                text: '$vehicleCount vehiculos',
-              ),
-              _SmallPill(
-                icon: Icons.groups_outlined,
-                text: '$peopleCount personas',
-              ),
-              _SmallPill(icon: Icons.photo_library, text: '$photoCount fotos'),
-            ],
-          ),
-          if (captura.fotos.isNotEmpty) ...[
-            const SizedBox(height: 12),
-            _FotosGrid(fotos: captura.fotos),
-          ],
-          if (captura.vehiculos.isNotEmpty) ...[
-            const Divider(height: 22),
-            ...captura.vehiculos.map(_VehicleLine.new),
-          ],
-          if (captura.personas.isNotEmpty) ...[
-            const Divider(height: 22),
-            ...captura.personas.map(_PersonLine.new),
-          ],
-        ],
+        ),
       ),
     );
   }

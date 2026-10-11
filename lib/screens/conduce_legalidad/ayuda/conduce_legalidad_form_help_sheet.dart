@@ -125,6 +125,7 @@ class ConduceLegalidadOperativoFormHelpSheet extends StatelessWidget {
   final bool isEditing;
   final bool canSetSchedule;
   final bool canAssignOrganization;
+  final bool isAlcoholimetria;
 
   const ConduceLegalidadOperativoFormHelpSheet({
     super.key,
@@ -133,6 +134,7 @@ class ConduceLegalidadOperativoFormHelpSheet extends StatelessWidget {
     required this.isEditing,
     required this.canSetSchedule,
     required this.canAssignOrganization,
+    this.isAlcoholimetria = false,
   });
 
   @override
@@ -155,8 +157,12 @@ class ConduceLegalidadOperativoFormHelpSheet extends StatelessWidget {
             'Selecciona la Unidad responsable y, cuando corresponda, la Delegación específica.',
           if (canSetSchedule)
             'Pulsa los botones de fecha y hora para establecer el inicio.',
+          if (!isAlcoholimetria)
+            'Captura el nombre y los dos apellidos de la persona que firmará los IPH.',
           if (!canAssignOrganization && !canSetSchedule)
-            'La adscripción, fecha y hora se asignan automáticamente; continúa con la ubicación.',
+            isAlcoholimetria
+                ? 'La adscripción, fecha y hora se asignan automáticamente; continúa con la ubicación.'
+                : 'La adscripción, fecha y hora se asignan automáticamente; completa el firmante y continúa con la ubicación.',
         ],
         note:
             'Los controles de adscripción, fecha y hora sólo aparecen cuando tu cuenta tiene permiso para modificarlos.',
@@ -187,6 +193,8 @@ class ConduceLegalidadOperativoFormHelpSheet extends StatelessWidget {
           color: const Color(0xFF15803D),
           preview: _GuardarOperativoPreview(isEditing: isEditing),
           steps: <String>[
+            if (!isAlcoholimetria)
+              'Revisa el nombre completo de quien firmará los IPH.',
             'Revisa municipio, lugar, colonia y coordenadas.',
             isEditing ? 'Pulsa Guardar cambios.' : 'Pulsa Activar operativo.',
             'Espera el mensaje de confirmación antes de regresar.',

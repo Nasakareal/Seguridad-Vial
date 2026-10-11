@@ -92,6 +92,8 @@ class AuthService {
   static const String _strongPasswordConfirmedPrefix =
       'strong_password_confirmed_v1';
   static const String _constanciasHorarioExemptEmail = 'perito@perito.com';
+  static const int _constanciasHorarioInicio = 6;
+  static const int _constanciasHorarioFin = 16;
   static const int unidadSiniestrosId = 1;
   static const int unidadDelegacionesId = 2;
   static const int unidadSeguridadVialId = 3;
@@ -658,8 +660,18 @@ class AuthService {
     }
 
     final current = trustedNow;
-    final start = DateTime.utc(current.year, current.month, current.day, 8);
-    final end = DateTime.utc(current.year, current.month, current.day, 16);
+    final start = DateTime.utc(
+      current.year,
+      current.month,
+      current.day,
+      _constanciasHorarioInicio,
+    );
+    final end = DateTime.utc(
+      current.year,
+      current.month,
+      current.day,
+      _constanciasHorarioFin,
+    );
     final isWorkday =
         current.weekday >= DateTime.monday &&
         current.weekday <= DateTime.friday;
@@ -675,7 +687,7 @@ class AuthService {
       allowed: false,
       nextAvailableAt: next,
       message:
-          'Modulo bloqueado por horario. El turno LICENCIAS L-V solo permite activar constancias de lunes a viernes de 08:00 a 16:00. Podras activar constancias el $nextLabel.',
+          'Modulo bloqueado por horario. El turno LICENCIAS L-V solo permite activar constancias de lunes a viernes de 06:00 a 16:00. Podras activar constancias el $nextLabel.',
     );
   }
 
@@ -4061,7 +4073,7 @@ class AuthService {
       current.year,
       current.month,
       current.day,
-      8,
+      _constanciasHorarioInicio,
     );
     final isWorkday =
         current.weekday >= DateTime.monday &&
@@ -4080,7 +4092,12 @@ class AuthService {
       nextDay = nextDay.add(const Duration(days: 1));
     }
 
-    return DateTime.utc(nextDay.year, nextDay.month, nextDay.day, 8);
+    return DateTime.utc(
+      nextDay.year,
+      nextDay.month,
+      nextDay.day,
+      _constanciasHorarioInicio,
+    );
   }
 
   static String _formatConstanciasManejoHorarioDateTime(DateTime value) {

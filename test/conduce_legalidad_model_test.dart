@@ -123,6 +123,9 @@ void main() {
       'numero': '123',
       'colonia': 'Felix Ireta',
       'codigo_postal': '58070',
+      'firmante_iph_nombres': 'Laura Beatriz',
+      'firmante_iph_apellido_paterno': 'Ramírez',
+      'firmante_iph_apellido_materno': 'Torres',
       'lat': 19.6861,
       'lng': -101.1974,
       'estado': 'activo',
@@ -137,6 +140,10 @@ void main() {
     expect(operativo.codigoPostal, '58070');
     expect(operativo.unidadId, 2);
     expect(operativo.delegacionId, 15);
+    expect(operativo.firmanteIphNombres, 'Laura Beatriz');
+    expect(operativo.firmanteIphApellidoPaterno, 'Ramírez');
+    expect(operativo.firmanteIphApellidoMaterno, 'Torres');
+    expect(operativo.firmanteIphNombreCompleto, 'Laura Beatriz Ramírez Torres');
     expect(
       operativo.direccionCompleta,
       'Av. Camelinas y Ventura Puente 123, Col. Felix Ireta, CP 58070, Morelia',

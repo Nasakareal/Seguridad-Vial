@@ -1,10 +1,11 @@
-enum TrafficLightColor { red, yellow, green, unknown }
+enum TrafficLightColor { red, yellow, green, off, unknown }
 
 TrafficLightColor trafficLightColorFromJson(Object? raw) {
   return switch (raw?.toString().trim().toLowerCase()) {
     'red' || 'rojo' => TrafficLightColor.red,
     'yellow' || 'amber' || 'ambar' || 'ámbar' => TrafficLightColor.yellow,
     'green' || 'verde' => TrafficLightColor.green,
+    'off' || 'apagado' => TrafficLightColor.off,
     _ => TrafficLightColor.unknown,
   };
 }
@@ -127,6 +128,7 @@ class TrafficControllerNodeStatus {
 
 class TrafficControllerStatus {
   final bool running;
+  final bool flashing;
   final bool peerLinked;
   final bool emergencyAllRed;
   final String mode;
@@ -140,6 +142,7 @@ class TrafficControllerStatus {
 
   const TrafficControllerStatus({
     required this.running,
+    required this.flashing,
     required this.peerLinked,
     required this.emergencyAllRed,
     required this.mode,
@@ -162,6 +165,7 @@ class TrafficControllerStatus {
 
     return TrafficControllerStatus(
       running: json['running'] == true,
+      flashing: json['flashing'] == true,
       peerLinked: json['peer_linked'] == true,
       emergencyAllRed: json['emergency_all_red'] == true,
       mode: TrafficControllerPlan._text(json['mode'], 'desconocido'),

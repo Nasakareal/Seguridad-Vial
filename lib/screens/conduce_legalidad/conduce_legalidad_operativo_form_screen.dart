@@ -33,6 +33,9 @@ class _ConduceLegalidadOperativoFormScreenState
   final _numeroCtrl = TextEditingController();
   final _coloniaCtrl = TextEditingController();
   final _coordenadasCtrl = TextEditingController();
+  final _firmanteNombresCtrl = TextEditingController();
+  final _firmanteApellidoPaternoCtrl = TextEditingController();
+  final _firmanteApellidoMaternoCtrl = TextEditingController();
 
   DateTime _fecha = DateTime.now();
   TimeOfDay _hora = TimeOfDay.now();
@@ -67,6 +70,9 @@ class _ConduceLegalidadOperativoFormScreenState
     _numeroCtrl.dispose();
     _coloniaCtrl.dispose();
     _coordenadasCtrl.dispose();
+    _firmanteNombresCtrl.dispose();
+    _firmanteApellidoPaternoCtrl.dispose();
+    _firmanteApellidoMaternoCtrl.dispose();
     super.dispose();
   }
 
@@ -87,7 +93,9 @@ class _ConduceLegalidadOperativoFormScreenState
           _operativoHelpOption(
             sheetContext: sheetContext,
             title: 'Datos del operativo',
-            subtitle: 'Tipo, adscripción, fecha y hora disponibles.',
+            subtitle: widget.module.isAlcoholimetria
+                ? 'Tipo, adscripción, fecha y hora disponibles.'
+                : 'Tipo, adscripción, fecha, hora y firmante de los IPH.',
             icon: Icons.fact_check_outlined,
             color: const Color(0xFF2563EB),
             topic: ConduceLegalidadOperativoFormHelpTopic.datos,
@@ -147,6 +155,7 @@ class _ConduceLegalidadOperativoFormScreenState
             isEditing: _editing,
             canSetSchedule: _canSetSchedule,
             canAssignOrganization: _isSuperadmin,
+            isAlcoholimetria: widget.module.isAlcoholimetria,
           ),
         );
       },
@@ -163,6 +172,11 @@ class _ConduceLegalidadOperativoFormScreenState
     _lugarCtrl.text = operativo.lugar ?? '';
     _numeroCtrl.text = operativo.numero ?? '';
     _coloniaCtrl.text = operativo.colonia ?? '';
+    _firmanteNombresCtrl.text = operativo.firmanteIphNombres ?? '';
+    _firmanteApellidoPaternoCtrl.text =
+        operativo.firmanteIphApellidoPaterno ?? '';
+    _firmanteApellidoMaternoCtrl.text =
+        operativo.firmanteIphApellidoMaterno ?? '';
     _fecha = _parseDate(operativo.fecha) ?? DateTime.now();
     _hora = _parseTime(operativo.horaInicio) ?? TimeOfDay.now();
     _unidadId = operativo.unidadId;
@@ -411,6 +425,15 @@ class _ConduceLegalidadOperativoFormScreenState
         'lat': _lat,
         'lng': _lng,
         'coordenadas_texto': _emptyToNull(_coordenadasCtrl.text),
+        if (!widget.module.isAlcoholimetria) ...{
+          'firmante_iph_nombres': _emptyToNull(_firmanteNombresCtrl.text),
+          'firmante_iph_apellido_paterno': _emptyToNull(
+            _firmanteApellidoPaternoCtrl.text,
+          ),
+          'firmante_iph_apellido_materno': _emptyToNull(
+            _firmanteApellidoMaternoCtrl.text,
+          ),
+        },
         ...widget.module.operativoPayloadFields(),
       };
 
@@ -551,6 +574,10 @@ class _ConduceLegalidadOperativoFormScreenState
                   ),
                 ],
               ),
+              const SizedBox(height: 12),
+            ],
+            if (!widget.module.isAlcoholimetria) ...[
+              _buildFirmanteIphFields(),
               const SizedBox(height: 12),
             ],
             MunicipioAutocompleteField(
@@ -751,6 +778,70 @@ class _ConduceLegalidadOperativoFormScreenState
                 value == null ? 'Selecciona la delegación responsable.' : null,
           ),
         ],
+      ],
+    );
+  }
+
+  Widget _buildFirmanteIphFields() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Persona que firmará los IPH',
+          style: Theme.of(
+            context,
+          ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          'Captura el nombre exactamente como debe aparecer en los documentos.',
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+        const SizedBox(height: 12),
+        TextFormField(
+          controller: _firmanteNombresCtrl,
+          textCapitalization: TextCapitalization.words,
+          autofillHints: const [AutofillHints.givenName],
+          maxLength: 120,
+          decoration: const InputDecoration(
+            labelText: 'Nombre(s) del firmante *',
+            border: OutlineInputBorder(),
+            prefixIcon: Icon(Icons.badge_outlined),
+          ),
+          validator: (value) => (value ?? '').trim().isEmpty
+              ? 'Captura el nombre de quien firmará los IPH.'
+              : null,
+        ),
+        const SizedBox(height: 12),
+        TextFormField(
+          controller: _firmanteApellidoPaternoCtrl,
+          textCapitalization: TextCapitalization.words,
+          autofillHints: const [AutofillHints.familyName],
+          maxLength: 80,
+          decoration: const InputDecoration(
+            labelText: 'Apellido paterno del firmante *',
+            border: OutlineInputBorder(),
+            prefixIcon: Icon(Icons.person_outline),
+          ),
+          validator: (value) => (value ?? '').trim().isEmpty
+              ? 'Captura el apellido paterno de quien firmará los IPH.'
+              : null,
+        ),
+        const SizedBox(height: 12),
+        TextFormField(
+          controller: _firmanteApellidoMaternoCtrl,
+          textCapitalization: TextCapitalization.words,
+          autofillHints: const [AutofillHints.familyName],
+          maxLength: 80,
+          decoration: const InputDecoration(
+            labelText: 'Apellido materno del firmante *',
+            border: OutlineInputBorder(),
+            prefixIcon: Icon(Icons.person_outline),
+          ),
+          validator: (value) => (value ?? '').trim().isEmpty
+              ? 'Captura el apellido materno de quien firmará los IPH.'
+              : null,
+        ),
       ],
     );
   }

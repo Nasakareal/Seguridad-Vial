@@ -70,4 +70,25 @@ void main() {
     expect(find.text('Activar operativo'), findsNothing);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('la ayuda de Conduce solicita identificar al firmante IPH', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: ConduceLegalidadOperativoFormHelpSheet(
+            topic: ConduceLegalidadOperativoFormHelpTopic.datos,
+            operativoNombre: 'CONDUCE CON LEGALIDAD',
+            isEditing: false,
+            canSetSchedule: true,
+            canAssignOrganization: false,
+          ),
+        ),
+      ),
+    );
+
+    expect(find.textContaining('persona que firmará los IPH'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
 }

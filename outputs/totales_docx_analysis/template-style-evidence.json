@@ -1,0 +1,135 @@
+{
+  "input": "C:\\wamp64\\www\\sistemaEstadistico\\public\\TOTALES.docx",
+  "fonts_by_char_count": {
+    "Arial": 2792
+  },
+  "direct_run_formatting_runs": 99,
+  "direct_paragraph_formatting_paragraphs": 58,
+  "heading_like_paragraphs_not_heading_style": [
+    {
+      "para_index": 10,
+      "text": "LIC. RAMS\u00c9S ADALID VEGA SAYABEDRA",
+      "style": "Normal"
+    },
+    {
+      "para_index": 11,
+      "text": "SUBSECRETARIO DE OPERACI\u00d3N POLICIAL ",
+      "style": "Normal"
+    },
+    {
+      "para_index": 12,
+      "text": "P R E S E N T E.-",
+      "style": "Normal"
+    },
+    {
+      "para_index": 18,
+      "text": "Fecha del operativo: $dia/$mesnumero/$year",
+      "style": "Normal"
+    },
+    {
+      "para_index": 19,
+      "text": "Hora del operativo: $hora horas",
+      "style": "Normal"
+    },
+    {
+      "para_index": 20,
+      "text": "Lugar: $lugar",
+      "style": "Normal"
+    },
+    {
+      "para_index": 47,
+      "text": "RESULTADOS",
+      "style": "Normal"
+    },
+    {
+      "para_index": 51,
+      "text": "PERSONAS RETENIDAS",
+      "style": "Normal"
+    },
+    {
+      "para_index": 55,
+      "text": "VEHICULOS RESGUARDADOS",
+      "style": "Normal"
+    },
+    {
+      "para_index": 58,
+      "text": "$totales",
+      "style": "Normal"
+    },
+    {
+      "para_index": 64,
+      "text": "RESPETUOSAMENTE",
+      "style": "Normal"
+    },
+    {
+      "para_index": 68,
+      "text": "LIC. LUIS ROBERTO ROSILES SOBERANIS",
+      "style": "Normal"
+    },
+    {
+      "para_index": 69,
+      "text": "COORDINADOR DEL AGRUPAMIENTO DE SEGURIDAD VIAL",
+      "style": "Normal"
+    }
+  ],
+  "examples": {
+    "direct_paragraph_formatting": [
+      {
+        "para_index": 9,
+        "text": "Morelia, Michoac\u00e1n a $dia de $mesletra de $year",
+        "style": "Normal"
+      },
+      {
+        "para_index": 10,
+        "text": "LIC. RAMS\u00c9S ADALID VEGA SAYABEDRA",
+        "style": "Normal"
+      },
+      {
+        "para_index": 11,
+        "text": "SUBSECRETARIO DE OPERACI\u00d3N POLICIAL ",
+        "style": "Normal"
+      },
+      {
+        "para_index": 12,
+        "text": "P R E S E N T E.-",
+        "style": "Normal"
+      },
+      {
+        "para_index": 13,
+        "text": "",
+        "style": "Normal"
+      }
+    ],
+    "direct_run_formatting": [
+      {
+        "para_index": 9,
+        "run_text": "Morelia, Michoac\u00e1n",
+        "style": "Normal"
+      },
+      {
+        "para_index": 9,
+        "run_text": " a ",
+        "style": "Normal"
+      },
+      {
+        "para_index": 9,
+        "run_text": "$dia",
+        "style": "Normal"
+      },
+      {
+        "para_index": 9,
+        "run_text": " ",
+        "style": "Normal"
+      },
+      {
+        "para_index": 9,
+        "run_text": "de ",
+        "style": "Normal"
+      }
+    ]
+  },
+  "notes": [
+    "Direct formatting is not always wrong, but it often causes inconsistent output when templates change.",
+    "Heading-like paragraphs not using Heading styles can break TOC and accessibility."
+  ]
+}

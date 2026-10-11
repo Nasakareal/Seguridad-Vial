@@ -210,6 +210,22 @@ class ConstanciasManejoPage {
   bool get hasMore => currentPage < lastPage;
 }
 
+class ConstanciaExamenSolicitudesPage {
+  final List<ConstanciaExamenSolicitud> items;
+  final int currentPage;
+  final int lastPage;
+  final int total;
+
+  const ConstanciaExamenSolicitudesPage({
+    required this.items,
+    required this.currentPage,
+    required this.lastPage,
+    required this.total,
+  });
+
+  bool get hasMore => currentPage < lastPage;
+}
+
 class ConstanciasManejoCreateResult {
   final List<ConstanciaManejo> constancias;
   final List<int> ids;
@@ -246,6 +262,7 @@ class ConstanciaExamenSolicitud {
   final int? aciertos;
   final int? errores;
   final String? fechaExamen;
+  final String? createdAt;
   final String? tokenExpira;
   final String? observaciones;
   final String? urlExamen;
@@ -277,6 +294,7 @@ class ConstanciaExamenSolicitud {
     required this.aciertos,
     required this.errores,
     required this.fechaExamen,
+    required this.createdAt,
     required this.tokenExpira,
     required this.observaciones,
     required this.urlExamen,
@@ -318,6 +336,7 @@ class ConstanciaExamenSolicitud {
       aciertos: _readInt(json['aciertos']),
       errores: _readInt(json['errores']),
       fechaExamen: _readNullableString(json['fecha_examen']),
+      createdAt: _readNullableString(json['created_at']),
       tokenExpira: _readNullableString(json['token_expira']),
       observaciones: _readNullableString(json['observaciones']),
       urlExamen: _readNullableString(json['url_examen']),

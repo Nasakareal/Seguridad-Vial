@@ -19,7 +19,7 @@ constexpr uint32_t PACKET_MAGIC = 0x5356544CUL;  // SVTL
 constexpr uint8_t PACKET_VERSION = 1;
 constexpr uint32_t PLAN_MAGIC = 0x5356504CUL;    // SVPL
 
-enum class LampColor : uint8_t { red = 0, yellow = 1, green = 2 };
+enum class LampColor : uint8_t { red = 0, yellow = 1, green = 2, off = 3 };
 enum class Phase : uint8_t {
   stopped = 0,
   aGreen = 1,
@@ -28,6 +28,7 @@ enum class Phase : uint8_t {
   bGreen = 4,
   bYellow = 5,
   allRedBToA = 6,
+  flashingYellow = 7,
 };
 enum class PacketKind : uint8_t { sync = 1, ack = 2 };
 
@@ -59,11 +60,13 @@ PlanStorage plan{};
 LampColor currentColor = LampColor::red;
 Phase currentPhase = Phase::stopped;
 bool running = false;
+bool flashing = false;
 bool emergencyRed = true;
 uint32_t phaseStartedAt = 0;
 uint32_t phaseDurationMs = 0;
 uint32_t sequenceNumber = 0;
 uint32_t lastRadioSendAt = 0;
+uint32_t lastFlashToggleAt = 0;
 volatile uint32_t lastPeerContactAt = 0;
 volatile uint32_t lastPeerSequence = 0;
 String fault;
@@ -175,6 +178,7 @@ const char* colorName(LampColor color) {
   switch (color) {
     case LampColor::green: return "green";
     case LampColor::yellow: return "yellow";
+    case LampColor::off: return "off";
     default: return "red";
   }
 }
@@ -187,6 +191,7 @@ const char* phaseName(Phase phase) {
     case Phase::bGreen: return "B verde";
     case Phase::bYellow: return "B ámbar";
     case Phase::allRedBToA: return "Todo rojo B → A";
+    case Phase::flashingYellow: return "Destello ámbar";
     default: return "Detenido en rojo";
   }
 }
@@ -229,7 +234,7 @@ RadioPacket makePacket(PacketKind kind, LampColor color) {
 bool validPacket(const RadioPacket& packet) {
   return packet.magic == PACKET_MAGIC && packet.version == PACKET_VERSION &&
          packet.checksum == structChecksum(packet) &&
-         packet.color <= static_cast<uint8_t>(LampColor::green);
+         packet.color <= static_cast<uint8_t>(LampColor::off);
 }
 
 void sendRadio(const uint8_t* peer, PacketKind kind, LampColor color) {
@@ -294,6 +299,7 @@ bool initializeEspNow() {
 
 #if CONTROLLER_ROLE_MASTER
 void enterPhase(Phase phase, uint16_t seconds) {
+  flashing = false;
   currentPhase = phase;
   phaseStartedAt = millis();
   phaseDurationMs = static_cast<uint32_t>(seconds) * 1000UL;
@@ -304,6 +310,7 @@ void enterPhase(Phase phase, uint16_t seconds) {
 
 void forceAllRed(const String& reason, bool emergency) {
   running = false;
+  flashing = false;
   emergencyRed = emergency;
   currentPhase = Phase::stopped;
   phaseDurationMs = 0;
@@ -311,6 +318,29 @@ void forceAllRed(const String& reason, bool emergency) {
   fault = reason;
   applyColor(LampColor::red);
   sendRadio(FOLLOWER_MAC, PacketKind::sync, LampColor::red);
+}
+
+void startFlashingYellow() {
+  running = false;
+  flashing = true;
+  emergencyRed = false;
+  fault = "";
+  currentPhase = Phase::flashingYellow;
+  phaseDurationMs = 0;
+  lastFlashToggleAt = millis();
+  ++sequenceNumber;
+  applyColor(LampColor::yellow);
+  sendRadio(FOLLOWER_MAC, PacketKind::sync, LampColor::yellow);
+}
+
+void updateFlashingYellow() {
+  if (!flashing || millis() - lastFlashToggleAt < FLASH_HALF_PERIOD_MS) return;
+  lastFlashToggleAt = millis();
+  ++sequenceNumber;
+  const LampColor next =
+      currentColor == LampColor::yellow ? LampColor::off : LampColor::yellow;
+  applyColor(next);
+  sendRadio(FOLLOWER_MAC, PacketKind::sync, next);
 }
 
 void advancePhase() {
@@ -349,12 +379,16 @@ void addPlanJson(JsonObject target) {
 String statusJson() {
   JsonDocument doc;
   doc["running"] = running;
+  doc["flashing"] = flashing;
   doc["peer_linked"] = peerLinked();
   doc["emergency_all_red"] = emergencyRed;
   doc["mode"] = fault.isEmpty()
-                    ? (running ? (peerLinked() ? "Ciclo sincronizado"
-                                               : "Ciclo autónomo del maestro")
-                               : "Todo rojo")
+                    ? (flashing
+                           ? (peerLinked() ? "Destello ámbar sincronizado"
+                                           : "Destello ámbar del maestro")
+                           : (running ? (peerLinked() ? "Ciclo sincronizado"
+                                                      : "Ciclo autónomo del maestro")
+                                      : "Todo rojo"))
                     : "Falla segura";
   doc["phase"] = phaseName(currentPhase);
   doc["fault"] = fault;
@@ -363,12 +397,15 @@ String statusJson() {
   addPlanJson(doc["plan"].to<JsonObject>());
   JsonObject a = doc["node_a"].to<JsonObject>();
   a["name"] = plan.movementA;
-  a["color"] = colorName(masterColorFor(currentPhase));
+  a["color"] = colorName(flashing ? currentColor
+                                    : masterColorFor(currentPhase));
   a["online"] = true;
   a["remaining_seconds"] = (remainingMs() + 999) / 1000;
   JsonObject b = doc["node_b"].to<JsonObject>();
   b["name"] = plan.movementB;
-  b["color"] = colorName(followerColorFor(currentPhase));
+  b["color"] = colorName(flashing
+                             ? (peerLinked() ? currentColor : LampColor::red)
+                             : followerColorFor(currentPhase));
   b["online"] = peerLinked();
   b["remaining_seconds"] = (remainingMs() + 999) / 1000;
   String output;
@@ -392,7 +429,7 @@ bool validSeconds(int value, int minimum, int maximum) {
 
 void handlePlan() {
   if (!requireAuthentication()) return;
-  if (running) {
+  if (running || flashing) {
     sendJson(409, "{\"message\":\"Detén el ciclo antes de cambiar el plan.\"}");
     return;
   }
@@ -444,8 +481,22 @@ void initializeHttp() {
     }
     fault = "";
     emergencyRed = false;
+    flashing = false;
     running = true;
     enterPhase(Phase::aGreen, plan.greenA);
+    sendJson(200, statusJson());
+  });
+  server.on("/api/flash", HTTP_POST, [] {
+    if (!requireAuthentication()) return;
+    if (running) {
+      sendJson(409, "{\"message\":\"Detén el ciclo antes de activar el destello.\"}");
+      return;
+    }
+    if (!productionConfigurationReady()) {
+      sendJson(409, "{\"message\":\"Faltan MAC o claves definitivas en controller_config.h.\"}");
+      return;
+    }
+    startFlashingYellow();
     sendJson(200, statusJson());
   });
   server.on("/api/stop", HTTP_POST, [] {
@@ -492,11 +543,14 @@ void setup() {
 void loop() {
 #if CONTROLLER_ROLE_MASTER
   server.handleClient();
+  updateFlashingYellow();
   if (running && remainingMs() == 0) advancePhase();
   if (millis() - lastRadioSendAt >= SYNC_INTERVAL_MS) {
     lastRadioSendAt = millis();
     sendRadio(FOLLOWER_MAC, PacketKind::sync,
-              running ? followerColorFor(currentPhase) : LampColor::red);
+              flashing ? currentColor
+                       : (running ? followerColorFor(currentPhase)
+                                  : LampColor::red));
   }
 #else
   const bool linked = peerLinked();

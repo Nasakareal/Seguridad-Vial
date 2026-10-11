@@ -365,10 +365,10 @@ class _ConduceLegalidadShareTotalsHelpSheetState
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _tituloPaso('2', 'Se abre WhatsApp'),
+              _tituloPaso('2', 'Se prepara el informe Word'),
               const SizedBox(height: 8),
               const Text(
-                'Después de pulsar compartir, el sistema prepara el resumen y abre WhatsApp para continuar el envío.',
+                'Después de pulsar compartir, el sistema genera el informe oficial en Word y abre el menú para compartirlo.',
                 style: TextStyle(fontSize: 15, height: 1.4),
               ),
               const SizedBox(height: 20),
@@ -436,9 +436,9 @@ class _ConduceLegalidadShareTotalsHelpSheetState
                                   const SizedBox(height: 14),
                                   Text(
                                     preparando
-                                        ? 'Preparando resumen del operativo...'
+                                        ? 'Generando informe Word...'
                                         : abriendo
-                                        ? 'Abriendo WhatsApp...'
+                                        ? 'Abriendo opciones para compartir...'
                                         : 'Listo para compartir',
                                     textAlign: TextAlign.center,
                                     style: const TextStyle(
@@ -449,7 +449,7 @@ class _ConduceLegalidadShareTotalsHelpSheetState
                                   const SizedBox(height: 8),
                                   Text(
                                     preparando || abriendo
-                                        ? 'Espera unos segundos mientras se genera el mensaje.'
+                                        ? 'Espera unos segundos mientras se genera el documento y el mensaje.'
                                         : 'Pulsa compartir para iniciar.',
                                     textAlign: TextAlign.center,
                                     style: TextStyle(
@@ -538,16 +538,16 @@ class _ConduceLegalidadShareTotalsHelpSheetState
               const SizedBox(height: 18),
               _aviso(
                 icon: Icons.phone_android_outlined,
-                titulo: 'Se abre WhatsApp automáticamente',
+                titulo: 'Elige WhatsApp en el menú',
                 texto:
-                    'Después de pulsar compartir, WhatsApp se abrirá con el mensaje del resumen ya preparado.',
+                    'El menú para compartir incluye WhatsApp y las demás aplicaciones disponibles en tu teléfono.',
               ),
               const SizedBox(height: 12),
               _aviso(
                 icon: Icons.description_outlined,
-                titulo: 'El texto ya va listo',
+                titulo: 'Documento y texto listos',
                 texto:
-                    'No tienes que redactar el resumen manualmente; el sistema genera el contenido para compartirlo.',
+                    'El sistema adjunta el informe Word y también prepara el resumen para compartirlo.',
               ),
             ],
           ),
@@ -574,7 +574,7 @@ class _ConduceLegalidadShareTotalsHelpSheetState
               _tituloPaso('3', 'Selecciona el contacto'),
               const SizedBox(height: 8),
               const Text(
-                'Dentro de WhatsApp, sólo selecciona el contacto o grupo al que deseas enviar el resumen.',
+                'Elige WhatsApp y selecciona el contacto o grupo al que deseas enviar el informe y el resumen.',
                 style: TextStyle(fontSize: 15, height: 1.4),
               ),
               const SizedBox(height: 20),
@@ -781,7 +781,7 @@ class _ConduceLegalidadShareTotalsHelpSheetState
                 icon: Icons.check_circle_outline,
                 titulo: 'Proceso simple',
                 texto:
-                    'La acción real es: tocar compartir, abrir WhatsApp y seleccionar el destinatario.',
+                    'La acción real es: tocar compartir, elegir WhatsApp y seleccionar el destinatario.',
               ),
             ],
           ),
