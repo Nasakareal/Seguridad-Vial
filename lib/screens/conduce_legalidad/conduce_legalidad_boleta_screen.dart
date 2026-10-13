@@ -2,6 +2,8 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 
+import '../../constants/vehicle_release_notice.dart';
+
 import '../../models/conduce_legalidad.dart';
 import '../../services/browser_print_service.dart';
 import '../../services/conduce_legalidad_service.dart';
@@ -1314,7 +1316,7 @@ class ConduceLegalidadBoletaLegalText {
       return 'Para iniciar el trámite de liberación del vehículo, la persona interesada deberá acudir a $oficina$ubicacion, en su horario de atención, con identificación oficial y documentación que acredite propiedad o legítima posesión. $retiro';
     }
 
-    return 'Para iniciar el trámite de liberación del vehículo, la persona interesada deberá acudir a la Dirección de Justicia Cívica y Mediación Administrativa, ubicada en Periférico Paseo de la República #5000, Colonia Sentimientos de la Nación (C.P. 58178), en Morelia, Mich., de lunes a viernes de 09:00 a 18:00 horas, con identificación oficial y documentación que acredite propiedad o legítima posesión. Informes: 4433163728. $retiro';
+    return '$vehicleReleaseNotice $retiro';
   }
 
   static List<_BoletaInfractionEntry> _entries(

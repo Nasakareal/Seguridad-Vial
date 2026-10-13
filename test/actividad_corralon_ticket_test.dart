@@ -4,6 +4,11 @@ import 'package:seguridad_vial_app/models/actividad.dart';
 import 'package:seguridad_vial_app/screens/actividades/actividad_corralon_ticket_screen.dart';
 
 void main() {
+  test('el aviso de Siniestros usa el horario autorizado hasta las 16:00', () {
+    expect(actividadCorralonAvisoSiniestros, contains('4:00 p. m.'));
+    expect(actividadCorralonAvisoSiniestros, isNot(contains('3:00 p. m.')));
+  });
+
   testWidgets('el ticket muestra firma, inconformidad y aviso de Siniestros', (
     tester,
   ) async {

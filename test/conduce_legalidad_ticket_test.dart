@@ -153,6 +153,17 @@ void main() {
     expect(texto, isNot(contains('4433163728')));
   });
 
+  test('Morelia usa el mismo aviso de Siniestros hasta las 16:00', () {
+    final texto = ConduceLegalidadBoletaLegalText.informacionLiberacion(
+      const ConduceLegalidadVehiculo(retencionVehiculo: true),
+    );
+
+    expect(texto, contains('Unidad de Atención a Siniestros'));
+    expect(texto, contains('4:00 p. m.'));
+    expect(texto, isNot(contains('3:00 p. m.')));
+    expect(texto, isNot(contains('18:00')));
+  });
+
   test('el operativo conserva el supervisor enviado por el backend', () {
     final item = ConduceLegalidadOperativo.fromJson({
       'id': 11,

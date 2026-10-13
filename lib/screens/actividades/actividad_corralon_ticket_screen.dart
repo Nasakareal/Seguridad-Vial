@@ -2,15 +2,12 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 
+import '../../constants/vehicle_release_notice.dart';
 import '../../models/actividad.dart';
 import '../../services/browser_print_service.dart';
 import '../../services/thermal_printer_service.dart';
 
-const String actividadCorralonAvisoSiniestros =
-    'Puede recoger su vehículo en la Unidad de Atención a Siniestros, '
-    'ubicada en Periférico Independencia #5000, col. Sentimientos de la '
-    'Nación, Morelia, Michoacán, en un horario de 9:00 a. m. a 3:00 p. m., '
-    'de lunes a viernes.';
+const String actividadCorralonAvisoSiniestros = vehicleReleaseNotice;
 
 class ActividadCorralonTicketScreen extends StatefulWidget {
   final Actividad actividad;
