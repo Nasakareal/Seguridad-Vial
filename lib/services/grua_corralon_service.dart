@@ -1,15 +1,22 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:http/http.dart' as http;
-import 'package:image_picker/image_picker.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
 
 import 'auth_service.dart';
 
 class GruaCorralonResult {
   final List<Map<String, dynamic>> items;
   final String? gruaNombre;
+  final Map<String, dynamic> summary;
 
-  const GruaCorralonResult({required this.items, this.gruaNombre});
+  const GruaCorralonResult({
+    required this.items,
+    required this.summary,
+    this.gruaNombre,
+  });
 }
 
 class GruaCorralonService {
@@ -55,7 +62,59 @@ class GruaCorralonService {
     return GruaCorralonResult(
       items: items,
       gruaNombre: grua is Map ? grua['nombre']?.toString() : null,
+      summary: raw['summary'] is Map
+          ? Map<String, dynamic>.from(raw['summary'] as Map)
+          : const {},
     );
+  }
+
+  static String imageUrl(String endpoint) {
+    if (endpoint.startsWith('http://') || endpoint.startsWith('https://')) {
+      return endpoint;
+    }
+    return '${AuthService.baseUrl}${endpoint.startsWith('/') ? endpoint : '/$endpoint'}';
+  }
+
+  static Future<Map<String, String>> authenticatedHeaders() => _headers();
+
+  static Future<void> exportAndShare({
+    required String format,
+    required String estado,
+    String search = '',
+  }) async {
+    final normalized = format.toLowerCase();
+    if (normalized != 'csv' && normalized != 'pdf') {
+      throw Exception('Formato de exportación no válido.');
+    }
+
+    final uri =
+        Uri.parse(
+          '${AuthService.baseUrl}/grua/corralon/exportar/$normalized',
+        ).replace(
+          queryParameters: {
+            'estado': estado,
+            if (search.trim().isNotEmpty) 'q': search.trim(),
+          },
+        );
+    final response = await http
+        .get(uri, headers: await _headers())
+        .timeout(const Duration(seconds: 45));
+    if (response.statusCode != 200) {
+      throw Exception(_errorMessage(response));
+    }
+
+    final directory = await getTemporaryDirectory();
+    final timestamp = DateTime.now().millisecondsSinceEpoch;
+    final file = File(
+      '${directory.path}${Platform.pathSeparator}servicios_corralon_$timestamp.$normalized',
+    );
+    await file.writeAsBytes(response.bodyBytes, flush: true);
+    await Share.shareXFiles([
+      XFile(
+        file.path,
+        mimeType: normalized == 'pdf' ? 'application/pdf' : 'text/csv',
+      ),
+    ], text: 'Reporte de servicios de corralón');
   }
 
   static Future<void> entregar({
