@@ -108,6 +108,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   Future<bool> _redirectSpecialHomeIfNeeded() async {
+    if (await AuthService.isGruaUser()) {
+      if (!mounted) return true;
+      Navigator.pushReplacementNamed(context, AppRoutes.gruaCorralon);
+      return true;
+    }
+
     final motociclistaHome =
         await HomeResolverService.isMotociclistaHomeAvailable();
     if (!mounted) return true;

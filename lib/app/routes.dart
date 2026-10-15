@@ -1,6 +1,7 @@
 class AppRoutes {
   static const String login = '/login';
   static const String home = '/home';
+  static const String gruaCorralon = '/grua/corralon';
   static const String homePerito = '/home-perito';
   static const String homeAgenteUpec = '/home-agente-upec';
   static const String homeAgenteVial = '/home-agente-vial';

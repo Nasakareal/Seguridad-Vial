@@ -319,6 +319,18 @@ class AuthService {
     return prefs.getInt(_userIdKey);
   }
 
+  static Future<bool> isGruaUser() async {
+    final payload = await getStoredUserPayload();
+    final accountType = payload?['account_type']
+        ?.toString()
+        .trim()
+        .toLowerCase();
+    if (accountType == 'grua') return true;
+
+    final role = (await getRole())?.trim().toUpperCase();
+    return role == 'GRUA';
+  }
+
   static Future<String?> getUserEmail() async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getString(_userEmailKey);

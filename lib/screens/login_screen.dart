@@ -10,6 +10,7 @@ import 'home_fenix_screen.dart';
 import 'home_motociclista_screen.dart';
 import 'home_screen.dart';
 import 'home_perito_screen.dart';
+import 'grua/grua_corralon_screen.dart';
 import 'location_consent_screen.dart';
 import '../app/routes.dart';
 
@@ -60,8 +61,21 @@ class _LoginScreenState extends State<LoginScreen> {
       if (!mounted) return;
 
       if (result.success) {
-        await OfflineSyncService.initialize();
-        await OfflineSyncService.flushPending();
+        final isGrua = await AuthService.isGruaUser();
+        if (!isGrua) {
+          await OfflineSyncService.initialize();
+          await OfflineSyncService.flushPending();
+        }
+
+        if (!mounted) return;
+        if (isGrua) {
+          Navigator.pushAndRemoveUntil(
+            context,
+            MaterialPageRoute(builder: (_) => const GruaCorralonScreen()),
+            (_) => false,
+          );
+          return;
+        }
 
         final askLocation = await AuthService.shouldAskLocation();
         final motociclistaHomeAvailable =

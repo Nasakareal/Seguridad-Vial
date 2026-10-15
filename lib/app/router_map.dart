@@ -20,6 +20,7 @@ import '../screens/home_fenix_screen.dart';
 import '../screens/home_motociclista_screen.dart';
 import '../screens/home_screen.dart';
 import '../screens/home_perito_screen.dart';
+import '../screens/grua/grua_corralon_screen.dart';
 import '../screens/account/change_password_screen.dart';
 import '../screens/account/account_settings_screen.dart';
 import '../screens/account/profile_screen.dart';
@@ -137,6 +138,7 @@ import '../widgets/superadmin_guard.dart';
 final Map<String, WidgetBuilder> appRoutesMap = {
   AppRoutes.login: (context) => const LoginScreen(),
   AppRoutes.home: (context) => const HomeScreen(),
+  AppRoutes.gruaCorralon: (context) => const GruaCorralonScreen(),
   AppRoutes.homePerito: (context) => const HomePeritoScreen(),
   AppRoutes.homeAgenteUpec: (context) => const HomeAgenteUpecScreen(),
   AppRoutes.homeAgenteVial: (context) => const HomeAgenteVialScreen(),
