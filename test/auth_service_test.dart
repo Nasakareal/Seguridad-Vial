@@ -286,6 +286,43 @@ void main() {
   );
 
   test(
+    'delegaciones roles can feed but only delegado and superadmin can create',
+    () async {
+      for (final entry in <(String, bool)>[
+        ('Superadmin', true),
+        ('Delegado', true),
+        ('Policia', false),
+        ('Administrativo', false),
+      ]) {
+        SharedPreferences.setMockInitialValues(<String, Object>{
+          'auth_token': 'token-prueba',
+          'auth_role': entry.$1,
+          'auth_unidad_id': AuthService.unidadDelegacionesId,
+          'auth_delegacion_id': 15,
+          'auth_user_payload': jsonEncode(<String, Object>{
+            'id': 500,
+            'role': <String, Object>{'name': entry.$1},
+            'unidad_id': AuthService.unidadDelegacionesId,
+            'delegacion_id': 15,
+          }),
+          'auth_perms': <String>[],
+        });
+
+        expect(
+          await AuthService.canFeedConduceLegalidad(),
+          isTrue,
+          reason: '${entry.$1} debe poder alimentar',
+        );
+        expect(
+          await AuthService.canCreateConduceLegalidad(),
+          entry.$2,
+          reason: entry.$1,
+        );
+      }
+    },
+  );
+
+  test(
     'only administrador subdirector and superadmin set operativo schedule',
     () async {
       for (final entry in <(String, int, bool)>[

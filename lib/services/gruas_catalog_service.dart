@@ -33,6 +33,32 @@ class GruasCatalogService {
     );
   }
 
+  static Future<List<Map<String, dynamic>>> fetchOperativoGruas({
+    required int operativoId,
+    required int unidadId,
+    int? delegacionId,
+  }) {
+    if (operativoId <= 0 || unidadId <= 0) {
+      return Future.value(const <Map<String, dynamic>>[]);
+    }
+
+    final access = _GruasAccess(
+      hasFullAccess: false,
+      unidadFiltroId: unidadId,
+      delegacionFiltroId: unidadId == AuthService.unidadDelegacionesId
+          ? delegacionId
+          : null,
+      queryParameters: const <String, String>{},
+    );
+
+    return _fetchForAccess(
+      access,
+      cacheKey:
+          '${_cachePrefix}_operativo_${operativoId}_unidad_${unidadId}_delegacion_${delegacionId ?? 0}',
+      endpointPath: '/conduce-legalidad/operativos/$operativoId/gruas',
+    );
+  }
+
   static Future<List<Map<String, dynamic>>> _fetchForAccess(
     _GruasAccess access, {
     required String cacheKey,

@@ -15,7 +15,7 @@ void main() {
     expect(find.text('Detención'), findsOneWidget);
     expect(find.text('Policía Estatal'), findsOneWidget);
     expect(find.text('Copiar'), findsOneWidget);
-    expect(find.text('WhatsApp'), findsOneWidget);
+    expect(find.text('Compartir'), findsOneWidget);
   });
 
   test('RND message does not include internal warning text', () {
@@ -24,6 +24,8 @@ void main() {
     ).readAsStringSync();
 
     expect(source, isNot(contains('Información incompleta')));
+    expect(source, isNot(contains('wa.me/')));
+    expect(source, isNot(contains('5214433163728')));
   });
 
   test('RND form reuses all clothing selectors in the generated message', () {

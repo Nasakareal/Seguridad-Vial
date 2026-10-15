@@ -49,9 +49,6 @@ class ConduceLegalidadCapturaScreen extends StatefulWidget {
 
 class _ConduceLegalidadCapturaScreenState
     extends State<ConduceLegalidadCapturaScreen> {
-  static const _agenteAdscripcionDefault =
-      'Unidad de Protección en Vialidades Urbanas';
-
   final _formKey = GlobalKey<FormState>();
   final _contentErrorKey = GlobalKey();
   final _agenteNombresCtrl = TextEditingController();
@@ -85,6 +82,29 @@ class _ConduceLegalidadCapturaScreenState
   final ImagePicker _picker = ImagePicker();
 
   bool get _editing => widget.initialCaptura != null;
+
+  String get _agenteAdscripcion {
+    final operativo = _operativo;
+    if (operativo == null) {
+      return widget.initialCaptura?.agenteAdscripcion ??
+          'Adscripción del operativo';
+    }
+
+    final unidad = switch (operativo.unidadId) {
+      1 => 'Unidad de Atención a Siniestros',
+      2 => 'Unidad de Delegaciones',
+      3 => 'Unidad de Seguridad Vial',
+      4 => 'Unidad de Protección a Carreteras',
+      5 => 'Unidad de Protección en Vialidades Urbanas',
+      _ => 'Unidad operativa',
+    };
+    final delegacion = operativo.delegacion?.nombre.trim() ?? '';
+    if (operativo.unidadId == AuthService.unidadDelegacionesId &&
+        delegacion.isNotEmpty) {
+      return '$unidad · Delegación de $delegacion';
+    }
+    return unidad;
+  }
 
   void _showHelp() {
     showModalBottomSheet(
@@ -695,6 +715,7 @@ class _ConduceLegalidadCapturaScreenState
       initialTipoGeneral: widget.module.isAlcoholimetria
           ? 'automovil'
           : 'motocicleta',
+      gruasLoader: _cargarGruasDelOperativo,
     );
     if (vehiculo == null || !mounted) return;
     setState(() {
@@ -712,10 +733,24 @@ class _ConduceLegalidadCapturaScreenState
           _vehiculos[index].tipoGeneral ??
           (widget.module.isAlcoholimetria ? 'automovil' : 'motocicleta'),
       initialVehiculo: _vehiculos[index],
+      gruasLoader: _cargarGruasDelOperativo,
     );
     if (vehiculo == null || !mounted) return;
     setState(() => _vehiculos[index] = vehiculo);
     _draft.notifyChanged();
+  }
+
+  Future<List<Map<String, dynamic>>> _cargarGruasDelOperativo() {
+    final operativo = _operativo;
+    if (operativo == null || operativo.unidadId == null) {
+      return Future.value(const <Map<String, dynamic>>[]);
+    }
+
+    return GruasCatalogService.fetchOperativoGruas(
+      operativoId: operativo.id,
+      unidadId: operativo.unidadId!,
+      delegacionId: operativo.delegacionId,
+    );
   }
 
   void _setFundamento(ConduceLegalidadFundamento? fundamento) {
@@ -905,7 +940,7 @@ class _ConduceLegalidadCapturaScreenState
         'agente_apellido_paterno': _agenteApellidoPaternoCtrl.text.trim(),
         'agente_apellido_materno': _agenteApellidoMaternoCtrl.text.trim(),
         'agente_numero_placa': _agentePlacaCtrl.text.trim(),
-        'agente_adscripcion': _agenteAdscripcionDefault,
+        'agente_adscripcion': _agenteAdscripcion,
         'narrativa': _emptyToNull(_narrativaCtrl.text),
         'observaciones': _emptyToNull(_observacionesCtrl.text),
         if (!_fundamentoLegacyNoDisponible) ...{
@@ -1156,14 +1191,14 @@ class _ConduceLegalidadCapturaScreenState
                         : null,
                   ),
                   const SizedBox(height: 12),
-                  const InputDecorator(
-                    decoration: InputDecoration(
+                  InputDecorator(
+                    decoration: const InputDecoration(
                       labelText: 'Adscripción',
                       helperText: 'Se asigna automáticamente.',
                       border: OutlineInputBorder(),
                       prefixIcon: Icon(Icons.account_balance_outlined),
                     ),
-                    child: Text(_agenteAdscripcionDefault),
+                    child: Text(_agenteAdscripcion),
                   ),
                   const SizedBox(height: 20),
                   DropdownButtonFormField<ConduceLegalidadFundamento?>(

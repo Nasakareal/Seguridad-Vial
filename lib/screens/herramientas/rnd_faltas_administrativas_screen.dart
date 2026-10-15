@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:share_plus/share_plus.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../../services/auth_service.dart';
 import '../../services/conduce_legalidad_persona_descriptor.dart';
@@ -223,14 +222,7 @@ class _RndFaltasAdministrativasScreenState
 
   Future<void> _shareMessage() async {
     if (!_validate()) return;
-    final message = _buildMensaje();
-    final uri = Uri.parse(
-      'https://wa.me/$_barandillasWhatsappNumber?text=${Uri.encodeComponent(message)}',
-    );
-    final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
-    if (opened) return;
-
-    await Share.share(message);
+    await Share.share(_buildMensaje());
   }
 
   bool _validate() {
@@ -308,7 +300,7 @@ class _RndFaltasAdministrativasScreenState
               child: FilledButton.icon(
                 onPressed: _shareMessage,
                 icon: const Icon(Icons.share),
-                label: const Text('WhatsApp'),
+                label: const Text('Compartir'),
               ),
             ),
           ],
@@ -819,7 +811,6 @@ final _colorVestimentaOptions = ConduceLegalidadPersonaDescriptor.colorOptions
     .map((value) => _Option(value, value))
     .toList(growable: false);
 
-const _barandillasWhatsappNumber = '5214433163728';
 const _destinoJusticiaCivica =
     'Dirección de Justicia Cívica y Mediación Administrativa';
 
