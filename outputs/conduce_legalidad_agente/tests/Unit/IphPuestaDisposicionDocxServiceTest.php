@@ -10,6 +10,129 @@ use ZipArchive;
 
 class IphPuestaDisposicionDocxServiceTest extends TestCase
 {
+    public function test_barandillas_solo_vehiculo_ignora_personas_y_usa_el_firmante_del_operativo(): void
+    {
+        if (!class_exists(ZipArchive::class)) {
+            $this->markTestSkipped('ZipArchive is required to inspect generated DOCX files.');
+        }
+
+        $hecho = new Hechos([
+            'id' => 903,
+            'folio_c5i' => 'CL-77-903',
+        ]);
+        $mapeo = [
+            'hecho' => [
+                'folio_c5i' => 'CL-77-903',
+                'fecha' => '2026-10-14',
+                'hora' => '10:45',
+                'creador_nombre' => 'Agente del resguardo',
+                'unidad_org_nombre' => 'Unidad de Protección en Vialidades Urbanas',
+                'ubicacion' => [],
+            ],
+            'puesta_disposicion' => [
+                'nombre_policia' => 'Agente del resguardo',
+                'agente_nombres' => 'Agente',
+                'agente_apellido_paterno' => 'Del',
+                'agente_apellido_materno' => 'Resguardo',
+                'firmante_iph_nombres' => 'Laura Beatriz',
+                'firmante_iph_apellido_paterno' => 'Ramírez',
+                'firmante_iph_apellido_materno' => 'Torres',
+            ],
+            'vehiculos_hecho' => [[
+                'marca' => 'Honda',
+                'linea' => 'Cargo',
+                'placas' => 'ABC123',
+                'conductores' => [[
+                    'nombre_completo' => 'Persona Conductora Prueba',
+                ]],
+            ]],
+            'vehiculos' => [[
+                'marca' => 'Honda',
+                'linea' => 'Cargo',
+                'placas' => 'ABC123',
+                'conductores' => [[
+                    'nombre_completo' => 'Persona Conductora Prueba',
+                ]],
+            ]],
+            'conductores_hecho' => [[
+                'nombre_completo' => 'Persona Conductora Prueba',
+            ]],
+            'personas' => [[
+                'nombre_completo' => 'Persona Conductora Prueba',
+            ]],
+            'lesionados_hecho' => [],
+            'objetos' => [],
+            'anexos' => [],
+        ];
+
+        [$path, $filename] = app(IphPuestaDisposicionDocxService::class)
+            ->generarConduceLegalidadBarandillasSoloVehiculo($hecho, $mapeo);
+
+        try {
+            $texto = $this->textoDocx($path);
+
+            $this->assertStringContainsString('iph_barandillas_conduce_vehiculo_', $filename);
+            $this->assertStringContainsString('RamírezTorresLaura Beatriz', $texto);
+            $this->assertStringNotContainsString('PersonaConductoraPrueba', $texto);
+            $this->assertStringNotContainsString('DelResguardoAgente', $texto);
+            $this->assertStringNotContainsString('$apellidoPaternoquien', $texto);
+            $this->assertStringNotContainsString('$apellidoMaternoquien', $texto);
+            $this->assertStringNotContainsString('$nombrequien', $texto);
+        } finally {
+            if (is_file($path)) {
+                @unlink($path);
+            }
+        }
+    }
+
+    public function test_barandillas_reemplaza_el_nombre_de_quien_firma_el_iph(): void
+    {
+        if (!class_exists(ZipArchive::class)) {
+            $this->markTestSkipped('ZipArchive is required to inspect generated DOCX files.');
+        }
+
+        $hecho = new Hechos([
+            'id' => 902,
+            'folio_c5i' => 'CL-77-902',
+        ]);
+        $mapeo = [
+            'hecho' => [
+                'folio_c5i' => 'CL-77-902',
+                'fecha' => '2026-10-10',
+                'hora' => '09:30',
+                'creador_nombre' => 'Agente que captura',
+                'ubicacion' => [],
+            ],
+            'puesta_disposicion' => [
+                'nombre_policia' => 'Agente que captura',
+                'firmante_iph_nombres' => 'Laura Beatriz',
+                'firmante_iph_apellido_paterno' => 'Ramírez',
+                'firmante_iph_apellido_materno' => 'Torres',
+            ],
+            'vehiculos_hecho' => [],
+            'lesionados_hecho' => [],
+            'objetos' => [],
+            'anexos' => [],
+            'personas' => [],
+        ];
+
+        [$path] = app(IphPuestaDisposicionDocxService::class)
+            ->generarConduceLegalidadBarandillas($hecho, $mapeo);
+
+        try {
+            $texto = $this->textoDocx($path);
+
+            $this->assertStringContainsString('RamírezTorresLaura Beatriz', $texto);
+            $this->assertStringNotContainsString('$apellidoPaternoquien', $texto);
+            $this->assertStringNotContainsString('$apellidoMaternoquien', $texto);
+            $this->assertStringNotContainsString('$nombrequien', $texto);
+        } finally {
+            if (is_file($path)) {
+                @unlink($path);
+            }
+        }
+    }
+
     public function test_barandillas_no_confunde_al_agente_con_la_persona_detenida(): void
     {
         if (!class_exists(ZipArchive::class)) {

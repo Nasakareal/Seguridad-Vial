@@ -50,6 +50,9 @@ class ConduceLegalidadIphMappingTest extends TestCase
             'codigo_postal' => '58000',
             'lat' => 19.7008,
             'lng' => -101.1844,
+            'firmante_iph_nombres' => 'Laura Beatriz',
+            'firmante_iph_apellido_paterno' => 'Ramírez',
+            'firmante_iph_apellido_materno' => 'Torres',
         ]);
 
         $captura = new ConduceLegalidadCaptura();
@@ -93,6 +96,9 @@ class ConduceLegalidadIphMappingTest extends TestCase
         $this->assertSame('Pérez', $mapeo['puesta_disposicion']['agente_apellido_paterno']);
         $this->assertSame('López', $mapeo['puesta_disposicion']['agente_apellido_materno']);
         $this->assertSame('PLACA-7788', $mapeo['puesta_disposicion']['agente_numero_placa']);
+        $this->assertSame('Laura Beatriz', $mapeo['puesta_disposicion']['firmante_iph_nombres']);
+        $this->assertSame('Ramírez', $mapeo['puesta_disposicion']['firmante_iph_apellido_paterno']);
+        $this->assertSame('Torres', $mapeo['puesta_disposicion']['firmante_iph_apellido_materno']);
         $this->assertSame(
             'Unidad de Protección en Vialidades Urbanas',
             $mapeo['puesta_disposicion']['area']

@@ -1,12 +1,14 @@
 import 'dart:typed_data';
 
 import 'package:fl_chart/fl_chart.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../services/auth_service.dart';
 import '../../services/grua_corralon_service.dart';
 import '../login_screen.dart';
+import 'grua_expediente_screen.dart';
 
 const _navy = Color(0xff0b3558);
 const _teal = Color(0xff087f8c);
@@ -24,9 +26,15 @@ class _GruaCorralonScreenState extends State<GruaCorralonScreen> {
   Map<String, dynamic> _summary = const {};
   bool _loading = true;
   bool _exporting = false;
+  bool _loadingMore = false;
   String? _error;
   String? _gruaNombre;
   String _estado = 'pendientes';
+  String _origen = 'TODOS';
+  int _dias = 0;
+  int _page = 1;
+  int _lastPage = 1;
+  int _total = 0;
 
   @override
   void initState() {
@@ -40,27 +48,42 @@ class _GruaCorralonScreenState extends State<GruaCorralonScreen> {
     super.dispose();
   }
 
-  Future<void> _load() async {
+  Future<void> _load({bool append = false}) async {
     setState(() {
-      _loading = true;
+      if (append) {
+        _loadingMore = true;
+      } else {
+        _loading = true;
+      }
       _error = null;
     });
     try {
       final result = await GruaCorralonService.fetch(
         estado: _estado,
         search: _searchController.text,
+        origin: _origen,
+        days: _dias,
+        page: append ? _page + 1 : 1,
       );
       if (!mounted) return;
       setState(() {
-        _items = result.items;
+        _items = append ? [..._items, ...result.items] : result.items;
         _summary = result.summary;
         _gruaNombre = result.gruaNombre;
+        _page = result.currentPage;
+        _lastPage = result.lastPage;
+        _total = result.total;
       });
     } catch (error) {
       if (!mounted) return;
       setState(() => _error = error.toString().replaceFirst('Exception: ', ''));
     } finally {
-      if (mounted) setState(() => _loading = false);
+      if (mounted) {
+        setState(() {
+          _loading = false;
+          _loadingMore = false;
+        });
+      }
     }
   }
 
@@ -71,6 +94,8 @@ class _GruaCorralonScreenState extends State<GruaCorralonScreen> {
         format: format,
         estado: _estado,
         search: _searchController.text,
+        origin: _origen,
+        days: _dias,
       );
     } catch (error) {
       if (!mounted) return;
@@ -95,9 +120,44 @@ class _GruaCorralonScreenState extends State<GruaCorralonScreen> {
   }
 
   Future<void> _openEntrega(Map<String, dynamic> item) async {
+    final record = item['expediente'];
+    if (record is Map && record['completo'] != true) {
+      final missing = record['faltantes'] is List
+          ? (record['faltantes'] as List).join(', ')
+          : 'datos obligatorios';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Completa el expediente antes de entregar. Falta: $missing',
+          ),
+        ),
+      );
+      await Navigator.push<bool>(
+        context,
+        MaterialPageRoute(builder: (_) => GruaExpedienteScreen(item: item)),
+      );
+      await _load();
+      return;
+    }
     final saved = await Navigator.push<bool>(
       context,
       MaterialPageRoute(builder: (_) => GruaEntregaScreen(item: item)),
+    );
+    if (saved == true) await _load();
+  }
+
+  Future<void> _openServicio(Map<String, dynamic> item) async {
+    await Navigator.push<void>(
+      context,
+      MaterialPageRoute(builder: (_) => GruaServicioScreen(item: item)),
+    );
+    await _load();
+  }
+
+  Future<void> _newService() async {
+    final saved = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(builder: (_) => const GruaExpedienteScreen()),
     );
     if (saved == true) await _load();
   }
@@ -155,6 +215,15 @@ class _GruaCorralonScreenState extends State<GruaCorralonScreen> {
           ),
         ],
       ),
+      floatingActionButton: _estado == 'pendientes'
+          ? FloatingActionButton.extended(
+              onPressed: _newService,
+              backgroundColor: _teal,
+              foregroundColor: Colors.white,
+              icon: const Icon(Icons.add),
+              label: const Text('Nuevo servicio'),
+            )
+          : null,
       body: SafeArea(
         child: Column(
           children: [
@@ -215,6 +284,47 @@ class _GruaCorralonScreenState extends State<GruaCorralonScreen> {
           ),
         ),
         const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(
+              child: _headerDropdown<String>(
+                value: _origen,
+                icon: Icons.account_tree_outlined,
+                items: const {
+                  'TODOS': 'Todos los orígenes',
+                  'SINIESTRO': 'Siniestros',
+                  'ACTIVIDAD': 'Actividades',
+                  'CONDUCE_LEGALIDAD': 'Conduce con Legalidad',
+                  'MANUAL': 'Alta manual / otros',
+                },
+                onChanged: (value) {
+                  setState(() => _origen = value);
+                  _load();
+                },
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: _headerDropdown<int>(
+                value: _dias,
+                icon: Icons.date_range_outlined,
+                items: const {
+                  0: 'Todas las fechas',
+                  1: 'Hoy',
+                  7: 'Últimos 7 días',
+                  30: 'Últimos 30 días',
+                  90: 'Últimos 90 días',
+                  365: 'Último año',
+                },
+                onChanged: (value) {
+                  setState(() => _dias = value);
+                  _load();
+                },
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
         SizedBox(
           width: double.infinity,
           child: SegmentedButton<String>(
@@ -244,6 +354,45 @@ class _GruaCorralonScreenState extends State<GruaCorralonScreen> {
           ),
         ),
       ],
+    ),
+  );
+
+  Widget _headerDropdown<T>({
+    required T value,
+    required IconData icon,
+    required Map<T, String> items,
+    required ValueChanged<T> onChanged,
+  }) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 10),
+    decoration: BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(12),
+    ),
+    child: DropdownButtonHideUnderline(
+      child: DropdownButton<T>(
+        value: value,
+        isExpanded: true,
+        icon: const Icon(Icons.expand_more),
+        items: items.entries
+            .map(
+              (entry) => DropdownMenuItem<T>(
+                value: entry.key,
+                child: Row(
+                  children: [
+                    Icon(icon, size: 18, color: _teal),
+                    const SizedBox(width: 7),
+                    Expanded(
+                      child: Text(entry.value, overflow: TextOverflow.ellipsis),
+                    ),
+                  ],
+                ),
+              ),
+            )
+            .toList(),
+        onChanged: (newValue) {
+          if (newValue != null) onChanged(newValue);
+        },
+      ),
     ),
   );
 
@@ -297,7 +446,7 @@ class _GruaCorralonScreenState extends State<GruaCorralonScreen> {
                 ),
               ),
               Text(
-                '${_items.length} registros',
+                '${_items.length} de $_total',
                 style: TextStyle(color: Colors.blueGrey.shade600),
               ),
             ],
@@ -310,9 +459,27 @@ class _GruaCorralonScreenState extends State<GruaCorralonScreen> {
               (item) => _VehicleCard(
                 item: item,
                 pending: _estado == 'pendientes',
+                onOpen: () => _openServicio(item),
                 onDeliver: () => _openEntrega(item),
               ),
             ),
+          if (_page < _lastPage) ...[
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+              onPressed: _loadingMore ? null : () => _load(append: true),
+              icon: _loadingMore
+                  ? const SizedBox.square(
+                      dimension: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.expand_more),
+              label: Text(
+                _loadingMore
+                    ? 'Cargando…'
+                    : 'Cargar más (${_items.length} de $_total)',
+              ),
+            ),
+          ],
           const SizedBox(height: 24),
         ],
       ),
@@ -648,14 +815,62 @@ class _EmptyState extends StatelessWidget {
   );
 }
 
+class _OriginBadge extends StatelessWidget {
+  final Map<String, dynamic> origin;
+
+  const _OriginBadge({required this.origin});
+
+  @override
+  Widget build(BuildContext context) {
+    final type = origin['tipo']?.toString() ?? 'SIN_CLASIFICAR';
+    final (color, icon) = switch (type) {
+      'SINIESTRO' => (Colors.red.shade700, Icons.car_crash_outlined),
+      'ACTIVIDAD' => (Colors.indigo.shade700, Icons.assignment_outlined),
+      'CONDUCE_LEGALIDAD' => (Colors.purple.shade700, Icons.gavel_outlined),
+      _ => (Colors.blueGrey, Icons.help_outline),
+    };
+    final label = origin['etiqueta']?.toString() ?? 'Sin clasificar';
+    final detail = origin['detalle']?.toString().trim() ?? '';
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: .1),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: color.withValues(alpha: .25)),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, size: 18, color: color),
+          const SizedBox(width: 7),
+          Expanded(
+            child: Text(
+              detail.isEmpty ? label : '$label · $detail',
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: color,
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _VehicleCard extends StatelessWidget {
   final Map<String, dynamic> item;
   final bool pending;
+  final VoidCallback onOpen;
   final VoidCallback onDeliver;
 
   const _VehicleCard({
     required this.item,
     required this.pending,
+    required this.onOpen,
     required this.onDeliver,
   });
 
@@ -669,15 +884,17 @@ class _VehicleCard extends StatelessWidget {
     final liberacion = item['liberacion'] is Map
         ? Map<String, dynamic>.from(item['liberacion'] as Map)
         : null;
-    final fotos = item['fotos'] is Map
-        ? Map<String, dynamic>.from(item['fotos'] as Map)
+    final rawGallery = item['galeria'];
+    final photoEntries = rawGallery is List
+        ? rawGallery
+              .whereType<Map>()
+              .map((photo) => Map<String, dynamic>.from(photo))
+              .where((photo) => (photo['url']?.toString() ?? '').isNotEmpty)
+              .toList()
+        : <Map<String, dynamic>>[];
+    final origin = item['origen'] is Map
+        ? Map<String, dynamic>.from(item['origen'] as Map)
         : const <String, dynamic>{};
-    final photoEntries = <(String, String)>[
-      if ((fotos['inventario']?.toString() ?? '').isNotEmpty)
-        ('Inventario', fotos['inventario'].toString()),
-      if ((fotos['entrega']?.toString() ?? '').isNotEmpty)
-        ('Entrega', fotos['entrega'].toString()),
-    ];
 
     return Card(
       elevation: 0,
@@ -689,17 +906,22 @@ class _VehicleCard extends StatelessWidget {
           if (photoEntries.isNotEmpty)
             SizedBox(
               height: 170,
-              child: Row(
-                children: photoEntries
-                    .map(
-                      (photo) => Expanded(
-                        child: _AuthenticatedPhoto(
-                          endpoint: photo.$2,
-                          label: photo.$1,
-                        ),
-                      ),
-                    )
-                    .toList(),
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                itemCount: photoEntries.length,
+                separatorBuilder: (_, __) => const SizedBox(width: 2),
+                itemBuilder: (context, index) {
+                  final photo = photoEntries[index];
+                  return SizedBox(
+                    width: photoEntries.length == 1
+                        ? MediaQuery.sizeOf(context).width - 28
+                        : 250,
+                    child: _AuthenticatedPhoto(
+                      endpoint: photo['url'].toString(),
+                      label: photo['etiqueta']?.toString() ?? 'Evidencia',
+                    ),
+                  );
+                },
               ),
             )
           else
@@ -757,6 +979,8 @@ class _VehicleCard extends StatelessWidget {
                     ),
                   ],
                 ),
+                const SizedBox(height: 8),
+                _OriginBadge(origin: origin),
                 const Divider(height: 22),
                 _row(
                   Icons.pin_outlined,
@@ -795,19 +1019,35 @@ class _VehicleCard extends StatelessWidget {
                 ],
                 if (pending) ...[
                   const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: onOpen,
+                          icon: const Icon(Icons.assignment_outlined),
+                          label: const Text('Abrir servicio'),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: FilledButton.icon(
+                          style: FilledButton.styleFrom(backgroundColor: _teal),
+                          onPressed: onDeliver,
+                          icon: const Icon(Icons.verified_outlined),
+                          label: const Text('Entregar'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ] else
                   SizedBox(
                     width: double.infinity,
-                    child: FilledButton.icon(
-                      style: FilledButton.styleFrom(
-                        backgroundColor: _teal,
-                        padding: const EdgeInsets.symmetric(vertical: 13),
-                      ),
-                      onPressed: onDeliver,
-                      icon: const Icon(Icons.verified_outlined),
-                      label: const Text('Registrar entrega'),
+                    child: OutlinedButton.icon(
+                      onPressed: onOpen,
+                      icon: const Icon(Icons.assignment_outlined),
+                      label: const Text('Ver servicio completo'),
                     ),
                   ),
-                ],
               ],
             ),
           ),
@@ -928,6 +1168,478 @@ class _AuthenticatedPhoto extends StatelessWidget {
   }
 }
 
+class GruaServicioScreen extends StatefulWidget {
+  final Map<String, dynamic> item;
+
+  const GruaServicioScreen({super.key, required this.item});
+
+  @override
+  State<GruaServicioScreen> createState() => _GruaServicioScreenState();
+}
+
+class _GruaServicioScreenState extends State<GruaServicioScreen> {
+  final _formKey = GlobalKey<FormState>();
+  final _maniobras = TextEditingController();
+  final _observaciones = TextEditingController();
+  late Map<String, dynamic> _item;
+  bool? _realizoManiobras;
+  bool _saving = false;
+  bool _sharing = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _item = Map<String, dynamic>.from(widget.item);
+    _hydrate();
+  }
+
+  void _hydrate() {
+    final service = _item['servicio'] is Map
+        ? Map<String, dynamic>.from(_item['servicio'] as Map)
+        : const <String, dynamic>{};
+    _realizoManiobras = service['realizo_maniobras'] is bool
+        ? service['realizo_maniobras'] as bool
+        : null;
+    _maniobras.text = service['maniobras_descripcion']?.toString() ?? '';
+    _observaciones.text = service['observaciones_grua']?.toString() ?? '';
+  }
+
+  @override
+  void dispose() {
+    _maniobras.dispose();
+    _observaciones.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    if (_realizoManiobras == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Indica si se realizaron maniobras.')),
+      );
+      return;
+    }
+    if (!_formKey.currentState!.validate()) return;
+
+    setState(() => _saving = true);
+    try {
+      final updated = await GruaCorralonService.updateService(
+        vehiculoId: int.parse(_item['id'].toString()),
+        realizoManiobras: _realizoManiobras!,
+        maniobrasDescripcion: _maniobras.text,
+        observaciones: _observaciones.text,
+      );
+      if (!mounted) return;
+      setState(() {
+        _item = updated;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Servicio actualizado correctamente.')),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(error.toString().replaceFirst('Exception: ', '')),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  Future<void> _shareMemory() async {
+    setState(() => _sharing = true);
+    try {
+      await GruaCorralonService.shareServiceMemory(
+        vehiculoId: int.parse(_item['id'].toString()),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(error.toString().replaceFirst('Exception: ', '')),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _sharing = false);
+    }
+  }
+
+  Future<void> _editRecord() async {
+    final saved = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(builder: (_) => GruaExpedienteScreen(item: _item)),
+    );
+    if (saved == true && mounted) Navigator.pop(context);
+  }
+
+  Future<void> _shareUploadedMemory() async {
+    try {
+      await GruaCorralonService.shareUploadedMemory(
+        vehiculoId: int.parse(_item['id'].toString()),
+      );
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(error.toString().replaceFirst('Exception: ', '')),
+          ),
+        );
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final origin = _item['origen'] is Map
+        ? Map<String, dynamic>.from(_item['origen'] as Map)
+        : const <String, dynamic>{};
+    final rawGallery = _item['galeria'];
+    final gallery = rawGallery is List
+        ? rawGallery
+              .whereType<Map>()
+              .map((photo) => Map<String, dynamic>.from(photo))
+              .toList()
+        : <Map<String, dynamic>>[];
+    final plates = (_item['placas']?.toString().trim() ?? '').isEmpty
+        ? 'Sin placas'
+        : _item['placas'].toString();
+
+    return Scaffold(
+      backgroundColor: const Color(0xffeef3f7),
+      appBar: AppBar(
+        backgroundColor: _navy,
+        foregroundColor: Colors.white,
+        title: Text('Servicio · $plates'),
+        actions: [
+          IconButton(
+            tooltip: 'Completar expediente',
+            onPressed: _editRecord,
+            icon: const Icon(Icons.edit_note),
+          ),
+        ],
+      ),
+      body: Form(
+        key: _formKey,
+        child: ListView(
+          padding: const EdgeInsets.all(14),
+          children: [
+            if (_item['expediente'] is Map) ...[
+              Builder(
+                builder: (context) {
+                  final record = Map<String, dynamic>.from(
+                    _item['expediente'] as Map,
+                  );
+                  final missing = record['faltantes'] is List
+                      ? List<dynamic>.from(record['faltantes'] as List)
+                      : const <dynamic>[];
+                  final complete = record['completo'] == true;
+                  return Card(
+                    color: complete
+                        ? const Color(0xffe6f6ef)
+                        : const Color(0xfffff4d8),
+                    elevation: 0,
+                    child: ListTile(
+                      leading: Icon(
+                        complete ? Icons.verified : Icons.warning_amber_rounded,
+                        color: complete
+                            ? Colors.green.shade700
+                            : Colors.orange.shade800,
+                      ),
+                      title: Text(
+                        complete
+                            ? 'Expediente completo'
+                            : 'Expediente incompleto',
+                        style: const TextStyle(fontWeight: FontWeight.w800),
+                      ),
+                      subtitle: complete
+                          ? const Text(
+                              'Cuenta con folio y memoria descriptiva cargada.',
+                            )
+                          : Text('Falta: ${missing.join(', ')}'),
+                      trailing: const Icon(Icons.chevron_right),
+                      onTap: _editRecord,
+                    ),
+                  );
+                },
+              ),
+              const SizedBox(height: 12),
+            ],
+            if (gallery.isNotEmpty)
+              SizedBox(
+                height: 220,
+                child: PageView.builder(
+                  controller: PageController(viewportFraction: .94),
+                  itemCount: gallery.length,
+                  itemBuilder: (context, index) {
+                    final photo = gallery[index];
+                    return Padding(
+                      padding: const EdgeInsets.only(right: 7),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(16),
+                        child: _AuthenticatedPhoto(
+                          endpoint: photo['url']?.toString() ?? '',
+                          label: photo['etiqueta']?.toString() ?? 'Evidencia',
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              )
+            else
+              Container(
+                height: 130,
+                decoration: BoxDecoration(
+                  color: const Color(0xffe1eaf0),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: const Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.no_photography_outlined, size: 42),
+                    SizedBox(height: 7),
+                    Text('Este expediente no contiene fotografías'),
+                  ],
+                ),
+              ),
+            const SizedBox(height: 12),
+            Card(
+              elevation: 0,
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Origen del servicio',
+                      style: TextStyle(
+                        color: _navy,
+                        fontSize: 17,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    _OriginBadge(origin: origin),
+                    const SizedBox(height: 12),
+                    _detail('Referencia', origin['id']),
+                    _detail('Folio', origin['folio']),
+                    _detail('Fecha', origin['fecha']),
+                    _detail('Lugar', origin['lugar']),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            if ((_item['servicio'] is Map) &&
+                ((_item['servicio'] as Map)['inventario_recepcion']
+                    is Map)) ...[
+              Builder(
+                builder: (context) {
+                  final inventory = Map<String, dynamic>.from(
+                    (_item['servicio'] as Map)['inventario_recepcion'] as Map,
+                  );
+                  const labels = <String, String>{
+                    'llaves': 'Llaves',
+                    'tarjeta_circulacion': 'Tarjeta',
+                    'placas': 'Placas',
+                    'estereo': 'Estéreo',
+                    'bateria': 'Batería',
+                    'llanta_refaccion': 'Refacción',
+                    'herramienta': 'Herramienta',
+                    'danos_visibles': 'Daños visibles',
+                  };
+                  return Card(
+                    elevation: 0,
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Inventario de recepción',
+                            style: TextStyle(
+                              color: _navy,
+                              fontSize: 17,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          Wrap(
+                            spacing: 7,
+                            runSpacing: 7,
+                            children: labels.entries.map((entry) {
+                              final present = inventory[entry.key] == true;
+                              return Chip(
+                                avatar: Icon(
+                                  present
+                                      ? Icons.check_circle
+                                      : Icons.remove_circle_outline,
+                                  size: 18,
+                                  color: present
+                                      ? Colors.green.shade700
+                                      : Colors.blueGrey,
+                                ),
+                                label: Text(
+                                  '${entry.value}: ${present ? 'Sí' : 'No'}',
+                                ),
+                              );
+                            }).toList(),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+              const SizedBox(height: 12),
+            ],
+            Card(
+              elevation: 0,
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Actuación de la grúa',
+                      style: TextStyle(
+                        color: _navy,
+                        fontSize: 17,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    const Text('¿Se realizaron maniobras? *'),
+                    const SizedBox(height: 8),
+                    SegmentedButton<bool>(
+                      emptySelectionAllowed: true,
+                      segments: const [
+                        ButtonSegment(
+                          value: true,
+                          icon: Icon(Icons.construction),
+                          label: Text('Sí'),
+                        ),
+                        ButtonSegment(
+                          value: false,
+                          icon: Icon(Icons.block),
+                          label: Text('No'),
+                        ),
+                      ],
+                      selected: _realizoManiobras == null
+                          ? <bool>{}
+                          : {_realizoManiobras!},
+                      onSelectionChanged: (value) => setState(() {
+                        _realizoManiobras = value.first;
+                        if (_realizoManiobras == false) {
+                          _maniobras.clear();
+                        }
+                      }),
+                    ),
+                    const SizedBox(height: 14),
+                    TextFormField(
+                      controller: _maniobras,
+                      enabled: _realizoManiobras == true,
+                      maxLines: 4,
+                      decoration: const InputDecoration(
+                        labelText: 'Descripción de las maniobras',
+                        hintText:
+                            'Arrastre, izaje, extracción, cambio de posición…',
+                        border: OutlineInputBorder(),
+                      ),
+                      validator: (value) =>
+                          _realizoManiobras == true &&
+                              (value ?? '').trim().isEmpty
+                          ? 'Describe las maniobras realizadas'
+                          : null,
+                    ),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: _observaciones,
+                      maxLines: 4,
+                      decoration: const InputDecoration(
+                        labelText: 'Observaciones del servicio',
+                        hintText:
+                            'Condición del vehículo, incidencias, faltantes o aclaraciones',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    SizedBox(
+                      width: double.infinity,
+                      child: FilledButton.icon(
+                        style: FilledButton.styleFrom(
+                          backgroundColor: _teal,
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                        ),
+                        onPressed: _saving ? null : _save,
+                        icon: _saving
+                            ? const SizedBox.square(
+                                dimension: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Icon(Icons.save_outlined),
+                        label: Text(
+                          _saving ? 'Guardando…' : 'Guardar servicio',
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              onPressed: _sharing ? null : _shareMemory,
+              icon: _sharing
+                  ? const SizedBox.square(
+                      dimension: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.picture_as_pdf_outlined),
+              label: Text(
+                _sharing
+                    ? 'Generando memoria…'
+                    : 'Compartir resumen del sistema',
+              ),
+            ),
+            if ((_item['servicio'] is Map) &&
+                ((_item['servicio'] as Map)['memoria'] is Map)) ...[
+              const SizedBox(height: 8),
+              FilledButton.icon(
+                style: FilledButton.styleFrom(backgroundColor: _teal),
+                onPressed: _shareUploadedMemory,
+                icon: const Icon(Icons.description_outlined),
+                label: const Text('Abrir memoria descriptiva oficial'),
+              ),
+            ],
+            const SizedBox(height: 28),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _detail(String label, dynamic value) {
+    final text = value?.toString().trim() ?? '';
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Text.rich(
+        TextSpan(
+          children: [
+            TextSpan(
+              text: '$label: ',
+              style: const TextStyle(fontWeight: FontWeight.w700),
+            ),
+            TextSpan(text: text.isEmpty ? 'N/A' : text),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class GruaEntregaScreen extends StatefulWidget {
   final Map<String, dynamic> item;
 
@@ -946,6 +1658,10 @@ class _GruaEntregaScreenState extends State<GruaEntregaScreen> {
   final _observaciones = TextEditingController();
   String _condicion = 'CONFORME_INVENTARIO';
   XFile? _foto;
+  XFile? _identificacionArchivo;
+  XFile? _oficioLiberacion;
+  XFile? _comprobantePago;
+  XFile? _firmaRecibe;
   bool _confirmado = false;
   bool _saving = false;
 
@@ -968,6 +1684,34 @@ class _GruaEntregaScreenState extends State<GruaEntregaScreen> {
     if (file != null && mounted) setState(() => _foto = file);
   }
 
+  Future<void> _pickDeliveryImage(String field) async {
+    final file = await ImagePicker().pickImage(
+      source: ImageSource.camera,
+      imageQuality: 82,
+      maxWidth: 1800,
+    );
+    if (file == null || !mounted) return;
+    setState(() {
+      if (field == 'identificacion') _identificacionArchivo = file;
+      if (field == 'firma') _firmaRecibe = file;
+    });
+  }
+
+  Future<void> _pickDeliveryDocument(String field) async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: const ['pdf', 'jpg', 'jpeg', 'png', 'webp'],
+      withData: true,
+    );
+    final selected = result?.files.single;
+    if (selected == null || !mounted) return;
+    final file = XFile.fromData(selected.bytes!, name: selected.name);
+    setState(() {
+      if (field == 'oficio') _oficioLiberacion = file;
+      if (field == 'pago') _comprobantePago = file;
+    });
+  }
+
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
     if (_foto == null) {
@@ -979,6 +1723,19 @@ class _GruaEntregaScreenState extends State<GruaEntregaScreen> {
     if (!_confirmado) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Confirma la entrega del vehículo.')),
+      );
+      return;
+    }
+    if (_identificacionArchivo == null ||
+        _oficioLiberacion == null ||
+        _comprobantePago == null ||
+        _firmaRecibe == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Adjunta identificación, oficio, comprobante de pago y firma.',
+          ),
+        ),
       );
       return;
     }
@@ -994,6 +1751,10 @@ class _GruaEntregaScreenState extends State<GruaEntregaScreen> {
         condicionEntrega: _condicion,
         observaciones: _observaciones.text,
         fotoEntrega: _foto!,
+        fotoIdentificacion: _identificacionArchivo,
+        documentoLiberacion: _oficioLiberacion,
+        comprobantePago: _comprobantePago,
+        firmaRecibe: _firmaRecibe,
       );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1077,6 +1838,55 @@ class _GruaEntregaScreenState extends State<GruaEntregaScreen> {
                         labelText: 'Observaciones',
                         border: OutlineInputBorder(),
                       ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Card(
+              elevation: 0,
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const Text(
+                      'Documentos de entrega *',
+                      style: TextStyle(
+                        color: _navy,
+                        fontSize: 17,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    const Text(
+                      'Integra el oficio, la identificación, el pago y la conformidad firmada.',
+                    ),
+                    const SizedBox(height: 12),
+                    _attachmentButton(
+                      icon: Icons.badge_outlined,
+                      label: 'Fotografiar identificación',
+                      file: _identificacionArchivo,
+                      onTap: () => _pickDeliveryImage('identificacion'),
+                    ),
+                    _attachmentButton(
+                      icon: Icons.gavel_outlined,
+                      label: 'Adjuntar oficio de liberación',
+                      file: _oficioLiberacion,
+                      onTap: () => _pickDeliveryDocument('oficio'),
+                    ),
+                    _attachmentButton(
+                      icon: Icons.receipt_long_outlined,
+                      label: 'Adjuntar comprobante de pago',
+                      file: _comprobantePago,
+                      onTap: () => _pickDeliveryDocument('pago'),
+                    ),
+                    _attachmentButton(
+                      icon: Icons.draw_outlined,
+                      label: 'Fotografiar firma / conformidad',
+                      file: _firmaRecibe,
+                      onTap: () => _pickDeliveryImage('firma'),
                     ),
                   ],
                 ),
@@ -1211,6 +2021,23 @@ class _GruaEntregaScreenState extends State<GruaEntregaScreen> {
       validator: required
           ? (value) => (value ?? '').trim().isEmpty ? 'Campo obligatorio' : null
           : null,
+    ),
+  );
+
+  Widget _attachmentButton({
+    required IconData icon,
+    required String label,
+    required XFile? file,
+    required VoidCallback onTap,
+  }) => Padding(
+    padding: const EdgeInsets.only(bottom: 8),
+    child: OutlinedButton.icon(
+      onPressed: onTap,
+      icon: Icon(
+        file == null ? icon : Icons.check_circle,
+        color: file == null ? null : Colors.green,
+      ),
+      label: Text(file?.name ?? label),
     ),
   );
 }

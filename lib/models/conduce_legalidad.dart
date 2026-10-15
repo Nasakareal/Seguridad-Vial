@@ -639,6 +639,8 @@ class ConduceLegalidadOperativo {
 
 class ConduceLegalidadCaptura {
   final int id;
+  final int? folioNumero;
+  final String? folio;
   final String? clientUuid;
   final int operativoId;
   final int? licenciaPuntoInfraccionId;
@@ -665,6 +667,7 @@ class ConduceLegalidadCaptura {
   final String? coordenadasTexto;
   final String? narrativa;
   final String? observaciones;
+  final DateTime? createdAt;
   final bool canEdit;
   final bool canDelete;
   final List<ConduceLegalidadVehiculo> vehiculos;
@@ -673,6 +676,8 @@ class ConduceLegalidadCaptura {
 
   const ConduceLegalidadCaptura({
     required this.id,
+    this.folioNumero,
+    this.folio,
     this.clientUuid,
     required this.operativoId,
     this.licenciaPuntoInfraccionId,
@@ -699,6 +704,7 @@ class ConduceLegalidadCaptura {
     this.coordenadasTexto,
     this.narrativa,
     this.observaciones,
+    this.createdAt,
     required this.canEdit,
     this.canDelete = false,
     required this.vehiculos,
@@ -733,6 +739,8 @@ class ConduceLegalidadCaptura {
 
     return ConduceLegalidadCaptura(
       id: _asInt(json['id']),
+      folioNumero: _nullableInt(json['folio_numero']),
+      folio: _str(json['folio']),
       clientUuid: _str(json['client_uuid']),
       operativoId: _asInt(json['operativo_id']),
       licenciaPuntoInfraccionId: _nullableInt(
@@ -761,6 +769,7 @@ class ConduceLegalidadCaptura {
       coordenadasTexto: _str(json['coordenadas_texto']),
       narrativa: _str(json['narrativa']),
       observaciones: _str(json['observaciones']),
+      createdAt: _dateTime(json['created_at']),
       canEdit: _bool(json['can_edit']),
       canDelete: _bool(json['can_delete']),
       vehiculos: _list(
@@ -782,6 +791,23 @@ class ConduceLegalidadCaptura {
       infraccion ??
       _firstFundamento(vehiculos.map((item) => item.infraccion)) ??
       _firstFundamento(personas.map((item) => item.infraccion));
+
+  String folioPara({required int operativoId, required String prefijo}) {
+    final asignado = folio?.trim() ?? '';
+    if (asignado.isNotEmpty) return asignado;
+    return '$prefijo-$operativoId-${folioNumero ?? id}';
+  }
+
+  DateTime? get captureMoment {
+    final date = (fecha ?? '').trim();
+    final time = (hora ?? '').trim();
+    if (date.isNotEmpty && time.isNotEmpty) {
+      final parsed = DateTime.tryParse('${date}T$time');
+      if (parsed != null) return parsed;
+    }
+
+    return createdAt;
+  }
 }
 
 class ConduceLegalidadFoto {

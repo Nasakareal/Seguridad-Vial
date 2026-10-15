@@ -4,6 +4,35 @@ import 'package:seguridad_vial_app/models/conduce_legalidad.dart';
 import 'package:seguridad_vial_app/screens/conduce_legalidad/conduce_legalidad_module.dart';
 
 void main() {
+  test('uses reserved folio instead of the capture database id', () {
+    const captura = ConduceLegalidadCaptura(
+      id: 81,
+      folioNumero: 502,
+      folio: 'CL-17-502',
+      operativoId: 17,
+      canEdit: true,
+      vehiculos: <ConduceLegalidadVehiculo>[],
+      personas: <ConduceLegalidadPersona>[],
+    );
+
+    expect(captura.folioPara(operativoId: 17, prefijo: 'CL'), 'CL-17-502');
+  });
+
+  test('capture moment prefers captured date and time for stable ordering', () {
+    final captura = ConduceLegalidadCaptura.fromJson({
+      'id': 82,
+      'operativo_id': 17,
+      'fecha': '2026-10-14',
+      'hora': '18:35:42',
+      'created_at': '2026-10-14T18:36:10-06:00',
+      'vehiculos': <dynamic>[],
+      'personas': <dynamic>[],
+    });
+
+    expect(captura.createdAt, isNotNull);
+    expect(captura.captureMoment, DateTime(2026, 10, 14, 18, 35, 42));
+  });
+
   test('captura conserva la identidad escrita del agente', () {
     final captura = ConduceLegalidadCaptura.fromJson({
       'id': 15,

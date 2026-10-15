@@ -76,6 +76,26 @@ class ConduceLegalidadNativeShareData {
   }
 }
 
+class ConduceLegalidadFolioReservation {
+  final String clientUuid;
+  final int numero;
+  final String folio;
+
+  const ConduceLegalidadFolioReservation({
+    required this.clientUuid,
+    required this.numero,
+    required this.folio,
+  });
+
+  factory ConduceLegalidadFolioReservation.fromJson(Map<String, dynamic> json) {
+    return ConduceLegalidadFolioReservation(
+      clientUuid: (json['client_uuid'] ?? '').toString().trim(),
+      numero: _readNullableInt(json['folio_numero']) ?? 0,
+      folio: (json['folio'] ?? '').toString().trim(),
+    );
+  }
+}
+
 int? _readNullableInt(dynamic value) {
   if (value is int) return value > 0 ? value : null;
   if (value is num) {
@@ -168,6 +188,22 @@ class ConduceLegalidadService {
     final body = _decodeJson(res);
     _throwIfNotOk(res, body, 'No se pudo cargar el operativo.');
     return ConduceLegalidadOperativo.fromJson(_map(body['data']));
+  }
+
+  static Future<ConduceLegalidadFolioReservation> reserveCapturaFolio({
+    required int operativoId,
+    required String clientUuid,
+  }) async {
+    final res = await http.post(
+      Uri.parse(
+        '${AuthService.baseUrl}$_path/operativos/$operativoId/capturas/reservar-folio',
+      ),
+      headers: await _headers(json: true),
+      body: jsonEncode(<String, dynamic>{'client_uuid': clientUuid}),
+    );
+    final body = _decodeJson(res);
+    _throwIfNotOk(res, body, 'No se pudo reservar el folio.');
+    return ConduceLegalidadFolioReservation.fromJson(_map(body['data']));
   }
 
   static Future<ConduceLegalidadOperativo> createOperativo(

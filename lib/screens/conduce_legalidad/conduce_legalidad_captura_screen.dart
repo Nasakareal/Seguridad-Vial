@@ -19,10 +19,12 @@ import '../../services/conduce_legalidad_narrativa_service.dart';
 import '../../services/conduce_legalidad_service.dart';
 import '../../services/gruas_catalog_service.dart';
 import '../../services/local_draft_service.dart';
+import '../../services/offline_sync_service.dart';
 import '../../services/photo_picker_service.dart';
 import '../../services/vehiculo_form_service.dart';
 import '../../widgets/marca_vehiculo_dropdown.dart';
 import '../../widgets/help_options_menu.dart';
+import '../../widgets/capture_draft_recovery_dialog.dart';
 import '../../widgets/safe_network_image.dart';
 import '../../widgets/tarjeta_circulacion_scanner_screen.dart';
 import 'ayuda/conduce_legalidad_form_help_sheet.dart';
@@ -64,6 +66,9 @@ class _ConduceLegalidadCapturaScreenState
   bool _saving = false;
   String? _metaError;
   String? _contentError;
+  String? _clientUuid;
+  String? _reservedFolio;
+  bool _reservingFolio = false;
   String? _ultimaNarrativaAutomatica;
   bool _narrativaEditadaPorUsuario = false;
   ConduceLegalidadMeta? _meta;
@@ -189,10 +194,18 @@ class _ConduceLegalidadCapturaScreenState
         'narrativa': _narrativaCtrl,
         'observaciones': _observacionesCtrl,
       });
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      unawaited(_restoreLocalDraft());
-      unawaited(_loadMeta());
-    });
+    WidgetsBinding.instance.addPostFrameCallback((_) => _initialize());
+  }
+
+  Future<void> _initialize() async {
+    await _restoreLocalDraft();
+    if (!mounted) return;
+    if (!_editing) {
+      _clientUuid ??= OfflineSyncService.newClientUuid();
+      _draft.notifyChanged();
+      unawaited(_reserveFolio());
+    }
+    unawaited(_loadMeta());
   }
 
   @override
@@ -255,7 +268,18 @@ class _ConduceLegalidadCapturaScreenState
   }
 
   Future<void> _restoreLocalDraft() async {
-    final restored = await _draft.restore(_applyLocalDraft);
+    final restored = await _draft.restore(
+      _applyLocalDraft,
+      shouldRestore: _editing
+          ? null
+          : (values) async =>
+                mounted &&
+                await confirmCaptureDraftRecovery(
+                  context,
+                  values: values,
+                  newLabel: 'Nueva captura',
+                ),
+    );
     if (!mounted || !restored) return;
     setState(() {});
     ScaffoldMessenger.of(
@@ -264,6 +288,8 @@ class _ConduceLegalidadCapturaScreenState
   }
 
   void _applyLocalDraft(Map<String, dynamic> draft) {
+    _clientUuid = _stringValue(draft['client_uuid']) ?? _clientUuid;
+    _reservedFolio = _stringValue(draft['folio_reservado']);
     _agenteNombresCtrl.text =
         _stringValue(draft['agente_nombres']) ?? _agenteNombresCtrl.text;
     _agenteApellidoPaternoCtrl.text =
@@ -329,6 +355,10 @@ class _ConduceLegalidadCapturaScreenState
 
   Map<String, dynamic> _draftValues() {
     return <String, dynamic>{
+      'client_uuid': _clientUuid,
+      'folio_reservado': _reservedFolio,
+      'fecha': _dateForPayload(),
+      'hora': _timeForPayload(),
       'agente_nombres': _agenteNombresCtrl.text,
       'agente_apellido_paterno': _agenteApellidoPaternoCtrl.text,
       'agente_apellido_materno': _agenteApellidoMaternoCtrl.text,
@@ -349,6 +379,85 @@ class _ConduceLegalidadCapturaScreenState
       'fotos': _fotos.map((file) => file.path).toList(),
       'fotos_count': _fotos.length,
     };
+  }
+
+  Future<void> _reserveFolio() async {
+    if (_editing || _reservingFolio) return;
+    final clientUuid = _clientUuid?.trim() ?? '';
+    if (clientUuid.isEmpty) return;
+    setState(() => _reservingFolio = true);
+    try {
+      final reservation = await ConduceLegalidadService.reserveCapturaFolio(
+        operativoId: widget.operativoId,
+        clientUuid: clientUuid,
+      );
+      if (!mounted || _clientUuid != clientUuid) return;
+      setState(() => _reservedFolio = reservation.folio);
+      _draft.notifyChanged();
+    } catch (_) {
+      if (!mounted || _clientUuid != clientUuid) return;
+      setState(() => _reservedFolio = null);
+    } finally {
+      if (mounted && _clientUuid == clientUuid) {
+        setState(() => _reservingFolio = false);
+      }
+    }
+  }
+
+  Future<void> _startCleanCapture() async {
+    if (_editing || _saving) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Crear nueva captura'),
+        content: const Text(
+          'Se limpiará el formulario y el borrador local de este equipo. '
+          'No se borra ninguna captura ya enviada ni pendiente de sincronizar.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton.icon(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            icon: const Icon(Icons.add_circle_outline),
+            label: const Text('Crear nueva'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    await _draft.discard();
+    if (!mounted) return;
+    _formKey.currentState?.reset();
+    setState(() {
+      _clientUuid = OfflineSyncService.newClientUuid();
+      _reservedFolio = null;
+      _reservingFolio = false;
+      _contentError = null;
+      _fundamento = null;
+      _fundamentosAdicionales.clear();
+      _fundamentoLegacyNoDisponible = false;
+      _vehiculos.clear();
+      _personas.clear();
+      _fotosExistentes.clear();
+      _fotos.clear();
+      _agenteNombresCtrl.clear();
+      _agenteApellidoPaternoCtrl.clear();
+      _agenteApellidoMaternoCtrl.clear();
+      _agentePlacaCtrl.clear();
+      _narrativaCtrl.clear();
+      _observacionesCtrl.clear();
+      _ultimaNarrativaAutomatica = null;
+      _narrativaEditadaPorUsuario = false;
+    });
+    _draft.notifyChanged();
+    unawaited(_reserveFolio());
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Formulario local limpio.')));
   }
 
   Map<String, dynamic> _vehiculoDraftJson(ConduceLegalidadVehiculo vehiculo) {
@@ -787,6 +896,8 @@ class _ConduceLegalidadCapturaScreenState
           ? null
           : fundamentos.first;
       final payload = {
+        if (!_editing && (_clientUuid ?? '').trim().isNotEmpty)
+          'client_uuid': _clientUuid,
         'fecha': _dateForPayload(),
         'hora': _timeForPayload(),
         'agente_nombre': _agenteNombreCompleto,
@@ -918,6 +1029,12 @@ class _ConduceLegalidadCapturaScreenState
               : 'Agregar captura ${widget.module.title}',
         ),
         actions: [
+          if (!_editing)
+            IconButton(
+              tooltip: 'Crear nueva captura',
+              onPressed: _saving ? null : _startCleanCapture,
+              icon: const Icon(Icons.add_circle_outline),
+            ),
           IconButton(
             tooltip: 'Ayuda para llenar y escanear',
             onPressed: _showHelp,
@@ -961,6 +1078,14 @@ class _ConduceLegalidadCapturaScreenState
               child: ListView(
                 padding: const EdgeInsets.fromLTRB(16, 16, 16, 92),
                 children: [
+                  if (!_editing) ...[
+                    _FolioReservationPanel(
+                      folio: _reservedFolio,
+                      loading: _reservingFolio,
+                      onRetry: _reserveFolio,
+                    ),
+                    const SizedBox(height: 12),
+                  ],
                   if (_metaError != null)
                     _WarningPanel(text: _metaError!, onRetry: _loadMeta),
                   if (_metaError != null) const SizedBox(height: 12),
@@ -3211,6 +3336,87 @@ class _PersonaModalState extends State<_PersonaModal> {
           alignLabelWithHint: maxLines > 1,
         ),
         validator: validator,
+      ),
+    );
+  }
+}
+
+class _FolioReservationPanel extends StatelessWidget {
+  final String? folio;
+  final bool loading;
+  final VoidCallback onRetry;
+
+  const _FolioReservationPanel({
+    required this.folio,
+    required this.loading,
+    required this.onRetry,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final assigned = (folio ?? '').trim();
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: assigned.isNotEmpty
+            ? const Color(0xFFECFDF5)
+            : const Color(0xFFFFFBEB),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: assigned.isNotEmpty
+              ? const Color(0xFF10B981)
+              : const Color(0xFFF59E0B),
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            assigned.isNotEmpty
+                ? Icons.confirmation_number_outlined
+                : Icons.sync_problem_outlined,
+            color: assigned.isNotEmpty
+                ? const Color(0xFF047857)
+                : const Color(0xFF92400E),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'FOLIO DE ESTA CAPTURA',
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  assigned.isNotEmpty
+                      ? assigned
+                      : loading
+                      ? 'Reservando folio…'
+                      : 'Sin conexión: toca para reintentar',
+                  style: TextStyle(
+                    fontSize: assigned.isNotEmpty ? 24 : 15,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                if (assigned.isNotEmpty)
+                  const Text('Este mismo folio saldrá en la boleta y el IPH.'),
+              ],
+            ),
+          ),
+          if (loading)
+            const SizedBox(
+              width: 22,
+              height: 22,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          else if (assigned.isEmpty)
+            IconButton(
+              tooltip: 'Reintentar folio',
+              onPressed: onRetry,
+              icon: const Icon(Icons.refresh),
+            ),
+        ],
       ),
     );
   }

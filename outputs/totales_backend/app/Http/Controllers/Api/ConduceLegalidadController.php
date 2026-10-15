@@ -1193,7 +1193,7 @@ class ConduceLegalidadController extends Controller
 
             $hecho = $this->hechoTemporalIph($operativo, $captura);
             $mapeo = $this->mapearIphDesdeCaptura($operativo, $captura, $user);
-            [$iphPath, $iphFilename] = $docxService->generarConduceLegalidadBarandillas($hecho, $mapeo);
+            [$iphPath, $iphFilename] = $docxService->generarConduceLegalidadBarandillasSoloVehiculo($hecho, $mapeo);
             $iphUpload = $whatsApp->uploadMedia(
                 $iphPath,
                 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'

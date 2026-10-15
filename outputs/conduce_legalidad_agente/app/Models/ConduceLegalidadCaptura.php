@@ -18,6 +18,7 @@ class ConduceLegalidadCaptura extends Model
         'infraccion_codigo',
         'fundamento_legal',
         'client_uuid',
+        'folio_numero',
         'created_by',
         'agente_nombre',
         'agente_nombres',

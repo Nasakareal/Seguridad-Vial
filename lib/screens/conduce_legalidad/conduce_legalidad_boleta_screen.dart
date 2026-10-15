@@ -627,7 +627,7 @@ class _BoletaPaper extends StatelessWidget {
 
   String get _folio {
     final suffix = total > 1 ? '-${index + 1}' : '';
-    return '${operativo.ticketFolioPrefix}-${operativo.id}-${captura.id}$suffix';
+    return '${captura.folioPara(operativoId: operativo.id, prefijo: operativo.ticketFolioPrefix)}$suffix';
   }
 
   String get _supervisorNombre => operativo.ticketSupervisorNombre;
@@ -969,7 +969,7 @@ class _BoletaTicketData {
 
   String get folio {
     final suffix = total > 1 ? '-${index + 1}' : '';
-    return '${operativo.ticketFolioPrefix}-${operativo.id}-${captura.id}$suffix';
+    return '${captura.folioPara(operativoId: operativo.id, prefijo: operativo.ticketFolioPrefix)}$suffix';
   }
 
   String get supervisorNombre => operativo.ticketSupervisorNombre;

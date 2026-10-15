@@ -17,8 +17,10 @@ class ConduceLegalidadCapturaShowScreen extends StatelessWidget {
     this.module = ConduceLegalidadModule.conduceLegalidad,
   });
 
-  String get _folio =>
-      '${operativo.ticketFolioPrefix}-${operativo.id}-${captura.id}';
+  String get _folio => captura.folioPara(
+    operativoId: operativo.id,
+    prefijo: operativo.ticketFolioPrefix,
+  );
 
   @override
   Widget build(BuildContext context) {

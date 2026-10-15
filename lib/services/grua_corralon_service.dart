@@ -11,10 +11,16 @@ class GruaCorralonResult {
   final List<Map<String, dynamic>> items;
   final String? gruaNombre;
   final Map<String, dynamic> summary;
+  final int currentPage;
+  final int lastPage;
+  final int total;
 
   const GruaCorralonResult({
     required this.items,
     required this.summary,
+    required this.currentPage,
+    required this.lastPage,
+    required this.total,
     this.gruaNombre,
   });
 }
@@ -32,11 +38,18 @@ class GruaCorralonService {
   static Future<GruaCorralonResult> fetch({
     required String estado,
     String search = '',
+    String origin = 'TODOS',
+    int days = 0,
+    int page = 1,
   }) async {
     final uri = Uri.parse('${AuthService.baseUrl}/grua/corralon').replace(
       queryParameters: {
         'estado': estado,
         if (search.trim().isNotEmpty) 'q': search.trim(),
+        'origen': origin,
+        'dias': '$days',
+        'page': '$page',
+        'per_page': '50',
       },
     );
     final response = await http
@@ -58,6 +71,9 @@ class GruaCorralonService {
               .toList()
         : <Map<String, dynamic>>[];
     final grua = raw['grua'];
+    final meta = raw['meta'] is Map
+        ? Map<String, dynamic>.from(raw['meta'] as Map)
+        : const <String, dynamic>{};
 
     return GruaCorralonResult(
       items: items,
@@ -65,6 +81,9 @@ class GruaCorralonService {
       summary: raw['summary'] is Map
           ? Map<String, dynamic>.from(raw['summary'] as Map)
           : const {},
+      currentPage: int.tryParse('${meta['current_page'] ?? 1}') ?? 1,
+      lastPage: int.tryParse('${meta['last_page'] ?? 1}') ?? 1,
+      total: int.tryParse('${meta['total'] ?? items.length}') ?? items.length,
     );
   }
 
@@ -81,6 +100,8 @@ class GruaCorralonService {
     required String format,
     required String estado,
     String search = '',
+    String origin = 'TODOS',
+    int days = 0,
   }) async {
     final normalized = format.toLowerCase();
     if (normalized != 'csv' && normalized != 'pdf') {
@@ -94,6 +115,8 @@ class GruaCorralonService {
           queryParameters: {
             'estado': estado,
             if (search.trim().isNotEmpty) 'q': search.trim(),
+            'origen': origin,
+            'dias': '$days',
           },
         );
     final response = await http
@@ -117,6 +140,127 @@ class GruaCorralonService {
     ], text: 'Reporte de servicios de corralón');
   }
 
+  static Future<Map<String, dynamic>> updateService({
+    required int vehiculoId,
+    required bool realizoManiobras,
+    required String maniobrasDescripcion,
+    required String observaciones,
+  }) async {
+    final uri = Uri.parse(
+      '${AuthService.baseUrl}/grua/corralon/$vehiculoId/servicio',
+    );
+    final response = await http
+        .patch(
+          uri,
+          headers: {...await _headers(), 'Content-Type': 'application/json'},
+          body: jsonEncode({
+            'realizo_maniobras': realizoManiobras,
+            'maniobras_descripcion': maniobrasDescripcion.trim(),
+            'observaciones_grua': observaciones.trim(),
+          }),
+        )
+        .timeout(const Duration(seconds: 20));
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception(_errorMessage(response));
+    }
+
+    final raw = jsonDecode(response.body);
+    if (raw is! Map || raw['item'] is! Map) {
+      throw Exception('Respuesta inválida del servidor.');
+    }
+    return Map<String, dynamic>.from(raw['item'] as Map);
+  }
+
+  static Future<Map<String, dynamic>> createService({
+    required Map<String, String> fields,
+    XFile? memoriaDescriptiva,
+  }) => _sendRecord(
+    path: '/grua/corralon/servicios',
+    fields: fields,
+    memoriaDescriptiva: memoriaDescriptiva,
+  );
+
+  static Future<Map<String, dynamic>> updateRecord({
+    required int vehiculoId,
+    required Map<String, String> fields,
+    XFile? memoriaDescriptiva,
+  }) => _sendRecord(
+    path: '/grua/corralon/$vehiculoId/expediente',
+    fields: fields,
+    memoriaDescriptiva: memoriaDescriptiva,
+  );
+
+  static Future<Map<String, dynamic>> _sendRecord({
+    required String path,
+    required Map<String, String> fields,
+    XFile? memoriaDescriptiva,
+  }) async {
+    final request = http.MultipartRequest(
+      'POST',
+      Uri.parse('${AuthService.baseUrl}$path'),
+    );
+    request.headers.addAll(await _headers());
+    request.fields.addAll(fields);
+    if (memoriaDescriptiva != null) {
+      request.files.add(
+        http.MultipartFile.fromBytes(
+          'memoria_descriptiva',
+          await memoriaDescriptiva.readAsBytes(),
+          filename: memoriaDescriptiva.name,
+        ),
+      );
+    }
+    final streamed = await request.send().timeout(const Duration(seconds: 60));
+    final response = await http.Response.fromStream(streamed);
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception(_errorMessage(response));
+    }
+    final raw = jsonDecode(response.body);
+    if (raw is! Map || raw['item'] is! Map) {
+      throw Exception('Respuesta inválida del servidor.');
+    }
+    return Map<String, dynamic>.from(raw['item'] as Map);
+  }
+
+  static Future<void> shareServiceMemory({required int vehiculoId}) async {
+    final uri = Uri.parse(
+      '${AuthService.baseUrl}/grua/corralon/$vehiculoId/memoria-descriptiva',
+    );
+    final response = await http
+        .get(uri, headers: await _headers())
+        .timeout(const Duration(seconds: 45));
+    if (response.statusCode != 200) {
+      throw Exception(_errorMessage(response));
+    }
+
+    final directory = await getTemporaryDirectory();
+    final file = File(
+      '${directory.path}${Platform.pathSeparator}memoria_servicio_$vehiculoId.pdf',
+    );
+    await file.writeAsBytes(response.bodyBytes, flush: true);
+    await Share.shareXFiles([
+      XFile(file.path, mimeType: 'application/pdf'),
+    ], text: 'Memoria descriptiva del servicio de grúa');
+  }
+
+  static Future<void> shareUploadedMemory({required int vehiculoId}) async {
+    final uri = Uri.parse(
+      '${AuthService.baseUrl}/grua/corralon/$vehiculoId/memoria-descriptiva/archivo',
+    );
+    final response = await http
+        .get(uri, headers: await _headers())
+        .timeout(const Duration(seconds: 45));
+    if (response.statusCode != 200) throw Exception(_errorMessage(response));
+    final directory = await getTemporaryDirectory();
+    final file = File(
+      '${directory.path}${Platform.pathSeparator}memoria_sierse_$vehiculoId.pdf',
+    );
+    await file.writeAsBytes(response.bodyBytes, flush: true);
+    await Share.shareXFiles([
+      XFile(file.path),
+    ], text: 'Memoria descriptiva SIERSE');
+  }
+
   static Future<void> entregar({
     required int vehiculoId,
     required String personaRecibe,
@@ -125,6 +269,10 @@ class GruaCorralonService {
     required String condicionEntrega,
     required String observaciones,
     required XFile fotoEntrega,
+    XFile? fotoIdentificacion,
+    XFile? documentoLiberacion,
+    XFile? comprobantePago,
+    XFile? firmaRecibe,
     String telefono = '',
   }) async {
     final uri = Uri.parse(
@@ -149,6 +297,21 @@ class GruaCorralonService {
         filename: fotoEntrega.name,
       ),
     );
+    for (final entry in <String, XFile?>{
+      'foto_identificacion': fotoIdentificacion,
+      'documento_liberacion': documentoLiberacion,
+      'comprobante_pago': comprobantePago,
+      'firma_recibe': firmaRecibe,
+    }.entries) {
+      if (entry.value == null) continue;
+      request.files.add(
+        http.MultipartFile.fromBytes(
+          entry.key,
+          await entry.value!.readAsBytes(),
+          filename: entry.value!.name,
+        ),
+      );
+    }
 
     final streamed = await request.send().timeout(const Duration(seconds: 40));
     final response = await http.Response.fromStream(streamed);

@@ -54,6 +54,8 @@ class _ConduceLegalidadShowScreenState extends State<ConduceLegalidadShowScreen>
   bool _isSuperadmin = false;
   bool _canManageCapturas = false;
   int? _currentUserId;
+  int? _creatorFilterId;
+  String _captureQuery = '';
   Timer? _feedingClosureTimer;
 
   @override
@@ -68,6 +70,165 @@ class _ConduceLegalidadShowScreenState extends State<ConduceLegalidadShowScreen>
     _feedingClosureTimer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
+  }
+
+  Future<void> _selectCreatorFilter() async {
+    final operativo = _operativo;
+    if (operativo == null) return;
+    final creators = <int, ConduceLegalidadUserRef>{};
+    for (final captura in operativo.capturas) {
+      final creador = captura.creador;
+      if (creador != null) creators[creador.id] = creador;
+    }
+    final ordered = creators.values.toList()
+      ..sort((a, b) => a.nombre.compareTo(b.nombre));
+    final selected = await showModalBottomSheet<int>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) => SafeArea(
+        child: ListView(
+          shrinkWrap: true,
+          children: [
+            const ListTile(
+              title: Text(
+                'Filtrar capturas por usuario',
+                style: TextStyle(fontWeight: FontWeight.w900),
+              ),
+            ),
+            ListTile(
+              leading: const Icon(Icons.groups_outlined),
+              title: const Text('Todos los usuarios'),
+              trailing: _creatorFilterId == null
+                  ? const Icon(Icons.check)
+                  : null,
+              onTap: () => Navigator.pop(sheetContext, -1),
+            ),
+            ...ordered.map(
+              (creator) => ListTile(
+                leading: const Icon(Icons.person_outline),
+                title: Text(creator.nombre),
+                subtitle: (creator.placa ?? '').trim().isEmpty
+                    ? null
+                    : Text('Placa ${creator.placa}'),
+                trailing: _creatorFilterId == creator.id
+                    ? const Icon(Icons.check)
+                    : null,
+                onTap: () => Navigator.pop(sheetContext, creator.id),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (selected == null || !mounted) return;
+    setState(() => _creatorFilterId = selected == -1 ? null : selected);
+  }
+
+  Future<void> _searchCaptures() async {
+    var currentQuery = _captureQuery;
+    final query = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Buscar en este operativo'),
+        content: TextFormField(
+          initialValue: currentQuery,
+          autofocus: true,
+          textInputAction: TextInputAction.search,
+          decoration: const InputDecoration(
+            labelText: 'Folio, placa, inventario, serie, nombre…',
+            prefixIcon: Icon(Icons.search),
+            border: OutlineInputBorder(),
+          ),
+          onChanged: (value) => currentQuery = value,
+          onFieldSubmitted: (value) => Navigator.pop(dialogContext, value),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, ''),
+            child: const Text('Limpiar'),
+          ),
+          FilledButton.icon(
+            onPressed: () => Navigator.pop(dialogContext, currentQuery),
+            icon: const Icon(Icons.search),
+            label: const Text('Buscar'),
+          ),
+        ],
+      ),
+    );
+    if (query == null || !mounted) return;
+    setState(() => _captureQuery = query.trim());
+  }
+
+  String _creatorFilterLabel(List<ConduceLegalidadCaptura> capturas) {
+    final id = _creatorFilterId;
+    if (id == null) return 'Usuario';
+    for (final captura in capturas) {
+      if (captura.creador?.id == id) return captura.creador!.nombre;
+    }
+    return 'Usuario';
+  }
+
+  bool _matchesCaptureSearch(
+    ConduceLegalidadCaptura captura,
+    ConduceLegalidadOperativo operativo,
+  ) {
+    final query = _normalizeSearch(_captureQuery);
+    if (query.isEmpty) return true;
+    final values = <String?>[
+      captura.folioPara(
+        operativoId: operativo.id,
+        prefijo: operativo.ticketFolioPrefix,
+      ),
+      captura.id.toString(),
+      captura.creador?.nombre,
+      captura.creador?.email,
+      captura.creador?.placa,
+      captura.agenteNombre,
+      captura.agenteNombres,
+      captura.agenteApellidoPaterno,
+      captura.agenteApellidoMaterno,
+      captura.agenteNumeroPlaca,
+      captura.fecha,
+      captura.hora,
+      captura.municipio,
+      captura.lugar,
+      captura.narrativa,
+      captura.observaciones,
+      for (final vehiculo in captura.vehiculos) ...[
+        vehiculo.marca,
+        vehiculo.modelo,
+        vehiculo.linea,
+        vehiculo.color,
+        vehiculo.placas,
+        vehiculo.serie,
+        vehiculo.numeroInventario,
+        vehiculo.grua,
+        vehiculo.corralon,
+      ],
+      for (final persona in captura.personas) ...[
+        persona.nombreCompleto,
+        persona.telefono,
+        persona.numeroLicencia,
+      ],
+    ];
+    return _normalizeSearch(
+      values.whereType<String>().join(' '),
+    ).contains(query);
+  }
+
+  String _normalizeSearch(String value) {
+    var normalized = value.toLowerCase().trim();
+    const accents = <String, String>{
+      'á': 'a',
+      'é': 'e',
+      'í': 'i',
+      'ó': 'o',
+      'ú': 'u',
+      'ü': 'u',
+      'ñ': 'n',
+    };
+    accents.forEach((from, to) => normalized = normalized.replaceAll(from, to));
+    return normalized.replaceAll(RegExp(r'[^a-z0-9]+'), ' ').trim();
   }
 
   @override
@@ -885,15 +1046,30 @@ class _ConduceLegalidadShowScreenState extends State<ConduceLegalidadShowScreen>
       return const Center(child: Text('Operativo no disponible.'));
     }
 
-    final capturas = operativo.capturas.toList();
+    final allCapturas = operativo.capturas.toList();
+    final capturas = allCapturas
+        .where(
+          (captura) =>
+              (_creatorFilterId == null ||
+                  captura.createdBy == _creatorFilterId) &&
+              _matchesCaptureSearch(captura, operativo),
+        )
+        .toList();
+    capturas.sort((a, b) {
+      final aMoment = a.captureMoment;
+      final bMoment = b.captureMoment;
+      if (aMoment != null && bMoment != null) {
+        final byMoment = bMoment.compareTo(aMoment);
+        if (byMoment != 0) return byMoment;
+      } else if (aMoment != null) {
+        return -1;
+      } else if (bMoment != null) {
+        return 1;
+      }
+
+      return b.id.compareTo(a.id);
+    });
     final highlightedCapturaId = widget.highlightedCapturaId;
-    if (highlightedCapturaId != null) {
-      capturas.sort((a, b) {
-        if (a.id == highlightedCapturaId) return -1;
-        if (b.id == highlightedCapturaId) return 1;
-        return 0;
-      });
-    }
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 92),
@@ -918,12 +1094,29 @@ class _ConduceLegalidadShowScreenState extends State<ConduceLegalidadShowScreen>
           ),
         if ((operativo.objetivo ?? '').trim().isNotEmpty)
           const SizedBox(height: 14),
+        _CaptureFilters(
+          userLabel: _creatorFilterLabel(allCapturas),
+          query: _captureQuery,
+          shown: capturas.length,
+          total: allCapturas.length,
+          onUser: _selectCreatorFilter,
+          onSearch: _searchCaptures,
+          onClear: () => setState(() {
+            _creatorFilterId = null;
+            _captureQuery = '';
+          }),
+        ),
+        const SizedBox(height: 14),
         if (capturas.isEmpty)
-          const _Panel(
+          _Panel(
             icon: Icons.inbox_outlined,
-            title: 'Sin capturas visibles',
+            title: allCapturas.isEmpty
+                ? 'Sin capturas visibles'
+                : 'Sin coincidencias',
             child: Text(
-              'Agrega una narrativa, vehiculos o personas para alimentar este punto.',
+              allCapturas.isEmpty
+                  ? 'Agrega una narrativa, vehiculos o personas para alimentar este punto.'
+                  : 'Cambia el usuario o limpia la búsqueda para ver otras capturas.',
             ),
           )
         else
@@ -944,6 +1137,83 @@ class _ConduceLegalidadShowScreenState extends State<ConduceLegalidadShowScreen>
             ),
           ),
       ],
+    );
+  }
+}
+
+class _CaptureFilters extends StatelessWidget {
+  final String userLabel;
+  final String query;
+  final int shown;
+  final int total;
+  final VoidCallback onUser;
+  final VoidCallback onSearch;
+  final VoidCallback onClear;
+
+  const _CaptureFilters({
+    required this.userLabel,
+    required this.query,
+    required this.shown,
+    required this.total,
+    required this.onUser,
+    required this.onSearch,
+    required this.onClear,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final active = query.isNotEmpty || userLabel != 'Usuario';
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: onUser,
+                  icon: const Icon(Icons.person_search_outlined),
+                  label: Text(userLabel, overflow: TextOverflow.ellipsis),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: onSearch,
+                  icon: const Icon(Icons.search),
+                  label: Text(
+                    query.isEmpty ? 'Buscar dato' : query,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  '$shown de $total capturas',
+                  style: TextStyle(color: Colors.grey.shade700),
+                ),
+              ),
+              if (active)
+                TextButton.icon(
+                  onPressed: onClear,
+                  icon: const Icon(Icons.filter_alt_off_outlined),
+                  label: const Text('Limpiar'),
+                ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 }
@@ -1062,6 +1332,7 @@ class _CapturaCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final creator = captura.creador?.nombre ?? 'Usuario';
+    final folio = captura.folio?.trim() ?? '';
     final vehicleCount = captura.vehiculos.length;
     final peopleCount = captura.personas.length;
     final photoCount = captura.fotos.length;
@@ -1184,6 +1455,13 @@ class _CapturaCard extends StatelessWidget {
                   ],
                 ],
               ),
+              if (folio.isNotEmpty) ...[
+                const SizedBox(height: 4),
+                Text(
+                  'Folio $folio',
+                  style: const TextStyle(fontWeight: FontWeight.w800),
+                ),
+              ],
               if (timestamp.isNotEmpty) ...[
                 const SizedBox(height: 4),
                 Text(
