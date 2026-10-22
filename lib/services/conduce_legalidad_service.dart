@@ -206,6 +206,22 @@ class ConduceLegalidadService {
     return ConduceLegalidadFolioReservation.fromJson(_map(body['data']));
   }
 
+  static Future<ConduceLegalidadFolioReservation> reserveInventoryFolio({
+    required int operativoId,
+    required String clientUuid,
+  }) async {
+    final res = await http.post(
+      Uri.parse(
+        '${AuthService.baseUrl}$_path/operativos/$operativoId/inventarios/reservar-folio',
+      ),
+      headers: await _headers(json: true),
+      body: jsonEncode(<String, dynamic>{'client_uuid': clientUuid}),
+    );
+    final body = _decodeJson(res);
+    _throwIfNotOk(res, body, 'No se pudo reservar el folio de inventario.');
+    return ConduceLegalidadFolioReservation.fromJson(_map(body['data']));
+  }
+
   static Future<ConduceLegalidadOperativo> createOperativo(
     Map<String, dynamic> payload,
   ) async {

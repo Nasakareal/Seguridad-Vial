@@ -22,7 +22,7 @@ void main() {
       expect(find.text('Agregar'), findsOneWidget);
       expect(find.text('Escanear tarjeta'), findsOneWidget);
       expect(find.text('Agregar vehículo'), findsOneWidget);
-      expect(find.textContaining('Número de inventario'), findsOneWidget);
+      expect(find.textContaining('folio de inventario'), findsOneWidget);
       expect(find.textContaining('Corralón de destino'), findsOneWidget);
       expect(tester.takeException(), isNull);
     },

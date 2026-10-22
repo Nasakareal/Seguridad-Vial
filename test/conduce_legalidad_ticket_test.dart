@@ -62,7 +62,7 @@ void main() {
       vehiculos: <ConduceLegalidadVehiculo>[
         ConduceLegalidadVehiculo(
           placas: 'ABC-123-A',
-          numeroInventario: 'INV-2026-0042',
+          numeroInventario: '00042',
           corralonId: 8,
           corralon: 'CORRALÓN MORELIA',
         ),
@@ -81,7 +81,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('NÚMERO DE INVENTARIO:'), findsOneWidget);
-    expect(find.text('INV-2026-0042'), findsOneWidget);
+    expect(find.text('00042'), findsOneWidget);
     expect(find.text('CORRALÓN DE DESTINO:'), findsOneWidget);
     expect(find.text('CORRALÓN MORELIA'), findsOneWidget);
     expect(find.text('Ana María Pérez López'), findsOneWidget);
@@ -104,11 +104,139 @@ void main() {
       tester.getTopLeft(find.text('AGENTE')).dy,
       lessThan(tester.getTopLeft(find.text('Firma autógrafa/electrónica:')).dy),
     );
-    expect(
-      tester.widget<Text>(find.text('INV-2026-0042')).style?.fontSize,
-      isNull,
-    );
+    expect(tester.widget<Text>(find.text('00042')).style?.fontSize, isNull);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('el inventario se previsualiza separado de la boleta', (
+    tester,
+  ) async {
+    final item = operativo('conduce_legalidad');
+    const captura = ConduceLegalidadCaptura(
+      id: 12,
+      operativoId: 11,
+      folio: 'CL-11-12',
+      fecha: '2026-10-19',
+      hora: '10:30',
+      lugar: 'Uruapan',
+      agenteNombre: 'María Policía',
+      agenteNumeroPlaca: 'SV-101',
+      canEdit: true,
+      vehiculos: <ConduceLegalidadVehiculo>[
+        ConduceLegalidadVehiculo(
+          marca: 'Honda',
+          linea: 'Cargo',
+          modelo: '2024',
+          color: 'Rojo',
+          placas: 'ABC-123-A',
+          serie: '3H1TEST1234567890',
+          numeroInventario: '00042',
+          grua: 'Grúas Uruapan',
+          corralon: 'Corralón Uruapan',
+          partesDanadas: 'Rayón en costado derecho',
+          observaciones: 'Casco bajo el asiento',
+        ),
+      ],
+      personas: <ConduceLegalidadPersona>[
+        ConduceLegalidadPersona(nombre: 'Juan Propietario'),
+      ],
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ConduceLegalidadBoletaScreen(
+          initialOperativo: item,
+          initialCaptura: captura,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Inventario'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('INVENTARIO DE VEHÍCULO REMITIDO'), findsOneWidget);
+    expect(find.text('PREVIO AL ARRASTRE · ARTÍCULO 352'), findsOneWidget);
+    expect(find.text('00042'), findsOneWidget);
+    expect(find.text('Grúas Uruapan'), findsWidgets);
+    expect(find.text('Corralón Uruapan'), findsOneWidget);
+    expect(find.text('Objetos y accesorios inventariados:'), findsOneWidget);
+    expect(find.text('PROPIETARIO / CONDUCTOR'), findsOneWidget);
+    expect(find.text('AGENTE QUE ELABORA'), findsOneWidget);
+    expect(find.text('OPERADOR DE GRÚA'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('una captura histórica sin folio no genera inventario nuevo', (
+    tester,
+  ) async {
+    final item = operativo('conduce_legalidad');
+    const captura = ConduceLegalidadCaptura(
+      id: 10,
+      operativoId: 11,
+      canEdit: true,
+      vehiculos: <ConduceLegalidadVehiculo>[
+        ConduceLegalidadVehiculo(placas: 'HIST-001'),
+      ],
+      personas: <ConduceLegalidadPersona>[],
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ConduceLegalidadBoletaScreen(
+          initialOperativo: item,
+          initialCaptura: captura,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Inventario'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('INVENTARIO DE VEHÍCULO REMITIDO'), findsNothing);
+    expect(
+      find.textContaining('anterior al inicio de la serie digital'),
+      findsOneWidget,
+    );
+  });
+
+  test('el inventario térmico incluye vehículo, artículo y tres firmas', () {
+    final item = operativo('conduce_legalidad');
+    const captura = ConduceLegalidadCaptura(
+      id: 12,
+      operativoId: 11,
+      fecha: '2026-10-19',
+      hora: '10:30',
+      agenteNombre: 'María Policía',
+      agenteNumeroPlaca: 'SV-101',
+      canEdit: true,
+      vehiculos: <ConduceLegalidadVehiculo>[
+        ConduceLegalidadVehiculo(
+          placas: 'ABC-123-A',
+          serie: '3H1TEST1234567890',
+          numeroInventario: '00042',
+          grua: 'Grúas Uruapan',
+          corralon: 'Corralón Uruapan',
+        ),
+      ],
+      personas: <ConduceLegalidadPersona>[
+        ConduceLegalidadPersona(nombre: 'Juan Propietario'),
+      ],
+    );
+
+    final text = buildConduceLegalidadInventoryTicketText(
+      operativo: item,
+      captura: captura,
+      width: 48,
+    );
+
+    expect(text, contains('INVENTARIO DE VEHICULO REMITIDO'));
+    expect(text, contains('ARTICULO 352'));
+    expect(text, contains('00042'));
+    expect(text, contains('ABC-123-A'));
+    expect(text, contains('Numero de sello'));
+    expect(text, contains('PROPIETARIO / CONDUCTOR'));
+    expect(text, contains('AGENTE QUE ELABORA'));
+    expect(text, contains('OPERADOR DE GRUA'));
   });
 
   test('tickets de ambos operativos usan la dirección de su delegación', () {
@@ -136,6 +264,8 @@ void main() {
 
       expect(texto, contains('Delegación de Pátzcuaro'));
       expect(texto, contains('Av. Lázaro Cárdenas 120'));
+      expect(texto, contains('9:00 a. m. a 3:00 p. m.'));
+      expect(texto, isNot(contains('4:00 p. m.')));
       expect(texto, isNot(contains('Justicia Cívica')));
       expect(texto, isNot(contains('Periférico Paseo')));
     }
@@ -149,6 +279,7 @@ void main() {
     );
 
     expect(texto, contains('Delegación de Pátzcuaro'));
+    expect(texto, contains('9:00 a. m. a 3:00 p. m.'));
     expect(texto, isNot(contains('Morelia')));
     expect(texto, isNot(contains('4433163728')));
   });

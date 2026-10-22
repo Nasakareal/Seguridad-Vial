@@ -79,6 +79,7 @@ class _ConduceLegalidadWorkflowHelpSheetState
         'En Vehículos pulsa Agregar. Cada alimentación admite como máximo un vehículo.',
         'Puedes tocar Escanear tarjeta y centrar el QR para proponer los datos automáticamente.',
         'Revisa Tipo de vehículo, Carrocería, Marca, Color, placas, estado y número de serie.',
+        'Verifica el folio de inventario asignado automáticamente; no necesitas capturarlo ni modificarlo.',
         'Completa Grúa, Corralón, aseguradora y antecedente solamente cuando correspondan.',
         'Pulsa Agregar vehículo; después aparecerá en la sección Vehículos y podrás editarlo o quitarlo.',
       ],
@@ -140,16 +141,17 @@ class _ConduceLegalidadWorkflowHelpSheetState
       highlightedIcon: 2,
     ),
     _HelpTopic(
-      title: 'Imprimir la boleta',
+      title: 'Imprimir boleta o inventario',
       intro:
-          'Abre la boleta de la captura y envíala a una impresora térmica emparejada.',
+          'Abre los documentos de la captura y envía por separado la boleta o el inventario a una impresora térmica emparejada.',
       icon: Icons.print_outlined,
       color: Color(0xFFB45309),
       action: 'Imprimir',
       actionIcon: Icons.print_outlined,
       steps: <String>[
         'Toca el icono de boleta en la tarjeta de la captura.',
-        'Revisa la vista previa y pulsa el icono Imprimir.',
+        'Selecciona Boleta o Inventario y revisa la vista previa correspondiente.',
+        'Pulsa Imprimir; sólo se enviará el documento seleccionado.',
         'Elige papel de 58 mm u 80 mm.',
         'Selecciona la impresora Bluetooth previamente emparejada.',
       ],

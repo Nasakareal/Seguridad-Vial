@@ -65,8 +65,10 @@ class ConduceLegalidadCaptureFormHelpSheet extends StatelessWidget {
           'En Vehículos pulsa Agregar.',
           'Dentro de la ventana pulsa Escanear tarjeta y encuadra el código con la cámara.',
           isAlcoholimetria
-              ? 'Comprueba tipo, carrocería, marca, placas y serie; captura también el Número de inventario cuando exista.'
-              : 'Comprueba tipo, carrocería, marca, placas y serie; captura obligatoriamente el Número de inventario y selecciona el Corralón de destino.',
+              ? 'Comprueba tipo, carrocería, marca, placas y serie; revisa también el folio de inventario cuando exista.'
+              : 'Comprueba tipo, carrocería, marca, placas y serie; verifica el folio de inventario asignado automáticamente y selecciona el Corralón de destino.',
+          if (!isAlcoholimetria)
+            'En Daños o partes afectadas describe el estado visible del vehículo; usa Observaciones del inventario para accesorios, objetos y otras condiciones relevantes.',
           'Pulsa Agregar vehículo; al editar uno existente el botón dirá Guardar cambios.',
         ],
         note:
@@ -108,7 +110,7 @@ class ConduceLegalidadCaptureFormHelpSheet extends StatelessWidget {
           'Usa Observaciones sólo para información adicional que no esté en la Narrativa.',
           isAlcoholimetria
               ? 'Revisa fundamentos, vehículo, personas y fotos.'
-              : 'Confirma que exista un vehículo con Número de inventario y Corralón de destino; sin esos datos la captura no se guardará.',
+              : 'Confirma que el vehículo muestre su folio de inventario automático y el Corralón de destino; sin esos datos la captura no se guardará.',
           isEditing
               ? 'Pulsa Actualizar captura y espera el mensaje de confirmación.'
               : 'Pulsa Guardar captura y espera el mensaje de confirmación.',

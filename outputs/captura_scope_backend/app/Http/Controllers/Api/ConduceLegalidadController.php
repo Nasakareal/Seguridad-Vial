@@ -433,6 +433,27 @@ class ConduceLegalidadController extends Controller
         ]);
     }
 
+    public function reservarFolioInventario(Request $request, ConduceLegalidadOperativo $operativo)
+    {
+        $user = $request->user();
+        abort_unless($user, 403);
+        $this->assertPuedeVerOperativo($operativo, $user);
+        $this->assertPuedeAlimentarOperativo($operativo, $user);
+        abort_if($this->esOperativoAlcoholimetria($operativo), 422, 'Este operativo no requiere folio de inventario.');
+
+        $validated = $request->validate(['client_uuid' => ['required', 'uuid']]);
+        $folio = $this->reservarNumeroInventario($validated['client_uuid'], (int) $user->id);
+
+        return response()->json([
+            'ok' => true,
+            'data' => [
+                'client_uuid' => $validated['client_uuid'],
+                'folio_numero' => (int) $folio,
+                'folio' => $folio,
+            ],
+        ]);
+    }
+
     public function updateOperativo(Request $request, ConduceLegalidadOperativo $operativo)
     {
         $user = $request->user();
@@ -554,12 +575,7 @@ class ConduceLegalidadController extends Controller
         $user = $request->user();
         abort_unless($user, 403);
         $this->assertPuedeVerOperativo($operativo, $user);
-
-        $validated = $request->validate(
-            $this->capturaRules($operativo),
-            $this->capturaValidationMessages()
-        );
-        $clientUuid = $this->nullableString($validated['client_uuid'] ?? null);
+        $clientUuid = $this->nullableString($request->input('client_uuid'));
         if ($clientUuid !== null) {
             $existing = $operativo->capturas()
                 ->where('client_uuid', $clientUuid)
@@ -579,6 +595,13 @@ class ConduceLegalidadController extends Controller
                 ]);
             }
         }
+
+        $this->prepararNumeroInventarioAutomatico($request, $operativo);
+        $validated = $request->validate(
+            $this->capturaRules($operativo),
+            $this->capturaValidationMessages()
+        );
+        $clientUuid = $this->nullableString($validated['client_uuid'] ?? null);
 
         $this->assertPuedeAlimentarOperativo($operativo, $user);
 
@@ -740,9 +763,14 @@ class ConduceLegalidadController extends Controller
         abort_unless($captura->operativo_id === $operativo->id, 404);
         abort_unless($this->canEditCaptura($user, $captura), 403);
         $this->assertPuedeAlimentarOperativo($operativo, $user);
+        $this->prepararNumeroInventarioAutomatico(
+            $request,
+            $operativo,
+            $captura
+        );
 
         $validated = $request->validate(
-            $this->capturaRules($operativo),
+            $this->capturaRules($operativo, $captura),
             $this->capturaValidationMessages()
         );
         $this->assertCapturaHasFundamento($validated, $operativo, $captura);
@@ -1679,6 +1707,48 @@ class ConduceLegalidadController extends Controller
             ->where('client_uuid', $clientUuid)
             ->lockForUpdate()
             ->value('id');
+    }
+
+    private function reservarNumeroInventario(string $clientUuid, int $userId): string
+    {
+        while (true) {
+            $existente = DB::table('inventario_vehiculo_folio_reservas')
+                ->where('client_uuid', $clientUuid)
+                ->value('id');
+
+            if ($existente === null) {
+                $now = now();
+                DB::table('inventario_vehiculo_folio_reservas')->insertOrIgnore([
+                    'client_uuid' => $clientUuid,
+                    'created_by' => $userId,
+                    'created_at' => $now,
+                    'updated_at' => $now,
+                ]);
+                $existente = DB::table('inventario_vehiculo_folio_reservas')
+                    ->where('client_uuid', $clientUuid)
+                    ->lockForUpdate()
+                    ->value('id');
+                if ($existente === null) {
+                    continue;
+                }
+            }
+
+            $folio = str_pad((string) ((int) $existente), 5, '0', STR_PAD_LEFT);
+            $ocupadoHistoricamente = ConduceLegalidadVehiculo::query()
+                ->where('numero_inventario', $folio)
+                ->exists();
+            if (!$ocupadoHistoricamente) {
+                return $folio;
+            }
+
+            DB::table('inventario_vehiculo_folio_reservas')
+                ->where('id', $existente)
+                ->where('client_uuid', $clientUuid)
+                ->update([
+                    'client_uuid' => (string) Str::uuid(),
+                    'updated_at' => now(),
+                ]);
+        }
     }
 
     private function parseFolioBusqueda(string $value): ?array
@@ -2684,9 +2754,17 @@ class ConduceLegalidadController extends Controller
         ];
     }
 
-    private function capturaRules(?ConduceLegalidadOperativo $operativo = null): array
+    private function capturaRules(
+        ?ConduceLegalidadOperativo $operativo = null,
+        ?ConduceLegalidadCaptura $captura = null
+    ): array
     {
         $requiereVehiculo = $operativo === null || !$this->esOperativoAlcoholimetria($operativo);
+        $esHistoricaSinInventario = $captura !== null
+            && $this->normalizarNumeroInventario(
+                $captura->vehiculos()->value('numero_inventario')
+            ) === null;
+        $requiereInventario = $requiereVehiculo && !$esHistoricaSinInventario;
 
         return [
             'client_uuid' => ['nullable', 'string', 'max:80'],
@@ -2732,7 +2810,12 @@ class ConduceLegalidadController extends Controller
             'vehiculos.*.placas' => ['nullable', 'string', 'max:20'],
             'vehiculos.*.estado_placas' => ['nullable', 'string', 'max:80'],
             'vehiculos.*.serie' => ['nullable', 'string', 'max:30'],
-            'vehiculos.*.numero_inventario' => [$requiereVehiculo ? 'required' : 'nullable', 'string', 'max:100'],
+            'vehiculos.*.numero_inventario' => [
+                $requiereInventario ? 'required' : 'nullable',
+                'string',
+                'max:100',
+                'regex:/^\d{5,}$/',
+            ],
             'vehiculos.*.capacidad_personas' => ['nullable', 'integer', 'min:0', 'max:999'],
             'vehiculos.*.tipo_servicio' => ['nullable', 'string', 'max:80'],
             'vehiculos.*.tarjeta_circulacion_nombre' => ['nullable', 'string', 'max:255'],
@@ -2794,6 +2877,7 @@ class ConduceLegalidadController extends Controller
             'vehiculos.required' => 'Agrega el vehículo antes de guardar la captura.',
             'vehiculos.size' => 'La captura debe contener exactamente un vehículo.',
             'vehiculos.*.numero_inventario.required' => 'Captura el número de inventario del vehículo.',
+            'vehiculos.*.numero_inventario.regex' => 'El folio de inventario no fue generado por el sistema.',
             'vehiculos.*.corralon_id.required' => 'Selecciona el corralón al que se trasladará el vehículo.',
             'vehiculos.*.corralon_id.exists' => 'El corralón seleccionado ya no está disponible. Selecciona otro.',
         ];
@@ -2895,6 +2979,89 @@ class ConduceLegalidadController extends Controller
         }
     }
 
+    private function prepararNumeroInventarioAutomatico(
+        Request $request,
+        ConduceLegalidadOperativo $operativo,
+        ?ConduceLegalidadCaptura $captura = null
+    ): void {
+        if ($this->esOperativoAlcoholimetria($operativo)) {
+            return;
+        }
+
+        $vehiculos = $request->input('vehiculos');
+        if (
+            !is_array($vehiculos)
+            || count($vehiculos) === 0
+            || !isset($vehiculos[0])
+            || !is_array($vehiculos[0])
+        ) {
+            return;
+        }
+
+        $folioActual = $captura
+            ? $this->normalizarNumeroInventario(
+                $captura->vehiculos()->value('numero_inventario')
+            )
+            : null;
+
+        if ($captura !== null && $folioActual === null) {
+            $vehiculos[0]['numero_inventario'] = null;
+            $request->merge(['vehiculos' => $vehiculos]);
+            return;
+        }
+        $clientUuid = $this->nullableString(
+            $request->input('client_uuid') ?: ($captura ? $captura->client_uuid : null)
+        );
+
+        if ($clientUuid === null) {
+            $clientUuid = (string) Str::uuid();
+            $request->merge(['client_uuid' => $clientUuid]);
+        }
+
+        $folio = $folioActual ?: $this->reservarNumeroInventario(
+            $clientUuid,
+            (int) optional($request->user())->id
+        );
+        $vehiculos[0]['numero_inventario'] = $folio;
+        $request->merge(['vehiculos' => $vehiculos]);
+    }
+
+    private function normalizarNumeroInventario($value): ?string
+    {
+        $folio = $this->nullableString($value);
+        return $folio === null ? null : strtoupper($folio);
+    }
+
+    private function assertNumerosInventarioDisponibles(
+        ConduceLegalidadCaptura $captura,
+        array $vehiculos
+    ): void {
+        $folios = [];
+        foreach ($vehiculos as $row) {
+            $folio = $this->normalizarNumeroInventario($row['numero_inventario'] ?? null);
+            if ($folio === null) {
+                continue;
+            }
+
+            if (isset($folios[$folio])) {
+                throw ValidationException::withMessages([
+                    'vehiculos.0.numero_inventario' => 'El folio de inventario está repetido en la captura.',
+                ]);
+            }
+            $folios[$folio] = true;
+
+            $ocupado = ConduceLegalidadVehiculo::query()
+                ->where('numero_inventario', $folio)
+                ->where('captura_id', '<>', $captura->id)
+                ->exists();
+            if ($ocupado) {
+                throw ValidationException::withMessages([
+                    'vehiculos.0.numero_inventario' => 'El folio de inventario ya está asignado a otro vehículo.',
+                ]);
+            }
+        }
+    }
+
     private function replaceVehiculos(
         ConduceLegalidadCaptura $captura,
         array $vehiculos,
@@ -2902,6 +3069,7 @@ class ConduceLegalidadController extends Controller
         bool $usaFundamentoUnificado = false
     ): void
     {
+        $this->assertNumerosInventarioDisponibles($captura, $vehiculos);
         $captura->vehiculos()->delete();
 
         foreach ($vehiculos as $row) {
@@ -2962,7 +3130,7 @@ class ConduceLegalidadController extends Controller
                 'placas' => $this->nullableString($row['placas'] ?? null),
                 'estado_placas' => $this->nullableString($row['estado_placas'] ?? null),
                 'serie' => $this->nullableString($row['serie'] ?? null),
-                'numero_inventario' => $this->nullableString($row['numero_inventario'] ?? null),
+                'numero_inventario' => $this->normalizarNumeroInventario($row['numero_inventario'] ?? null),
                 'capacidad_personas' => (int) ($row['capacidad_personas'] ?? 0),
                 'tipo_servicio' => $this->nullableString($row['tipo_servicio'] ?? null),
                 'tarjeta_circulacion_nombre' => $this->nullableString($row['tarjeta_circulacion_nombre'] ?? null),
@@ -3947,25 +4115,9 @@ class ConduceLegalidadController extends Controller
                 });
         });
 
-        if ($unidadId !== self::UNIDAD_DELEGACIONES) {
-            return;
-        }
-
-        $delegacionId = (int) ($user->delegacion_id ?? 0);
-        if ($delegacionId <= 0) {
-            $query->whereRaw('1=0');
-            return;
-        }
-
-        $query->where(function ($delegaciones) use ($delegacionId) {
-            $delegaciones->where('delegacion_id', $delegacionId)
-                ->orWhere(function ($legacy) use ($delegacionId) {
-                    $legacy->whereNull('delegacion_id')
-                        ->whereHas('creador', function ($creador) use ($delegacionId) {
-                            $creador->where('delegacion_id', $delegacionId);
-                        });
-                });
-        });
+        // Los operativos de Delegaciones son puntos de trabajo compartidos.
+        // Personal de otra delegacion puede acudir como apoyo y alimentarlos;
+        // la adscripcion contable de cada captura se hereda del operativo.
     }
 
     private function canViewOperativo($user, ConduceLegalidadOperativo $operativo): bool
@@ -3985,14 +4137,7 @@ class ConduceLegalidadController extends Controller
             return false;
         }
 
-        if ($unidadId !== self::UNIDAD_DELEGACIONES) {
-            return true;
-        }
-
-        $delegacionId = (int) ($user->delegacion_id ?? 0);
-        $delegacionOperativo = (int) ($operativo->delegacion_id ?? optional($operativo->creador)->delegacion_id ?? 0);
-
-        return $delegacionId > 0 && $delegacionOperativo === $delegacionId;
+        return true;
     }
 
     private function assertPuedeVerOperativo(ConduceLegalidadOperativo $operativo, $user): void

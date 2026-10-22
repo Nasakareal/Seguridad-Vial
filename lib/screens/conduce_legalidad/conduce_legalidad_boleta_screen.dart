@@ -11,6 +11,8 @@ import '../../services/thermal_printer_service.dart';
 import 'ayuda/conduce_legalidad_workflow_help_sheet.dart';
 import 'conduce_legalidad_module.dart';
 
+enum _PrintableDocument { boleta, inventario }
+
 class ConduceLegalidadBoletaScreen extends StatefulWidget {
   final ConduceLegalidadOperativo? initialOperativo;
   final ConduceLegalidadCaptura? initialCaptura;
@@ -42,6 +44,7 @@ class _ConduceLegalidadBoletaScreenState
   ConduceLegalidadCaptura? _captura;
   bool _usingPreview = false;
   bool _printing = false;
+  _PrintableDocument _document = _PrintableDocument.boleta;
 
   @override
   void initState() {
@@ -125,13 +128,21 @@ class _ConduceLegalidadBoletaScreenState
         final printer = await _selectBondedPrinter();
         if (!mounted || printer == null) return;
 
+        final bytes = _document == _PrintableDocument.inventario
+            ? _buildEscPosInventory(operativo, captura, paperSize)
+            : _buildEscPosTicket(operativo, captura, paperSize);
         await ThermalPrinterService.printEscPos(
           address: printer.address,
-          bytes: _buildEscPosTicket(operativo, captura, paperSize),
+          bytes: bytes,
         );
         if (!mounted) return;
 
-        _showSnackBar('Boleta ${paperSize.label} enviada a ${printer.name}.');
+        final documentName = _document == _PrintableDocument.inventario
+            ? 'Inventario'
+            : 'Boleta';
+        _showSnackBar(
+          '$documentName ${paperSize.label} enviado a ${printer.name}.',
+        );
         return;
       }
 
@@ -283,7 +294,11 @@ class _ConduceLegalidadBoletaScreenState
     return Scaffold(
       backgroundColor: const Color(0xFFF3F4F6),
       appBar: AppBar(
-        title: const Text('Boleta de infracción'),
+        title: Text(
+          _document == _PrintableDocument.inventario
+              ? 'Inventario del vehículo'
+              : 'Boleta de infracción',
+        ),
         actions: [
           IconButton(
             tooltip: 'Ayuda para imprimir',
@@ -291,7 +306,9 @@ class _ConduceLegalidadBoletaScreenState
             icon: const Icon(Icons.help_outline),
           ),
           IconButton(
-            tooltip: 'Imprimir',
+            tooltip: _document == _PrintableDocument.inventario
+                ? 'Imprimir inventario'
+                : 'Imprimir boleta',
             onPressed: _loading || _printing ? null : _print,
             icon: _printing
                 ? const SizedBox.square(
@@ -348,6 +365,9 @@ class _ConduceLegalidadBoletaScreenState
     final vehiculos = captura.vehiculos.isEmpty
         ? <ConduceLegalidadVehiculo?>[null]
         : captura.vehiculos.cast<ConduceLegalidadVehiculo?>().toList();
+    final canShowInventory = captura.vehiculos.any(
+      (vehiculo) => (vehiculo.numeroInventario ?? '').trim().isNotEmpty,
+    );
 
     return SelectionArea(
       child: ListView(
@@ -363,20 +383,61 @@ class _ConduceLegalidadBoletaScreenState
             const SizedBox(height: 14),
           ],
           Center(
+            child: SegmentedButton<_PrintableDocument>(
+              segments: const [
+                ButtonSegment<_PrintableDocument>(
+                  value: _PrintableDocument.boleta,
+                  icon: Icon(Icons.receipt_long_outlined),
+                  label: Text('Boleta'),
+                ),
+                ButtonSegment<_PrintableDocument>(
+                  value: _PrintableDocument.inventario,
+                  icon: Icon(Icons.inventory_2_outlined),
+                  label: Text('Inventario'),
+                ),
+              ],
+              selected: {_document},
+              onSelectionChanged: (selection) {
+                final selected = selection.first;
+                if (selected == _PrintableDocument.inventario &&
+                    !canShowInventory) {
+                  _showSnackBar(
+                    captura.vehiculos.isEmpty
+                        ? 'La captura no tiene un vehículo para generar inventario.'
+                        : 'Este registro es anterior al inicio de la serie digital y se conserva sin inventario.',
+                  );
+                  return;
+                }
+                setState(() => _document = selected);
+              },
+            ),
+          ),
+          const SizedBox(height: 14),
+          Center(
             child: Column(
               children: [
                 for (var i = 0; i < vehiculos.length; i++) ...[
                   ConstrainedBox(
                     constraints: const BoxConstraints(maxWidth: 380),
-                    child: _BoletaPaper(
-                      operativo: operativo,
-                      captura: captura,
-                      vehiculo: vehiculos[i],
-                      persona: _personaFor(captura, i),
-                      index: i,
-                      total: vehiculos.length,
-                      preview: _usingPreview,
-                    ),
+                    child: _document == _PrintableDocument.inventario
+                        ? _InventarioPaper(
+                            operativo: operativo,
+                            captura: captura,
+                            vehiculo: vehiculos[i],
+                            persona: _personaFor(captura, i),
+                            index: i,
+                            total: vehiculos.length,
+                            preview: _usingPreview,
+                          )
+                        : _BoletaPaper(
+                            operativo: operativo,
+                            captura: captura,
+                            vehiculo: vehiculos[i],
+                            persona: _personaFor(captura, i),
+                            index: i,
+                            total: vehiculos.length,
+                            preview: _usingPreview,
+                          ),
                   ),
                   if (i < vehiculos.length - 1) const SizedBox(height: 18),
                 ],
@@ -731,6 +792,211 @@ class _BoletaPaper extends StatelessWidget {
   }
 }
 
+class ConduceLegalidadInventarioLegalText {
+  const ConduceLegalidadInventarioLegalText._();
+
+  static const String article352Notice =
+      'Inventario elaborado antes de iniciar el arrastre y sellado del vehículo, conforme al artículo 352. Las condiciones, daños y objetos asentados se reciben para su guarda y custodia.';
+}
+
+class _InventarioPaper extends StatelessWidget {
+  final ConduceLegalidadOperativo operativo;
+  final ConduceLegalidadCaptura captura;
+  final ConduceLegalidadVehiculo? vehiculo;
+  final ConduceLegalidadPersona? persona;
+  final int index;
+  final int total;
+  final bool preview;
+
+  const _InventarioPaper({
+    required this.operativo,
+    required this.captura,
+    required this.vehiculo,
+    required this.persona,
+    required this.index,
+    required this.total,
+    required this.preview,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final data = _BoletaTicketData(
+      operativo: operativo,
+      captura: captura,
+      vehiculo: vehiculo,
+      persona: persona,
+      index: index,
+      total: total,
+    );
+    const style = TextStyle(
+      color: Colors.black,
+      fontFamily: 'monospace',
+      fontSize: 12,
+      height: 1.25,
+    );
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border.all(color: Colors.black, width: 1.1),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.10),
+            blurRadius: 14,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: DefaultTextStyle(
+        style: style,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Text(
+              'SECRETARÍA DE SEGURIDAD PÚBLICA',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontWeight: FontWeight.w900, fontSize: 13),
+            ),
+            const Text(
+              'INVENTARIO DE VEHÍCULO REMITIDO',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontWeight: FontWeight.w900, fontSize: 15),
+            ),
+            const Text(
+              'PREVIO AL ARRASTRE · ARTÍCULO 352',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontWeight: FontWeight.w800, fontSize: 11),
+            ),
+            const _TicketDivider(),
+            _TicketPair(label: 'Folio', value: data.folio),
+            _TicketBlock(
+              label: 'NÚMERO DE INVENTARIO',
+              value: _value(
+                vehiculo?.numeroInventario,
+                fallback: 'No capturado',
+              ),
+            ),
+            _TicketPairRow(
+              leftLabel: 'Fecha',
+              leftValue: _value(captura.fecha),
+              rightLabel: 'Hora',
+              rightValue: _value(captura.hora),
+            ),
+            _TicketBlock(label: 'Lugar', value: data.lugar),
+            const _TicketDivider(),
+            const _TicketSection('DATOS DEL VEHÍCULO'),
+            _TicketPairRow(
+              leftLabel: 'Placas/permiso',
+              leftValue: _value(vehiculo?.placas, fallback: 'No capturado'),
+              rightLabel: 'Estado',
+              rightValue: _value(
+                vehiculo?.estadoPlacas,
+                fallback: 'No capturado',
+              ),
+            ),
+            _TicketBlock(label: 'Descripción', value: data.vehiculoDescripcion),
+            _TicketBlock(
+              label: 'Serie/NIV',
+              value: _value(vehiculo?.serie, fallback: 'No capturado'),
+            ),
+            const _TicketDivider(),
+            const _TicketSection('TRASLADO Y CUSTODIA'),
+            _TicketBlock(
+              label: 'Grúa',
+              value: _value(vehiculo?.grua, fallback: 'No capturada'),
+            ),
+            _TicketBlock(
+              label: 'Corralón',
+              value: _value(vehiculo?.corralon, fallback: 'No capturado'),
+            ),
+            const Text('Número de sello:'),
+            const SizedBox(height: 18),
+            const _SignatureLine(),
+            const SizedBox(height: 6),
+            const _TicketSection('CONDICIONES Y CONTENIDO'),
+            _TicketBlock(
+              label: 'Daños o partes afectadas',
+              value: _value(
+                vehiculo?.partesDanadas,
+                fallback: 'Sin daños capturados',
+              ),
+            ),
+            _TicketBlock(
+              label: 'Observaciones registradas',
+              value: _value(
+                vehiculo?.observaciones,
+                fallback: 'Sin observaciones capturadas',
+              ),
+            ),
+            const Text('Objetos y accesorios inventariados:'),
+            const SizedBox(height: 4),
+            const _HandwrittenLines(lines: 3),
+            const SizedBox(height: 6),
+            const Text(
+              ConduceLegalidadInventarioLegalText.article352Notice,
+              textAlign: TextAlign.justify,
+              style: TextStyle(fontSize: 10.5),
+            ),
+            const _TicketDivider(),
+            const _TicketSection('NOMBRES Y FIRMAS DE ENTREGA'),
+            _InventorySignature(
+              title: 'PROPIETARIO / CONDUCTOR',
+              name: _value(
+                persona?.nombreCompleto,
+                fallback: 'Nombre: ______________________________',
+              ),
+            ),
+            _InventorySignature(
+              title: 'AGENTE QUE ELABORA',
+              name:
+                  '${_value(captura.agenteNombre ?? captura.creador?.nombre, fallback: 'Nombre no capturado')} · Placa ${data.placaAgente}',
+            ),
+            _InventorySignature(
+              title: 'OPERADOR DE GRÚA',
+              name:
+                  '${_value(vehiculo?.grua, fallback: 'Grúa no capturada')}\nNombre del operador: ____________________',
+            ),
+            Text(
+              preview
+                  ? 'PREVISUALIZACIÓN LOCAL'
+                  : 'Captura #${captura.id} / Operativo #${operativo.id}',
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: 20),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _InventorySignature extends StatelessWidget {
+  final String title;
+  final String name;
+
+  const _InventorySignature({required this.title, required this.name});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(title, style: const TextStyle(fontWeight: FontWeight.w900)),
+          Text(name),
+          const SizedBox(height: 24),
+          const _SignatureLine(),
+          const Text('Nombre y firma', textAlign: TextAlign.center),
+        ],
+      ),
+    );
+  }
+}
+
 Uint8List _buildEscPosTicket(
   ConduceLegalidadOperativo operativo,
   ConduceLegalidadCaptura captura,
@@ -768,6 +1034,72 @@ Uint8List _buildEscPosTicket(
     0x1D, 0x21, 0x00, // Tamaño normal.
     0x1B, 0x45, 0x00, // Negritas apagadas.
     0x1B, 0x61, 0x00, // Alineación izquierda; el centrado va en texto.
+    ...textBytes,
+    ..._thermalTicketBottomFeed,
+  ]);
+}
+
+String buildConduceLegalidadInventoryTicketText({
+  required ConduceLegalidadOperativo operativo,
+  required ConduceLegalidadCaptura captura,
+  int width = 48,
+}) {
+  final vehiculos = captura.vehiculos.isEmpty
+      ? <ConduceLegalidadVehiculo?>[null]
+      : captura.vehiculos.cast<ConduceLegalidadVehiculo?>().toList();
+  final writer = ThermalTicketRowFormatter(width: width);
+
+  for (var i = 0; i < vehiculos.length; i++) {
+    _writeThermalInventory(
+      writer,
+      _BoletaTicketData(
+        operativo: operativo,
+        captura: captura,
+        vehiculo: vehiculos[i],
+        persona: _personaForTicket(captura, i),
+        index: i,
+        total: vehiculos.length,
+      ),
+    );
+    if (i < vehiculos.length - 1) {
+      writer.blank();
+      writer.rule();
+      writer.blank();
+    }
+  }
+
+  return writer.toString();
+}
+
+Uint8List _buildEscPosInventory(
+  ConduceLegalidadOperativo operativo,
+  ConduceLegalidadCaptura captura,
+  _ThermalPaperSize paperSize,
+) {
+  final text = buildConduceLegalidadInventoryTicketText(
+    operativo: operativo,
+    captura: captura,
+    width: paperSize.columns,
+  );
+  final textBytes = _thermalEncode(text.replaceAll('\n', '\r\n'));
+  return Uint8List.fromList(<int>[
+    0x1B,
+    0x40,
+    0x1B,
+    0x21,
+    0x00,
+    0x1B,
+    0x4D,
+    0x00,
+    0x1D,
+    0x21,
+    0x00,
+    0x1B,
+    0x45,
+    0x00,
+    0x1B,
+    0x61,
+    0x00,
     ...textBytes,
     ..._thermalTicketBottomFeed,
   ]);
@@ -948,6 +1280,115 @@ void _writeThermalTicket(
   ticket.center(
     'Captura #${data.captura.id} / Operativo #${data.operativo.id}',
   );
+}
+
+void _writeThermalInventory(
+  ThermalTicketRowFormatter ticket,
+  _BoletaTicketData data,
+) {
+  final line = ThermalTicketRowFormatter.repeat('_', ticket.width);
+  ticket.center('SECRETARÍA DE SEGURIDAD PÚBLICA');
+  ticket.center('INVENTARIO DE VEHÍCULO REMITIDO');
+  ticket.center('PREVIO AL ARRASTRE - ARTÍCULO 352');
+  ticket.rule();
+  ticket.pairRow(
+    'Folio',
+    data.folio,
+    'Inventario',
+    _value(data.vehiculo?.numeroInventario, fallback: 'No capturado'),
+  );
+  ticket.pairRow(
+    'Fecha',
+    _value(data.captura.fecha),
+    'Hora',
+    _value(data.captura.hora),
+  );
+  ticket.block('Lugar', data.lugar);
+  ticket.rule();
+  ticket.section('DATOS DEL VEHÍCULO');
+  ticket.pairRow(
+    'Placas/permiso',
+    _value(data.vehiculo?.placas, fallback: 'No capturado'),
+    'Estado',
+    _value(data.vehiculo?.estadoPlacas, fallback: 'No capturado'),
+  );
+  ticket.block('Descripción', data.vehiculoDescripcion);
+  ticket.block(
+    'Serie/NIV',
+    _value(data.vehiculo?.serie, fallback: 'No capturado'),
+  );
+  ticket.rule();
+  ticket.section('TRASLADO Y CUSTODIA');
+  ticket.block('Grúa', _value(data.vehiculo?.grua, fallback: 'No capturada'));
+  ticket.block(
+    'Corralón',
+    _value(data.vehiculo?.corralon, fallback: 'No capturado'),
+  );
+  ticket.line('Número de sello:');
+  ticket.blank();
+  ticket.line(line);
+  ticket.rule();
+  ticket.section('CONDICIONES Y CONTENIDO');
+  ticket.block(
+    'Daños o partes afectadas',
+    _value(data.vehiculo?.partesDanadas, fallback: 'Sin daños capturados'),
+  );
+  ticket.block(
+    'Observaciones registradas',
+    _value(
+      data.vehiculo?.observaciones,
+      fallback: 'Sin observaciones capturadas',
+    ),
+  );
+  ticket.line('Objetos y accesorios inventariados:');
+  ticket.blank();
+  ticket.line(line);
+  ticket.blank();
+  ticket.line(line);
+  ticket.blank();
+  ticket.line(line);
+  ticket.blank();
+  ticket.block(
+    'Constancia',
+    ConduceLegalidadInventarioLegalText.article352Notice,
+  );
+  ticket.rule();
+  ticket.section('NOMBRES Y FIRMAS DE ENTREGA');
+  _writeThermalInventorySignature(
+    ticket,
+    'PROPIETARIO / CONDUCTOR',
+    _value(
+      data.persona?.nombreCompleto,
+      fallback: 'Nombre: __________________________',
+    ),
+  );
+  _writeThermalInventorySignature(
+    ticket,
+    'AGENTE QUE ELABORA',
+    '${_value(data.captura.agenteNombre ?? data.captura.creador?.nombre, fallback: 'Nombre no capturado')} / Placa ${data.placaAgente}',
+  );
+  _writeThermalInventorySignature(
+    ticket,
+    'OPERADOR DE GRÚA',
+    '${_value(data.vehiculo?.grua, fallback: 'Grúa no capturada')}\nNombre del operador: ____________________',
+  );
+  ticket.center(
+    'Captura #${data.captura.id} / Operativo #${data.operativo.id}',
+  );
+}
+
+void _writeThermalInventorySignature(
+  ThermalTicketRowFormatter ticket,
+  String title,
+  String name,
+) {
+  ticket.line(title);
+  ticket.block('Nombre', name);
+  ticket.blank();
+  ticket.blank();
+  ticket.line(ThermalTicketRowFormatter.repeat('_', ticket.width));
+  ticket.center('Nombre y firma');
+  ticket.blank();
 }
 
 class _BoletaTicketData {
@@ -1313,7 +1754,7 @@ class ConduceLegalidadBoletaLegalText {
           : 'la Delegación de $nombre';
       final ubicacion = direccion == null ? '' : ', ubicada en $direccion';
 
-      return 'Para iniciar el trámite de liberación del vehículo, la persona interesada deberá acudir a $oficina$ubicacion, en su horario de atención, con identificación oficial y documentación que acredite propiedad o legítima posesión. $retiro';
+      return 'Para iniciar el trámite de liberación del vehículo, la persona interesada deberá acudir a $oficina$ubicacion, en un horario de 9:00 a. m. a 3:00 p. m., con identificación oficial y documentación que acredite propiedad o legítima posesión. $retiro';
     }
 
     return '$vehicleReleaseNotice $retiro';
@@ -1960,7 +2401,7 @@ class _BoletaPreviewData {
             placas: 'ABC1D',
             estadoPlacas: 'Michoacán',
             serie: '3SCPFTDEMO0000001',
-            numeroInventario: 'INV-2026-0042',
+            numeroInventario: '00001',
             tipoServicio: 'Particular',
             retencionVehiculo: true,
             motivoRetencion: 'Retencion por falta de licencia vigente.',

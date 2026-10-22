@@ -62,7 +62,7 @@ void main() {
     );
     await tester.pump(const Duration(milliseconds: 200));
 
-    expect(find.text('Imprimir la boleta'), findsOneWidget);
+    expect(find.text('Imprimir boleta o inventario'), findsOneWidget);
     expect(find.text('Siguiente'), findsNothing);
   });
 }

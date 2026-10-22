@@ -65,7 +65,9 @@ class _ConduceLegalidadCapturaScreenState
   String? _contentError;
   String? _clientUuid;
   String? _reservedFolio;
+  String? _reservedInventoryFolio;
   bool _reservingFolio = false;
+  bool _reservingInventoryFolio = false;
   String? _ultimaNarrativaAutomatica;
   bool _narrativaEditadaPorUsuario = false;
   ConduceLegalidadMeta? _meta;
@@ -310,6 +312,7 @@ class _ConduceLegalidadCapturaScreenState
   void _applyLocalDraft(Map<String, dynamic> draft) {
     _clientUuid = _stringValue(draft['client_uuid']) ?? _clientUuid;
     _reservedFolio = _stringValue(draft['folio_reservado']);
+    _reservedInventoryFolio = _stringValue(draft['folio_inventario_reservado']);
     _agenteNombresCtrl.text =
         _stringValue(draft['agente_nombres']) ?? _agenteNombresCtrl.text;
     _agenteApellidoPaternoCtrl.text =
@@ -377,6 +380,7 @@ class _ConduceLegalidadCapturaScreenState
     return <String, dynamic>{
       'client_uuid': _clientUuid,
       'folio_reservado': _reservedFolio,
+      'folio_inventario_reservado': _reservedInventoryFolio,
       'fecha': _dateForPayload(),
       'hora': _timeForPayload(),
       'agente_nombres': _agenteNombresCtrl.text,
@@ -424,6 +428,32 @@ class _ConduceLegalidadCapturaScreenState
     }
   }
 
+  Future<String?> _reserveInventoryFolio() async {
+    if (_editing || widget.module.isAlcoholimetria) return null;
+    final existing = _reservedInventoryFolio?.trim() ?? '';
+    if (existing.isNotEmpty) return existing;
+    if (_reservingInventoryFolio) return null;
+    final clientUuid = _clientUuid?.trim() ?? '';
+    if (clientUuid.isEmpty) return null;
+    setState(() => _reservingInventoryFolio = true);
+    try {
+      final reservation = await ConduceLegalidadService.reserveInventoryFolio(
+        operativoId: widget.operativoId,
+        clientUuid: clientUuid,
+      );
+      if (!mounted || _clientUuid != clientUuid) return null;
+      setState(() => _reservedInventoryFolio = reservation.folio);
+      _draft.notifyChanged();
+      return reservation.folio;
+    } catch (_) {
+      return null;
+    } finally {
+      if (mounted && _clientUuid == clientUuid) {
+        setState(() => _reservingInventoryFolio = false);
+      }
+    }
+  }
+
   Future<void> _startCleanCapture() async {
     if (_editing || _saving) return;
     final confirmed = await showDialog<bool>(
@@ -455,7 +485,9 @@ class _ConduceLegalidadCapturaScreenState
     setState(() {
       _clientUuid = OfflineSyncService.newClientUuid();
       _reservedFolio = null;
+      _reservedInventoryFolio = null;
       _reservingFolio = false;
+      _reservingInventoryFolio = false;
       _contentError = null;
       _fundamento = null;
       _fundamentosAdicionales.clear();
@@ -708,6 +740,26 @@ class _ConduceLegalidadCapturaScreenState
       return;
     }
 
+    _clientUuid ??= OfflineSyncService.newClientUuid();
+    String? inventoryFolio;
+    if (!widget.module.isAlcoholimetria) {
+      inventoryFolio = _reservedInventoryFolio?.trim();
+      if ((inventoryFolio ?? '').isEmpty) {
+        inventoryFolio = await _reserveInventoryFolio();
+      }
+      if ((inventoryFolio ?? '').isEmpty) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'No se pudo asignar el folio de inventario. Verifica tu conexión e inténtalo de nuevo.',
+            ),
+          ),
+        );
+        return;
+      }
+    }
+    if (!mounted) return;
     final vehiculo = await showConduceLegalidadVehiculoModal(
       context,
       fundamentos: _fundamentosSeleccionados,
@@ -715,6 +767,7 @@ class _ConduceLegalidadCapturaScreenState
       initialTipoGeneral: widget.module.isAlcoholimetria
           ? 'automovil'
           : 'motocicleta',
+      inventoryFolio: inventoryFolio,
       gruasLoader: _cargarGruasDelOperativo,
     );
     if (vehiculo == null || !mounted) return;
@@ -1544,6 +1597,7 @@ Future<ConduceLegalidadVehiculo?> showConduceLegalidadVehiculoModal(
   required String initialTipoGeneral,
   bool onlyMotorcycles = false,
   ConduceLegalidadVehiculo? initialVehiculo,
+  String? inventoryFolio,
   @visibleForTesting Future<List<Map<String, dynamic>>> Function()? gruasLoader,
 }) {
   return showModalBottomSheet<ConduceLegalidadVehiculo>(
@@ -1555,6 +1609,7 @@ Future<ConduceLegalidadVehiculo?> showConduceLegalidadVehiculoModal(
       initialTipoGeneral: initialTipoGeneral,
       onlyMotorcycles: onlyMotorcycles,
       initialVehiculo: initialVehiculo,
+      inventoryFolio: inventoryFolio,
       gruasLoader: gruasLoader,
     ),
   );
@@ -1565,6 +1620,7 @@ class _VehiculoModal extends StatefulWidget {
   final String initialTipoGeneral;
   final bool onlyMotorcycles;
   final ConduceLegalidadVehiculo? initialVehiculo;
+  final String? inventoryFolio;
   final Future<List<Map<String, dynamic>>> Function()? gruasLoader;
 
   const _VehiculoModal({
@@ -1572,6 +1628,7 @@ class _VehiculoModal extends StatefulWidget {
     required this.initialTipoGeneral,
     this.onlyMotorcycles = false,
     this.initialVehiculo,
+    this.inventoryFolio,
     this.gruasLoader,
   });
 
@@ -1592,6 +1649,7 @@ class _VehiculoModalState extends State<_VehiculoModal> {
   final _tipoServicioCtrl = TextEditingController(text: 'PARTICULAR');
   final _tarjetaCtrl = TextEditingController();
   final _aseguradoraCtrl = TextEditingController();
+  final _partesDanadasCtrl = TextEditingController();
   final _motivoCtrl = TextEditingController();
   final _observacionesCtrl = TextEditingController();
 
@@ -1622,7 +1680,8 @@ class _VehiculoModalState extends State<_VehiculoModal> {
     _placasCtrl.text = initial?.placas ?? '';
     _estadoPlacasSeleccionado = initial?.estadoPlacas;
     _serieCtrl.text = initial?.serie ?? '';
-    _numeroInventarioCtrl.text = initial?.numeroInventario ?? '';
+    _numeroInventarioCtrl.text =
+        initial?.numeroInventario ?? widget.inventoryFolio ?? '';
     _capacidadCtrl.text = initial == null
         ? '2'
         : initial.capacidadPersonas.toString();
@@ -1631,6 +1690,7 @@ class _VehiculoModalState extends State<_VehiculoModal> {
     _gruaIdSeleccionada = initial?.gruaId;
     _corralonGruaIdSeleccionada = initial?.corralonId;
     _aseguradoraCtrl.text = initial?.aseguradora ?? '';
+    _partesDanadasCtrl.text = initial?.partesDanadas ?? '';
     _antecedenteVehiculo = initial?.antecedenteVehiculo ?? false;
     _rawTarjeta = initial?.rawTarjetaQr;
     _observacionesCtrl.text = initial?.observaciones ?? '';
@@ -1656,6 +1716,7 @@ class _VehiculoModalState extends State<_VehiculoModal> {
     _tipoServicioCtrl.dispose();
     _tarjetaCtrl.dispose();
     _aseguradoraCtrl.dispose();
+    _partesDanadasCtrl.dispose();
     _motivoCtrl.dispose();
     _observacionesCtrl.dispose();
     super.dispose();
@@ -1932,7 +1993,7 @@ class _VehiculoModalState extends State<_VehiculoModal> {
       linea: _t(_lineaCtrl),
       color: _t(_colorCtrl),
       tipoServicio: tipoServicio,
-      partesDanadas: '',
+      partesDanadas: _t(_partesDanadasCtrl),
       tipoGeneral: _tipoGeneralSeleccionado,
       tipoCarroceria: _tipoCarroceriaSeleccionada,
       placas: _t(_placasCtrl),
@@ -2007,7 +2068,7 @@ class _VehiculoModalState extends State<_VehiculoModal> {
         corralon: _empty(corralonNombre),
         aseguradora: _empty(_t(_aseguradoraCtrl)),
         montoDanos: widget.initialVehiculo?.montoDanos,
-        partesDanadas: widget.initialVehiculo?.partesDanadas,
+        partesDanadas: _empty(_t(_partesDanadasCtrl)),
         antecedenteVehiculo: _antecedenteVehiculo,
         rawTarjetaQr: _rawTarjeta,
         licenciaPuntoInfraccionId:
@@ -2383,14 +2444,28 @@ class _VehiculoModalState extends State<_VehiculoModal> {
                     _text(
                       _numeroInventarioCtrl,
                       widget.onlyMotorcycles
-                          ? 'Número de inventario *'
+                          ? (widget.initialVehiculo != null &&
+                                    (widget.initialVehiculo!.numeroInventario ??
+                                            '')
+                                        .trim()
+                                        .isEmpty
+                                ? 'Folio de inventario'
+                                : 'Folio de inventario automático *')
                           : 'Número de inventario',
                       Icons.inventory_2_outlined,
                       helperText: widget.onlyMotorcycles
-                          ? 'Obligatorio para guardar y emitir la boleta.'
+                          ? (widget.initialVehiculo != null &&
+                                    (widget.initialVehiculo!.numeroInventario ??
+                                            '')
+                                        .trim()
+                                        .isEmpty
+                                ? 'Registro anterior al inicio de la serie digital; se conserva sin folio.'
+                                : 'Asignado por el sistema; no puede modificarse ni repetirse.')
                           : 'Se mostrará en la boleta.',
+                      readOnly: widget.onlyMotorcycles,
                       validator: (value) {
                         if (widget.onlyMotorcycles &&
+                            widget.initialVehiculo == null &&
                             (value ?? '').trim().isEmpty) {
                           return 'Captura el número de inventario';
                         }
@@ -2548,6 +2623,20 @@ class _VehiculoModalState extends State<_VehiculoModal> {
                     const SizedBox(height: 8),
                     const SizedBox(height: 8),
                     _text(
+                      _partesDanadasCtrl,
+                      'Daños o partes afectadas',
+                      Icons.car_crash_outlined,
+                      helperText:
+                          'Describe golpes, rayones, faltantes o escribe SIN DAÑOS APARENTES.',
+                      maxLines: 3,
+                      validator: (value) =>
+                          VehiculoFormService.validateOptionalText(
+                            value,
+                            max: 2000,
+                            label: 'Daños o partes afectadas',
+                          ),
+                    ),
+                    _text(
                       _motivoCtrl,
                       'Motivo de retencion',
                       Icons.report_problem_outlined,
@@ -2555,9 +2644,17 @@ class _VehiculoModalState extends State<_VehiculoModal> {
                     ),
                     _text(
                       _observacionesCtrl,
-                      'Observaciones',
+                      'Observaciones del inventario',
                       Icons.info_outline,
+                      helperText:
+                          'Anota el estado visible, accesorios, objetos u otra condición relevante.',
                       maxLines: 3,
+                      validator: (value) =>
+                          VehiculoFormService.validateOptionalText(
+                            value,
+                            max: 2000,
+                            label: 'Observaciones del inventario',
+                          ),
                     ),
                     const SizedBox(height: 12),
                     ElevatedButton.icon(
@@ -2592,6 +2689,7 @@ class _VehiculoModalState extends State<_VehiculoModal> {
     String? Function(String?)? validator,
     TextInputType? keyboardType,
     ValueChanged<String>? onChanged,
+    bool readOnly = false,
   }) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
@@ -2600,6 +2698,7 @@ class _VehiculoModalState extends State<_VehiculoModal> {
         maxLines: maxLines,
         keyboardType: keyboardType,
         textCapitalization: TextCapitalization.characters,
+        readOnly: readOnly,
         decoration: InputDecoration(
           labelText: label,
           border: const OutlineInputBorder(),

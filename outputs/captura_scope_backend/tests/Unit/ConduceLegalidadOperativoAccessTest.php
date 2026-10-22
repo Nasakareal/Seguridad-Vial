@@ -135,7 +135,7 @@ class ConduceLegalidadOperativoAccessTest extends TestCase
         $this->assertSame('07:30', $schedule['hora_inicio']);
     }
 
-    public function test_operatives_are_visible_only_in_same_unit_and_delegation(): void
+    public function test_delegaciones_operatives_are_visible_across_delegations(): void
     {
         $operativo = new ConduceLegalidadOperativo();
         $operativo->forceFill([
@@ -145,9 +145,27 @@ class ConduceLegalidadOperativoAccessTest extends TestCase
         $operativo->setRelation('creador', null);
 
         $this->assertTrue($this->canView($this->user('Delegado', 2, 15), $operativo));
-        $this->assertFalse($this->canView($this->user('Delegado', 2, 16), $operativo));
+        $this->assertTrue($this->canView($this->user('Delegado', 2, 16), $operativo));
         $this->assertFalse($this->canView($this->user('Responsable de Turno', 5), $operativo));
+        $this->assertTrue($this->canView($this->user('Subdirector', 2, 16), $operativo));
         $this->assertTrue($this->canView($this->user('Superadmin', 5), $operativo));
+    }
+
+    public function test_support_from_another_delegation_keeps_operational_delegation(): void
+    {
+        $operativo = new ConduceLegalidadOperativo();
+        $operativo->forceFill([
+            'unidad_id' => 2,
+            'delegacion_id' => 15,
+        ]);
+        $operativo->setRelation('creador', null);
+        $supportUser = $this->user('Policia', 2, 16);
+
+        $this->assertTrue($this->canView($supportUser, $operativo));
+
+        $scope = $this->resolveCaptureScope($operativo, $supportUser);
+        $this->assertSame(2, $scope['unidad_id']);
+        $this->assertSame(15, $scope['delegacion_id']);
     }
 
     public function test_superadmin_can_assign_delegaciones_scope(): void
