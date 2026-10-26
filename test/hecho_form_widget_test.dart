@@ -77,6 +77,8 @@ void main() {
     );
 
     await tester.pumpAndSettle();
+    expect(find.byKey(const Key('hecho-unidad-text')), findsOneWidget);
+    expect(find.byKey(const Key('hecho-unidad-select')), findsNothing);
     expect(find.text('Foto 1 del hecho (opcional)'), findsOneWidget);
     expect(find.text('Foto 2 del hecho (opcional)'), findsOneWidget);
     await tester.ensureVisible(find.text('TURNADO').last);
@@ -96,6 +98,101 @@ void main() {
     expect(data.situacion, 'PENDIENTE');
     expect(data.vehiculosMp, '0');
     expect(data.personasMp, '0');
+  });
+
+  testWidgets('Unidad 1 uses a patrol number select for unidad', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues(<String, Object>{
+      'auth_session_owner_key': 'user:1',
+      'auth_unidad_id': AuthService.unidadSiniestrosId,
+      'auth_role': 'Policia',
+    });
+    final data = validDelegacionesData()..unidad = '';
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: HechoForm(
+              mode: HechoFormMode.create,
+              data: data,
+              siniestrosPatrolNumbersLoader: () async => const [
+                '04-151',
+                '05-200',
+              ],
+              onSubmit:
+                  ({
+                    required data,
+                    required dictamenSelected,
+                    required fotoLugar,
+                    required fotoLugar2,
+                    required fotoSituacion,
+                  }) async => const OfflineActionResult.synced(),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('hecho-unidad-select')), findsOneWidget);
+    expect(find.byKey(const Key('hecho-unidad-text')), findsNothing);
+    await tester.ensureVisible(find.byKey(const Key('hecho-unidad-select')));
+    await tester.tap(find.byKey(const Key('hecho-unidad-select')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('04-151').last);
+    await tester.pumpAndSettle();
+
+    expect(data.unidad, '04-151');
+  });
+
+  testWidgets('Unidad 1 keeps manual capture when catalog is unavailable', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues(<String, Object>{
+      'auth_session_owner_key': 'user:1',
+      'auth_unidad_id': AuthService.unidadSiniestrosId,
+      'auth_role': 'Policia',
+    });
+    final data = validDelegacionesData()..unidad = '04-151';
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: HechoForm(
+              mode: HechoFormMode.create,
+              data: data,
+              siniestrosPatrolNumbersLoader: () async {
+                throw Exception('Error HTTP 404');
+              },
+              onSubmit:
+                  ({
+                    required data,
+                    required dictamenSelected,
+                    required fotoLugar,
+                    required fotoLugar2,
+                    required fotoSituacion,
+                  }) async => const OfflineActionResult.synced(),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('hecho-unidad-text')), findsOneWidget);
+    expect(find.byKey(const Key('hecho-unidad-select')), findsNothing);
+    expect(
+      find.text(
+        'Catálogo no disponible; puedes capturar la unidad manualmente.',
+      ),
+      findsOneWidget,
+    );
+    expect(data.unidad, '04-151');
   });
 
   testWidgets('retry keeps the UUID persisted before the network attempt', (
@@ -122,8 +219,9 @@ void main() {
                     attempts.add(data.clientUuid);
                     final saved = await LocalDraftService.load('hechos:create');
                     expect(saved?['client_uuid'], data.clientUuid);
-                    if (attempts.length == 1)
+                    if (attempts.length == 1) {
                       throw Exception('Fallo de prueba');
+                    }
                     return const OfflineActionResult.queued();
                   },
               onSubmitted: (_, _) async {},

@@ -38,6 +38,7 @@ class ConduceLegalidadMeta {
   final List<ConduceLegalidadFundamento> fundamentosCorralon;
   final List<ConduceLegalidadFundamento> fundamentosActividadCorralon;
   final List<ConduceLegalidadFundamento> fundamentosPersona;
+  final List<ConduceLegalidadAgente> agentes;
   final List<ConduceLegalidadRef> unidades;
   final List<ConduceLegalidadRef> delegaciones;
 
@@ -47,6 +48,7 @@ class ConduceLegalidadMeta {
     required this.fundamentosCorralon,
     this.fundamentosActividadCorralon = const <ConduceLegalidadFundamento>[],
     required this.fundamentosPersona,
+    this.agentes = const <ConduceLegalidadAgente>[],
     this.unidades = const <ConduceLegalidadRef>[],
     this.delegaciones = const <ConduceLegalidadRef>[],
   });
@@ -93,6 +95,10 @@ class ConduceLegalidadMeta {
       fundamentosPersona: fundamentosPersonaPayload.isNotEmpty
           ? fundamentosPersonaPayload
           : fundamentos.where((item) => item.aplicaSancionPersona).toList(),
+      agentes: _list(data['agentes'])
+          .whereType<Map>()
+          .map((item) => ConduceLegalidadAgente.fromJson(_map(item)))
+          .toList(),
       unidades: _list(data['unidades'])
           .map(ConduceLegalidadRef.tryParse)
           .whereType<ConduceLegalidadRef>()
@@ -101,6 +107,46 @@ class ConduceLegalidadMeta {
           .map(ConduceLegalidadRef.tryParse)
           .whereType<ConduceLegalidadRef>()
           .toList(),
+    );
+  }
+}
+
+class ConduceLegalidadAgente {
+  final int id;
+  final String nombres;
+  final String apellidoPaterno;
+  final String apellidoMaterno;
+  final String numeroPlaca;
+  final String nombreCompleto;
+
+  const ConduceLegalidadAgente({
+    required this.id,
+    required this.nombres,
+    required this.apellidoPaterno,
+    required this.apellidoMaterno,
+    required this.numeroPlaca,
+    required this.nombreCompleto,
+  });
+
+  factory ConduceLegalidadAgente.fromJson(Map<String, dynamic> json) {
+    final nombres = _str(json['nombres']) ?? '';
+    final apellidoPaterno = _str(json['apellido_paterno']) ?? '';
+    final apellidoMaterno = _str(json['apellido_materno']) ?? '';
+    final nombreCompleto =
+        _str(json['nombre_completo']) ??
+        [
+          nombres,
+          apellidoPaterno,
+          apellidoMaterno,
+        ].where((value) => value.isNotEmpty).join(' ');
+
+    return ConduceLegalidadAgente(
+      id: _asInt(json['id']),
+      nombres: nombres,
+      apellidoPaterno: apellidoPaterno,
+      apellidoMaterno: apellidoMaterno,
+      numeroPlaca: _str(json['numero_placa']) ?? '',
+      nombreCompleto: nombreCompleto,
     );
   }
 }

@@ -11,6 +11,29 @@ import '../../services/thermal_printer_service.dart';
 import 'ayuda/conduce_legalidad_workflow_help_sheet.dart';
 import 'conduce_legalidad_module.dart';
 
+const String _vialidadesUrbanasTicketAdscripcion =
+    'UNIDAD DE PROTECCIÓN EN VIALIDADES URBANAS';
+
+String _ticketAdscripcionAgente(
+  ConduceLegalidadOperativo operativo,
+  ConduceLegalidadCaptura captura,
+) {
+  final adscripcionGuardada = captura.agenteAdscripcion?.trim() ?? '';
+  final esVialidadesUrbanas =
+      operativo.unidadId == 5 ||
+      captura.unidad?.id == 5 ||
+      adscripcionGuardada.toUpperCase().contains('VIALIDADES URBANAS');
+  if (esVialidadesUrbanas) return _vialidadesUrbanasTicketAdscripcion;
+
+  return _value(
+    captura.agenteAdscripcion ??
+        captura.creador?.adscripcion ??
+        captura.unidad?.nombre ??
+        captura.delegacion?.nombre,
+    fallback: 'Pendiente de unidad',
+  );
+}
+
 enum _PrintableDocument { boleta, inventario }
 
 class ConduceLegalidadBoletaScreen extends StatefulWidget {
@@ -768,13 +791,7 @@ class _BoletaPaper extends StatelessWidget {
   }
 
   String get _adscripcionAgente {
-    return _value(
-      captura.agenteAdscripcion ??
-          captura.creador?.adscripcion ??
-          captura.unidad?.nombre ??
-          captura.delegacion?.nombre,
-      fallback: 'Pendiente de unidad',
-    );
+    return _ticketAdscripcionAgente(operativo, captura);
   }
 
   bool get _mostrarInformacionLiberacion {
@@ -1002,10 +1019,33 @@ Uint8List _buildEscPosTicket(
   ConduceLegalidadCaptura captura,
   _ThermalPaperSize paperSize,
 ) {
+  final text = buildConduceLegalidadTicketText(
+    operativo: operativo,
+    captura: captura,
+    width: paperSize.columns,
+  );
+  final textBytes = _thermalEncode(text.replaceAll('\n', '\r\n'));
+  return Uint8List.fromList(<int>[
+    0x1B, 0x40, // Inicializa impresora.
+    0x1B, 0x21, 0x00, // Fuente A normal y legible.
+    0x1B, 0x4D, 0x00, // Selecciona fuente A explícitamente.
+    0x1D, 0x21, 0x00, // Tamaño normal.
+    0x1B, 0x45, 0x00, // Negritas apagadas.
+    0x1B, 0x61, 0x00, // Alineación izquierda; el centrado va en texto.
+    ...textBytes,
+    ..._thermalTicketBottomFeed,
+  ]);
+}
+
+String buildConduceLegalidadTicketText({
+  required ConduceLegalidadOperativo operativo,
+  required ConduceLegalidadCaptura captura,
+  int width = 48,
+}) {
   final vehiculos = captura.vehiculos.isEmpty
       ? <ConduceLegalidadVehiculo?>[null]
       : captura.vehiculos.cast<ConduceLegalidadVehiculo?>().toList();
-  final writer = ThermalTicketRowFormatter(width: paperSize.columns);
+  final writer = ThermalTicketRowFormatter(width: width);
 
   for (var i = 0; i < vehiculos.length; i++) {
     final data = _BoletaTicketData(
@@ -1026,17 +1066,7 @@ Uint8List _buildEscPosTicket(
     }
   }
 
-  final textBytes = _thermalEncode(writer.toString().replaceAll('\n', '\r\n'));
-  return Uint8List.fromList(<int>[
-    0x1B, 0x40, // Inicializa impresora.
-    0x1B, 0x21, 0x00, // Fuente A normal y legible.
-    0x1B, 0x4D, 0x00, // Selecciona fuente A explícitamente.
-    0x1D, 0x21, 0x00, // Tamaño normal.
-    0x1B, 0x45, 0x00, // Negritas apagadas.
-    0x1B, 0x61, 0x00, // Alineación izquierda; el centrado va en texto.
-    ...textBytes,
-    ..._thermalTicketBottomFeed,
-  ]);
+  return writer.toString();
 }
 
 String buildConduceLegalidadInventoryTicketText({
@@ -1490,13 +1520,7 @@ class _BoletaTicketData {
   }
 
   String get adscripcionAgente {
-    return _value(
-      captura.agenteAdscripcion ??
-          captura.creador?.adscripcion ??
-          captura.unidad?.nombre ??
-          captura.delegacion?.nombre,
-      fallback: 'Pendiente de unidad',
-    );
+    return _ticketAdscripcionAgente(operativo, captura);
   }
 
   bool get mostrarInformacionLiberacion {
@@ -1509,11 +1533,7 @@ class _BoletaTicketData {
     final delegacion = operativo.delegacion ?? captura.delegacion;
     return ConduceLegalidadBoletaLegalText.informacionLiberacion(
       vehiculo,
-      esDelegaciones:
-          operativo.isDelegaciones ||
-          captura.unidad?.id == 2 ||
-          captura.delegacion?.id != null ||
-          delegacion != null,
+      esDelegaciones: operativo.unidadId == 2 || captura.unidad?.id == 2,
       delegacion: delegacion,
     );
   }
@@ -1757,7 +1777,7 @@ class ConduceLegalidadBoletaLegalText {
       return 'Para iniciar el trámite de liberación del vehículo, la persona interesada deberá acudir a $oficina$ubicacion, en un horario de 9:00 a. m. a 3:00 p. m., con identificación oficial y documentación que acredite propiedad o legítima posesión. $retiro';
     }
 
-    return '$vehicleReleaseNotice $retiro';
+    return '$justiciaCivicaVehicleReleaseNotice $retiro';
   }
 
   static List<_BoletaInfractionEntry> _entries(

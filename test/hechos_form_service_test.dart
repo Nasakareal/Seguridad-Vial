@@ -10,6 +10,19 @@ import 'package:seguridad_vial_app/services/hechos_form_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
+  test('parses the Siniestros patrol catalog without blank duplicates', () {
+    final result = HechosFormService.parseSiniestrosPatrolNumbers('''
+      {"data":[
+        {"id":1,"numero_economico":"04-151"},
+        {"id":2,"numero_economico":" 04-151 "},
+        {"id":3,"numero_economico":"C-20"},
+        {"id":4,"numero_economico":""}
+      ]}
+    ''');
+
+    expect(result, <String>['04-151', 'C-20']);
+  });
+
   setUp(() {
     SharedPreferences.setMockInitialValues(<String, Object>{});
   });

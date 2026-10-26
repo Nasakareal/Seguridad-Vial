@@ -51,6 +51,8 @@ class _ConduceLegalidadCapturaScreenState
     extends State<ConduceLegalidadCapturaScreen> {
   final _formKey = GlobalKey<FormState>();
   final _contentErrorKey = GlobalKey();
+  final _agenteBusquedaCtrl = TextEditingController();
+  final _agenteBusquedaFocus = FocusNode();
   final _agenteNombresCtrl = TextEditingController();
   final _agenteApellidoPaternoCtrl = TextEditingController();
   final _agenteApellidoMaternoCtrl = TextEditingController();
@@ -234,6 +236,8 @@ class _ConduceLegalidadCapturaScreenState
   void dispose() {
     _feedingClosureTimer?.cancel();
     _draft.dispose();
+    _agenteBusquedaCtrl.dispose();
+    _agenteBusquedaFocus.dispose();
     _agenteNombresCtrl.dispose();
     _agenteApellidoPaternoCtrl.dispose();
     _agenteApellidoMaternoCtrl.dispose();
@@ -496,6 +500,7 @@ class _ConduceLegalidadCapturaScreenState
       _personas.clear();
       _fotosExistentes.clear();
       _fotos.clear();
+      _agenteBusquedaCtrl.clear();
       _agenteNombresCtrl.clear();
       _agenteApellidoPaternoCtrl.clear();
       _agenteApellidoMaternoCtrl.clear();
@@ -510,6 +515,100 @@ class _ConduceLegalidadCapturaScreenState
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(const SnackBar(content: Text('Formulario local limpio.')));
+  }
+
+  String _normalizeAgentSearch(String value) {
+    return value
+        .trim()
+        .toUpperCase()
+        .replaceAll('Á', 'A')
+        .replaceAll('É', 'E')
+        .replaceAll('Í', 'I')
+        .replaceAll('Ó', 'O')
+        .replaceAll('Ú', 'U')
+        .replaceAll('Ü', 'U')
+        .replaceAll(RegExp(r'\s+'), ' ');
+  }
+
+  void _selectAgente(ConduceLegalidadAgente agente) {
+    setState(() {
+      _agenteNombresCtrl.text = agente.nombres;
+      _agenteApellidoPaternoCtrl.text = agente.apellidoPaterno;
+      _agenteApellidoMaternoCtrl.text = agente.apellidoMaterno;
+      _agentePlacaCtrl.text = agente.numeroPlaca;
+    });
+    _draft.notifyChanged();
+  }
+
+  Widget _agenteAutocomplete() {
+    final agentes = _meta?.agentes ?? const <ConduceLegalidadAgente>[];
+    return RawAutocomplete<ConduceLegalidadAgente>(
+      textEditingController: _agenteBusquedaCtrl,
+      focusNode: _agenteBusquedaFocus,
+      displayStringForOption: (agente) => agente.nombreCompleto,
+      optionsBuilder: (value) {
+        final query = _normalizeAgentSearch(value.text);
+        if (query.isEmpty) return const <ConduceLegalidadAgente>[];
+        return agentes
+            .where((agente) {
+              final searchable = _normalizeAgentSearch(
+                '${agente.nombreCompleto} ${agente.numeroPlaca}',
+              );
+              return searchable.contains(query);
+            })
+            .take(8);
+      },
+      onSelected: _selectAgente,
+      fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) {
+        return TextFormField(
+          key: const Key('agente-autocomplete'),
+          controller: controller,
+          focusNode: focusNode,
+          enabled: !_saving && agentes.isNotEmpty,
+          textCapitalization: TextCapitalization.words,
+          decoration: InputDecoration(
+            labelText: 'Buscar agente existente (opcional)',
+            hintText: 'Nombre, apellido o número de placa',
+            helperText: agentes.isEmpty
+                ? 'Sin catálogo disponible; captura los datos manualmente.'
+                : 'Selecciona una sugerencia para autocompletar los datos.',
+            border: const OutlineInputBorder(),
+            prefixIcon: const Icon(Icons.person_search_outlined),
+          ),
+          onFieldSubmitted: (_) => onFieldSubmitted(),
+        );
+      },
+      optionsViewBuilder: (context, onSelected, options) {
+        final matches = options.toList(growable: false);
+        return Align(
+          alignment: Alignment.topLeft,
+          child: Material(
+            elevation: 8,
+            borderRadius: BorderRadius.circular(12),
+            clipBehavior: Clip.antiAlias,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 280, maxWidth: 560),
+              child: ListView.separated(
+                padding: EdgeInsets.zero,
+                shrinkWrap: true,
+                itemCount: matches.length,
+                separatorBuilder: (_, _) => const Divider(height: 1),
+                itemBuilder: (context, index) {
+                  final agente = matches[index];
+                  return ListTile(
+                    key: Key('agente-suggestion-${agente.id}'),
+                    leading: const Icon(Icons.badge_outlined),
+                    title: Text(agente.nombreCompleto),
+                    subtitle: Text('Placa ${agente.numeroPlaca}'),
+                    onTap: () => onSelected(agente),
+                  );
+                },
+              ),
+            ),
+          ),
+        );
+      },
+    );
   }
 
   Map<String, dynamic> _vehiculoDraftJson(ConduceLegalidadVehiculo vehiculo) {
@@ -1185,7 +1284,10 @@ class _ConduceLegalidadCapturaScreenState
                     const SizedBox(height: 12),
                   ],
                   const _FormSectionLabel('AGENTE ACTUANTE'),
+                  _agenteAutocomplete(),
+                  const SizedBox(height: 12),
                   TextFormField(
+                    key: const Key('agente-nombres'),
                     controller: _agenteNombresCtrl,
                     enabled: !_saving,
                     textCapitalization: TextCapitalization.words,
@@ -1201,6 +1303,7 @@ class _ConduceLegalidadCapturaScreenState
                   ),
                   const SizedBox(height: 12),
                   TextFormField(
+                    key: const Key('agente-apellido-paterno'),
                     controller: _agenteApellidoPaternoCtrl,
                     enabled: !_saving,
                     textCapitalization: TextCapitalization.words,
@@ -1216,6 +1319,7 @@ class _ConduceLegalidadCapturaScreenState
                   ),
                   const SizedBox(height: 12),
                   TextFormField(
+                    key: const Key('agente-apellido-materno'),
                     controller: _agenteApellidoMaternoCtrl,
                     enabled: !_saving,
                     textCapitalization: TextCapitalization.words,
@@ -1230,6 +1334,7 @@ class _ConduceLegalidadCapturaScreenState
                   ),
                   const SizedBox(height: 12),
                   TextFormField(
+                    key: const Key('agente-numero-placa'),
                     controller: _agentePlacaCtrl,
                     enabled: !_saving,
                     textCapitalization: TextCapitalization.characters,
@@ -1255,6 +1360,7 @@ class _ConduceLegalidadCapturaScreenState
                   ),
                   const SizedBox(height: 20),
                   DropdownButtonFormField<ConduceLegalidadFundamento?>(
+                    key: const Key('fundamento-principal'),
                     value: _fundamento,
                     isExpanded: true,
                     itemHeight: null,
@@ -1322,6 +1428,7 @@ class _ConduceLegalidadCapturaScreenState
                                 DropdownButtonFormField<
                                   ConduceLegalidadFundamento?
                                 >(
+                                  key: Key('fundamento-adicional-$index'),
                                   value: fundamento,
                                   isExpanded: true,
                                   itemHeight: null,

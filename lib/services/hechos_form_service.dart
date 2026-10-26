@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 
 import '../core/hechos/hechos_catalogos.dart';
 import '../core/municipios_michoacan.dart';
@@ -102,6 +103,45 @@ class HechosFormService {
   static TimeOfDay currentTime() {
     final now = DateTime.now();
     return TimeOfDay(hour: now.hour, minute: now.minute);
+  }
+
+  static Future<List<String>> fetchSiniestrosPatrolNumbers() async {
+    final token = await AuthService.getToken();
+    final response = await http
+        .get(
+          Uri.parse(
+            '${AuthService.baseUrl}/hechos/catalogos/patrullas-siniestros',
+          ),
+          headers: <String, String>{
+            'Accept': 'application/json',
+            if (token != null && token.isNotEmpty)
+              'Authorization': 'Bearer $token',
+          },
+        )
+        .timeout(const Duration(seconds: 20));
+
+    if (response.statusCode != 200) {
+      throw Exception(parseBackendError(response.body, response.statusCode));
+    }
+
+    return parseSiniestrosPatrolNumbers(response.body);
+  }
+
+  static List<String> parseSiniestrosPatrolNumbers(String body) {
+    final decoded = jsonDecode(body);
+    final rawItems = decoded is Map ? decoded['data'] : null;
+    if (rawItems is! List) {
+      throw const FormatException('Catálogo de patrullas inválido.');
+    }
+
+    final seen = <String>{};
+    final numbers = <String>[];
+    for (final item in rawItems.whereType<Map>()) {
+      final number = (item['numero_economico'] ?? '').toString().trim();
+      if (number.isEmpty || !seen.add(number.toUpperCase())) continue;
+      numbers.add(number);
+    }
+    return numbers;
   }
 
   static String normalizeMunicipio(String value) {

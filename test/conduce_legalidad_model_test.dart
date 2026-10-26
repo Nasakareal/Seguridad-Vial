@@ -85,6 +85,30 @@ void main() {
     },
   );
 
+  test('meta parses the Vialidades agent autocomplete catalog', () {
+    final meta = ConduceLegalidadMeta.fromJson({
+      'data': {
+        'abilities': const <String, dynamic>{'can_feed': true},
+        'fundamentos_corralon': const <Object>[],
+        'fundamentos_persona': const <Object>[],
+        'agentes': const <Object>[
+          <String, dynamic>{
+            'id': 291,
+            'nombres': 'Julio Octavio',
+            'apellido_paterno': 'Pérez',
+            'apellido_materno': 'Hernández',
+            'numero_placa': '09130',
+            'nombre_completo': 'Julio Octavio Pérez Hernández',
+          },
+        ],
+      },
+    });
+
+    expect(meta.agentes, hasLength(1));
+    expect(meta.agentes.single.nombreCompleto, 'Julio Octavio Pérez Hernández');
+    expect(meta.agentes.single.numeroPlaca, '09130');
+  });
+
   test('each capture accepts at most one vehicle', () {
     expect(ConduceLegalidadCapturaLimits.maxVehiculos, 1);
     expect(ConduceLegalidadCapturaLimits.canAddVehiculo(0), isTrue);

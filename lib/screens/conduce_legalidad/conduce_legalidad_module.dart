@@ -66,6 +66,7 @@ class ConduceLegalidadModule {
       abilities: meta.abilities,
       fundamentosCorralon: fundamentosAlcohol,
       fundamentosPersona: fundamentosAlcohol,
+      agentes: meta.agentes,
       unidades: meta.unidades,
       delegaciones: meta.delegaciones,
     );

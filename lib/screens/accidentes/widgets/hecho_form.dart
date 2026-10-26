@@ -39,6 +39,7 @@ class HechoForm extends StatefulWidget {
   onSubmit;
   final Future<void> Function(OfflineActionResult result, HechoFormData data)?
   onSubmitted;
+  final Future<List<String>> Function()? siniestrosPatrolNumbersLoader;
 
   const HechoForm({
     super.key,
@@ -51,6 +52,7 @@ class HechoForm extends StatefulWidget {
     this.onDraftReady,
     required this.onSubmit,
     this.onSubmitted,
+    this.siniestrosPatrolNumbersLoader,
   });
 
   @override
@@ -75,6 +77,10 @@ class _HechoFormState extends State<HechoForm> {
   bool _canUseDictamenes = false;
   bool _canCaptureMpTurnado = false;
   bool _canEditCaptureTimestamp = false;
+  bool _usesSiniestrosPatrolSelect = false;
+  bool _loadingSiniestrosPatrols = false;
+  String? _siniestrosPatrolsError;
+  List<String> _siniestrosPatrolNumbers = const [];
 
   TimeOfDay? _hora;
   DateTime? _fecha;
@@ -178,6 +184,7 @@ class _HechoFormState extends State<HechoForm> {
         !isDelegaciones && await AuthService.isSiniestrosUser();
     final canCaptureMpTurnado = canUseDictamenes || isDelegaciones;
     final canEditCaptureTimestamp = await AuthService.canEditCaptureTimestamp();
+    final usesSiniestrosPatrolSelect = await AuthService.isSiniestrosUnitUser();
     if (!mounted) return;
 
     setState(() {
@@ -188,6 +195,7 @@ class _HechoFormState extends State<HechoForm> {
       _canUseDictamenes = canUseDictamenes;
       _canCaptureMpTurnado = canCaptureMpTurnado;
       _canEditCaptureTimestamp = canEditCaptureTimestamp;
+      _usesSiniestrosPatrolSelect = usesSiniestrosPatrolSelect;
       if (_usesRelaxedHechosRules) {
         widget.data.sector = null;
       }
@@ -210,6 +218,53 @@ class _HechoFormState extends State<HechoForm> {
         _resetMpFields();
       }
     });
+
+    if (usesSiniestrosPatrolSelect) {
+      await _loadSiniestrosPatrolNumbers();
+    }
+  }
+
+  Future<void> _loadSiniestrosPatrolNumbers() async {
+    if (!mounted) return;
+    setState(() {
+      _loadingSiniestrosPatrols = true;
+      _siniestrosPatrolsError = null;
+    });
+
+    try {
+      final loader =
+          widget.siniestrosPatrolNumbersLoader ??
+          HechosFormService.fetchSiniestrosPatrolNumbers;
+      final loaded = await loader();
+      final numbers = loaded
+          .map((value) => value.trim())
+          .where((value) => value.isNotEmpty)
+          .toSet()
+          .toList();
+      if (!mounted) return;
+
+      final current = _unidadCtrl.text.trim();
+      if (widget.mode == HechoFormMode.create &&
+          current.isNotEmpty &&
+          !numbers.contains(current)) {
+        _setControllerText(_unidadCtrl, '');
+        widget.data.unidad = '';
+      }
+
+      setState(() {
+        _siniestrosPatrolNumbers = numbers;
+        _loadingSiniestrosPatrols = false;
+      });
+      _markDraftChanged();
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _loadingSiniestrosPatrols = false;
+        _siniestrosPatrolsError = HechosFormService.cleanExceptionMessage(
+          error,
+        );
+      });
+    }
   }
 
   void _ensureReadOnlyCaptureTimestamp() {
@@ -788,6 +843,87 @@ class _HechoFormState extends State<HechoForm> {
     d.fecha = _fecha;
   }
 
+  Widget _unidadField() {
+    final catalogError = _siniestrosPatrolsError;
+    if (!_usesSiniestrosPatrolSelect || catalogError != null) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          TextFormField(
+            key: const Key('hecho-unidad-text'),
+            controller: _unidadCtrl,
+            decoration: _dec('Unidad *').copyWith(
+              helperText: catalogError == null
+                  ? null
+                  : 'Catálogo no disponible; puedes capturar la unidad manualmente.',
+            ),
+            validator: (v) => _requiredMaxValidator(v, 50, 'Unidad'),
+          ),
+          if (catalogError != null)
+            TextButton.icon(
+              onPressed: _submitting ? null : _loadSiniestrosPatrolNumbers,
+              icon: const Icon(Icons.refresh),
+              label: const Text('Reintentar catálogo de patrullas'),
+            ),
+        ],
+      );
+    }
+
+    final current = _unidadCtrl.text.trim();
+    final options = <String>[
+      ..._siniestrosPatrolNumbers,
+      if (widget.mode == HechoFormMode.edit &&
+          current.isNotEmpty &&
+          !_siniestrosPatrolNumbers.contains(current))
+        current,
+    ];
+    final selected = options.contains(current) ? current : null;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        DropdownButtonFormField<String>(
+          key: const Key('hecho-unidad-select'),
+          isExpanded: true,
+          value: selected,
+          decoration: _dec('Unidad *').copyWith(
+            helperText: _loadingSiniestrosPatrols
+                ? 'Cargando números económicos…'
+                : 'Selecciona el número económico de la patrulla.',
+            suffixIcon: _loadingSiniestrosPatrols
+                ? const Padding(
+                    padding: EdgeInsets.all(12),
+                    child: SizedBox.square(
+                      dimension: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  )
+                : null,
+          ),
+          items: options
+              .map(
+                (number) => DropdownMenuItem<String>(
+                  value: number,
+                  child: Text(number, overflow: TextOverflow.ellipsis),
+                ),
+              )
+              .toList(),
+          onChanged: (_submitting || _loadingSiniestrosPatrols)
+              ? null
+              : (value) {
+                  final number = value ?? '';
+                  setState(() {
+                    _setControllerText(_unidadCtrl, number);
+                    widget.data.unidad = number;
+                  });
+                  _markDraftChanged();
+                },
+          validator: (value) => _requiredMaxValidator(value, 50, 'Unidad'),
+        ),
+      ],
+    );
+  }
+
   Future<void> _submit() async {
     if (_submitting || _submitted) return;
     setState(() => _submitting = true);
@@ -1000,21 +1136,11 @@ class _HechoFormState extends State<HechoForm> {
                   ),
                 ),
                 const SizedBox(width: 8),
-                Expanded(
-                  child: TextFormField(
-                    controller: _unidadCtrl,
-                    decoration: _dec('Unidad *'),
-                    validator: (v) => _requiredMaxValidator(v, 50, 'Unidad'),
-                  ),
-                ),
+                Expanded(child: _unidadField()),
               ],
             )
           else
-            TextFormField(
-              controller: _unidadCtrl,
-              decoration: _dec('Unidad *'),
-              validator: (v) => _requiredMaxValidator(v, 50, 'Unidad'),
-            ),
+            _unidadField(),
 
           if (showCaptureTimestampFields) ...[
             const SizedBox(height: 12),
