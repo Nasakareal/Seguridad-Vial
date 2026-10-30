@@ -106,9 +106,28 @@ int? _readNullableInt(dynamic value) {
   return parsed > 0 ? parsed : null;
 }
 
+int? _readNonNegativeInt(dynamic value) {
+  final parsed = value is num
+      ? value.toInt()
+      : int.tryParse((value ?? '').toString().trim());
+  return parsed != null && parsed >= 0 ? parsed : null;
+}
+
 String? _readString(dynamic value) {
   final text = (value ?? '').toString().trim();
   return text.isEmpty ? null : text;
+}
+
+class ConduceLegalidadOperativosResult {
+  final List<ConduceLegalidadOperativo> operativos;
+  final int totalOperativos;
+  final int totalRegistros;
+
+  const ConduceLegalidadOperativosResult({
+    required this.operativos,
+    required this.totalOperativos,
+    required this.totalRegistros,
+  });
 }
 
 class ConduceLegalidadService {
@@ -148,13 +167,14 @@ class ConduceLegalidadService {
     }
   }
 
-  static Future<List<ConduceLegalidadOperativo>> fetchOperativos({
+  static Future<ConduceLegalidadOperativosResult> fetchOperativos({
     bool incluirCerrados = false,
     String? tipoOperativo,
     String? estado,
     String? fecha,
     String? fechaDesde,
     String? fechaHasta,
+    String? mes,
   }) async {
     final query = <String, String>{
       if (incluirCerrados) 'incluir_cerrados': '1',
@@ -166,6 +186,7 @@ class ConduceLegalidadService {
         'fecha_desde': fechaDesde!.trim(),
       if ((fechaHasta ?? '').trim().isNotEmpty)
         'fecha_hasta': fechaHasta!.trim(),
+      if ((mes ?? '').trim().isNotEmpty) 'mes': mes!.trim(),
     };
     final uri = Uri.parse(
       '${AuthService.baseUrl}$_path/operativos',
@@ -174,10 +195,19 @@ class ConduceLegalidadService {
     final body = _decodeJson(res);
     _throwIfNotOk(res, body, 'No se pudieron cargar los operativos.');
     final list = body['data'] is List ? body['data'] as List : const [];
-    return list
+    final operativos = list
         .whereType<Map>()
         .map((item) => ConduceLegalidadOperativo.fromJson(_map(item)))
         .toList();
+    final resumen = _map(body['resumen']);
+    return ConduceLegalidadOperativosResult(
+      operativos: operativos,
+      totalOperativos:
+          _readNonNegativeInt(resumen['operativos']) ?? operativos.length,
+      totalRegistros:
+          _readNonNegativeInt(resumen['registros']) ??
+          operativos.fold(0, (total, item) => total + item.totalCapturas),
+    );
   }
 
   static Future<ConduceLegalidadOperativo> fetchOperativo(int id) async {
@@ -249,13 +279,21 @@ class ConduceLegalidadService {
     return ConduceLegalidadOperativo.fromJson(_map(body['data']));
   }
 
-  static Future<void> destroyOperativo(int id) async {
+  static Future<void> standbyOperativo({
+    required int id,
+    required String password,
+  }) async {
     final res = await http.delete(
       Uri.parse('${AuthService.baseUrl}$_path/operativos/$id'),
-      headers: await _headers(),
+      headers: await _headers(json: true),
+      body: jsonEncode({
+        'password': password,
+        'confirmations': 3,
+        'confirmation_text': 'STANDBY',
+      }),
     );
     final body = _decodeJson(res);
-    _throwIfNotOk(res, body, 'No se pudo eliminar el operativo.');
+    _throwIfNotOk(res, body, 'No se pudo poner el operativo en standby.');
   }
 
   static Future<ConduceLegalidadNativeShareData> fetchOperativoNativeShareData({

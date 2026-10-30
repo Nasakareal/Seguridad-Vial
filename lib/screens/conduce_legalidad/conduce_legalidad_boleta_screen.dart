@@ -142,6 +142,13 @@ class _ConduceLegalidadBoletaScreenState
     final captura = _captura;
     if (_printing || operativo == null || captura == null) return;
 
+    final quantities = await _selectPrintQuantities(
+      canPrintInventory: captura.vehiculos.any(
+        (vehiculo) => (vehiculo.numeroInventario ?? '').trim().isNotEmpty,
+      ),
+    );
+    if (!mounted || quantities == null) return;
+
     setState(() => _printing = true);
     try {
       if (ThermalPrinterService.supportsBluetoothPrinting) {
@@ -151,20 +158,14 @@ class _ConduceLegalidadBoletaScreenState
         final printer = await _selectBondedPrinter();
         if (!mounted || printer == null) return;
 
-        final bytes = _document == _PrintableDocument.inventario
-            ? _buildEscPosInventory(operativo, captura, paperSize)
-            : _buildEscPosTicket(operativo, captura, paperSize);
         await ThermalPrinterService.printEscPos(
           address: printer.address,
-          bytes: bytes,
+          bytes: _buildEscPosBatch(operativo, captura, paperSize, quantities),
         );
         if (!mounted) return;
 
-        final documentName = _document == _PrintableDocument.inventario
-            ? 'Inventario'
-            : 'Boleta';
         _showSnackBar(
-          '$documentName ${paperSize.label} enviado a ${printer.name}.',
+          '${quantities.summary} ${paperSize.label} enviados a ${printer.name}.',
         );
         return;
       }
@@ -182,6 +183,89 @@ class _ConduceLegalidadBoletaScreenState
     } finally {
       if (mounted) setState(() => _printing = false);
     }
+  }
+
+  Future<_PrintQuantities?> _selectPrintQuantities({
+    required bool canPrintInventory,
+  }) {
+    var notifications = _document == _PrintableDocument.boleta ? 1 : 0;
+    var inventories = canPrintInventory ? 1 : 0;
+
+    return showDialog<_PrintQuantities>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          void changeNotifications(int delta) {
+            setDialogState(() {
+              notifications = (notifications + delta).clamp(0, 20).toInt();
+            });
+          }
+
+          void changeInventories(int delta) {
+            setDialogState(() {
+              inventories = (inventories + delta).clamp(0, 20).toInt();
+            });
+          }
+
+          return AlertDialog(
+            title: const Text('¿Cuántos documentos quieres imprimir?'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _PrintQuantityRow(
+                  label: 'Notificaciones (boletas)',
+                  value: notifications,
+                  onDecrease: notifications > 0
+                      ? () => changeNotifications(-1)
+                      : null,
+                  onIncrease: notifications < 20
+                      ? () => changeNotifications(1)
+                      : null,
+                ),
+                const SizedBox(height: 12),
+                _PrintQuantityRow(
+                  label: 'Inventarios',
+                  value: inventories,
+                  enabled: canPrintInventory,
+                  unavailableMessage: canPrintInventory
+                      ? null
+                      : 'Esta captura no tiene inventario disponible.',
+                  onDecrease: canPrintInventory && inventories > 0
+                      ? () => changeInventories(-1)
+                      : null,
+                  onIncrease: canPrintInventory && inventories < 20
+                      ? () => changeInventories(1)
+                      : null,
+                ),
+                const SizedBox(height: 12),
+                const Text(
+                  'Los documentos se enviarán juntos y saldrán automáticamente uno después de otro.',
+                  style: TextStyle(fontSize: 12),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: const Text('Cancelar'),
+              ),
+              FilledButton.icon(
+                onPressed: notifications + inventories == 0
+                    ? null
+                    : () => Navigator.of(dialogContext).pop(
+                        _PrintQuantities(
+                          notifications: notifications,
+                          inventories: inventories,
+                        ),
+                      ),
+                icon: const Icon(Icons.print_outlined),
+                label: const Text('Continuar'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
   }
 
   Future<void> _printTest() async {
@@ -479,6 +563,99 @@ class _ConduceLegalidadBoletaScreenState
     if (captura.personas.isEmpty) return null;
     if (captura.personas.length > index) return captura.personas[index];
     return captura.personas.first;
+  }
+}
+
+class _PrintQuantities {
+  final int notifications;
+  final int inventories;
+
+  const _PrintQuantities({
+    required this.notifications,
+    required this.inventories,
+  });
+
+  String get summary {
+    final parts = <String>[];
+    if (notifications > 0) {
+      parts.add(
+        '$notifications ${notifications == 1 ? 'notificación' : 'notificaciones'}',
+      );
+    }
+    if (inventories > 0) {
+      parts.add(
+        '$inventories ${inventories == 1 ? 'inventario' : 'inventarios'}',
+      );
+    }
+    return parts.join(' y ');
+  }
+}
+
+class _PrintQuantityRow extends StatelessWidget {
+  final String label;
+  final int value;
+  final bool enabled;
+  final String? unavailableMessage;
+  final VoidCallback? onDecrease;
+  final VoidCallback? onIncrease;
+
+  const _PrintQuantityRow({
+    required this.label,
+    required this.value,
+    this.enabled = true,
+    this.unavailableMessage,
+    required this.onDecrease,
+    required this.onIncrease,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+            fontWeight: FontWeight.w800,
+            color: enabled ? null : Theme.of(context).disabledColor,
+          ),
+        ),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            IconButton(
+              tooltip: 'Quitar una de $label',
+              onPressed: onDecrease,
+              icon: const Icon(Icons.remove_circle_outline),
+            ),
+            SizedBox(
+              width: 54,
+              child: Text(
+                '$value',
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ),
+            IconButton(
+              tooltip: 'Agregar una de $label',
+              onPressed: onIncrease,
+              icon: const Icon(Icons.add_circle_outline),
+            ),
+          ],
+        ),
+        if (unavailableMessage != null)
+          Text(
+            unavailableMessage!,
+            style: TextStyle(
+              color: Theme.of(context).colorScheme.error,
+              fontSize: 12,
+            ),
+          ),
+      ],
+    );
   }
 }
 
@@ -928,6 +1105,16 @@ class _InventarioPaper extends StatelessWidget {
               label: 'Corralón',
               value: _value(vehiculo?.corralon, fallback: 'No capturado'),
             ),
+            if ((vehiculo?.corralonDireccion ?? '').trim().isNotEmpty)
+              _TicketBlock(
+                label: 'Domicilio del corralón',
+                value: vehiculo!.corralonDireccion!.trim(),
+              ),
+            if ((vehiculo?.corralonTelefono ?? '').trim().isNotEmpty)
+              _TicketBlock(
+                label: 'Teléfono del corralón',
+                value: vehiculo!.corralonTelefono!.trim(),
+              ),
             const Text('Número de sello:'),
             const SizedBox(height: 18),
             const _SignatureLine(),
@@ -1133,6 +1320,22 @@ Uint8List _buildEscPosInventory(
     ...textBytes,
     ..._thermalTicketBottomFeed,
   ]);
+}
+
+Uint8List _buildEscPosBatch(
+  ConduceLegalidadOperativo operativo,
+  ConduceLegalidadCaptura captura,
+  _ThermalPaperSize paperSize,
+  _PrintQuantities quantities,
+) {
+  final bytes = BytesBuilder(copy: false);
+  for (var i = 0; i < quantities.notifications; i++) {
+    bytes.add(_buildEscPosTicket(operativo, captura, paperSize));
+  }
+  for (var i = 0; i < quantities.inventories; i++) {
+    bytes.add(_buildEscPosInventory(operativo, captura, paperSize));
+  }
+  return bytes.takeBytes();
 }
 
 Uint8List _buildEscPosTestTicket(_ThermalPaperSize paperSize) {
@@ -1354,6 +1557,18 @@ void _writeThermalInventory(
     'Corralón',
     _value(data.vehiculo?.corralon, fallback: 'No capturado'),
   );
+  if ((data.vehiculo?.corralonDireccion ?? '').trim().isNotEmpty) {
+    ticket.block(
+      'Domicilio del corralón',
+      data.vehiculo!.corralonDireccion!.trim(),
+    );
+  }
+  if ((data.vehiculo?.corralonTelefono ?? '').trim().isNotEmpty) {
+    ticket.block(
+      'Teléfono del corralón',
+      data.vehiculo!.corralonTelefono!.trim(),
+    );
+  }
   ticket.line('Número de sello:');
   ticket.blank();
   ticket.line(line);

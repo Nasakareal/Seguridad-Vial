@@ -15,7 +15,7 @@ import 'ayuda/conduce_legalidad_alimentar_help_sheet.dart';
 import 'ayuda/conduce_legalidad_action_help_sheet.dart';
 import '../../widgets/help_options_menu.dart';
 
-enum _OperativosListMode { dia, activos, rango }
+enum _OperativosListMode { dia, mes, activos, rango }
 
 class ConduceLegalidadScreen extends StatefulWidget {
   final ConduceLegalidadModule module;
@@ -38,8 +38,11 @@ class _ConduceLegalidadScreenState extends State<ConduceLegalidadScreen>
   String? _error;
   ConduceLegalidadMeta? _meta;
   List<ConduceLegalidadOperativo> _operativos = const [];
+  int _totalOperativos = 0;
+  int _totalRegistros = 0;
   _OperativosListMode _listMode = _OperativosListMode.dia;
   late DateTime _selectedDay;
+  late DateTime _selectedMonth;
   late DateTime _rangeStart;
   late DateTime _rangeEnd;
 
@@ -48,6 +51,7 @@ class _ConduceLegalidadScreenState extends State<ConduceLegalidadScreen>
     super.initState();
     final today = DateUtils.dateOnly(DateTime.now());
     _selectedDay = today;
+    _selectedMonth = DateTime(today.year, today.month);
     _rangeStart = DateTime(today.year, today.month);
     _rangeEnd = today;
     WidgetsBinding.instance.addObserver(this);
@@ -83,7 +87,7 @@ class _ConduceLegalidadScreenState extends State<ConduceLegalidadScreen>
       final effectiveMode = canCreateLocal
           ? _listMode
           : _OperativosListMode.activos;
-      final operativos = (await ConduceLegalidadService.fetchOperativos(
+      final result = await ConduceLegalidadService.fetchOperativos(
         incluirCerrados: effectiveMode != _OperativosListMode.activos,
         tipoOperativo: widget.module.id,
         estado: effectiveMode == _OperativosListMode.activos ? 'activo' : null,
@@ -96,13 +100,19 @@ class _ConduceLegalidadScreenState extends State<ConduceLegalidadScreen>
         fechaHasta: effectiveMode == _OperativosListMode.rango
             ? _apiDate(_rangeEnd)
             : null,
-      )).where(widget.module.ownsOperativo);
+        mes: effectiveMode == _OperativosListMode.mes
+            ? '${_selectedMonth.year}-${_selectedMonth.month.toString().padLeft(2, '0')}'
+            : null,
+      );
+      final operativos = result.operativos.where(widget.module.ownsOperativo);
       if (!mounted) return;
       setState(() {
         _canCreateLocal = canCreateLocal;
         _meta = meta;
         _listMode = effectiveMode;
         _operativos = operativos.toList();
+        _totalOperativos = result.totalOperativos;
+        _totalRegistros = result.totalRegistros;
         _loading = false;
       });
     } catch (e) {
@@ -130,6 +140,19 @@ class _ConduceLegalidadScreenState extends State<ConduceLegalidadScreen>
     );
     if (selected == null || !mounted) return;
     setState(() => _selectedDay = DateUtils.dateOnly(selected));
+    await _load();
+  }
+
+  Future<void> _pickMonth() async {
+    final selected = await showDatePicker(
+      context: context,
+      initialDate: _selectedMonth,
+      firstDate: DateTime(2020),
+      lastDate: DateTime.now().add(const Duration(days: 365)),
+      helpText: 'Selecciona cualquier día del mes',
+    );
+    if (selected == null || !mounted) return;
+    setState(() => _selectedMonth = DateTime(selected.year, selected.month));
     await _load();
   }
 
@@ -238,14 +261,67 @@ class _ConduceLegalidadScreenState extends State<ConduceLegalidadScreen>
         ? operativo.lugarConNumero
         : operativo.nombre;
 
+    final firstConfirmation = await _confirmStandbyStep(
+      title: 'Confirmación 1 de 3',
+      message: '¿Quieres poner "$punto" en standby? No se borrará ningún dato.',
+      actionLabel: 'Sí, continuar',
+    );
+    if (!firstConfirmation) return;
+
+    final secondConfirmation = await _confirmStandbyStep(
+      title: 'Confirmación 2 de 3',
+      message:
+          '¿Estás seguro? El operativo dejará de aceptar alimentaciones mientras esté en standby, pero conservará todas sus capturas.',
+      actionLabel: 'Entiendo, continuar',
+    );
+    if (!secondConfirmation) return;
+
+    final password = await _requestStandbyPassword(punto);
+    if (password == null || password.isEmpty) return;
+
+    setState(() => _deletingOperativoId = operativo.id);
+
+    try {
+      await ConduceLegalidadService.standbyOperativo(
+        id: operativo.id,
+        password: password,
+      );
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Operativo puesto en standby. Toda la información se conservó.',
+          ),
+        ),
+      );
+
+      await _load();
+    } catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('No se pudo poner en standby: $e')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _deletingOperativoId = null);
+      }
+    }
+  }
+
+  Future<bool> _confirmStandbyStep({
+    required String title,
+    required String message,
+    required String actionLabel,
+  }) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) {
         return AlertDialog(
-          title: const Text('Eliminar operativo'),
-          content: Text(
-            'Se eliminara "$punto" junto con sus capturas, vehiculos, personas y fotos.',
-          ),
+          title: Text(title),
+          content: Text(message),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context, false),
@@ -253,39 +329,87 @@ class _ConduceLegalidadScreenState extends State<ConduceLegalidadScreen>
             ),
             FilledButton.icon(
               onPressed: () => Navigator.pop(context, true),
-              icon: const Icon(Icons.delete_outline),
-              label: const Text('Eliminar'),
+              icon: const Icon(Icons.pause_circle_outline),
+              label: Text(actionLabel),
             ),
           ],
         );
       },
     );
 
-    if (confirmed != true) return;
+    return confirmed == true;
+  }
 
-    setState(() => _deletingOperativoId = operativo.id);
+  Future<String?> _requestStandbyPassword(String punto) async {
+    var obscurePassword = true;
+    var passwordValue = '';
 
-    try {
-      await ConduceLegalidadService.destroyOperativo(operativo.id);
+    final password = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: const Text('Confirmación 3 de 3'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '¿Estás completamente seguro? Escribe tu contraseña para poner "$punto" en standby.',
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    autofocus: true,
+                    obscureText: obscurePassword,
+                    textInputAction: TextInputAction.done,
+                    onChanged: (value) => passwordValue = value,
+                    decoration: InputDecoration(
+                      labelText: 'Contraseña',
+                      border: const OutlineInputBorder(),
+                      suffixIcon: IconButton(
+                        tooltip: obscurePassword
+                            ? 'Mostrar contraseña'
+                            : 'Ocultar contraseña',
+                        onPressed: () => setDialogState(
+                          () => obscurePassword = !obscurePassword,
+                        ),
+                        icon: Icon(
+                          obscurePassword
+                              ? Icons.visibility_outlined
+                              : Icons.visibility_off_outlined,
+                        ),
+                      ),
+                    ),
+                    onSubmitted: (value) {
+                      if (value.isNotEmpty) {
+                        Navigator.pop(dialogContext, value);
+                      }
+                    },
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogContext),
+                  child: const Text('Cancelar'),
+                ),
+                FilledButton.icon(
+                  onPressed: () {
+                    final value = passwordValue;
+                    if (value.isNotEmpty) Navigator.pop(dialogContext, value);
+                  },
+                  icon: const Icon(Icons.pause_circle_outline),
+                  label: const Text('Poner en standby'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
 
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Operativo eliminado correctamente.')),
-      );
-
-      await _load();
-    } catch (e) {
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('No se pudo eliminar: $e')));
-    } finally {
-      if (mounted) {
-        setState(() => _deletingOperativoId = null);
-      }
-    }
+    return password;
   }
 
   void _mostrarAyuda() {
@@ -371,25 +495,25 @@ class _ConduceLegalidadScreenState extends State<ConduceLegalidadScreen>
           addOption(
             _listHelpOption(
               sheetContext: sheetContext,
-              icon: Icons.delete_outline,
-              color: const Color(0xFFB91C1C),
-              title: 'Cómo eliminar un operativo',
+              icon: Icons.pause_circle_outline,
+              color: const Color(0xFFB45309),
+              title: 'Cómo poner un operativo en standby',
               subtitle:
-                  'Borrar un operativo disponible desde su menú de opciones.',
+                  'Desactivar temporalmente un operativo sin borrar información.',
               child: const ConduceLegalidadActionHelpSheet(
-                title: 'Eliminar un operativo',
+                title: 'Poner un operativo en standby',
                 description:
-                    'La opción aparece únicamente en los operativos que tienes permitido eliminar.',
-                icon: Icons.delete_outline,
-                color: Color(0xFFB91C1C),
+                    'Esta opción protegida aparece únicamente para el usuario con ID 1.',
+                icon: Icons.pause_circle_outline,
+                color: Color(0xFFB45309),
                 steps: [
                   'Ubica el operativo correcto en el listado.',
-                  'Pulsa los tres puntos de su tarjeta y selecciona Eliminar.',
-                  'Comprueba el nombre del punto mostrado en la confirmación.',
-                  'Confirma y espera a que desaparezca del listado.',
+                  'Pulsa los tres puntos y selecciona Poner en standby.',
+                  'Acepta las dos primeras confirmaciones después de revisar el punto.',
+                  'En la tercera confirmación escribe tu contraseña.',
                 ],
                 note:
-                    'La eliminación puede afectar las capturas relacionadas y no se puede deshacer.',
+                    'No se borra nada: el operativo y toda su información quedan conservados.',
               ),
             ),
           );
@@ -508,7 +632,20 @@ class _ConduceLegalidadScreenState extends State<ConduceLegalidadScreen>
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 92),
       children: [
-        _Header(meta: meta, module: widget.module, canCreate: canCreate),
+        _Header(
+          meta: meta,
+          module: widget.module,
+          canCreate: canCreate,
+          totalOperativos: _totalOperativos,
+          totalRegistros: _totalRegistros,
+          periodDescription: _filterDescription(
+            _listMode,
+            _selectedDay,
+            _selectedMonth,
+            _rangeStart,
+            _rangeEnd,
+          ),
+        ),
         const SizedBox(height: 10),
 
         Align(
@@ -532,10 +669,12 @@ class _ConduceLegalidadScreenState extends State<ConduceLegalidadScreen>
           canViewHistory: canCreate,
           mode: _listMode,
           selectedDay: _selectedDay,
+          selectedMonth: _selectedMonth,
           rangeStart: _rangeStart,
           rangeEnd: _rangeEnd,
           onModeChanged: _changeListMode,
           onPickDay: _pickDay,
+          onPickMonth: _pickMonth,
           onPickRangeStart: _pickRangeStart,
           onPickRangeEnd: _pickRangeEnd,
         ),
@@ -555,14 +694,17 @@ class _ConduceLegalidadScreenState extends State<ConduceLegalidadScreen>
                 ? 'Sin operativos activos'
                 : 'Sin operativos en este periodo',
             message: canCreate
-                ? 'No hay operativos para ${_filterDescription(_listMode, _selectedDay, _rangeStart, _rangeEnd)}.'
+                ? 'No hay operativos para ${_filterDescription(_listMode, _selectedDay, _selectedMonth, _rangeStart, _rangeEnd)}.'
                 : 'Cuando un delegado o mando habilitado active un punto, aparecerá aquí para alimentar capturas.',
           )
         else
           ..._operativos.map(
             (operativo) => _OperativoCard(
               operativo: operativo,
-              canViewAll: meta?.abilities.canViewAllCapturas ?? false,
+              canViewAll:
+                  operativo.canViewAllCapturas ||
+                  (meta?.abilities.canViewAllCapturas ?? false),
+              canShareTotals: meta?.abilities.canViewAllCapturas ?? false,
               deleting: _deletingOperativoId == operativo.id,
               sharing: _sharingOperativoId == operativo.id,
               onTap: () => _openShow(operativo.id),
@@ -580,10 +722,12 @@ class _OperativosFilters extends StatelessWidget {
   final bool canViewHistory;
   final _OperativosListMode mode;
   final DateTime selectedDay;
+  final DateTime selectedMonth;
   final DateTime rangeStart;
   final DateTime rangeEnd;
   final ValueChanged<_OperativosListMode> onModeChanged;
   final VoidCallback onPickDay;
+  final VoidCallback onPickMonth;
   final VoidCallback onPickRangeStart;
   final VoidCallback onPickRangeEnd;
 
@@ -591,10 +735,12 @@ class _OperativosFilters extends StatelessWidget {
     required this.canViewHistory,
     required this.mode,
     required this.selectedDay,
+    required this.selectedMonth,
     required this.rangeStart,
     required this.rangeEnd,
     required this.onModeChanged,
     required this.onPickDay,
+    required this.onPickMonth,
     required this.onPickRangeStart,
     required this.onPickRangeEnd,
   });
@@ -653,6 +799,15 @@ class _OperativosFilters extends StatelessWidget {
                   label: const Text('Por día'),
                 ),
                 ChoiceChip(
+                  selected: mode == _OperativosListMode.mes,
+                  onSelected: (_) => onModeChanged(_OperativosListMode.mes),
+                  avatar: const Icon(
+                    Icons.calendar_view_month_outlined,
+                    size: 18,
+                  ),
+                  label: const Text('Por mes'),
+                ),
+                ChoiceChip(
                   selected: mode == _OperativosListMode.activos,
                   onSelected: (_) => onModeChanged(_OperativosListMode.activos),
                   avatar: const Icon(Icons.play_circle_outline, size: 18),
@@ -672,6 +827,14 @@ class _OperativosFilters extends StatelessWidget {
                 onPressed: onPickDay,
                 icon: const Icon(Icons.calendar_month_outlined),
                 label: Text(_displayDate(selectedDay)),
+              ),
+            ],
+            if (mode == _OperativosListMode.mes) ...[
+              const SizedBox(height: 10),
+              OutlinedButton.icon(
+                onPressed: onPickMonth,
+                icon: const Icon(Icons.calendar_view_month_outlined),
+                label: Text(_displayMonth(selectedMonth)),
               ),
             ],
             if (mode == _OperativosListMode.rango) ...[
@@ -704,11 +867,17 @@ class _Header extends StatelessWidget {
   final ConduceLegalidadMeta? meta;
   final ConduceLegalidadModule module;
   final bool canCreate;
+  final int totalOperativos;
+  final int totalRegistros;
+  final String periodDescription;
 
   const _Header({
     required this.meta,
     required this.module,
     required this.canCreate,
+    required this.totalOperativos,
+    required this.totalRegistros,
+    required this.periodDescription,
   });
 
   @override
@@ -738,8 +907,35 @@ class _Header extends StatelessWidget {
           Text(
             abilities.canViewAllCapturas
                 ? 'Vista total de capturas del operativo.'
-                : 'Solo veras las capturas que alimentes.',
+                : 'Puedes apoyar operativos activos de otras adscripciones; en los de tu delegación sede verás el total si eres el delegado responsable.',
             style: const TextStyle(color: Colors.white70, height: 1.35),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            'Resumen de $periodDescription',
+            style: const TextStyle(
+              color: Colors.white70,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: [
+              _HeaderMetric(
+                icon: Icons.fact_check_outlined,
+                value: '$totalOperativos',
+                label: totalOperativos == 1 ? 'operativo' : 'operativos',
+              ),
+              _HeaderMetric(
+                icon: Icons.inventory_2_outlined,
+                value: '$totalRegistros',
+                label: totalRegistros == 1
+                    ? 'registro / resguardo'
+                    : 'registros / resguardos',
+              ),
+            ],
           ),
           const SizedBox(height: 12),
           Wrap(
@@ -762,6 +958,7 @@ class _Header extends StatelessWidget {
 class _OperativoCard extends StatelessWidget {
   final ConduceLegalidadOperativo operativo;
   final bool canViewAll;
+  final bool canShareTotals;
   final bool deleting;
   final bool sharing;
   final VoidCallback onTap;
@@ -772,6 +969,7 @@ class _OperativoCard extends StatelessWidget {
   const _OperativoCard({
     required this.operativo,
     required this.canViewAll,
+    required this.canShareTotals,
     required this.deleting,
     required this.sharing,
     required this.onTap,
@@ -784,7 +982,7 @@ class _OperativoCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final counts = canViewAll
         ? '${operativo.totalCapturas} capturas'
-        : '${operativo.misCapturas} mias';
+        : '${operativo.misCapturas} mías';
     final hasAdminActions = operativo.canEdit || operativo.canDelete;
     final displayState = operativo.isFeedingClosedAt(DateTime.now())
         ? 'CERRADO 8H'
@@ -832,7 +1030,7 @@ class _OperativoCard extends StatelessWidget {
                   displayState,
                 ]
                 .whereType<String>()
-                .where((v) => v.trim().isNotEmpty)
+                .where((value) => value.trim().isNotEmpty)
                 .join('  |  '),
           ),
         ),
@@ -846,7 +1044,7 @@ class _OperativoCard extends StatelessWidget {
                 child: CircularProgressIndicator(strokeWidth: 2),
               )
             else ...[
-              if (canViewAll)
+              if (canShareTotals)
                 IconButton(
                   tooltip: 'Compartir totales',
                   onPressed: onShareTotals,
@@ -879,10 +1077,10 @@ class _OperativoCard extends StatelessWidget {
                         child: ListTile(
                           contentPadding: EdgeInsets.zero,
                           leading: Icon(
-                            Icons.delete_outline,
-                            color: Colors.red,
+                            Icons.pause_circle_outline,
+                            color: Color(0xFFB45309),
                           ),
-                          title: Text('Eliminar'),
+                          title: Text('Poner en standby'),
                         ),
                       ),
                   ],
@@ -891,6 +1089,54 @@ class _OperativoCard extends StatelessWidget {
             const Icon(Icons.chevron_right),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _HeaderMetric extends StatelessWidget {
+  final IconData icon;
+  final String value;
+  final String label;
+
+  const _HeaderMetric({
+    required this.icon,
+    required this.value,
+    required this.label,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      constraints: const BoxConstraints(minWidth: 145),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.white24),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 22, color: Colors.white),
+          const SizedBox(width: 9),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                value,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 20,
+                  fontWeight: FontWeight.w900,
+                  height: 1,
+                ),
+              ),
+              const SizedBox(height: 3),
+              Text(label, style: const TextStyle(color: Colors.white70)),
+            ],
+          ),
+        ],
       ),
     );
   }
@@ -974,14 +1220,34 @@ String _displayDate(DateTime value) {
       '${value.year.toString().padLeft(4, '0')}';
 }
 
+String _displayMonth(DateTime value) {
+  const months = <String>[
+    'Enero',
+    'Febrero',
+    'Marzo',
+    'Abril',
+    'Mayo',
+    'Junio',
+    'Julio',
+    'Agosto',
+    'Septiembre',
+    'Octubre',
+    'Noviembre',
+    'Diciembre',
+  ];
+  return '${months[value.month - 1]} ${value.year}';
+}
+
 String _filterDescription(
   _OperativosListMode mode,
   DateTime selectedDay,
+  DateTime selectedMonth,
   DateTime rangeStart,
   DateTime rangeEnd,
 ) {
   return switch (mode) {
     _OperativosListMode.dia => 'el día ${_displayDate(selectedDay)}',
+    _OperativosListMode.mes => 'el mes de ${_displayMonth(selectedMonth)}',
     _OperativosListMode.activos => 'los operativos activos',
     _OperativosListMode.rango =>
       'el rango ${_displayDate(rangeStart)} a ${_displayDate(rangeEnd)}',

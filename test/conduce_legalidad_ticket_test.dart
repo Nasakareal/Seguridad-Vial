@@ -132,13 +132,19 @@ void main() {
           serie: '3H1TEST1234567890',
           numeroInventario: '00042',
           grua: 'Grúas Uruapan',
+          corralonId: 7,
           corralon: 'Corralón Uruapan',
+          corralonDireccion: 'Libramiento Oriente 450, Uruapan',
+          corralonTelefono: '452 123 4567',
           partesDanadas: 'Rayón en costado derecho',
           observaciones: 'Casco bajo el asiento',
         ),
       ],
       personas: <ConduceLegalidadPersona>[
-        ConduceLegalidadPersona(nombre: 'Juan Propietario'),
+        ConduceLegalidadPersona(
+          nombre: 'Juan Propietario',
+          domicilio: 'Av. Camelinas 1000, Morelia',
+        ),
       ],
     );
 
@@ -159,10 +165,64 @@ void main() {
     expect(find.text('00042'), findsOneWidget);
     expect(find.text('Grúas Uruapan'), findsWidgets);
     expect(find.text('Corralón Uruapan'), findsOneWidget);
+    expect(find.text('Domicilio del corralón:'), findsOneWidget);
+    expect(find.text('Libramiento Oriente 450, Uruapan'), findsOneWidget);
+    expect(find.text('Teléfono del corralón:'), findsOneWidget);
+    expect(find.text('452 123 4567'), findsOneWidget);
+    expect(find.text('Número de corralón:'), findsNothing);
+    expect(find.text('Domicilio del propietario / conductor:'), findsNothing);
+    expect(find.text('Av. Camelinas 1000, Morelia'), findsNothing);
     expect(find.text('Objetos y accesorios inventariados:'), findsOneWidget);
     expect(find.text('PROPIETARIO / CONDUCTOR'), findsOneWidget);
     expect(find.text('AGENTE QUE ELABORA'), findsOneWidget);
     expect(find.text('OPERADOR DE GRÚA'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('antes de imprimir permite elegir ambas cantidades', (
+    tester,
+  ) async {
+    final item = operativo('conduce_legalidad');
+    const captura = ConduceLegalidadCaptura(
+      id: 12,
+      operativoId: 11,
+      canEdit: true,
+      vehiculos: <ConduceLegalidadVehiculo>[
+        ConduceLegalidadVehiculo(
+          numeroInventario: '00042',
+          corralon: 'Corralón Uruapan',
+        ),
+      ],
+      personas: <ConduceLegalidadPersona>[],
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ConduceLegalidadBoletaScreen(
+          initialOperativo: item,
+          initialCaptura: captura,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Imprimir boleta'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('¿Cuántos documentos quieres imprimir?'), findsOneWidget);
+    expect(find.text('Notificaciones (boletas)'), findsOneWidget);
+    expect(find.text('Inventarios'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Agregar una de Notificaciones (boletas)'));
+    await tester.tap(find.byTooltip('Agregar una de Inventarios'));
+    await tester.tap(find.byTooltip('Agregar una de Inventarios'));
+    await tester.pump();
+
+    expect(find.text('2'), findsOneWidget);
+    expect(find.text('3'), findsOneWidget);
+    expect(find.text('Continuar'), findsOneWidget);
+
+    await tester.tap(find.text('Cancelar'));
+    await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
   });
 
@@ -215,11 +275,17 @@ void main() {
           serie: '3H1TEST1234567890',
           numeroInventario: '00042',
           grua: 'Grúas Uruapan',
+          corralonId: 7,
           corralon: 'Corralón Uruapan',
+          corralonDireccion: 'Libramiento Oriente 450, Uruapan',
+          corralonTelefono: '452 123 4567',
         ),
       ],
       personas: <ConduceLegalidadPersona>[
-        ConduceLegalidadPersona(nombre: 'Juan Propietario'),
+        ConduceLegalidadPersona(
+          nombre: 'Juan Propietario',
+          domicilio: 'Av. Camelinas 1000, Morelia',
+        ),
       ],
     );
 
@@ -233,6 +299,12 @@ void main() {
     expect(text, contains('ARTICULO 352'));
     expect(text, contains('00042'));
     expect(text, contains('ABC-123-A'));
+    expect(text, contains('Domicilio del corralon'));
+    expect(text, contains('Libramiento Oriente 450, Uruapan'));
+    expect(text, contains('Telefono del corralon'));
+    expect(text, contains('452 123 4567'));
+    expect(text, isNot(contains('Numero de corralon')));
+    expect(text, isNot(contains('Av. Camelinas 1000, Morelia')));
     expect(text, contains('Numero de sello'));
     expect(text, contains('PROPIETARIO / CONDUCTOR'));
     expect(text, contains('AGENTE QUE ELABORA'));

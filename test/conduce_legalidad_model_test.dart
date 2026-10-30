@@ -184,6 +184,7 @@ void main() {
       'estado': 'activo',
       'unidad_id': 2,
       'delegacion_id': 15,
+      'can_view_all_capturas': true,
     });
 
     expect(operativo.lugar, 'Av. Camelinas y Ventura Puente');
@@ -193,6 +194,7 @@ void main() {
     expect(operativo.codigoPostal, '58070');
     expect(operativo.unidadId, 2);
     expect(operativo.delegacionId, 15);
+    expect(operativo.canViewAllCapturas, isTrue);
     expect(operativo.firmanteIphNombres, 'Laura Beatriz');
     expect(operativo.firmanteIphApellidoPaterno, 'Ramírez');
     expect(operativo.firmanteIphApellidoMaterno, 'Torres');

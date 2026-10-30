@@ -143,7 +143,7 @@ class _ConduceLegalidadWorkflowHelpSheetState
     _HelpTopic(
       title: 'Imprimir boleta o inventario',
       intro:
-          'Abre los documentos de la captura y envía por separado la boleta o el inventario a una impresora térmica emparejada.',
+          'Abre los documentos de la captura y envía las copias necesarias a una impresora térmica emparejada.',
       icon: Icons.print_outlined,
       color: Color(0xFFB45309),
       action: 'Imprimir',
@@ -151,9 +151,9 @@ class _ConduceLegalidadWorkflowHelpSheetState
       steps: <String>[
         'Toca el icono de boleta en la tarjeta de la captura.',
         'Selecciona Boleta o Inventario y revisa la vista previa correspondiente.',
-        'Pulsa Imprimir; sólo se enviará el documento seleccionado.',
+        'Pulsa Imprimir e indica cuántas notificaciones y cuántos inventarios necesitas.',
         'Elige papel de 58 mm u 80 mm.',
-        'Selecciona la impresora Bluetooth previamente emparejada.',
+        'Selecciona la impresora Bluetooth; todas las copias saldrán automáticamente.',
       ],
       tip:
           'Usa Prueba Bluetooth para confirmar conexión y ancho del papel antes del operativo.',

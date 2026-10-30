@@ -1226,7 +1226,9 @@ class _OperativoHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final canViewAll = meta?.abilities.canViewAllCapturas ?? false;
+    final canViewAll =
+        operativo.canViewAllCapturas ||
+        (meta?.abilities.canViewAllCapturas ?? false);
     final count = canViewAll
         ? '${operativo.totalCapturas} capturas'
         : '${operativo.misCapturas} mias';

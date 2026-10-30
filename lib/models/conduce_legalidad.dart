@@ -516,6 +516,7 @@ class ConduceLegalidadOperativo {
   final DateTime? feedingClosesAt;
   final bool feedingClosed;
   final bool canFeed;
+  final bool canViewAllCapturas;
   final bool canEdit;
   final bool canDelete;
   final int totalCapturas;
@@ -554,6 +555,7 @@ class ConduceLegalidadOperativo {
     this.feedingClosesAt,
     this.feedingClosed = false,
     this.canFeed = true,
+    this.canViewAllCapturas = false,
     this.canEdit = false,
     this.canDelete = false,
     required this.totalCapturas,
@@ -671,6 +673,7 @@ class ConduceLegalidadOperativo {
       feedingClosesAt: _dateTime(json['alimentacion_cierra_en']),
       feedingClosed: _bool(json['alimentacion_cerrada']),
       canFeed: !json.containsKey('can_feed') || _bool(json['can_feed']),
+      canViewAllCapturas: _bool(json['can_view_all_capturas']),
       canEdit: _bool(json['can_edit']),
       canDelete: _bool(json['can_delete']),
       totalCapturas: _asInt(json['total_capturas']),
@@ -909,6 +912,8 @@ class ConduceLegalidadVehiculo {
   final int? corralonId;
   final String? grua;
   final String? corralon;
+  final String? corralonDireccion;
+  final String? corralonTelefono;
   final int? servicioUnidadId;
   final int? servicioDelegacionId;
   final int? servicioCreatedBy;
@@ -944,6 +949,8 @@ class ConduceLegalidadVehiculo {
     this.corralonId,
     this.grua,
     this.corralon,
+    this.corralonDireccion,
+    this.corralonTelefono,
     this.servicioUnidadId,
     this.servicioDelegacionId,
     this.servicioCreatedBy,
@@ -986,6 +993,10 @@ class ConduceLegalidadVehiculo {
       corralonId: _nullableInt(json['corralon_id']),
       grua: _str(json['grua']),
       corralon: _str(json['corralon']),
+      corralonDireccion: _str(
+        json['corralon_direccion'] ?? json['ubicacion_corralon'],
+      ),
+      corralonTelefono: _str(json['corralon_telefono']),
       servicioUnidadId: _nullableInt(json['servicio_unidad_id']),
       servicioDelegacionId: _nullableInt(json['servicio_delegacion_id']),
       servicioCreatedBy: _nullableInt(json['servicio_created_by']),
@@ -1024,6 +1035,8 @@ class ConduceLegalidadVehiculo {
     'corralon_id': corralonId,
     'grua': grua,
     'corralon': corralon,
+    'corralon_direccion': corralonDireccion,
+    'corralon_telefono': corralonTelefono,
     'aseguradora': aseguradora,
     'monto_danos': montoDanos,
     'partes_danadas': partesDanadas,
