@@ -1155,6 +1155,16 @@ class AppDrawer extends StatelessWidget {
                           ),
                           if (isSuperadmin)
                             _DrawerSubItem(
+                              icon: Icons.print_outlined,
+                              label: 'Impresoras Bluetooth',
+                              subtitle: 'Nombres internos por dirección MAC',
+                              onTap: () => _nav(
+                                context,
+                                AppRoutes.herramientasImpresorasBluetooth,
+                              ),
+                            ),
+                          if (isSuperadmin)
+                            _DrawerSubItem(
                               icon: Icons.badge_outlined,
                               label: 'Emisión de licencias',
                               subtitle: 'Examen, constancia e historial',

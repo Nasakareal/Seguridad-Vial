@@ -1138,8 +1138,10 @@ class AuthService {
       return true;
     }
 
-    if (await isDelegacionesUser() && await isDelegadoRole()) {
-      return true;
+    if (await isDelegacionesUser()) {
+      return await _hasExactRoleName('administrador') ||
+          await _hasExactRoleName('subdirector') ||
+          await _hasExactRoleName('delegado');
     }
 
     final payload = await getCurrentUserPayload(refresh: false);
@@ -1156,6 +1158,14 @@ class AuthService {
         await _hasExactRoleName('subdirector') ||
         await _hasExactRoleName('administrador') ||
         await _hasExactRoleName('administrativo');
+  }
+
+  static Future<bool> canAssignConduceLegalidadScope() async {
+    if (await isSuperadmin()) return true;
+    if (!await isDelegacionesUser()) return false;
+
+    return await _hasExactRoleName('administrador') ||
+        await _hasExactRoleName('subdirector');
   }
 
   static Future<bool> canSetConduceLegalidadSchedule({

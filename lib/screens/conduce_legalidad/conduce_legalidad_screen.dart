@@ -33,6 +33,7 @@ class _ConduceLegalidadScreenState extends State<ConduceLegalidadScreen>
     with WidgetsBindingObserver {
   bool _loading = true;
   bool _canCreateLocal = false;
+  bool _canRecoverDeleted = false;
   int? _deletingOperativoId;
   int? _sharingOperativoId;
   String? _error;
@@ -80,6 +81,7 @@ class _ConduceLegalidadScreenState extends State<ConduceLegalidadScreen>
 
     try {
       final canCreateLocal = await AuthService.canCreateConduceLegalidad();
+      final canRecoverDeleted = await AuthService.getUserId() == 1;
       final rawMeta = await ConduceLegalidadService.fetchMeta(
         filterConduceLegalidadMotos: !widget.module.isAlcoholimetria,
       );
@@ -104,15 +106,36 @@ class _ConduceLegalidadScreenState extends State<ConduceLegalidadScreen>
             ? '${_selectedMonth.year}-${_selectedMonth.month.toString().padLeft(2, '0')}'
             : null,
       );
-      final operativos = result.operativos.where(widget.module.ownsOperativo);
+      // Compatibilidad defensiva con servidores anteriores: un operativo dado
+      // de baja nunca debe reaparecer ni entrar en los indicadores de la app.
+      final hiddenOperativos = result.operativos.where(
+        (operativo) => operativo.estado.toLowerCase() == 'standby',
+      );
+      final operativos = result.operativos.where(
+        (operativo) =>
+            operativo.estado.toLowerCase() != 'standby' &&
+            widget.module.ownsOperativo(operativo),
+      );
+      final hiddenCount = hiddenOperativos.length;
+      final hiddenCapturas = hiddenOperativos.fold<int>(
+        0,
+        (total, operativo) => total + operativo.totalCapturas,
+      );
       if (!mounted) return;
       setState(() {
         _canCreateLocal = canCreateLocal;
+        _canRecoverDeleted = canRecoverDeleted;
         _meta = meta;
         _listMode = effectiveMode;
         _operativos = operativos.toList();
-        _totalOperativos = result.totalOperativos;
-        _totalRegistros = result.totalRegistros;
+        _totalOperativos = (result.totalOperativos - hiddenCount).clamp(
+          0,
+          result.totalOperativos,
+        );
+        _totalRegistros = (result.totalRegistros - hiddenCapturas).clamp(
+          0,
+          result.totalRegistros,
+        );
         _loading = false;
       });
     } catch (e) {
@@ -261,28 +284,28 @@ class _ConduceLegalidadScreenState extends State<ConduceLegalidadScreen>
         ? operativo.lugarConNumero
         : operativo.nombre;
 
-    final firstConfirmation = await _confirmStandbyStep(
+    final firstConfirmation = await _confirmDeleteStep(
       title: 'Confirmación 1 de 3',
-      message: '¿Quieres poner "$punto" en standby? No se borrará ningún dato.',
+      message: '¿Quieres eliminar el operativo de "$punto"?',
       actionLabel: 'Sí, continuar',
     );
     if (!firstConfirmation) return;
 
-    final secondConfirmation = await _confirmStandbyStep(
+    final secondConfirmation = await _confirmDeleteStep(
       title: 'Confirmación 2 de 3',
       message:
-          '¿Estás seguro? El operativo dejará de aceptar alimentaciones mientras esté en standby, pero conservará todas sus capturas.',
+          '¿Estás seguro? El operativo dejará de aparecer y ya no permitirá nuevas capturas.',
       actionLabel: 'Entiendo, continuar',
     );
     if (!secondConfirmation) return;
 
-    final password = await _requestStandbyPassword(punto);
+    final password = await _requestDeletePassword(punto);
     if (password == null || password.isEmpty) return;
 
     setState(() => _deletingOperativoId = operativo.id);
 
     try {
-      await ConduceLegalidadService.standbyOperativo(
+      await ConduceLegalidadService.deleteOperativo(
         id: operativo.id,
         password: password,
       );
@@ -290,11 +313,7 @@ class _ConduceLegalidadScreenState extends State<ConduceLegalidadScreen>
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Operativo puesto en standby. Toda la información se conservó.',
-          ),
-        ),
+        const SnackBar(content: Text('Operativo eliminado correctamente.')),
       );
 
       await _load();
@@ -302,7 +321,7 @@ class _ConduceLegalidadScreenState extends State<ConduceLegalidadScreen>
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('No se pudo poner en standby: $e')),
+        SnackBar(content: Text('No se pudo eliminar el operativo: $e')),
       );
     } finally {
       if (mounted) {
@@ -311,7 +330,7 @@ class _ConduceLegalidadScreenState extends State<ConduceLegalidadScreen>
     }
   }
 
-  Future<bool> _confirmStandbyStep({
+  Future<bool> _confirmDeleteStep({
     required String title,
     required String message,
     required String actionLabel,
@@ -329,7 +348,7 @@ class _ConduceLegalidadScreenState extends State<ConduceLegalidadScreen>
             ),
             FilledButton.icon(
               onPressed: () => Navigator.pop(context, true),
-              icon: const Icon(Icons.pause_circle_outline),
+              icon: const Icon(Icons.delete_outline),
               label: Text(actionLabel),
             ),
           ],
@@ -340,7 +359,7 @@ class _ConduceLegalidadScreenState extends State<ConduceLegalidadScreen>
     return confirmed == true;
   }
 
-  Future<String?> _requestStandbyPassword(String punto) async {
+  Future<String?> _requestDeletePassword(String punto) async {
     var obscurePassword = true;
     var passwordValue = '';
 
@@ -356,7 +375,7 @@ class _ConduceLegalidadScreenState extends State<ConduceLegalidadScreen>
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    '¿Estás completamente seguro? Escribe tu contraseña para poner "$punto" en standby.',
+                    '¿Estás completamente seguro? Escribe tu contraseña para eliminar el operativo de "$punto".',
                   ),
                   const SizedBox(height: 16),
                   TextField(
@@ -399,8 +418,8 @@ class _ConduceLegalidadScreenState extends State<ConduceLegalidadScreen>
                     final value = passwordValue;
                     if (value.isNotEmpty) Navigator.pop(dialogContext, value);
                   },
-                  icon: const Icon(Icons.pause_circle_outline),
-                  label: const Text('Poner en standby'),
+                  icon: const Icon(Icons.delete_outline),
+                  label: const Text('Eliminar operativo'),
                 ),
               ],
             );
@@ -410,6 +429,168 @@ class _ConduceLegalidadScreenState extends State<ConduceLegalidadScreen>
     );
 
     return password;
+  }
+
+  Future<String?> _requestRecoveryPassword(String punto) async {
+    final controller = TextEditingController();
+    try {
+      return await showDialog<String>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Recuperar operativo'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'El operativo de "$punto" volverá a estar disponible. Escribe tu contraseña para confirmar.',
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: controller,
+                autofocus: true,
+                obscureText: true,
+                decoration: const InputDecoration(
+                  labelText: 'Contraseña',
+                  border: OutlineInputBorder(),
+                ),
+                onSubmitted: (value) {
+                  if (value.trim().isNotEmpty) {
+                    Navigator.pop(dialogContext, value);
+                  }
+                },
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Cancelar'),
+            ),
+            FilledButton.icon(
+              onPressed: () {
+                final value = controller.text.trim();
+                if (value.isNotEmpty) Navigator.pop(dialogContext, value);
+              },
+              icon: const Icon(Icons.restore),
+              label: const Text('Recuperar'),
+            ),
+          ],
+        ),
+      );
+    } finally {
+      controller.dispose();
+    }
+  }
+
+  Future<void> _showDeletedOperativos() async {
+    List<Map<String, dynamic>> deleted;
+    try {
+      deleted = await ConduceLegalidadService.fetchDeletedOperativos(
+        tipoOperativo: widget.module.id,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('No se pudieron cargar los eliminados: $e')),
+      );
+      return;
+    }
+    if (!mounted) return;
+    if (deleted.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No hay operativos eliminados.')),
+      );
+      return;
+    }
+
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Operativos eliminados'),
+          content: SizedBox(
+            width: 520,
+            child: deleted.isEmpty
+                ? const Text('No hay operativos eliminados.')
+                : ListView.separated(
+                    shrinkWrap: true,
+                    itemCount: deleted.length,
+                    separatorBuilder: (_, _) => const Divider(),
+                    itemBuilder: (context, index) {
+                      final item = deleted[index];
+                      final id = int.tryParse('${item['id']}') ?? 0;
+                      final lugar = [item['lugar'], item['numero']]
+                          .where(
+                            (value) =>
+                                value != null && '$value'.trim().isNotEmpty,
+                          )
+                          .join(' ');
+                      final title = lugar.trim().isNotEmpty
+                          ? lugar
+                          : '${item['nombre'] ?? 'Operativo'}';
+                      return ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: Text(title),
+                        subtitle: Text(
+                          [
+                                item['fecha'],
+                                item['municipio'],
+                                '${item['total_capturas'] ?? 0} capturas',
+                              ]
+                              .where(
+                                (value) =>
+                                    value != null && '$value'.trim().isNotEmpty,
+                              )
+                              .join('  |  '),
+                        ),
+                        trailing: IconButton(
+                          tooltip: 'Recuperar',
+                          icon: const Icon(Icons.restore),
+                          onPressed: id <= 0
+                              ? null
+                              : () async {
+                                  final password =
+                                      await _requestRecoveryPassword(title);
+                                  if (password == null || password.isEmpty) {
+                                    return;
+                                  }
+                                  try {
+                                    await ConduceLegalidadService.restoreOperativo(
+                                      id: id,
+                                      password: password,
+                                    );
+                                    if (context.mounted) {
+                                      setDialogState(
+                                        () => deleted.removeAt(index),
+                                      );
+                                    }
+                                    await _load();
+                                  } catch (e) {
+                                    if (!context.mounted) return;
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: Text(
+                                          'No se pudo recuperar el operativo: $e',
+                                        ),
+                                      ),
+                                    );
+                                  }
+                                },
+                        ),
+                      );
+                    },
+                  ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Cerrar'),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   void _mostrarAyuda() {
@@ -495,20 +676,19 @@ class _ConduceLegalidadScreenState extends State<ConduceLegalidadScreen>
           addOption(
             _listHelpOption(
               sheetContext: sheetContext,
-              icon: Icons.pause_circle_outline,
-              color: const Color(0xFFB45309),
-              title: 'Cómo poner un operativo en standby',
-              subtitle:
-                  'Desactivar temporalmente un operativo sin borrar información.',
+              icon: Icons.delete_outline,
+              color: const Color(0xFFB91C1C),
+              title: 'Cómo eliminar un operativo',
+              subtitle: 'Quitar de la operación un registro creado por error.',
               child: const ConduceLegalidadActionHelpSheet(
-                title: 'Poner un operativo en standby',
+                title: 'Eliminar un operativo',
                 description:
                     'Esta opción protegida aparece únicamente para el usuario con ID 1.',
-                icon: Icons.pause_circle_outline,
-                color: Color(0xFFB45309),
+                icon: Icons.delete_outline,
+                color: Color(0xFFB91C1C),
                 steps: [
                   'Ubica el operativo correcto en el listado.',
-                  'Pulsa los tres puntos y selecciona Poner en standby.',
+                  'Pulsa los tres puntos y selecciona Eliminar operativo.',
                   'Acepta las dos primeras confirmaciones después de revisar el punto.',
                   'En la tercera confirmación escribe tu contraseña.',
                 ],
@@ -579,6 +759,12 @@ class _ConduceLegalidadScreenState extends State<ConduceLegalidadScreen>
       appBar: AppBar(
         title: Text(widget.module.title),
         actions: [
+          if (_canRecoverDeleted)
+            IconButton(
+              tooltip: 'Recuperar eliminados',
+              onPressed: _showDeletedOperativos,
+              icon: const Icon(Icons.restore_from_trash_outlined),
+            ),
           IconButton(
             tooltip: 'Buscar registros',
             onPressed: () =>
@@ -1077,10 +1263,10 @@ class _OperativoCard extends StatelessWidget {
                         child: ListTile(
                           contentPadding: EdgeInsets.zero,
                           leading: Icon(
-                            Icons.pause_circle_outline,
-                            color: Color(0xFFB45309),
+                            Icons.delete_outline,
+                            color: Color(0xFFB91C1C),
                           ),
-                          title: Text('Poner en standby'),
+                          title: Text('Eliminar operativo'),
                         ),
                       ),
                   ],

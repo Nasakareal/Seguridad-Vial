@@ -8,7 +8,7 @@ import 'package:seguridad_vial_app/screens/conduce_legalidad/conduce_legalidad_s
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
-  testWidgets('standby exige tres confirmaciones y envía la contraseña', (
+  testWidgets('eliminar exige tres confirmaciones y envía la contraseña', (
     tester,
   ) async {
     SharedPreferences.setMockInitialValues(<String, Object>{
@@ -39,7 +39,7 @@ void main() {
         await tester.pumpAndSettle();
         await tester.tap(optionsButton);
         await tester.pumpAndSettle();
-        await tester.tap(find.text('Poner en standby'));
+        await tester.tap(find.text('Eliminar operativo'));
         await tester.pumpAndSettle();
 
         expect(find.text('Confirmación 1 de 3'), findsOneWidget);
@@ -52,20 +52,15 @@ void main() {
 
         expect(find.text('Confirmación 3 de 3'), findsOneWidget);
         await tester.enterText(find.byType(TextField), 'secreto-123');
-        await tester.tap(find.text('Poner en standby'));
+        await tester.tap(find.text('Eliminar operativo'));
         await tester.pumpAndSettle();
 
         expect(deletePayload, <String, dynamic>{
           'password': 'secreto-123',
           'confirmations': 3,
-          'confirmation_text': 'STANDBY',
+          'confirmation_text': 'ELIMINAR',
         });
-        expect(
-          find.text(
-            'Operativo puesto en standby. Toda la información se conservó.',
-          ),
-          findsOneWidget,
-        );
+        expect(find.text('Operativo eliminado correctamente.'), findsOneWidget);
         expect(tester.takeException(), isNull);
       },
       () {

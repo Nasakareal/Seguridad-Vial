@@ -69,6 +69,8 @@ class AppRoutes {
       '/herramientas/reconstructor-transito-2d';
   static const String herramientasLicenciasEmision =
       '/herramientas/emision-licencias';
+  static const String herramientasImpresorasBluetooth =
+      '/herramientas/impresoras-bluetooth';
 
   static const String controlUbicacion = '/control-ubicacion';
   static const String controlSemaforico = '/control-semaforico';

@@ -71,6 +71,7 @@ void main() {
       expect(find.textContaining('Uruapan'), findsWidgets);
       expect(find.textContaining('2 mías'), findsOneWidget);
       expect(find.textContaining('5 resguardados'), findsNothing);
+      expect(find.text('No debe aparecer'), findsNothing);
       expect(tester.takeException(), isNull);
     }, () => MockClient(_response));
   });
@@ -95,7 +96,9 @@ Future<http.Response> _response(http.Request request) async {
   }
 
   return _json(<String, dynamic>{
-    'resumen': <String, dynamic>{'operativos': 1, 'registros': 8},
+    // Un servidor anterior podía devolver una baja lógica como "standby" e
+    // incluirla en los totales. La app debe ocultarla de forma defensiva.
+    'resumen': <String, dynamic>{'operativos': 2, 'registros': 11},
     'data': <Object>[
       <String, dynamic>{
         'id': 31,
@@ -113,6 +116,18 @@ Future<http.Response> _response(http.Request request) async {
         'can_feed': true,
         'can_view_all_capturas': false,
         'delegacion': <String, dynamic>{'id': 15, 'nombre': 'Uruapan'},
+      },
+      <String, dynamic>{
+        'id': 32,
+        'nombre': 'Operativo fantasma',
+        'tipo_operativo': 'conduce_legalidad',
+        'fecha': '2026-10-30',
+        'municipio': 'Uruapan',
+        'lugar': 'No debe aparecer',
+        'estado': 'standby',
+        'total_capturas': 3,
+        'mis_capturas': 0,
+        'can_feed': false,
       },
     ],
   });

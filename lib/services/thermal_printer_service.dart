@@ -2,11 +2,20 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:permission_handler/permission_handler.dart';
 
+import 'thermal_printer_catalog_service.dart';
+
 class ThermalPrinterDevice {
   final String name;
   final String address;
+  final String systemName;
+  final bool isManaged;
 
-  const ThermalPrinterDevice({required this.name, required this.address});
+  const ThermalPrinterDevice({
+    required this.name,
+    required this.address,
+    String? systemName,
+    this.isManaged = false,
+  }) : systemName = systemName ?? name;
 
   factory ThermalPrinterDevice.fromMap(Map<dynamic, dynamic> map) {
     final address = (map['address'] ?? '').toString().trim();
@@ -14,6 +23,16 @@ class ThermalPrinterDevice {
     return ThermalPrinterDevice(
       name: name.isEmpty ? 'Impresora Bluetooth' : name,
       address: address,
+      systemName: name.isEmpty ? 'Impresora Bluetooth' : name,
+    );
+  }
+
+  ThermalPrinterDevice withManagedName(String managedName) {
+    return ThermalPrinterDevice(
+      name: managedName,
+      address: address,
+      systemName: systemName,
+      isManaged: true,
     );
   }
 }
@@ -74,7 +93,9 @@ class ThermalPrinterService {
     return !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
   }
 
-  static Future<List<ThermalPrinterDevice>> getBondedPrinters() async {
+  static Future<List<ThermalPrinterDevice>> getBondedPrinters({
+    bool resolveManagedNames = true,
+  }) async {
     if (!supportsBluetoothPrinting) return const <ThermalPrinterDevice>[];
 
     final rawDevices = await _runWithPermissionRetry<List<dynamic>>(() async {
@@ -84,11 +105,31 @@ class ThermalPrinterService {
       return result ?? const <dynamic>[];
     });
 
-    return rawDevices
+    final devices = rawDevices
         .whereType<Map<dynamic, dynamic>>()
         .map(ThermalPrinterDevice.fromMap)
         .where((device) => device.address.isNotEmpty)
         .toList(growable: false);
+
+    if (!resolveManagedNames || devices.isEmpty) return devices;
+
+    try {
+      final aliases = await ThermalPrinterCatalogService.aliasesByMac();
+      return devices
+          .map((device) {
+            final alias =
+                aliases[ThermalPrinterCatalogService.normalizeMac(
+                  device.address,
+                )];
+            return alias == null
+                ? device
+                : device.withManagedName(alias.displayName);
+          })
+          .toList(growable: false);
+    } catch (_) {
+      // La impresión nunca debe bloquearse si el catálogo remoto no responde.
+      return devices;
+    }
   }
 
   static Future<void> printEscPos({

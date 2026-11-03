@@ -68,6 +68,7 @@ import '../screens/herramientas/velocidad_deformacion_laminas_screen.dart';
 import '../screens/herramientas/rnd_faltas_administrativas_screen.dart';
 import '../screens/herramientas/reconstructor_transito_2d_screen.dart';
 import '../screens/herramientas/licencias_emision_screen.dart';
+import '../screens/herramientas/impresoras_bluetooth_screen.dart';
 
 import '../screens/mapa/mapa_patrullas_screen.dart';
 import '../screens/mapa/mapa_incidencias_screen.dart';
@@ -228,6 +229,10 @@ final Map<String, WidgetBuilder> appRoutesMap = {
   AppRoutes.herramientasLicenciasEmision: (context) => const SuperadminGuard(
     title: 'Emisión de licencias',
     child: LicenciasEmisionScreen(),
+  ),
+  AppRoutes.herramientasImpresorasBluetooth: (context) => const SuperadminGuard(
+    title: 'Impresoras Bluetooth',
+    child: ImpresorasBluetoothScreen(),
   ),
 
   AppRoutes.controlUbicacion: (context) => const ControlUbicacionScreen(),

@@ -279,7 +279,7 @@ class ConduceLegalidadService {
     return ConduceLegalidadOperativo.fromJson(_map(body['data']));
   }
 
-  static Future<void> standbyOperativo({
+  static Future<void> deleteOperativo({
     required int id,
     required String password,
   }) async {
@@ -289,11 +289,46 @@ class ConduceLegalidadService {
       body: jsonEncode({
         'password': password,
         'confirmations': 3,
-        'confirmation_text': 'STANDBY',
+        'confirmation_text': 'ELIMINAR',
       }),
     );
     final body = _decodeJson(res);
-    _throwIfNotOk(res, body, 'No se pudo poner el operativo en standby.');
+    _throwIfNotOk(res, body, 'No se pudo eliminar el operativo.');
+  }
+
+  static Future<List<Map<String, dynamic>>> fetchDeletedOperativos({
+    String? tipoOperativo,
+  }) async {
+    final uri = Uri.parse('${AuthService.baseUrl}$_path/operativos-eliminados')
+        .replace(
+          queryParameters: (tipoOperativo ?? '').trim().isEmpty
+              ? null
+              : <String, String>{'tipo_operativo': tipoOperativo!.trim()},
+        );
+    final res = await http.get(uri, headers: await _headers());
+    final body = _decodeJson(res);
+    _throwIfNotOk(
+      res,
+      body,
+      'No se pudieron cargar los operativos eliminados.',
+    );
+    return (body['data'] is List ? body['data'] as List : const <dynamic>[])
+        .whereType<Map>()
+        .map(_map)
+        .toList();
+  }
+
+  static Future<void> restoreOperativo({
+    required int id,
+    required String password,
+  }) async {
+    final res = await http.post(
+      Uri.parse('${AuthService.baseUrl}$_path/operativos/$id/restaurar'),
+      headers: await _headers(json: true),
+      body: jsonEncode(<String, dynamic>{'password': password}),
+    );
+    final body = _decodeJson(res);
+    _throwIfNotOk(res, body, 'No se pudo recuperar el operativo.');
   }
 
   static Future<ConduceLegalidadNativeShareData> fetchOperativoNativeShareData({

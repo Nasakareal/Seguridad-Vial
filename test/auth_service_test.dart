@@ -286,10 +286,12 @@ void main() {
   );
 
   test(
-    'delegaciones roles can feed but only delegado and superadmin can create',
+    'unidad 2 permite crear a administrador subdirector y delegado',
     () async {
       for (final entry in <(String, bool)>[
         ('Superadmin', true),
+        ('Administrador', true),
+        ('Subdirector', true),
         ('Delegado', true),
         ('Policia', false),
         ('Administrativo', false),
@@ -351,6 +353,29 @@ void main() {
           await AuthService.canSetConduceLegalidadSchedule(),
           entry.$3,
           reason: entry.$1,
+        );
+      }
+    },
+  );
+
+  test(
+    'unidad 2 administrador y subdirector pueden asignar delegación',
+    () async {
+      for (final role in <String>['Administrador', 'Subdirector']) {
+        SharedPreferences.setMockInitialValues(<String, Object>{
+          'auth_role': role,
+          'auth_unidad_id': AuthService.unidadDelegacionesId,
+          'auth_user_payload': jsonEncode(<String, Object>{
+            'id': 600,
+            'role': <String, Object>{'name': role},
+            'unidad_id': AuthService.unidadDelegacionesId,
+          }),
+        });
+
+        expect(
+          await AuthService.canAssignConduceLegalidadScope(),
+          isTrue,
+          reason: role,
         );
       }
     },

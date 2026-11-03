@@ -46,3 +46,6 @@ app.*.map.json
 
 # Local SSH host-key files used during deployment
 tmp/*known_hosts*
+
+# Local Codex investigation artifacts
+.codex-tmp/

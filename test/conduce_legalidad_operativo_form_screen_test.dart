@@ -51,6 +51,28 @@ void main() {
     expect(find.text('Apellido materno del firmante *'), findsOneWidget);
   });
 
+  testWidgets(
+    'unidad 2 administrador elige delegación aunque no tenga una asignada',
+    (tester) async {
+      _setSession(
+        role: 'Administrador',
+        roleId: 3,
+        unidadId: AuthService.unidadDelegacionesId,
+      );
+
+      await http.runWithClient(() async {
+        await tester.pumpWidget(
+          const MaterialApp(home: ConduceLegalidadOperativoFormScreen()),
+        );
+        await tester.pumpAndSettle();
+      }, () => MockClient(_delegacionesManagerMetaResponse));
+
+      expect(find.text('Unidad responsable *'), findsOneWidget);
+      expect(find.text('Delegación específica *'), findsOneWidget);
+      expect(find.text('Delegaciones'), findsOneWidget);
+    },
+  );
+
   testWidgets('Alcoholimetría does not request an IPH signer', (tester) async {
     _setSession(
       role: 'Administrador',
@@ -156,6 +178,28 @@ Future<http.Response> _metaResponse(http.Request request) async {
         ],
         'delegaciones': [
           {'id': 15, 'nombre': 'Pátzcuaro'},
+        ],
+        'fundamentos_corralon': <Object>[],
+        'fundamentos_persona': <Object>[],
+      },
+    }),
+    200,
+    headers: {'content-type': 'application/json; charset=utf-8'},
+  );
+}
+
+Future<http.Response> _delegacionesManagerMetaResponse(
+  http.Request request,
+) async {
+  return http.Response(
+    jsonEncode({
+      'data': {
+        'abilities': {'can_assign_scope': true},
+        'unidades': [
+          {'id': 2, 'nombre': 'Delegaciones'},
+        ],
+        'delegaciones': [
+          {'id': 30, 'nombre': 'Uruapan'},
         ],
         'fundamentos_corralon': <Object>[],
         'fundamentos_persona': <Object>[],

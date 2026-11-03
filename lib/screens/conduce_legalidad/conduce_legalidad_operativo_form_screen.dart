@@ -42,7 +42,7 @@ class _ConduceLegalidadOperativoFormScreenState
   bool _saving = false;
   bool _locating = false;
   bool _canSetSchedule = false;
-  bool _isSuperadmin = false;
+  bool _canAssignScope = false;
   bool _canCreate = false;
   bool _loadingAccess = true;
   String? _organizationError;
@@ -154,7 +154,7 @@ class _ConduceLegalidadOperativoFormScreenState
             operativoNombre: widget.module.operativoNombre,
             isEditing: _editing,
             canSetSchedule: _canSetSchedule,
-            canAssignOrganization: _isSuperadmin,
+            canAssignOrganization: _canAssignScope,
             isAlcoholimetria: widget.module.isAlcoholimetria,
           ),
         );
@@ -207,20 +207,20 @@ class _ConduceLegalidadOperativoFormScreenState
       setState(() {
         _canCreate = false;
         _canSetSchedule = false;
-        _isSuperadmin = false;
+        _canAssignScope = false;
         _loadingAccess = false;
       });
       return;
     }
 
     final canSetSchedule = await AuthService.canSetConduceLegalidadSchedule();
-    final isSuperadmin = await AuthService.isSuperadmin();
-    if (!isSuperadmin) {
+    final canAssignScope = await AuthService.canAssignConduceLegalidadScope();
+    if (!canAssignScope) {
       if (!mounted) return;
       setState(() {
         _canCreate = canCreate;
         _canSetSchedule = canSetSchedule;
-        _isSuperadmin = false;
+        _canAssignScope = false;
         _loadingAccess = false;
       });
       return;
@@ -255,7 +255,7 @@ class _ConduceLegalidadOperativoFormScreenState
       setState(() {
         _canCreate = canCreate;
         _canSetSchedule = canSetSchedule;
-        _isSuperadmin = true;
+        _canAssignScope = true;
         _unidades = meta.unidades;
         _delegaciones = meta.delegaciones;
         _unidadId = unidadId;
@@ -272,7 +272,7 @@ class _ConduceLegalidadOperativoFormScreenState
       setState(() {
         _canCreate = canCreate;
         _canSetSchedule = canSetSchedule;
-        _isSuperadmin = true;
+        _canAssignScope = true;
         _loadingAccess = false;
         _organizationError =
             'No se pudieron cargar las unidades y delegaciones: $e';
@@ -415,8 +415,8 @@ class _ConduceLegalidadOperativoFormScreenState
       final payload = {
         if (_canSetSchedule) 'fecha': _date(_fecha),
         if (_canSetSchedule) 'hora_inicio': _time(_hora),
-        if (_isSuperadmin) 'unidad_id': _unidadId,
-        if (_isSuperadmin && _unidadId == AuthService.unidadDelegacionesId)
+        if (_canAssignScope) 'unidad_id': _unidadId,
+        if (_canAssignScope && _unidadId == AuthService.unidadDelegacionesId)
           'delegacion_id': _delegacionId,
         'municipio': MunicipiosMichoacan.canonical(_municipioCtrl.text),
         'lugar': _emptyToNull(_lugarCtrl.text),
@@ -550,7 +550,7 @@ class _ConduceLegalidadOperativoFormScreenState
               ),
             ),
             const SizedBox(height: 12),
-            if (_isSuperadmin) ...[
+            if (_canAssignScope) ...[
               _buildOrganizationFields(),
               const SizedBox(height: 12),
             ],
@@ -658,7 +658,7 @@ class _ConduceLegalidadOperativoFormScreenState
               onPressed:
                   (_saving ||
                       _loadingAccess ||
-                      (_isSuperadmin && _organizationError != null))
+                      (_canAssignScope && _organizationError != null))
                   ? null
                   : _submit,
               icon: _saving
