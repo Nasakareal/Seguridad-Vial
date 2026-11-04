@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
 import '../../models/cultura_vial.dart';
+import '../../modules/cultura_vial/services/cultura_vial_audio_service.dart';
 import '../../services/cultura_vial_service.dart';
 import '../../services/local_draft_service.dart';
 
@@ -19,11 +20,14 @@ class _CulturaVialJoinScreenState extends State<CulturaVialJoinScreen> {
   final _nameCtrl = TextEditingController();
   final _codeCtrl = TextEditingController();
   bool _joining = false;
+  bool _audioEntered = false;
   late final LocalDraftAutosave _draft;
 
   @override
   void initState() {
     super.initState();
+    _audioEntered = true;
+    unawaited(CulturaVialAudioService.instance.enterModule());
     _draft = LocalDraftAutosave(
       draftId: 'cultura_vial:join',
       collect: _draftValues,
@@ -33,6 +37,9 @@ class _CulturaVialJoinScreenState extends State<CulturaVialJoinScreen> {
 
   @override
   void dispose() {
+    if (_audioEntered) {
+      unawaited(CulturaVialAudioService.instance.exitModule());
+    }
     _draft.dispose();
     _nameCtrl.dispose();
     _codeCtrl.dispose();
@@ -66,6 +73,7 @@ class _CulturaVialJoinScreenState extends State<CulturaVialJoinScreen> {
   }
 
   Future<void> _join() async {
+    unawaited(CulturaVialAudioService.instance.notifyInteraction());
     if (_joining) return;
     final nombre = _nameCtrl.text.trim();
     final code = CulturaVialService.parseJoinCode(_codeCtrl.text);
@@ -363,6 +371,7 @@ class CulturaVialGameScreen extends StatefulWidget {
 class _CulturaVialGameScreenState extends State<CulturaVialGameScreen>
     with SingleTickerProviderStateMixin {
   late final AnimationController _roadController;
+  bool _audioEntered = false;
   final DateTime _startedAt = DateTime.now();
   final List<Map<String, dynamic>> _decisions = <Map<String, dynamic>>[];
 
@@ -608,6 +617,8 @@ class _CulturaVialGameScreenState extends State<CulturaVialGameScreen>
   @override
   void initState() {
     super.initState();
+    _audioEntered = true;
+    unawaited(CulturaVialAudioService.instance.enterModule());
     _roadController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1300),
@@ -616,6 +627,9 @@ class _CulturaVialGameScreenState extends State<CulturaVialGameScreen>
 
   @override
   void dispose() {
+    if (_audioEntered) {
+      unawaited(CulturaVialAudioService.instance.exitModule());
+    }
     _roadController.dispose();
     super.dispose();
   }
@@ -624,6 +638,11 @@ class _CulturaVialGameScreenState extends State<CulturaVialGameScreen>
     if (_answered || _finished) return;
     final question = _questions[_questionIndex];
     final isCorrect = index == question.correctIndex;
+    unawaited(
+      CulturaVialAudioService.instance.playEffect(
+        isCorrect ? CulturaVialSound.correct : CulturaVialSound.wrong,
+      ),
+    );
     final nextStreak = isCorrect ? _streak + 1 : 0;
     final earned = isCorrect ? 100 + math.min(nextStreak, 4) * 20 : 0;
 

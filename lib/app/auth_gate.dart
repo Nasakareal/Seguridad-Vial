@@ -12,6 +12,7 @@ import '../screens/home_motociclista_screen.dart';
 import '../screens/home_screen.dart';
 import '../screens/home_perito_screen.dart';
 import '../screens/grua/grua_corralon_screen.dart';
+import '../modules/cultura_vial/screens/cultura_vial_game_hub_screen.dart';
 
 class AuthGate extends StatelessWidget {
   const AuthGate({super.key});
@@ -30,6 +31,10 @@ class AuthGate extends StatelessWidget {
     final sessionAllowed = await AuthService.validateStoredSession();
     if (!sessionAllowed) {
       return const WelcomeScreen();
+    }
+
+    if (await AuthService.isCitizen()) {
+      return const CulturaVialGameHubScreen();
     }
 
     if (await AuthService.isGruaUser()) {

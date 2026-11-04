@@ -1,7 +1,7 @@
 name: seguridad_vial_app
 description: App móvil para captura de hechos y monitoreo de patrullas
 publish_to: 'none'
-version: 1.37.128+177
+version: 1.38.129+178
 
 environment:
   sdk: ">=3.8.0 <4.0.0"
@@ -57,6 +57,12 @@ flutter:
   uses-material-design: true
 
   assets:
+    - assets/cultura_vial/academia/
+    - assets/cultura_vial/un_segundo_antes/
+    - assets/cultura_vial/quien_pasa/
+    - assets/cultura_vial/detecta_peligro/
+    - assets/audio/track_01.mp3
+    - assets/audio/track_02.mp3
     - assets/sounds/message_sent.mp3
     - assets/sounds/recibido.mp3
     - assets/icon/whatsapp_share.png

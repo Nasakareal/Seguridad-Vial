@@ -1,5 +1,9 @@
 class AppRoutes {
   static const String login = '/login';
+  static const String registroCiudadano = '/registro-ciudadano';
+  static const String michoacanAlVolante = '/michoacan-al-volante';
+  static const String academiaVial = '/michoacan-al-volante/academia';
+  static const String misionesViales = '/michoacan-al-volante/misiones';
   static const String home = '/home';
   static const String gruaCorralon = '/grua/corralon';
   static const String homePerito = '/home-perito';

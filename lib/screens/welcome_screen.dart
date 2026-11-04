@@ -104,6 +104,38 @@ class WelcomeScreen extends StatelessWidget {
                             ),
                           ),
                         ),
+                        const SizedBox(height: 12),
+                        Wrap(
+                          alignment: WrapAlignment.center,
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: [
+                            TextButton.icon(
+                              onPressed: () => Navigator.pushNamed(
+                                context,
+                                AppRoutes.licenciasPuntosPublica,
+                              ),
+                              icon: const Icon(Icons.scoreboard_outlined),
+                              label: const Text('Puntos de licencia'),
+                            ),
+                            TextButton.icon(
+                              onPressed: () => Navigator.pushNamed(
+                                context,
+                                AppRoutes.culturaVialJoin,
+                              ),
+                              icon: const Icon(Icons.sports_esports),
+                              label: const Text('Juego con código'),
+                            ),
+                            TextButton.icon(
+                              onPressed: () => Navigator.pushNamed(
+                                context,
+                                AppRoutes.caleaEncuestaPublica,
+                              ),
+                              icon: const Icon(Icons.assignment_outlined),
+                              label: const Text('Encuesta con código'),
+                            ),
+                          ],
+                        ),
                       ],
                     ),
                   ),
@@ -137,29 +169,13 @@ class WelcomeScreen extends StatelessWidget {
                 const SizedBox(height: 10),
                 SizedBox(
                   width: double.infinity,
-                  child: OutlinedButton.icon(
+                  child: FilledButton.tonalIcon(
                     onPressed: () => Navigator.pushNamed(
                       context,
-                      AppRoutes.licenciasPuntosPublica,
+                      AppRoutes.registroCiudadano,
                     ),
-                    icon: const Icon(Icons.scoreboard_outlined),
-                    label: const Text(
-                      'Consultar puntos de licencia',
-                      textAlign: TextAlign.center,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 10),
-                SizedBox(
-                  width: double.infinity,
-                  child: OutlinedButton.icon(
-                    onPressed: () =>
-                        Navigator.pushNamed(context, AppRoutes.culturaVialJoin),
-                    icon: const Icon(Icons.sports_esports),
-                    label: const Text(
-                      'Entrar a juego vial',
-                      textAlign: TextAlign.center,
-                    ),
+                    icon: const Icon(Icons.person_add_alt_1),
+                    label: const Text('Crear cuenta personal'),
                   ),
                 ),
               ],

@@ -21,7 +21,9 @@ class _CaleaSurveyPublicScreenState extends State<CaleaSurveyPublicScreen> {
   String? _error;
   @override
   void dispose() {
-    for (final c in [_code, _name, _phone, _id, _email]) c.dispose();
+    for (final c in [_code, _name, _phone, _id, _email]) {
+      c.dispose();
+    }
     super.dispose();
   }
 
@@ -35,17 +37,19 @@ class _CaleaSurveyPublicScreenState extends State<CaleaSurveyPublicScreen> {
       final s = await CaleaSurveyService.publicSurvey(
         _code.text.trim().toUpperCase(),
       );
-      if (mounted)
+      if (mounted) {
         setState(() {
           _survey = s;
           _busy = false;
         });
+      }
     } catch (e) {
-      if (mounted)
+      if (mounted) {
         setState(() {
           _busy = false;
           _error = CaleaSurveyService.clean(e);
         });
+      }
     }
   }
 
@@ -72,13 +76,16 @@ class _CaleaSurveyPublicScreenState extends State<CaleaSurveyPublicScreen> {
           ),
         ),
       );
-      if (mounted) Navigator.pop(context);
+      if (mounted) {
+        Navigator.pop(context);
+      }
     } catch (e) {
-      if (mounted)
+      if (mounted) {
         setState(() {
           _busy = false;
           _error = CaleaSurveyService.clean(e);
         });
+      }
     }
   }
 
@@ -181,6 +188,7 @@ class _CaleaSurveyPublicScreenState extends State<CaleaSurveyPublicScreen> {
             const SizedBox(height: 14),
             TextFormField(
               controller: _name,
+              textCapitalization: TextCapitalization.words,
               decoration: const InputDecoration(
                 labelText: 'Nombre completo',
                 prefixIcon: Icon(Icons.person_outline),

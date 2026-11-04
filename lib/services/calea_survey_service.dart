@@ -26,8 +26,14 @@ class CaleaSurveyService {
       _list(_data(await _send('GET', '$_base/$surveyId/resultados')));
   static Future<Map<String, dynamic>> catalogs() async =>
       _map(_data(await _send('GET', '$_base/catalogos')));
+  static Future<Map<String, dynamic>> find(int surveyId) async =>
+      _map(_data(await _send('GET', '$_base/$surveyId')));
   static Future<Map<String, dynamic>> create(Map<String, dynamic> body) async =>
       _map(_data(await _send('POST', _base, body: body)));
+  static Future<Map<String, dynamic>> update(
+    int surveyId,
+    Map<String, dynamic> body,
+  ) async => _map(_data(await _send('PUT', '$_base/$surveyId', body: body)));
   static Future<Map<String, dynamic>> start(int id) async =>
       _map(_data(await _send('POST', '$_base/$id/iniciar')));
   static Future<Map<String, dynamic>> attempt(

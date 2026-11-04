@@ -12,6 +12,7 @@ import 'home_screen.dart';
 import 'home_perito_screen.dart';
 import 'grua/grua_corralon_screen.dart';
 import 'location_consent_screen.dart';
+import '../modules/cultura_vial/screens/cultura_vial_game_hub_screen.dart';
 import '../app/routes.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -40,7 +41,8 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Future<void> _login() async {
     final email = _emailController.text.trim();
-    final password = _passwordController.text.trim();
+    // A password is exact data: trimming it can change a valid credential.
+    final password = _passwordController.text;
 
     if (email.isEmpty || password.isEmpty) {
       setState(() => _error = 'Escribe tu email y contraseña');
@@ -61,6 +63,15 @@ class _LoginScreenState extends State<LoginScreen> {
       if (!mounted) return;
 
       if (result.success) {
+        if (await AuthService.isCitizen()) {
+          if (!mounted) return;
+          Navigator.pushAndRemoveUntil(
+            context,
+            MaterialPageRoute(builder: (_) => const CulturaVialGameHubScreen()),
+            (_) => false,
+          );
+          return;
+        }
         final isGrua = await AuthService.isGruaUser();
         if (!isGrua) {
           await OfflineSyncService.initialize();
@@ -254,6 +265,18 @@ class _LoginScreenState extends State<LoginScreen> {
                                   onPressed: () => Navigator.pushNamed(
                                     context,
                                     AppRoutes.caleaEncuestaPublica,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 10),
+                              SizedBox(
+                                width: double.infinity,
+                                child: FilledButton.tonalIcon(
+                                  icon: const Icon(Icons.person_add_alt_1),
+                                  label: const Text('Crear cuenta personal'),
+                                  onPressed: () => Navigator.pushNamed(
+                                    context,
+                                    AppRoutes.registroCiudadano,
                                   ),
                                 ),
                               ),

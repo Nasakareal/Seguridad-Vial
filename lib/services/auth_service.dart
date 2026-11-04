@@ -31,6 +31,27 @@ class AuthLoginResult {
        );
 }
 
+class AuthRegistrationResult {
+  final bool success;
+  final String? message;
+  final bool accountAlreadyExists;
+
+  const AuthRegistrationResult._({
+    required this.success,
+    this.message,
+    this.accountAlreadyExists = false,
+  });
+  const AuthRegistrationResult.success() : this._(success: true, message: null);
+  const AuthRegistrationResult.failure(
+    String message, {
+    bool accountAlreadyExists = false,
+  }) : this._(
+         success: false,
+         message: message,
+         accountAlreadyExists: accountAlreadyExists,
+       );
+}
+
 class PasswordStrengthResult {
   final List<String> errors;
 
@@ -124,12 +145,102 @@ class AuthService {
     return result.success;
   }
 
+  /// Creates a personal public account. The API must assign the restricted
+  /// `Ciudadano` role; clients never send or choose an operational role.
+  static Future<AuthRegistrationResult> registerCitizen({
+    required String name,
+    required String email,
+    required String password,
+    required String passwordConfirmation,
+  }) async {
+    final cleanName = name.trim();
+    final cleanEmail = email.trim().toLowerCase();
+    if (cleanName.length < 3) {
+      return const AuthRegistrationResult.failure(
+        'Escribe tu nombre completo.',
+      );
+    }
+    if (!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(cleanEmail)) {
+      return const AuthRegistrationResult.failure(
+        'Escribe un correo electrónico válido.',
+      );
+    }
+    if (password.length < 8) {
+      return const AuthRegistrationResult.failure(
+        'La contraseña debe tener al menos 8 caracteres.',
+      );
+    }
+    if (password != passwordConfirmation) {
+      return const AuthRegistrationResult.failure(
+        'Las contraseñas no coinciden.',
+      );
+    }
+
+    try {
+      final response = await http
+          .post(
+            Uri.parse('$_baseUrl/register'),
+            headers: const {
+              'Accept': 'application/json',
+              'Content-Type': 'application/json',
+            },
+            body: jsonEncode(<String, String>{
+              'name': cleanName,
+              'email': cleanEmail,
+              'password': password,
+              'password_confirmation': passwordConfirmation,
+              'account_type': 'ciudadano',
+            }),
+          )
+          .timeout(const Duration(seconds: 15));
+
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        return AuthRegistrationResult.failure(
+          _parseRegistrationError(response.body, response.statusCode),
+          accountAlreadyExists: _isRegistrationEmailConflict(
+            response.body,
+            response.statusCode,
+          ),
+        );
+      }
+      return const AuthRegistrationResult.success();
+    } on TimeoutException {
+      return const AuthRegistrationResult.failure(
+        'El servidor tardó demasiado. Intenta nuevamente.',
+      );
+    } catch (_) {
+      return const AuthRegistrationResult.failure(
+        'No fue posible conectar con el servidor.',
+      );
+    }
+  }
+
+  static Future<bool> isCitizen() async {
+    final role = (await getRole() ?? '')
+        .trim()
+        .toLowerCase()
+        .replaceAll(RegExp(r'[áàä]'), 'a')
+        .replaceAll(RegExp(r'[éèë]'), 'e')
+        .replaceAll(RegExp(r'[íìï]'), 'i')
+        .replaceAll(RegExp(r'[óòö]'), 'o')
+        .replaceAll(RegExp(r'[úùü]'), 'u');
+    return const {
+      'ciudadano',
+      'ciudadana',
+      'publico',
+      'usuario publico',
+    }.contains(role);
+  }
+
   static Future<AuthLoginResult> loginDetailed({
     required String email,
     required String password,
   }) async {
     try {
-      final loginBody = <String, String>{'email': email, 'password': password};
+      final loginBody = <String, String>{
+        'email': email.trim().toLowerCase(),
+        'password': password,
+      };
       loginBody.addAll(await _mobileSessionPayload(includeOnAnyMobile: true));
 
       final response = await http
@@ -2034,6 +2145,12 @@ class AuthService {
   }
 
   static String _parseLoginError(String body, int statusCode) {
+    if (statusCode == 429) {
+      return 'Demasiados intentos de inicio de sesión. Espera un minuto y vuelve a intentar.';
+    }
+    if (statusCode >= 500) {
+      return 'El servidor no pudo iniciar la sesión. Intenta nuevamente en unos momentos.';
+    }
     if (_isSingleMobileSessionConflict(body, statusCode)) {
       return _singleMobileSessionMessage;
     }
@@ -2043,6 +2160,29 @@ class AuthService {
       statusCode,
       fallback: 'Credenciales incorrectas.',
     );
+  }
+
+  static String _parseRegistrationError(String body, int statusCode) {
+    final parsed = _parseAuthError(
+      body,
+      statusCode,
+      fallback: 'No fue posible crear la cuenta.',
+    );
+    if (statusCode == 409 ||
+        (statusCode == 422 && body.toLowerCase().contains('email'))) {
+      return 'Ya existe una cuenta con ese correo electrónico.';
+    }
+    return parsed;
+  }
+
+  static bool _isRegistrationEmailConflict(String body, int statusCode) {
+    if (statusCode != 409 && statusCode != 422) return false;
+    final normalized = body.toLowerCase();
+    return normalized.contains('email') &&
+        (normalized.contains('registrado') ||
+            normalized.contains('taken') ||
+            normalized.contains('exists') ||
+            normalized.contains('existe'));
   }
 
   static const String _singleMobileSessionMessage =

@@ -1,30 +1,83 @@
 import 'package:flutter/material.dart';
 import '../../services/calea_survey_service.dart';
 
+String foldCaleaSurveySearch(String value) {
+  const accented = 'áéíóúüñÁÉÍÓÚÜÑ';
+  const plain = 'aeiouunAEIOUUN';
+  var result = value;
+  for (var i = 0; i < accented.length; i++) {
+    result = result.replaceAll(accented[i], plain[i]);
+  }
+  return result.toLowerCase();
+}
+
 class CaleaSurveyFormScreen extends StatefulWidget {
-  const CaleaSurveyFormScreen({super.key});
+  final int? surveyId;
+  const CaleaSurveyFormScreen({super.key, this.surveyId});
   @override
   State<CaleaSurveyFormScreen> createState() => _CaleaSurveyFormScreenState();
 }
 
 class _QuestionDraft {
+  final int? id;
   final text = TextEditingController();
-  final options = [TextEditingController(), TextEditingController()];
+  final List<_OptionDraft> options;
   int correct = 0;
+
+  _QuestionDraft({this.id, List<_OptionDraft>? options})
+    : options = options ?? [_OptionDraft(), _OptionDraft()];
+
+  factory _QuestionDraft.fromMap(Map<String, dynamic> row) {
+    final options = (row['opciones'] as List? ?? const [])
+        .whereType<Map>()
+        .map((e) => _OptionDraft.fromMap(Map<String, dynamic>.from(e)))
+        .toList();
+    final draft = _QuestionDraft(
+      id: int.tryParse('${row['id']}'),
+      options: options.isEmpty ? null : options,
+    );
+    draft.text.text = '${row['texto'] ?? ''}';
+    final correct = draft.options.indexWhere((o) => o.correct);
+    draft.correct = correct < 0 ? 0 : correct;
+    return draft;
+  }
+
   void dispose() {
     text.dispose();
-    for (final o in options) o.dispose();
+    for (final o in options) {
+      o.dispose();
+    }
   }
+}
+
+class _OptionDraft {
+  final int? id;
+  final bool correct;
+  final text = TextEditingController();
+
+  _OptionDraft({this.id, this.correct = false});
+
+  factory _OptionDraft.fromMap(Map<String, dynamic> row) {
+    final draft = _OptionDraft(
+      id: int.tryParse('${row['id']}'),
+      correct: row['es_correcta'] == true,
+    );
+    draft.text.text = '${row['texto'] ?? ''}';
+    return draft;
+  }
+
+  void dispose() => text.dispose();
 }
 
 class _CaleaSurveyFormScreenState extends State<CaleaSurveyFormScreen> {
   final _form = GlobalKey<FormState>();
   final _title = TextEditingController(),
-      _description = TextEditingController();
+      _description = TextEditingController(),
+      _userSearch = TextEditingController();
   final List<_QuestionDraft> _questions = [_QuestionDraft()];
   Map<String, dynamic>? _catalogs;
   int _minutes = 10, _passing = 70;
-  bool _public = false, _saving = false;
+  bool _public = false, _saving = false, _questionsLocked = false;
   String _assignment = 'unidad';
   int? _unitId;
   final Set<int> _users = {};
@@ -38,26 +91,67 @@ class _CaleaSurveyFormScreenState extends State<CaleaSurveyFormScreen> {
   void dispose() {
     _title.dispose();
     _description.dispose();
-    for (final q in _questions) q.dispose();
+    _userSearch.dispose();
+    for (final q in _questions) {
+      q.dispose();
+    }
     super.dispose();
   }
 
   Future<void> _load() async {
     try {
       final c = await CaleaSurveyService.catalogs();
+      final survey = widget.surveyId == null
+          ? null
+          : await CaleaSurveyService.find(widget.surveyId!);
       final units = c['unidades'] as List? ?? [];
-      if (mounted)
+      if (mounted) {
+        if (survey != null) {
+          _title.text = '${survey['titulo'] ?? ''}';
+          _description.text = '${survey['descripcion'] ?? ''}';
+          _minutes = int.tryParse('${survey['duracion_minutos']}') ?? 10;
+          _passing = int.tryParse('${survey['calificacion_minima']}') ?? 70;
+          _public = survey['permite_externos'] == true;
+          _questionsLocked = (survey['intentos_count'] as num? ?? 0) > 0;
+          final assignment = survey['asignacion'] is Map
+              ? Map<String, dynamic>.from(survey['asignacion'] as Map)
+              : <String, dynamic>{};
+          _assignment = '${assignment['tipo'] ?? 'unidad'}';
+          _unitId = int.tryParse('${assignment['unidad_id']}');
+          _users
+            ..clear()
+            ..addAll(
+              (assignment['usuarios'] as List? ?? const [])
+                  .map((id) => int.tryParse('$id'))
+                  .whereType<int>(),
+            );
+          for (final q in _questions) {
+            q.dispose();
+          }
+          _questions
+            ..clear()
+            ..addAll(
+              (survey['preguntas'] as List? ?? const []).whereType<Map>().map(
+                (q) => _QuestionDraft.fromMap(Map<String, dynamic>.from(q)),
+              ),
+            );
+        }
         setState(() {
           _catalogs = c;
-          if (units.isNotEmpty)
+          if (_unitId == null && units.isNotEmpty) {
             _unitId = int.tryParse('${(units.first as Map)['id']}');
-          if (c['alcance_global'] != true) _assignment = 'unidad';
+          }
+          if (c['alcance_global'] != true) {
+            _assignment = 'unidad';
+          }
         });
+      }
     } catch (e) {
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text(CaleaSurveyService.clean(e))));
+      }
     }
   }
 
@@ -71,7 +165,7 @@ class _CaleaSurveyFormScreenState extends State<CaleaSurveyFormScreen> {
     }
     setState(() => _saving = true);
     try {
-      await CaleaSurveyService.create({
+      final payload = <String, dynamic>{
         'titulo': _title.text.trim(),
         'descripcion': _description.text.trim(),
         'duracion_minutos': _minutes,
@@ -89,12 +183,14 @@ class _CaleaSurveyFormScreenState extends State<CaleaSurveyFormScreen> {
                 'texto': q.text.text.trim(),
                 'tipo': 'opcion_unica',
                 'puntos': 1,
+                if (q.id != null) 'id': q.id,
                 'opciones': q.options
                     .asMap()
                     .entries
                     .map(
                       (e) => {
-                        'texto': e.value.text.trim(),
+                        if (e.value.id != null) 'id': e.value.id,
+                        'texto': e.value.text.text.trim(),
                         'es_correcta': e.key == q.correct,
                       },
                     )
@@ -102,7 +198,12 @@ class _CaleaSurveyFormScreenState extends State<CaleaSurveyFormScreen> {
               },
             )
             .toList(),
-      });
+      };
+      if (widget.surveyId == null) {
+        await CaleaSurveyService.create(payload);
+      } else {
+        await CaleaSurveyService.update(widget.surveyId!, payload);
+      }
       if (mounted) Navigator.pop(context, true);
     } catch (e) {
       if (mounted) {
@@ -126,12 +227,26 @@ class _CaleaSurveyFormScreenState extends State<CaleaSurveyFormScreen> {
     final users = (_catalogs?['usuarios'] as List? ?? const [])
         .whereType<Map>()
         .toList();
+    final query = foldCaleaSurveySearch(_userSearch.text.trim());
+    final visibleUsers = query.isEmpty
+        ? users
+        : users
+              .where(
+                (u) => foldCaleaSurveySearch(
+                  '${u['name']} ${u['email']}',
+                ).contains(query),
+              )
+              .toList();
     return Scaffold(
       backgroundColor: const Color(0xFFF4F6F8),
       appBar: AppBar(
         backgroundColor: const Color(0xFF102A43),
         foregroundColor: Colors.white,
-        title: const Text('Nueva encuesta CALEA'),
+        title: Text(
+          widget.surveyId == null
+              ? 'Nueva encuesta CALEA'
+              : 'Editar encuesta CALEA',
+        ),
       ),
       body: _catalogs == null
           ? const Center(child: CircularProgressIndicator())
@@ -143,6 +258,7 @@ class _CaleaSurveyFormScreenState extends State<CaleaSurveyFormScreen> {
                   _section('Identidad y reglas', Icons.badge_outlined, [
                     TextFormField(
                       controller: _title,
+                      textCapitalization: TextCapitalization.sentences,
                       decoration: const InputDecoration(
                         labelText: 'Título de la encuesta',
                         border: OutlineInputBorder(),
@@ -152,6 +268,7 @@ class _CaleaSurveyFormScreenState extends State<CaleaSurveyFormScreen> {
                     const SizedBox(height: 12),
                     TextFormField(
                       controller: _description,
+                      textCapitalization: TextCapitalization.sentences,
                       maxLines: 3,
                       decoration: const InputDecoration(
                         labelText: 'Descripción e instrucciones',
@@ -262,6 +379,29 @@ class _CaleaSurveyFormScreenState extends State<CaleaSurveyFormScreen> {
                     ],
                     if (_assignment == 'usuarios') ...[
                       const SizedBox(height: 10),
+                      TextField(
+                        controller: _userSearch,
+                        onChanged: (_) => setState(() {}),
+                        decoration: InputDecoration(
+                          labelText: 'Buscar usuario específico',
+                          hintText: 'Nombre o correo; acepta acentos',
+                          prefixIcon: const Icon(Icons.search),
+                          suffixIcon: _userSearch.text.isEmpty
+                              ? null
+                              : IconButton(
+                                  onPressed: () =>
+                                      setState(() => _userSearch.clear()),
+                                  icon: const Icon(Icons.clear),
+                                ),
+                          border: const OutlineInputBorder(),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        '${_users.length} usuario(s) seleccionado(s)',
+                        style: const TextStyle(fontWeight: FontWeight.w700),
+                      ),
+                      const SizedBox(height: 8),
                       Container(
                         constraints: const BoxConstraints(maxHeight: 240),
                         decoration: BoxDecoration(
@@ -270,7 +410,7 @@ class _CaleaSurveyFormScreenState extends State<CaleaSurveyFormScreen> {
                         ),
                         child: ListView(
                           shrinkWrap: true,
-                          children: users.map((u) {
+                          children: visibleUsers.map((u) {
                             final id = int.parse('${u['id']}');
                             return CheckboxListTile(
                               value: _users.contains(id),
@@ -291,12 +431,24 @@ class _CaleaSurveyFormScreenState extends State<CaleaSurveyFormScreen> {
                   ..._questions.asMap().entries.map(
                     (entry) => _question(entry.key, entry.value),
                   ),
-                  OutlinedButton.icon(
-                    onPressed: () =>
-                        setState(() => _questions.add(_QuestionDraft())),
-                    icon: const Icon(Icons.add),
-                    label: const Text('Agregar pregunta'),
-                  ),
+                  if (_questionsLocked)
+                    const Card(
+                      color: Color(0xFFFFF4D1),
+                      child: Padding(
+                        padding: EdgeInsets.all(12),
+                        child: Text(
+                          'Ya existen respuestas. Puedes corregir textos y acentos, pero no cambiar la estructura ni la respuesta correcta.',
+                          style: TextStyle(fontWeight: FontWeight.w700),
+                        ),
+                      ),
+                    )
+                  else
+                    OutlinedButton.icon(
+                      onPressed: () =>
+                          setState(() => _questions.add(_QuestionDraft())),
+                      icon: const Icon(Icons.add),
+                      label: const Text('Agregar pregunta'),
+                    ),
                   const SizedBox(height: 18),
                   FilledButton.icon(
                     onPressed: _saving ? null : _save,
@@ -307,10 +459,12 @@ class _CaleaSurveyFormScreenState extends State<CaleaSurveyFormScreen> {
                             child: CircularProgressIndicator(strokeWidth: 2),
                           )
                         : const Icon(Icons.rocket_launch_outlined),
-                    label: const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 15),
+                    label: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 15),
                       child: Text(
-                        'Publicar y asignar encuesta',
+                        widget.surveyId == null
+                            ? 'Publicar y asignar encuesta'
+                            : 'Guardar cambios',
                         style: TextStyle(fontWeight: FontWeight.w900),
                       ),
                     ),
@@ -358,6 +512,7 @@ class _CaleaSurveyFormScreenState extends State<CaleaSurveyFormScreen> {
       child: _section('Pregunta ${index + 1}', Icons.quiz_outlined, [
         TextFormField(
           controller: q.text,
+          textCapitalization: TextCapitalization.sentences,
           maxLines: 2,
           decoration: const InputDecoration(
             labelText: 'Enunciado',
@@ -378,11 +533,14 @@ class _CaleaSurveyFormScreenState extends State<CaleaSurveyFormScreen> {
                 Radio<int>(
                   value: entry.key,
                   groupValue: q.correct,
-                  onChanged: (v) => setState(() => q.correct = v ?? 0),
+                  onChanged: _questionsLocked
+                      ? null
+                      : (v) => setState(() => q.correct = v ?? 0),
                 ),
                 Expanded(
                   child: TextFormField(
-                    controller: entry.value,
+                    controller: entry.value.text,
+                    textCapitalization: TextCapitalization.sentences,
                     decoration: InputDecoration(
                       labelText: 'Opción ${entry.key + 1}',
                       border: const OutlineInputBorder(),
@@ -390,7 +548,7 @@ class _CaleaSurveyFormScreenState extends State<CaleaSurveyFormScreen> {
                     validator: _required,
                   ),
                 ),
-                if (q.options.length > 2)
+                if (!_questionsLocked && q.options.length > 2)
                   IconButton(
                     onPressed: () {
                       setState(() {
@@ -406,12 +564,13 @@ class _CaleaSurveyFormScreenState extends State<CaleaSurveyFormScreen> {
           );
         }),
         OutlinedButton.icon(
-          onPressed: () =>
-              setState(() => q.options.add(TextEditingController())),
+          onPressed: _questionsLocked
+              ? null
+              : () => setState(() => q.options.add(_OptionDraft())),
           icon: const Icon(Icons.add),
           label: const Text('Agregar opción'),
         ),
-        if (_questions.length > 1)
+        if (!_questionsLocked && _questions.length > 1)
           Align(
             alignment: Alignment.centerRight,
             child: TextButton.icon(

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../../app/routes.dart';
 import '../../services/auth_service.dart';
 import '../../services/calea_survey_service.dart';
@@ -6,6 +7,7 @@ import '../../services/tracking_service.dart';
 import '../../widgets/account_drawer.dart';
 import '../login_screen.dart';
 import 'calea_survey_attempt_screen.dart';
+import 'calea_survey_form_screen.dart';
 
 class CaleaSurveysScreen extends StatefulWidget {
   const CaleaSurveysScreen({super.key});
@@ -36,18 +38,20 @@ class _CaleaSurveysScreenState extends State<CaleaSurveysScreen> {
       final managed = _admin
           ? await CaleaSurveyService.managed()
           : <Map<String, dynamic>>[];
-      if (mounted)
+      if (mounted) {
         setState(() {
           _active = active;
           _managed = managed;
           _loading = false;
         });
+      }
     } catch (e) {
-      if (mounted)
+      if (mounted) {
         setState(() {
           _loading = false;
           _error = CaleaSurveyService.clean(e);
         });
+      }
     }
   }
 
@@ -56,12 +60,13 @@ class _CaleaSurveysScreenState extends State<CaleaSurveysScreen> {
       await TrackingService.stop();
     } catch (_) {}
     await AuthService.logout();
-    if (mounted)
+    if (mounted) {
       Navigator.pushAndRemoveUntil(
         context,
         MaterialPageRoute(builder: (_) => const LoginScreen()),
         (_) => false,
       );
+    }
   }
 
   Future<void> _start(Map<String, dynamic> survey) async {
@@ -97,6 +102,26 @@ class _CaleaSurveysScreenState extends State<CaleaSurveysScreen> {
       isScrollControlled: true,
       builder: (_) => _ResultsSheet(survey: survey, onChanged: _load),
     );
+  }
+
+  Future<void> _edit(Map<String, dynamic> survey) async {
+    final changed = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (_) =>
+            CaleaSurveyFormScreen(surveyId: int.parse('${survey['id']}')),
+      ),
+    );
+    if (changed == true) await _load();
+  }
+
+  Future<void> _copyPublicCode(String code) async {
+    await Clipboard.setData(ClipboardData(text: code));
+    if (mounted) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Código $code copiado.')));
+    }
   }
 
   @override
@@ -290,6 +315,73 @@ class _CaleaSurveysScreenState extends State<CaleaSurveysScreen> {
                     _chip(Icons.circle_outlined, status.replaceAll('_', ' ')),
                 ],
               ),
+              if (admin) ...[
+                const SizedBox(height: 12),
+                if (e['permite_externos'] == true &&
+                    '${e['codigo_publico'] ?? ''}'.isNotEmpty)
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFE8F5E9),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.green.shade200),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.key, color: Color(0xFF24713B)),
+                        const SizedBox(width: 9),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'Código para contestar sin cuenta',
+                                style: TextStyle(fontSize: 12),
+                              ),
+                              SelectableText(
+                                '${e['codigo_publico']}',
+                                style: const TextStyle(
+                                  fontSize: 19,
+                                  fontWeight: FontWeight.w900,
+                                  letterSpacing: 1.5,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        IconButton(
+                          tooltip: 'Copiar código',
+                          onPressed: () =>
+                              _copyPublicCode('${e['codigo_publico']}'),
+                          icon: const Icon(Icons.copy),
+                        ),
+                      ],
+                    ),
+                  )
+                else
+                  const Text(
+                    'Acceso sin cuenta desactivado',
+                    style: TextStyle(color: Colors.blueGrey),
+                  ),
+                const SizedBox(height: 8),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    TextButton.icon(
+                      onPressed: () => _edit(e),
+                      icon: const Icon(Icons.edit_outlined),
+                      label: const Text('Editar'),
+                    ),
+                    const SizedBox(width: 6),
+                    FilledButton.tonalIcon(
+                      onPressed: () => _openResults(e),
+                      icon: const Icon(Icons.visibility_outlined),
+                      label: const Text('Ver respuestas'),
+                    ),
+                  ],
+                ),
+              ],
             ],
           ),
         ),
@@ -411,27 +503,74 @@ class _ResultsSheetState extends State<_ResultsSheet> {
                     itemBuilder: (_, i) {
                       final r = rows[i];
                       final userId = r['user_id'];
-                      return ListTile(
-                        leading: CircleAvatar(
-                          child: Icon(
-                            r['estado'] == 'finalizado'
-                                ? Icons.check
-                                : Icons.person_outline,
+                      final answers = (r['respuestas'] as List? ?? const [])
+                          .whereType<Map>()
+                          .toList();
+                      return Card(
+                        margin: const EdgeInsets.fromLTRB(12, 5, 12, 5),
+                        child: ExpansionTile(
+                          leading: CircleAvatar(
+                            child: Icon(
+                              r['estado'] == 'finalizado'
+                                  ? Icons.check
+                                  : Icons.person_outline,
+                            ),
                           ),
+                          title: Text(
+                            '${r['participante']}',
+                            style: const TextStyle(fontWeight: FontWeight.w800),
+                          ),
+                          subtitle: Text(
+                            '${r['estado']} · Calificación: ${r['calificacion'] ?? '—'}'
+                            '${r['identificador'] == null ? '' : ' · ${r['identificador']}'}',
+                          ),
+                          trailing: userId == null
+                              ? const Icon(Icons.expand_more)
+                              : FilledButton.tonal(
+                                  onPressed: () => _reauthorize(r),
+                                  child: const Text('Reautorizar'),
+                                ),
+                          children: [
+                            if (answers.isEmpty)
+                              const ListTile(
+                                title: Text('Aún no hay respuestas guardadas.'),
+                              )
+                            else
+                              ...answers.asMap().entries.map((entry) {
+                                final answer = entry.value;
+                                final correct = answer['correcta'];
+                                return ListTile(
+                                  isThreeLine: true,
+                                  leading: CircleAvatar(
+                                    radius: 14,
+                                    backgroundColor: correct == true
+                                        ? Colors.green.shade100
+                                        : correct == false
+                                        ? Colors.red.shade100
+                                        : Colors.blueGrey.shade100,
+                                    child: Text('${entry.key + 1}'),
+                                  ),
+                                  title: Text('${answer['pregunta']}'),
+                                  subtitle: Text(
+                                    'Respondió: ${answer['respuesta'] ?? 'Sin respuesta'}',
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                  trailing: correct == null
+                                      ? null
+                                      : Icon(
+                                          correct == true
+                                              ? Icons.check_circle
+                                              : Icons.cancel,
+                                          color: correct == true
+                                              ? Colors.green
+                                              : Colors.red,
+                                        ),
+                                );
+                              }),
+                          ],
                         ),
-                        title: Text(
-                          '${r['participante']}',
-                          style: const TextStyle(fontWeight: FontWeight.w800),
-                        ),
-                        subtitle: Text(
-                          '${r['estado']} · Calificación: ${r['calificacion'] ?? '—'}',
-                        ),
-                        trailing: userId == null
-                            ? null
-                            : FilledButton.tonal(
-                                onPressed: () => _reauthorize(r),
-                                child: const Text('Reautorizar'),
-                              ),
                       );
                     },
                   );

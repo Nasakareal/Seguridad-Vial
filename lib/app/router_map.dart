@@ -13,6 +13,9 @@ import '../services/comunicacion_service.dart';
 
 import '../models/conduce_legalidad.dart';
 import '../screens/login_screen.dart';
+import '../screens/publico/registro_ciudadano_screen.dart';
+import '../modules/cultura_vial/academy/screens/academia_vial_screen.dart';
+import '../modules/cultura_vial/screens/cultura_vial_game_hub_screen.dart';
 import '../screens/home_agente_vial_screen.dart';
 import '../screens/home_agente_upec_screen.dart';
 import '../screens/home_delegaciones_screen.dart';
@@ -138,6 +141,10 @@ import '../widgets/superadmin_guard.dart';
 
 final Map<String, WidgetBuilder> appRoutesMap = {
   AppRoutes.login: (context) => const LoginScreen(),
+  AppRoutes.registroCiudadano: (context) => const RegistroCiudadanoScreen(),
+  AppRoutes.michoacanAlVolante: (context) => const CulturaVialGameHubScreen(),
+  AppRoutes.academiaVial: (context) => const AcademiaVialScreen(),
+  AppRoutes.misionesViales: (context) => const CulturaVialGameHubScreen(),
   AppRoutes.home: (context) => const HomeScreen(),
   AppRoutes.gruaCorralon: (context) => const GruaCorralonScreen(),
   AppRoutes.homePerito: (context) => const HomePeritoScreen(),
