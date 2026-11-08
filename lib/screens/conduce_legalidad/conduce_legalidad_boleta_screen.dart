@@ -816,6 +816,7 @@ class _BoletaPaper extends StatelessWidget {
                 label: 'Trámite',
                 value: _informacionLiberacionVehiculo,
               ),
+              const _LiberacionRequirementsTable(),
             ],
             const _TicketDivider(),
             const _TicketSection('LICENCIA O PERMISO'),
@@ -990,7 +991,7 @@ class ConduceLegalidadInventarioLegalText {
   const ConduceLegalidadInventarioLegalText._();
 
   static const String article352Notice =
-      'Inventario elaborado antes de iniciar el arrastre y sellado del vehículo, conforme al artículo 352. Las condiciones, daños y objetos asentados se reciben para su guarda y custodia.';
+      'Inventario elaborado antes de iniciar el arrastre y sellado del vehículo, conforme al artículo 352 de la Ley de Movilidad y Seguridad Vial del Estado de Michoacán de Ocampo. Las condiciones, daños y objetos asentados se reciben para su guarda y custodia.';
 }
 
 class _InventarioPaper extends StatelessWidget {
@@ -1456,6 +1457,11 @@ void _writeThermalTicket(
     ticket.rule();
     ticket.section('LIBERACIÓN DEL VEHÍCULO');
     ticket.block('Trámite', data.informacionLiberacionVehiculo);
+    ticket.compactColumns('REQUISITO', 'FUNDAMENTO');
+    for (final requisito
+        in ConduceLegalidadBoletaLegalText.requisitosLiberacion) {
+      ticket.compactColumns(requisito.requisito, requisito.fundamentoCompacto);
+    }
   }
   ticket.rule();
   ticket.section('LICENCIA O PERMISO');
@@ -1814,6 +1820,27 @@ class ThermalTicketRowFormatter {
     _writeWrappedParagraphs(value, indent: 2);
   }
 
+  void compactColumns(String left, String right) {
+    final rightWidth = width >= 48 ? 15 : 12;
+    const gap = 1;
+    final leftWidth = width - rightWidth - gap;
+    final leftLines = _wrapText(left, leftWidth);
+    final rightLines = _wrapText(right, rightWidth);
+    final rows = leftLines.length > rightLines.length
+        ? leftLines.length
+        : rightLines.length;
+
+    for (var index = 0; index < rows; index += 1) {
+      final leftLine = index < leftLines.length ? leftLines[index] : '';
+      final rightIndex = index - (rows - rightLines.length);
+      final rightLine = rightIndex >= 0 && rightIndex < rightLines.length
+          ? rightLines[rightIndex]
+          : '';
+      final padding = leftWidth - leftLine.length;
+      line('$leftLine${repeat(' ', padding + gap)}$rightLine');
+    }
+  }
+
   void rule() {
     line(repeat('-', width));
   }
@@ -1879,9 +1906,74 @@ class _BoletaInfractionEntry {
   });
 }
 
+class LiberacionRequisito {
+  final String requisito;
+  final String fundamento;
+  final String fundamentoCompacto;
+
+  const LiberacionRequisito(
+    this.requisito,
+    this.fundamento,
+    this.fundamentoCompacto,
+  );
+}
+
 class ConduceLegalidadBoletaLegalText {
   static const String _normativa =
       'del Reglamento de la Ley de Movilidad y Seguridad Vial del Estado de Michoacán';
+
+  static const List<LiberacionRequisito>
+  requisitosLiberacion = <LiberacionRequisito>[
+    LiberacionRequisito(
+      'Solicitud de liberación',
+      'Art. 672, fracc. I, inciso a)',
+      'Art. 672-I-a)',
+    ),
+    LiberacionRequisito(
+      'Identificación oficial vigente',
+      'Art. 672, fracc. I, inciso b)',
+      'Art. 672-I-b)',
+    ),
+    LiberacionRequisito(
+      'Factura, carta factura vigente o acreditación de posesión legítima mediante tarjeta de circulación',
+      'Art. 672, fracc. I, inciso c)',
+      'Art. 672-I-c)',
+    ),
+    LiberacionRequisito(
+      'Tarjeta de circulación y placa o permiso provisional vigentes, según corresponda',
+      'Art. 672, fracc. I, inciso d)',
+      'Art. 672-I-d)',
+    ),
+    LiberacionRequisito(
+      'Licencia de conducir correspondiente',
+      'Art. 510',
+      'Art. 510',
+    ),
+    LiberacionRequisito(
+      'Estar al corriente en pagos de placas y/o refrendos',
+      'Art. 510',
+      'Art. 510',
+    ),
+    LiberacionRequisito(
+      'Oficio de liberación para retirar el vehículo del depósito',
+      'Art. 673, fracc. I',
+      'Art. 673-I',
+    ),
+    LiberacionRequisito(
+      'Pago de arrastre, salvamento y depósito, cuando procedan',
+      'Art. 673, fracc. III',
+      'Art. 673-III',
+    ),
+  ];
+
+  static String get requisitosLiberacionTexto => requisitosLiberacion
+      .asMap()
+      .entries
+      .map(
+        (entry) =>
+            '${entry.key + 1}. ${entry.value.requisito} — ${entry.value.fundamento}',
+      )
+      .join('\n');
 
   static String fundamentoInfraccion(
     ConduceLegalidadCaptura captura,
@@ -2480,6 +2572,53 @@ class _TicketBlock extends StatelessWidget {
           Text('$label:', style: const TextStyle(fontWeight: FontWeight.w800)),
           const SizedBox(height: 1),
           Text(value),
+        ],
+      ),
+    );
+  }
+}
+
+class _LiberacionRequirementsTable extends StatelessWidget {
+  const _LiberacionRequirementsTable();
+
+  @override
+  Widget build(BuildContext context) {
+    const headerStyle = TextStyle(fontWeight: FontWeight.w900, fontSize: 9);
+    const cellStyle = TextStyle(fontSize: 9, height: 1.12);
+    const border = BorderSide(color: Colors.black, width: 0.45);
+
+    Widget row(String requisito, String fundamento, {bool header = false}) {
+      final style = header ? headerStyle : cellStyle;
+      return DecoratedBox(
+        decoration: const BoxDecoration(border: Border(bottom: border)),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 2),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(flex: 7, child: Text(requisito, style: style)),
+              const SizedBox(width: 5),
+              Expanded(flex: 3, child: Text(fundamento, style: style)),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 5),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Text(
+            'REQUISITOS PARA LA LIBERACIÓN',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontWeight: FontWeight.w900, fontSize: 10),
+          ),
+          row('REQUISITO', 'FUNDAMENTO', header: true),
+          for (final item
+              in ConduceLegalidadBoletaLegalText.requisitosLiberacion)
+            row(item.requisito, item.fundamento),
         ],
       ),
     );

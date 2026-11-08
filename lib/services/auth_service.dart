@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/platform_support.dart';
+import 'auth_session_events.dart';
 import 'push_service.dart';
 
 class AuthLoginResult {
@@ -1484,6 +1485,24 @@ class AuthService {
     } catch (_) {}
   }
 
+  /// Actualiza adscripción, delegación, destacamento, rol y permisos sin
+  /// obligar a cerrar sesión. Un 401/419 se comunica al navegador global para
+  /// que una revocación remota sí lleve inmediatamente al inicio de sesión.
+  static Future<void> refreshSessionContext() async {
+    final token = await getToken();
+    if (token == null || token.trim().isEmpty) return;
+
+    final previousScope = _organizationalScope(await getStoredUserPayload());
+    try {
+      final payload = await _refreshCurrentUserProfile();
+      if (previousScope != _organizationalScope(payload)) {
+        try {
+          await refreshPermissions();
+        } catch (_) {}
+      }
+    } catch (_) {}
+  }
+
   static Future<bool> isVialidadesUrbanasUser({bool refresh = false}) async {
     if (refresh) {
       await refreshCurrentUserAccess();
@@ -1778,7 +1797,7 @@ class AuthService {
         .timeout(const Duration(seconds: 10));
 
     if (_isInvalidSessionStatus(res.statusCode)) {
-      await _clearLocalSession();
+      await _clearLocalSession(notifySignedOut: true);
       return const <String>[];
     }
 
@@ -1994,7 +2013,7 @@ class AuthService {
     return PasswordStrengthResult(errors);
   }
 
-  static Future<void> _clearLocalSession() async {
+  static Future<void> _clearLocalSession({bool notifySignedOut = false}) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_tokenKey);
     await prefs.remove(_roleKey);
@@ -2008,6 +2027,9 @@ class AuthService {
     await prefs.remove(_delegacionIdKey);
     await prefs.remove(_destacamentoIdKey);
     await prefs.remove(_sessionOwnerKeyKey);
+    if (notifySignedOut) {
+      AuthSessionEvents.signedOut();
+    }
   }
 
   static Future<Map<String, dynamic>> _refreshCurrentUserProfile() async {
@@ -2052,7 +2074,7 @@ class AuthService {
     if (response.statusCode < 200 || response.statusCode >= 300) {
       if (_isInvalidSessionStatus(response.statusCode) ||
           _isSingleMobileSessionConflict(response.body, response.statusCode)) {
-        await _clearLocalSession();
+        await _clearLocalSession(notifySignedOut: true);
       }
 
       throw Exception(
@@ -2070,6 +2092,9 @@ class AuthService {
       throw Exception('Respuesta inválida al obtener usuario actual.');
     }
 
+    final previousPayload = await getStoredUserPayload();
+    final previousScope = _organizationalScope(previousPayload);
+    final nextScope = _organizationalScope(payload);
     final prefs = await SharedPreferences.getInstance();
     await _storeUserSnapshot(prefs, payload);
     await _storeRoleSnapshot(prefs, raw, payload);
@@ -2089,7 +2114,20 @@ class AuthService {
       await prefs.setInt(_userIdKey, userId);
     }
 
+    if (previousPayload != null && previousScope != nextScope) {
+      AuthSessionEvents.organizationalContextChanged();
+    }
+
     return payload;
+  }
+
+  static String _organizationalScope(Map<String, dynamic>? payload) {
+    if (payload == null || payload.isEmpty) return '';
+    return <int?>[
+      _extractUnidadId(payload),
+      _extractDelegacionId(payload),
+      _extractDestacamentoId(payload),
+    ].map((value) => value ?? 0).join(':');
   }
 
   static String _parseAuthError(

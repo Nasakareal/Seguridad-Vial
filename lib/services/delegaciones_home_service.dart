@@ -10,7 +10,14 @@ class DelegacionesHomeService {
   static const int defaultDays = 30;
   static const int defaultWazeMinutes = 30;
   static const int defaultLimit = 350;
-  static const String _cacheKey = 'delegaciones_home_map_cache_v2';
+  static const String _cachePrefix = 'delegaciones_home_map_cache_v3';
+
+  static Future<String> _cacheKeyForCurrentScope() async {
+    final owner = (await AuthService.getSessionOwnerKey()) ?? 'sin_usuario';
+    final delegacionId = await AuthService.getDelegacionId();
+    final safeOwner = owner.replaceAll(RegExp(r'[^a-zA-Z0-9:_-]'), '_');
+    return '${_cachePrefix}_${safeOwner}_delegacion_${delegacionId ?? 0}';
+  }
 
   static Future<Map<String, String>> _headers() async {
     final token = await AuthService.getToken();
@@ -84,7 +91,7 @@ class DelegacionesHomeService {
 
   static Future<DelegacionesHomeMapData?> readCachedMapa() async {
     final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString(_cacheKey)?.trim() ?? '';
+    final raw = prefs.getString(await _cacheKeyForCurrentScope())?.trim() ?? '';
     if (raw.isEmpty) return null;
 
     try {
@@ -105,7 +112,7 @@ class DelegacionesHomeService {
   static Future<void> _storeCache(Map<String, dynamic> json) async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(_cacheKey, jsonEncode(json));
+      await prefs.setString(await _cacheKeyForCurrentScope(), jsonEncode(json));
     } catch (_) {}
   }
 }

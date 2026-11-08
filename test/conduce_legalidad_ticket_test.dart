@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:seguridad_vial_app/models/conduce_legalidad.dart';
 import 'package:seguridad_vial_app/screens/conduce_legalidad/conduce_legalidad_boleta_screen.dart';
 import 'package:seguridad_vial_app/screens/conduce_legalidad/conduce_legalidad_module.dart';
+import 'package:seguridad_vial_app/services/gruas_catalog_service.dart';
 
 void main() {
   ConduceLegalidadOperativo operativo(String tipo) {
@@ -173,6 +174,12 @@ void main() {
     expect(find.text('Domicilio del propietario / conductor:'), findsNothing);
     expect(find.text('Av. Camelinas 1000, Morelia'), findsNothing);
     expect(find.text('Objetos y accesorios inventariados:'), findsOneWidget);
+    expect(
+      find.textContaining(
+        'artículo 352 de la Ley de Movilidad y Seguridad Vial del Estado de Michoacán de Ocampo',
+      ),
+      findsOneWidget,
+    );
     expect(find.text('PROPIETARIO / CONDUCTOR'), findsOneWidget);
     expect(find.text('AGENTE QUE ELABORA'), findsOneWidget);
     expect(find.text('OPERADOR DE GRÚA'), findsOneWidget);
@@ -297,6 +304,12 @@ void main() {
 
     expect(text, contains('INVENTARIO DE VEHICULO REMITIDO'));
     expect(text, contains('ARTICULO 352'));
+    expect(
+      text.replaceAll(RegExp(r'\s+'), ' '),
+      contains(
+        'Ley de Movilidad y Seguridad Vial del Estado de Michoacan de Ocampo',
+      ),
+    );
     expect(text, contains('00042'));
     expect(text, contains('ABC-123-A'));
     expect(text, contains('Domicilio del corralon'));
@@ -309,6 +322,46 @@ void main() {
     expect(text, contains('PROPIETARIO / CONDUCTOR'));
     expect(text, contains('AGENTE QUE ELABORA'));
     expect(text, contains('OPERADOR DE GRUA'));
+  });
+
+  test('resuelve el domicilio de la grúa para la delegación del operativo', () {
+    final gruasUruapan = <Map<String, dynamic>>[
+      {
+        'id': 9,
+        'nombre': 'Grúas Mancera',
+        'direccion': 'Dirección general',
+        'ubicacion_corralon': 'Libramiento Oriente 450, Uruapan',
+        'telefono': '452 123 4567',
+      },
+    ];
+    final gruasLazaroCardenas = <Map<String, dynamic>>[
+      {
+        'id': 9,
+        'nombre': 'Grúas Mancera',
+        'direccion': 'Dirección general',
+        'corralon_direccion': 'Av. Las Palmas 800, Lázaro Cárdenas',
+        'telefono': '753 123 4567',
+      },
+    ];
+
+    expect(
+      GruasCatalogService.findCorralonDireccionById(gruasUruapan, 9),
+      'Libramiento Oriente 450, Uruapan',
+    );
+    expect(
+      GruasCatalogService.findCorralonDireccionById(gruasLazaroCardenas, 9),
+      'Av. Las Palmas 800, Lázaro Cárdenas',
+    );
+  });
+
+  test('el modelo acepta la dirección contextual publicada por el backend', () {
+    final vehiculo = ConduceLegalidadVehiculo.fromJson({
+      'grua_id': 9,
+      'grua': 'Grúas Mancera',
+      'grua_ubicacion_corralon': 'Av. Las Palmas 800, Lázaro Cárdenas',
+    });
+
+    expect(vehiculo.corralonDireccion, 'Av. Las Palmas 800, Lázaro Cárdenas');
   });
 
   test('tickets de ambos operativos usan la dirección de su delegación', () {
@@ -354,6 +407,45 @@ void main() {
     expect(texto, contains('9:00 a. m. a 3:00 p. m.'));
     expect(texto, isNot(contains('Morelia')));
     expect(texto, isNot(contains('4433163728')));
+  });
+
+  test('la boleta retenida incluye requisitos de liberación y fundamentos', () {
+    final item = ConduceLegalidadOperativo.fromJson({
+      'id': 11,
+      'nombre': 'Operativo conduce con legalidad',
+      'tipo_operativo': 'conduce_legalidad',
+      'unidad_id': 2,
+      'delegacion_id': 6,
+      'estado': 'activo',
+      'delegacion': {'id': 6, 'nombre': 'Uruapan'},
+    });
+    const captura = ConduceLegalidadCaptura(
+      id: 12,
+      operativoId: 11,
+      canEdit: true,
+      vehiculos: <ConduceLegalidadVehiculo>[
+        ConduceLegalidadVehiculo(retencionVehiculo: true),
+      ],
+      personas: <ConduceLegalidadPersona>[],
+    );
+
+    final texto = buildConduceLegalidadTicketText(
+      operativo: item,
+      captura: captura,
+    ).replaceAll(RegExp(r'\s+'), ' ');
+
+    expect(texto, contains('REQUISITO'));
+    expect(texto, contains('FUNDAMENTO'));
+    expect(texto, contains('Solicitud de liberacion'));
+    expect(texto, contains('Art. 672-I-a)'));
+    expect(texto, contains('Identificacion oficial vigente'));
+    expect(texto, contains('Art. 672-I-d)'));
+    expect(texto, contains('Licencia de conducir correspondiente'));
+    expect(texto, contains('Art. 510'));
+    expect(texto, contains('Oficio de liberacion'));
+    expect(texto, contains('Art. 673-I'));
+    expect(texto, contains('Pago de arrastre, salvamento y deposito'));
+    expect(texto, contains('Art. 673-III'));
   });
 
   test('Vialidades Urbanas en Morelia usa Justicia Cívica', () {

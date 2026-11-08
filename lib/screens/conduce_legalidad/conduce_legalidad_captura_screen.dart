@@ -2151,6 +2151,16 @@ class _VehiculoModalState extends State<_VehiculoModal> {
     );
     final gruaNombre = _nombreGruaById(_gruaIdSeleccionada);
     final corralonNombre = _nombreGruaById(_corralonGruaIdSeleccionada);
+    final corralonCatalogoId =
+        _corralonGruaIdSeleccionada ?? _gruaIdSeleccionada;
+    final corralonDireccion = GruasCatalogService.findCorralonDireccionById(
+      _gruas,
+      corralonCatalogoId,
+    );
+    final corralonTelefono = GruasCatalogService.findTelefonoById(
+      _gruas,
+      corralonCatalogoId,
+    );
 
     Navigator.pop(
       context,
@@ -2173,6 +2183,8 @@ class _VehiculoModalState extends State<_VehiculoModal> {
         corralonId: _corralonGruaIdSeleccionada,
         grua: _empty(gruaNombre),
         corralon: _empty(corralonNombre),
+        corralonDireccion: _empty(corralonDireccion ?? ''),
+        corralonTelefono: _empty(corralonTelefono ?? ''),
         aseguradora: _empty(_t(_aseguradoraCtrl)),
         montoDanos: widget.initialVehiculo?.montoDanos,
         partesDanadas: _empty(_t(_partesDanadasCtrl)),

@@ -187,6 +187,53 @@ class GruasCatalogService {
     return null;
   }
 
+  /// Devuelve el domicilio ya resuelto por el backend para el alcance del
+  /// operativo (unidad/delegación). El endpoint del operativo sustituye
+  /// `ubicacion_corralon` con la dirección correspondiente a ese alcance.
+  static String? findCorralonDireccionById(
+    List<Map<String, dynamic>> gruas,
+    int? id,
+  ) {
+    final grua = _findById(gruas, id);
+    if (grua == null) return null;
+
+    return _firstNonEmptyString(<dynamic>[
+      grua['corralon_direccion'],
+      grua['ubicacion_corralon'],
+      grua['grua_ubicacion_corralon'],
+      grua['grua_direccion'],
+      grua['direccion'],
+    ]);
+  }
+
+  static String? findTelefonoById(List<Map<String, dynamic>> gruas, int? id) {
+    final grua = _findById(gruas, id);
+    if (grua == null) return null;
+    return _firstNonEmptyString(<dynamic>[
+      grua['corralon_telefono'],
+      grua['telefono'],
+    ]);
+  }
+
+  static Map<String, dynamic>? _findById(
+    List<Map<String, dynamic>> gruas,
+    int? id,
+  ) {
+    if (id == null || id <= 0) return null;
+    for (final grua in gruas) {
+      if (idOf(grua) == id) return grua;
+    }
+    return null;
+  }
+
+  static String? _firstNonEmptyString(Iterable<dynamic> values) {
+    for (final value in values) {
+      final text = value?.toString().trim() ?? '';
+      if (text.isNotEmpty) return text;
+    }
+    return null;
+  }
+
   static List<int> extractUnidadIds(Map<String, dynamic> raw) {
     final ids = <int>{};
 

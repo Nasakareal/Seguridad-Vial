@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 
@@ -8,13 +10,67 @@ import '../widgets/offline_connection_banner.dart';
 import '../widgets/offline_sync_listener.dart';
 import '../widgets/screen_size_text_scale.dart';
 import '../widgets/unit_branding_watermark.dart';
+import '../services/auth_service.dart';
+import '../services/auth_session_events.dart';
+import 'routes.dart';
 
 import 'auth_gate.dart';
 import 'nav.dart';
 import 'router_map.dart';
 
-class SeguridadVialApp extends StatelessWidget {
+class SeguridadVialApp extends StatefulWidget {
   const SeguridadVialApp({super.key});
+
+  @override
+  State<SeguridadVialApp> createState() => _SeguridadVialAppState();
+}
+
+class _SeguridadVialAppState extends State<SeguridadVialApp> {
+  Timer? _sessionRefreshTimer;
+  int _lastSessionEventSequence = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    AuthSessionEvents.notifier.addListener(_handleSessionEvent);
+    _sessionRefreshTimer = Timer.periodic(const Duration(minutes: 1), (_) {
+      unawaited(AuthService.refreshSessionContext());
+    });
+  }
+
+  @override
+  void dispose() {
+    _sessionRefreshTimer?.cancel();
+    AuthSessionEvents.notifier.removeListener(_handleSessionEvent);
+    super.dispose();
+  }
+
+  void _handleSessionEvent() {
+    final event = AuthSessionEvents.notifier.value;
+    if (event == null || event.sequence <= _lastSessionEventSequence) return;
+    _lastSessionEventSequence = event.sequence;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final navigator = navigatorKey.currentState;
+      if (navigator == null) return;
+
+      if (event.type == AuthSessionEventType.signedOut) {
+        navigator.pushNamedAndRemoveUntil(AppRoutes.login, (_) => false);
+        return;
+      }
+
+      navigator.pushAndRemoveUntil(
+        MaterialPageRoute<void>(builder: (_) => _buildAuthRoot()),
+        (_) => false,
+      );
+    });
+  }
+
+  static Widget _buildAuthRoot() {
+    return const PushNavBinder(
+      child: AlertsListener(child: OfflineSyncListener(child: AuthGate())),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -81,9 +137,7 @@ class SeguridadVialApp extends StatelessWidget {
         }
         return WithForegroundTask(child: offlineAwareChild);
       },
-      home: const PushNavBinder(
-        child: AlertsListener(child: OfflineSyncListener(child: AuthGate())),
-      ),
+      home: _buildAuthRoot(),
       routes: appRoutesMap,
       onGenerateRoute: _generateRoute,
       onUnknownRoute: (settings) => MaterialPageRoute(

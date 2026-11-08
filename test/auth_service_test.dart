@@ -1,13 +1,84 @@
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 import 'package:seguridad_vial_app/services/auth_service.dart';
+import 'package:seguridad_vial_app/services/auth_session_events.dart';
 import 'package:seguridad_vial_app/services/home_resolver_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
   setUp(() {
     SharedPreferences.setMockInitialValues(<String, Object>{});
+    AuthSessionEvents.reset();
+  });
+
+  test(
+    'actualiza la delegación conservando token y publica cambio de contexto',
+    () async {
+      SharedPreferences.setMockInitialValues(<String, Object>{
+        'auth_token': 'token-vigente',
+        'auth_unidad_id': AuthService.unidadDelegacionesId,
+        'auth_delegacion_id': 10,
+        'auth_user_payload': jsonEncode(<String, Object>{
+          'id': 50,
+          'unidad_id': AuthService.unidadDelegacionesId,
+          'delegacion_id': 10,
+        }),
+      });
+
+      await http.runWithClient(
+        () async {
+          await AuthService.refreshSessionContext();
+        },
+        () {
+          return MockClient((request) async {
+            if (request.url.path.endsWith('/me')) {
+              return http.Response(
+                jsonEncode(<String, Object>{
+                  'user': <String, Object>{
+                    'id': 50,
+                    'unidad_id': AuthService.unidadDelegacionesId,
+                    'delegacion_id': 20,
+                  },
+                }),
+                200,
+                headers: <String, String>{'content-type': 'application/json'},
+              );
+            }
+            if (request.url.path.endsWith('/permissions')) {
+              return http.Response('[]', 200);
+            }
+            return http.Response('Not found', 404);
+          });
+        },
+      );
+
+      expect(await AuthService.getToken(), 'token-vigente');
+      expect(await AuthService.getDelegacionId(), 20);
+      expect(
+        AuthSessionEvents.notifier.value?.type,
+        AuthSessionEventType.organizationalContextChanged,
+      );
+    },
+  );
+
+  test('una revocación remota publica cierre de sesión', () async {
+    SharedPreferences.setMockInitialValues(<String, Object>{
+      'auth_token': 'token-revocado',
+      'auth_user_payload': jsonEncode(<String, Object>{'id': 50}),
+    });
+
+    await http.runWithClient(() async {
+      await AuthService.refreshSessionContext();
+    }, () => MockClient((_) async => http.Response('{}', 401)));
+
+    expect(await AuthService.getToken(), isNull);
+    expect(
+      AuthSessionEvents.notifier.value?.type,
+      AuthSessionEventType.signedOut,
+    );
   });
 
   test('perito can create hechos even from an excluded unit', () async {

@@ -994,9 +994,14 @@ class ConduceLegalidadVehiculo {
       grua: _str(json['grua']),
       corralon: _str(json['corralon']),
       corralonDireccion: _str(
-        json['corralon_direccion'] ?? json['ubicacion_corralon'],
+        json['corralon_direccion'] ??
+            json['ubicacion_corralon'] ??
+            json['grua_ubicacion_corralon'] ??
+            json['grua_direccion'],
       ),
-      corralonTelefono: _str(json['corralon_telefono']),
+      corralonTelefono: _str(
+        json['corralon_telefono'] ?? json['grua_telefono'],
+      ),
       servicioUnidadId: _nullableInt(json['servicio_unidad_id']),
       servicioDelegacionId: _nullableInt(json['servicio_delegacion_id']),
       servicioCreatedBy: _nullableInt(json['servicio_created_by']),
