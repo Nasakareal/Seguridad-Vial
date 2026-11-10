@@ -367,6 +367,11 @@ class ConduceLegalidadFundamento {
   }..removeWhere((_, value) => value == null);
 
   String get display {
+    if ((codigo ?? '').trim().toUpperCase() ==
+        'ART440_FVI_MOTO_CARRILES_CENTRALES') {
+      return 'Moto circula por carriles centrales o puentes';
+    }
+
     final text = (textoOperativo ?? '').trim();
     if (text.isNotEmpty) return text;
     final nombreText = nombre.trim();
@@ -381,7 +386,7 @@ class ConduceLegalidadFundamento {
   }
 
   bool get aplicaConduceLegalidadMotos {
-    if (!retencionVehiculo) return false;
+    if (!retencionVehiculo && !depositoSiSinPersonaHabilitada) return false;
 
     final ambito = (ambitoVehiculo ?? '').trim().toLowerCase();
     if (ambito.isNotEmpty && ambito != 'general' && ambito != 'motocicleta') {

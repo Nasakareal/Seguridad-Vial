@@ -5,7 +5,7 @@
 /// resuelve el registro vigente por `codigo`, evitando depender de los ids
 /// autoincrementales de cada servidor.
 final List<Map<String, dynamic>> conduceLegalidadLocalFundamentos =
-    <Map<String, String?>>[
+    <Map<String, dynamic>>[
           _item(
             'ART333_RIESGO_GRAVE_CONDUCCION_CONDICION',
             '333',
@@ -108,6 +108,18 @@ final List<Map<String, dynamic>> conduceLegalidadLocalFundamentos =
             ambito: 'motocicleta',
           ),
           _item(
+            'ART440_FVI_MOTO_CARRILES_CENTRALES',
+            '440',
+            'VI',
+            'Moto circula por carriles centrales o puentes',
+            'Reglamento de la Ley de Movilidad y Seguridad Vial del Estado de Michoacán de Ocampo, artículo 440, fracción VI: las personas conductoras de motocicleta deberán abstenerse de circular por carriles centrales de vías públicas y estatales de comunicación de acceso controlado. En puentes o pasos elevados aplica cuando formen parte de esos carriles o exista señalamiento restrictivo.',
+            ambito: 'motocicleta',
+            puntos: 3,
+            arrestoPersona: true,
+            depositoSiSinPersonaHabilitada: true,
+            retencionVehiculo: false,
+          ),
+          _item(
             'ART465_FII_SIRENAS_TORRETAS',
             '465',
             'II',
@@ -205,15 +217,18 @@ final List<Map<String, dynamic>> conduceLegalidadLocalFundamentos =
             'fraccion': item['fraccion'],
             'inciso': item['inciso'],
             'ambito_vehiculo': item['ambito'],
-            'puntos': 0,
-            'retencion_vehiculo': true,
+            'puntos': item['puntos'] ?? 0,
+            'arresto_persona': item['arresto_persona'] ?? false,
+            'deposito_si_sin_persona_habilitada':
+                item['deposito_si_sin_persona_habilitada'] ?? false,
+            'retencion_vehiculo': item['retencion_vehiculo'] ?? true,
             'descripcion': item['nombre'],
             'fundamento_legal': item['fundamento'],
           };
         })
         .toList(growable: false);
 
-Map<String, String?> _item(
+Map<String, dynamic> _item(
   String codigo,
   String articulo,
   String? fraccion,
@@ -221,12 +236,20 @@ Map<String, String?> _item(
   String fundamento, {
   String? inciso,
   String ambito = 'general',
-}) => <String, String?>{
+  int puntos = 0,
+  bool arrestoPersona = false,
+  bool depositoSiSinPersonaHabilitada = false,
+  bool retencionVehiculo = true,
+}) => <String, dynamic>{
   'codigo': codigo,
   'articulo': articulo,
   'fraccion': fraccion,
   'inciso': inciso,
   'ambito': ambito,
+  'puntos': puntos,
+  'arresto_persona': arrestoPersona,
+  'deposito_si_sin_persona_habilitada': depositoSiSinPersonaHabilitada,
+  'retencion_vehiculo': retencionVehiculo,
   'nombre': nombre,
   'fundamento': fundamento,
 };

@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
-import 'package:seguridad_vial_app/models/conduce_legalidad.dart';
 import 'package:seguridad_vial_app/screens/conduce_legalidad/conduce_legalidad_captura_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -221,22 +220,6 @@ void main() {
           await tester.pumpAndSettle();
         }
 
-        List<String?> optionCodes(Finder field) {
-          final dropdown = tester
-              .widget<DropdownButton<ConduceLegalidadFundamento?>>(
-                find.descendant(
-                  of: field,
-                  matching: find.byType(
-                    DropdownButton<ConduceLegalidadFundamento?>,
-                  ),
-                ),
-              );
-          return dropdown.items!
-              .map((item) => item.value?.codigo)
-              .whereType<String>()
-              .toList();
-        }
-
         await openFeeding();
         final primary = find.byKey(const Key('fundamento-principal'));
         await tester.scrollUntilVisible(
@@ -244,13 +227,33 @@ void main() {
           500,
           scrollable: find.byType(Scrollable).first,
         );
-        expect(
-          optionCodes(primary),
-          unorderedEquals(<String>['FUNDAMENTO_A', 'FUNDAMENTO_B']),
-        );
         await tester.tap(primary);
         await tester.pumpAndSettle();
-        await tester.tap(find.textContaining('Fundamento A').last);
+        expect(
+          find.byKey(const Key('fundamento-opcion-FUNDAMENTO_A')),
+          findsOneWidget,
+        );
+        expect(
+          find.byKey(const Key('fundamento-opcion-FUNDAMENTO_B')),
+          findsOneWidget,
+        );
+
+        final search = find.byKey(const Key('buscar-fundamento'));
+        await tester.enterText(search, 'Fundamento B');
+        await tester.pump();
+        expect(
+          find.byKey(const Key('fundamento-opcion-FUNDAMENTO_A')),
+          findsNothing,
+        );
+        expect(
+          find.byKey(const Key('fundamento-opcion-FUNDAMENTO_B')),
+          findsOneWidget,
+        );
+        await tester.enterText(search, '');
+        await tester.pump();
+        await tester.tap(
+          find.byKey(const Key('fundamento-opcion-FUNDAMENTO_A')),
+        );
         await tester.pumpAndSettle();
 
         final add = find.text('Añadir otro fundamento');
@@ -263,7 +266,16 @@ void main() {
         await tester.pumpAndSettle();
 
         final additional = find.byKey(const Key('fundamento-adicional-0'));
-        expect(optionCodes(additional), <String>['FUNDAMENTO_B']);
+        await tester.tap(additional);
+        await tester.pumpAndSettle();
+        expect(
+          find.byKey(const Key('fundamento-opcion-FUNDAMENTO_A')),
+          findsNothing,
+        );
+        expect(
+          find.byKey(const Key('fundamento-opcion-FUNDAMENTO_B')),
+          findsOneWidget,
+        );
       },
       () => MockClient((request) async {
         if (request.method == 'POST' &&

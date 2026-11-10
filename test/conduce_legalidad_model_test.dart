@@ -75,6 +75,15 @@ void main() {
         meta.fundamentosCorralon.map((item) => item.codigo),
         contains('ART333_RIESGO_GRAVE_CONDUCCION_CONDICION'),
       );
+      final carrilesCentrales = meta.fundamentosCorralon.firstWhere(
+        (item) => item.codigo == 'ART440_FVI_MOTO_CARRILES_CENTRALES',
+      );
+      expect(
+        carrilesCentrales.display,
+        'Moto circula por carriles centrales o puentes',
+      );
+      expect(carrilesCentrales.depositoSiSinPersonaHabilitada, isTrue);
+      expect(carrilesCentrales.retencionVehiculo, isFalse);
       expect(meta.fundamentosCorralon.every((item) => item.id < 0), isTrue);
       expect(
         meta.fundamentosCorralon.every(
@@ -533,6 +542,33 @@ void main() {
     });
 
     expect(meta.fundamentosCorralon.single.codigo, 'ART333_RIESGO_GRAVE');
+  });
+
+  test('Conduce Legalidad conserva fundamentos con depósito condicionado', () {
+    final meta = ConduceLegalidadMeta.fromJson({
+      'data': {
+        'abilities': {'can_feed': true},
+        'fundamentos_conduce_legalidad': [
+          {
+            'id': 4406,
+            'codigo': 'ART440_FVI_MOTO_CARRILES_CENTRALES',
+            'nombre':
+                'Motocicleta circula por carriles centrales de acceso controlado',
+            'articulo': '440',
+            'fraccion': 'VI',
+            'ambito_vehiculo': 'motocicleta',
+            'retencion_vehiculo': false,
+            'deposito_si_sin_persona_habilitada': true,
+          },
+        ],
+      },
+    });
+
+    expect(meta.fundamentosCorralon, hasLength(1));
+    expect(
+      meta.fundamentosCorralon.single.display,
+      'Moto circula por carriles centrales o puentes',
+    );
   });
 
   test(

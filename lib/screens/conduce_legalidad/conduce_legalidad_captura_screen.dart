@@ -1359,46 +1359,18 @@ class _ConduceLegalidadCapturaScreenState
                     child: Text(_agenteAdscripcion),
                   ),
                   const SizedBox(height: 20),
-                  DropdownButtonFormField<ConduceLegalidadFundamento?>(
+                  _FundamentoPickerFormField(
                     key: const Key('fundamento-principal'),
                     value: _fundamento,
-                    isExpanded: true,
-                    itemHeight: null,
-                    menuMaxHeight: MediaQuery.of(context).size.height * .55,
-                    decoration: const InputDecoration(
-                      labelText: 'Fundamento del operativo *',
-                      helperText:
-                          'Obligatorio. Aplica a toda la intervención, con vehículo, persona o ambos.',
-                      border: OutlineInputBorder(),
-                      prefixIcon: Icon(Icons.gavel_outlined),
+                    opciones: _opcionesFundamento(
+                      fundamentosCaptura,
+                      _fundamento,
                     ),
-                    selectedItemBuilder: (context) => [
-                      const _DropdownSelectedText(
-                        'Sin fundamento seleccionado',
-                      ),
-                      ..._opcionesFundamento(
-                        fundamentosCaptura,
-                        _fundamento,
-                      ).map((item) => _DropdownSelectedText(item.display)),
-                    ],
-                    items: [
-                      const DropdownMenuItem<ConduceLegalidadFundamento?>(
-                        value: null,
-                        child: _DropdownMenuText('Sin fundamento seleccionado'),
-                      ),
-                      ..._opcionesFundamento(
-                        fundamentosCaptura,
-                        _fundamento,
-                      ).map(
-                        (item) => DropdownMenuItem<ConduceLegalidadFundamento?>(
-                          value: item,
-                          child: _DropdownMenuText(
-                            '${item.display}\n${item.sancionResumen}',
-                          ),
-                        ),
-                      ),
-                    ],
-                    onChanged: _saving ? null : _setFundamento,
+                    enabled: !_saving,
+                    label: 'Fundamento del operativo *',
+                    helper:
+                        'Toca y escribe para buscar por conducta, artículo o palabra clave.',
+                    onChanged: _setFundamento,
                     validator: (value) => value == null
                         ? 'Selecciona al menos un fundamento'
                         : null,
@@ -1424,65 +1396,19 @@ class _ConduceLegalidadCapturaScreenState
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Expanded(
-                            child:
-                                DropdownButtonFormField<
-                                  ConduceLegalidadFundamento?
-                                >(
-                                  key: Key('fundamento-adicional-$index'),
-                                  value: fundamento,
-                                  isExpanded: true,
-                                  itemHeight: null,
-                                  menuMaxHeight:
-                                      MediaQuery.of(context).size.height * .55,
-                                  decoration: InputDecoration(
-                                    labelText:
-                                        'Fundamento adicional ${index + 1}',
-                                    border: const OutlineInputBorder(),
-                                    prefixIcon: const Icon(
-                                      Icons.gavel_outlined,
-                                    ),
-                                  ),
-                                  selectedItemBuilder: (context) => [
-                                    const _DropdownSelectedText(
-                                      '-- Seleccione --',
-                                    ),
-                                    ...opciones.map(
-                                      (item) =>
-                                          _DropdownSelectedText(item.display),
-                                    ),
-                                  ],
-                                  items: [
-                                    const DropdownMenuItem<
-                                      ConduceLegalidadFundamento?
-                                    >(
-                                      value: null,
-                                      child: _DropdownMenuText(
-                                        '-- Seleccione --',
-                                      ),
-                                    ),
-                                    ...opciones.map(
-                                      (item) =>
-                                          DropdownMenuItem<
-                                            ConduceLegalidadFundamento?
-                                          >(
-                                            value: item,
-                                            child: _DropdownMenuText(
-                                              '${item.display}\n'
-                                              '${item.sancionResumen}',
-                                            ),
-                                          ),
-                                    ),
-                                  ],
-                                  onChanged: _saving
-                                      ? null
-                                      : (value) => _setFundamentoAdicional(
-                                          index,
-                                          value,
-                                        ),
-                                  validator: (value) => value == null
-                                      ? 'Selecciona el fundamento'
-                                      : null,
-                                ),
+                            child: _FundamentoPickerFormField(
+                              key: Key('fundamento-adicional-$index'),
+                              value: fundamento,
+                              opciones: opciones,
+                              enabled: !_saving,
+                              label: 'Fundamento adicional ${index + 1}',
+                              helper: 'Toca y escribe para buscar.',
+                              onChanged: (value) =>
+                                  _setFundamentoAdicional(index, value),
+                              validator: (value) => value == null
+                                  ? 'Selecciona el fundamento'
+                                  : null,
+                            ),
                           ),
                           const SizedBox(width: 8),
                           IconButton(
@@ -3819,38 +3745,209 @@ class _SectionTitle extends StatelessWidget {
   }
 }
 
-class _DropdownMenuText extends StatelessWidget {
-  final String text;
+class _FundamentoPickerFormField extends FormField<ConduceLegalidadFundamento> {
+  _FundamentoPickerFormField({
+    super.key,
+    required ConduceLegalidadFundamento? value,
+    required List<ConduceLegalidadFundamento> opciones,
+    required bool enabled,
+    required String label,
+    required String helper,
+    required ValueChanged<ConduceLegalidadFundamento?> onChanged,
+    required FormFieldValidator<ConduceLegalidadFundamento> validator,
+  }) : super(
+         initialValue: value,
+         validator: validator,
+         builder: (state) {
+           Future<void> select() async {
+             if (!enabled) return;
+             final selected =
+                 await showModalBottomSheet<ConduceLegalidadFundamento>(
+                   context: state.context,
+                   isScrollControlled: true,
+                   useSafeArea: true,
+                   builder: (_) => _FundamentoPickerSheet(
+                     opciones: opciones,
+                     seleccionado: state.value,
+                   ),
+                 );
+             if (selected == null) return;
+             state.didChange(selected);
+             onChanged(selected);
+           }
 
-  const _DropdownMenuText(this.text);
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(vertical: 14),
-      decoration: BoxDecoration(
-        border: Border(bottom: BorderSide(color: Colors.grey.shade300)),
-      ),
-      child: Text(text, softWrap: true, style: const TextStyle(height: 1.3)),
-    );
-  }
+           return InkWell(
+             onTap: enabled ? select : null,
+             borderRadius: BorderRadius.circular(4),
+             child: InputDecorator(
+               isEmpty: state.value == null,
+               decoration: InputDecoration(
+                 labelText: label,
+                 helperText: helper,
+                 errorText: state.errorText,
+                 border: const OutlineInputBorder(),
+                 prefixIcon: const Icon(Icons.gavel_outlined),
+                 suffixIcon: const Icon(Icons.search),
+                 enabled: enabled,
+               ),
+               child: Text(
+                 state.value?.display ?? 'Toca para buscar y seleccionar',
+                 maxLines: 3,
+                 overflow: TextOverflow.ellipsis,
+                 style: state.value == null
+                     ? TextStyle(color: Colors.grey.shade700)
+                     : null,
+               ),
+             ),
+           );
+         },
+       );
 }
 
-class _DropdownSelectedText extends StatelessWidget {
-  final String text;
+class _FundamentoPickerSheet extends StatefulWidget {
+  final List<ConduceLegalidadFundamento> opciones;
+  final ConduceLegalidadFundamento? seleccionado;
 
-  const _DropdownSelectedText(this.text);
+  const _FundamentoPickerSheet({
+    required this.opciones,
+    required this.seleccionado,
+  });
+
+  @override
+  State<_FundamentoPickerSheet> createState() => _FundamentoPickerSheetState();
+}
+
+class _FundamentoPickerSheetState extends State<_FundamentoPickerSheet> {
+  final _searchCtrl = TextEditingController();
+  String _query = '';
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  String _normalize(String value) {
+    var text = value.toUpperCase().trim();
+    text = text
+        .replaceAll('Á', 'A')
+        .replaceAll('É', 'E')
+        .replaceAll('Í', 'I')
+        .replaceAll('Ó', 'O')
+        .replaceAll('Ú', 'U')
+        .replaceAll('Ü', 'U')
+        .replaceAll('Ñ', 'N');
+    return text.replaceAll(RegExp(r'[^A-Z0-9]+'), ' ').trim();
+  }
+
+  List<ConduceLegalidadFundamento> get _filtered {
+    final query = _normalize(_query);
+    if (query.isEmpty) return widget.opciones;
+
+    final tokens = query.split(' ');
+    return widget.opciones.where((item) {
+      final text = _normalize(
+        <String?>[
+          item.display,
+          item.nombre,
+          item.codigo,
+          item.articulo,
+          item.fraccion,
+          item.descripcion,
+          item.fundamentoLegal,
+          item.referenciaLegalCorta,
+        ].whereType<String>().join(' '),
+      );
+      return tokens.every(text.contains);
+    }).toList();
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Align(
-      alignment: Alignment.centerLeft,
-      child: Text(
-        text,
-        maxLines: 4,
-        overflow: TextOverflow.ellipsis,
-        softWrap: true,
+    final results = _filtered;
+    return Padding(
+      padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
+      child: SizedBox(
+        height: MediaQuery.sizeOf(context).height * .82,
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 14, 8, 8),
+              child: Row(
+                children: [
+                  const Expanded(
+                    child: Text(
+                      'Buscar fundamento',
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: 'Cerrar',
+                    onPressed: () => Navigator.pop(context),
+                    icon: const Icon(Icons.close),
+                  ),
+                ],
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+              child: TextField(
+                key: const Key('buscar-fundamento'),
+                controller: _searchCtrl,
+                autofocus: true,
+                textInputAction: TextInputAction.search,
+                decoration: const InputDecoration(
+                  hintText: 'Escribe: puente, casco, placas, 440…',
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.search),
+                ),
+                onChanged: (value) => setState(() => _query = value),
+              ),
+            ),
+            Expanded(
+              child: results.isEmpty
+                  ? const Center(
+                      child: Text('No hay fundamentos que coincidan.'),
+                    )
+                  : ListView.separated(
+                      keyboardDismissBehavior:
+                          ScrollViewKeyboardDismissBehavior.onDrag,
+                      itemCount: results.length,
+                      separatorBuilder: (_, _) => const Divider(height: 1),
+                      itemBuilder: (context, index) {
+                        final item = results[index];
+                        final selected =
+                            widget.seleccionado?.codigo == item.codigo &&
+                            widget.seleccionado?.id == item.id;
+                        final reference = <String>[
+                          if ((item.articulo ?? '').isNotEmpty)
+                            'Art. ${item.articulo}',
+                          if ((item.fraccion ?? '').isNotEmpty)
+                            'fr. ${item.fraccion}',
+                          item.sancionResumen,
+                        ].join(' · ');
+                        return ListTile(
+                          key: Key(
+                            'fundamento-opcion-${item.codigo ?? item.id}',
+                          ),
+                          leading: Icon(
+                            selected
+                                ? Icons.check_circle
+                                : Icons.gavel_outlined,
+                          ),
+                          title: Text(item.display),
+                          subtitle: Text(reference),
+                          selected: selected,
+                          onTap: () => Navigator.pop(context, item),
+                        );
+                      },
+                    ),
+            ),
+          ],
+        ),
       ),
     );
   }
