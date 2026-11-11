@@ -25,8 +25,8 @@ class ConduceLegalidadTicketAlimentacionHelpSheet extends StatelessWidget {
       steps: [
         'Ubica la alimentación correcta y pulsa el icono de boleta.',
         'Revisa en la vista previa que los datos correspondan a la persona y al vehículo intervenidos.',
-        'Pulsa Imprimir, selecciona papel de 58 mm u 80 mm y elige la impresora Bluetooth emparejada.',
-        'Si es la primera impresión, usa Prueba Bluetooth para confirmar la conexión y el ancho del papel.',
+        'Pulsa Imprimir y elige la impresora Bluetooth emparejada; el ticket está configurado para papel de 80 mm.',
+        'Si es la primera impresión, usa Prueba Bluetooth para confirmar la conexión y el formato de 80 mm.',
       ],
       note:
           'La impresora debe estar encendida y emparejada previamente desde la configuración Bluetooth de Android.',

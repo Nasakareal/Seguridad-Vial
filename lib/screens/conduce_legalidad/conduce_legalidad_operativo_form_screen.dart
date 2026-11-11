@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../core/coordinate_pair_parser.dart';
 import '../../core/municipios_michoacan.dart';
 import '../../models/conduce_legalidad.dart';
 import '../../services/auth_service.dart';
@@ -351,6 +352,28 @@ class _ConduceLegalidadOperativoFormScreenState
     }
   }
 
+  void _coordinatesChanged(String value) {
+    final pair = CoordinatePairParser.parse(value);
+    setState(() {
+      _lat = pair?.latitude;
+      _lng = pair?.longitude;
+      _locationStatus = value.trim().isEmpty
+          ? 'Aun no se han capturado coordenadas.'
+          : pair == null
+          ? 'Escribe latitud y longitud separadas por una coma.'
+          : 'Coordenadas capturadas manualmente.';
+    });
+  }
+
+  String? _validateCoordinates(String? value) {
+    final text = value?.trim() ?? '';
+    if (text.isEmpty) return 'Captura las coordenadas del operativo.';
+    if (CoordinatePairParser.parse(text) == null) {
+      return 'Usa latitud, longitud; por ejemplo: 19.7023456, -101.1923456';
+    }
+    return null;
+  }
+
   Future<void> _autofillAddressFromCoords(
     double lat,
     double lng,
@@ -408,6 +431,9 @@ class _ConduceLegalidadOperativoFormScreenState
         return;
       }
     }
+    final manualCoordinates = CoordinatePairParser.parse(_coordenadasCtrl.text);
+    _lat = manualCoordinates?.latitude;
+    _lng = manualCoordinates?.longitude;
     if (!_formKey.currentState!.validate()) return;
 
     setState(() => _saving = true);
@@ -640,16 +666,19 @@ class _ConduceLegalidadOperativoFormScreenState
             const SizedBox(height: 12),
             TextFormField(
               controller: _coordenadasCtrl,
-              readOnly: true,
+              enabled: !_saving && !_locating,
+              keyboardType: TextInputType.text,
+              autocorrect: false,
+              onChanged: _coordinatesChanged,
               decoration: const InputDecoration(
                 labelText: 'Coordenadas *',
+                hintText: '19.7023456, -101.1923456',
+                helperText:
+                    'Puedes escribirlas o usar el botón Obtener coordenadas.',
                 border: OutlineInputBorder(),
                 prefixIcon: Icon(Icons.pin_drop_outlined),
               ),
-              validator: (value) =>
-                  _lat == null || _lng == null || (value ?? '').trim().isEmpty
-                  ? 'Obtén las coordenadas del operativo.'
-                  : null,
+              validator: _validateCoordinates,
             ),
             const SizedBox(height: 8),
             Text(_locationStatus, style: Theme.of(context).textTheme.bodySmall),

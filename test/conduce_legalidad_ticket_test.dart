@@ -545,8 +545,8 @@ void main() {
     expect(item.ticketSupervisorNombre, isNot(contains('Lugo')));
   });
 
-  test('fecha y hora caben juntas en el ancho legible de 58 mm', () {
-    final writer = ThermalTicketRowFormatter(width: 32);
+  test('fecha y hora caben juntas en el ancho configurado de 80 mm', () {
+    final writer = ThermalTicketRowFormatter(width: 48);
 
     writer.pairRow('Fecha', '2026-07-25', 'Hora', '21:30');
 

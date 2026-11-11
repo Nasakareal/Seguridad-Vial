@@ -35,8 +35,6 @@ class _ActividadCorralonTicketScreenState
         return;
       }
 
-      final paper = await _selectPaper();
-      if (!mounted || paper == null) return;
       final printers = await ThermalPrinterService.getBondedPrinters();
       if (!mounted) return;
       if (printers.isEmpty) {
@@ -50,7 +48,7 @@ class _ActividadCorralonTicketScreenState
 
       await ThermalPrinterService.printEscPos(
         address: printer.address,
-        bytes: _buildEscPos(widget.actividad, paper.columns),
+        bytes: _buildEscPos(widget.actividad, 48),
       );
       if (mounted) _snack('Notificación enviada a ${printer.name}.');
     } on ThermalPrinterException catch (e) {
@@ -60,31 +58,6 @@ class _ActividadCorralonTicketScreenState
     } finally {
       if (mounted) setState(() => _printing = false);
     }
-  }
-
-  Future<_Paper?> _selectPaper() {
-    return showModalBottomSheet<_Paper>(
-      context: context,
-      builder: (context) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const ListTile(
-              title: Text(
-                'Tamaño del ticket',
-                style: TextStyle(fontWeight: FontWeight.w900),
-              ),
-            ),
-            for (final paper in _Paper.values)
-              ListTile(
-                leading: const Icon(Icons.receipt_long_outlined),
-                title: Text(paper.label),
-                onTap: () => Navigator.pop(context, paper),
-              ),
-          ],
-        ),
-      ),
-    );
   }
 
   Future<ThermalPrinterDevice?> _selectPrinter(
@@ -298,15 +271,6 @@ class _ActividadCorralonTicketScreenState
   }
 }
 
-enum _Paper {
-  paper80('80 mm', 48),
-  paper58('58 mm', 32);
-
-  final String label;
-  final int columns;
-  const _Paper(this.label, this.columns);
-}
-
 String _join(Iterable<String?> values) {
   return values
       .whereType<String>()
@@ -380,6 +344,7 @@ Uint8List _buildEscPos(Actividad actividad, int width) {
   return Uint8List.fromList(<int>[
     0x1B,
     0x40,
+    ...ThermalPrinterService.escPos80mmPrintArea,
     0x1B,
     0x21,
     0x00,

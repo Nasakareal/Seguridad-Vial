@@ -152,11 +152,11 @@ class _ConduceLegalidadWorkflowHelpSheetState
         'Toca el icono de boleta en la tarjeta de la captura.',
         'Selecciona Boleta o Inventario y revisa la vista previa correspondiente.',
         'Pulsa Imprimir e indica cuántas notificaciones y cuántos inventarios necesitas.',
-        'Elige papel de 58 mm u 80 mm.',
+        'La impresión está configurada para papel de 80 mm.',
         'Selecciona la impresora Bluetooth; todas las copias saldrán automáticamente.',
       ],
       tip:
-          'Usa Prueba Bluetooth para confirmar conexión y ancho del papel antes del operativo.',
+          'Usa Prueba Bluetooth para confirmar la conexión y la impresión en papel de 80 mm antes del operativo.',
       demoIcons: <IconData>[
         Icons.receipt_long_outlined,
         Icons.print_outlined,

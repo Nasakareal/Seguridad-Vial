@@ -140,6 +140,7 @@ class ComunicacionService {
     required int destinatarioUserId,
     String contenido = '',
     List<XFile> imagenes = const [],
+    XFile? audio,
   }) {
     return enviarComunicacion(
       tipo: 'mensaje',
@@ -148,6 +149,7 @@ class ComunicacionService {
       contenido: contenido,
       requiereEnterado: false,
       imagenes: imagenes,
+      audio: audio,
     );
   }
 
@@ -162,10 +164,14 @@ class ComunicacionService {
     int? destinatarioUserId,
     bool requiereEnterado = false,
     List<XFile> imagenes = const [],
+    XFile? audio,
   }) async {
-    if (tipo == 'mensaje' && contenido.trim().isEmpty && imagenes.isEmpty) {
+    if (tipo == 'mensaje' &&
+        contenido.trim().isEmpty &&
+        imagenes.isEmpty &&
+        audio == null) {
       throw const ComunicacionApiException(
-        mensaje: 'Debes escribir un mensaje o adjuntar al menos una imagen.',
+        mensaje: 'Debes escribir un mensaje o adjuntar una imagen o audio.',
       );
     }
 
@@ -216,6 +222,16 @@ class ComunicacionService {
       );
     }
 
+    if (audio != null) {
+      request.files.add(
+        await http.MultipartFile.fromPath(
+          'audios[]',
+          audio.path,
+          filename: audio.name,
+        ),
+      );
+    }
+
     final streamedResponse = await _client.send(request);
 
     final body = await streamedResponse.stream.bytesToString();
@@ -258,7 +274,7 @@ class ComunicacionService {
 
     final response = await _client.get(
       uri,
-      headers: {'Authorization': 'Bearer $token', 'Accept': 'image/*'},
+      headers: {'Authorization': 'Bearer $token', 'Accept': '*/*'},
     );
 
     if (response.statusCode < 200 || response.statusCode >= 300) {

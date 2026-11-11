@@ -1,9 +1,11 @@
 import 'dart:async';
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:audioplayers/audioplayers.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 import '../../models/comunicacion.dart';
 import '../../models/comunicacion_adjunto.dart';
@@ -11,6 +13,7 @@ import '../../models/comunicacion_usuario.dart';
 import '../../services/comunicacion_notification_service.dart';
 import '../../services/comunicacion_service.dart';
 import '../../services/comunicacion_sound_service.dart';
+import '../../services/ptt_service.dart';
 
 class ConversacionScreen extends StatefulWidget {
   final ComunicacionService service;
@@ -37,17 +40,20 @@ class _ConversacionScreenState extends State<ConversacionScreen> {
       ComunicacionNotificationService.instance;
 
   StreamSubscription<ComunicacionPushEvento>? _pushSubscription;
+  StreamSubscription<PttHardwareEvent>? _pttSubscription;
 
   Timer? _refreshTimer;
 
   late ComunicacionUsuario _usuario;
 
   List<Comunicacion> _mensajes = [];
-  List<XFile> _imagenesSeleccionadas = [];
+  final List<XFile> _imagenesSeleccionadas = [];
 
   bool _cargando = true;
   bool _enviando = false;
   bool _actualizando = false;
+  bool _pttPressed = false;
+  bool _grabandoPtt = false;
 
   String? _error;
 
@@ -60,6 +66,7 @@ class _ConversacionScreenState extends State<ConversacionScreen> {
     _cargarConversacion();
 
     _pushSubscription = _notificationService.eventos.listen(_procesarPush);
+    _pttSubscription = PttService.events.listen(_procesarPttHardware);
 
     _refreshTimer = Timer.periodic(const Duration(seconds: 12), (_) {
       if (!_enviando && !_actualizando) {
@@ -71,10 +78,91 @@ class _ConversacionScreenState extends State<ConversacionScreen> {
   @override
   void dispose() {
     _pushSubscription?.cancel();
+    _pttSubscription?.cancel();
+    if (_grabandoPtt) {
+      unawaited(PttService.cancelRecording());
+    }
     _refreshTimer?.cancel();
     _textoController.dispose();
     _scrollController.dispose();
     super.dispose();
+  }
+
+  void _procesarPttHardware(PttHardwareEvent event) {
+    if (event == PttHardwareEvent.down) {
+      _iniciarPtt();
+    } else {
+      _terminarPtt();
+    }
+  }
+
+  Future<void> _iniciarPtt() async {
+    if (_pttPressed || _grabandoPtt || _enviando || !_usuario.puedeEnviar) {
+      return;
+    }
+    _pttPressed = true;
+
+    final permission = await Permission.microphone.request();
+    if (!permission.isGranted) {
+      _pttPressed = false;
+      _mostrarError('Autoriza el micrófono para utilizar PTT.');
+      return;
+    }
+    if (!_pttPressed || !mounted) return;
+
+    try {
+      await PttService.startRecording();
+      if (!mounted) return;
+      setState(() => _grabandoPtt = true);
+    } on PlatformException catch (error) {
+      _pttPressed = false;
+      _mostrarError(error.message ?? 'No se pudo iniciar el PTT.');
+    }
+  }
+
+  Future<void> _terminarPtt() async {
+    _pttPressed = false;
+    if (!_grabandoPtt) return;
+
+    setState(() {
+      _grabandoPtt = false;
+      _enviando = true;
+    });
+
+    String? path;
+    try {
+      path = await PttService.stopRecording();
+      if (path == null || path.isEmpty) return;
+
+      final file = XFile(path, mimeType: 'audio/mp4', name: 'ptt.m4a');
+      final nueva = await widget.service.enviarMensaje(
+        destinatarioUserId: _usuario.id,
+        audio: file,
+      );
+      if (!mounted) return;
+
+      setState(() {
+        if (!_mensajes.any((mensaje) => mensaje.id == nueva.id)) {
+          _mensajes.add(nueva);
+        }
+      });
+      _scrollAlFinal();
+      await ComunicacionSoundService.enviado();
+      await _cargarConversacion(silencioso: true);
+    } on PlatformException catch (error) {
+      _mostrarError(error.message ?? 'No se pudo completar la grabación PTT.');
+    } on ComunicacionApiException catch (error) {
+      _mostrarError(error.mensaje);
+    } catch (_) {
+      _mostrarError('No fue posible enviar el audio PTT.');
+    } finally {
+      if (path != null) {
+        try {
+          await File(path).delete();
+        } catch (_) {}
+      }
+      if (mounted) setState(() => _enviando = false);
+    }
   }
 
   void _procesarPush(ComunicacionPushEvento evento) {
@@ -379,7 +467,7 @@ class _ConversacionScreenState extends State<ConversacionScreen> {
                         fontSize: 11,
                         color: Theme.of(
                           context,
-                        ).appBarTheme.foregroundColor?.withOpacity(.7),
+                        ).appBarTheme.foregroundColor?.withValues(alpha: .7),
                       ),
                     ),
                 ],
@@ -497,7 +585,7 @@ class _ConversacionScreenState extends State<ConversacionScreen> {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
-      color: Colors.orange.withOpacity(.12),
+      color: Colors.orange.withValues(alpha: .12),
       child: const Row(
         children: [
           Icon(Icons.lock_outline, size: 18, color: Colors.orange),
@@ -522,13 +610,31 @@ class _ConversacionScreenState extends State<ConversacionScreen> {
           color: Theme.of(context).colorScheme.surface,
           border: Border(
             top: BorderSide(
-              color: Theme.of(context).dividerColor.withOpacity(.25),
+              color: Theme.of(context).dividerColor.withValues(alpha: .25),
             ),
           ),
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            if (_grabandoPtt)
+              const Padding(
+                padding: EdgeInsets.only(bottom: 7),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.mic, color: Colors.red, size: 19),
+                    SizedBox(width: 7),
+                    Text(
+                      'Transmitiendo… suelta PTT para enviar',
+                      style: TextStyle(
+                        color: Colors.red,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             if (_imagenesSeleccionadas.isNotEmpty) _previewImagenes(),
             Row(
               crossAxisAlignment: CrossAxisAlignment.end,
@@ -566,7 +672,9 @@ class _ConversacionScreenState extends State<ConversacionScreen> {
                       enabledBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(24),
                         borderSide: BorderSide(
-                          color: Theme.of(context).dividerColor.withOpacity(.5),
+                          color: Theme.of(
+                            context,
+                          ).dividerColor.withValues(alpha: .5),
                         ),
                       ),
                     ),
@@ -588,6 +696,30 @@ class _ConversacionScreenState extends State<ConversacionScreen> {
         _imagenesSeleccionadas.isNotEmpty;
 
     final habilitado = _usuario.puedeEnviar && !_enviando && tieneContenido;
+
+    if (!tieneContenido) {
+      return Listener(
+        onPointerDown: (_) => _iniciarPtt(),
+        onPointerUp: (_) => _terminarPtt(),
+        onPointerCancel: (_) => _terminarPtt(),
+        child: SizedBox(
+          width: 46,
+          height: 46,
+          child: FilledButton(
+            onPressed: null,
+            style: FilledButton.styleFrom(
+              padding: EdgeInsets.zero,
+              shape: const CircleBorder(),
+              disabledBackgroundColor: _grabandoPtt
+                  ? Colors.red
+                  : Theme.of(context).colorScheme.primary,
+              disabledForegroundColor: Colors.white,
+            ),
+            child: Icon(_grabandoPtt ? Icons.mic : Icons.campaign, size: 23),
+          ),
+        ),
+      );
+    }
 
     return SizedBox(
       width: 46,
@@ -720,6 +852,16 @@ class _MensajeBurbuja extends StatelessWidget {
                     .toList(),
                 service: service,
               ),
+            if (mensaje.tieneAudio)
+              ...mensaje.adjuntos
+                  .where((adjunto) => adjunto.esAudio)
+                  .map(
+                    (adjunto) => _AudioPtt(
+                      adjunto: adjunto,
+                      service: service,
+                      foregroundColor: textoColor,
+                    ),
+                  ),
             if (mensaje.tieneImagenes && mensaje.tieneTexto)
               const SizedBox(height: 7),
             if (mensaje.tieneTexto)
@@ -749,13 +891,113 @@ class _MensajeBurbuja extends StatelessWidget {
               child: Text(
                 _hora(mensaje.enviadoAt),
                 style: TextStyle(
-                  color: textoColor.withOpacity(.65),
+                  color: textoColor.withValues(alpha: .65),
                   fontSize: 10,
                 ),
               ),
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _AudioPtt extends StatefulWidget {
+  final ComunicacionAdjunto adjunto;
+  final ComunicacionService service;
+  final Color foregroundColor;
+
+  const _AudioPtt({
+    required this.adjunto,
+    required this.service,
+    required this.foregroundColor,
+  });
+
+  @override
+  State<_AudioPtt> createState() => _AudioPttState();
+}
+
+class _AudioPttState extends State<_AudioPtt> {
+  final AudioPlayer _player = AudioPlayer();
+  StreamSubscription<void>? _completeSubscription;
+  Uint8List? _bytes;
+  bool _loading = false;
+  bool _playing = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _completeSubscription = _player.onPlayerComplete.listen((_) {
+      if (mounted) setState(() => _playing = false);
+    });
+  }
+
+  @override
+  void dispose() {
+    _completeSubscription?.cancel();
+    _player.dispose();
+    super.dispose();
+  }
+
+  Future<void> _toggle() async {
+    if (_loading) return;
+    if (_playing) {
+      await _player.stop();
+      if (mounted) setState(() => _playing = false);
+      return;
+    }
+
+    setState(() => _loading = true);
+    try {
+      _bytes ??= await widget.service.descargarAdjunto(widget.adjunto.url);
+      await _player.play(BytesSource(_bytes!));
+      if (mounted) setState(() => _playing = true);
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No fue posible reproducir el audio PTT.'),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 210,
+      child: Row(
+        children: [
+          IconButton(
+            tooltip: _playing ? 'Detener audio' : 'Reproducir audio PTT',
+            onPressed: _toggle,
+            color: widget.foregroundColor,
+            icon: _loading
+                ? SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: widget.foregroundColor,
+                    ),
+                  )
+                : Icon(_playing ? Icons.stop : Icons.play_arrow),
+          ),
+          Icon(Icons.graphic_eq, color: widget.foregroundColor),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'Audio PTT',
+              style: TextStyle(
+                color: widget.foregroundColor,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

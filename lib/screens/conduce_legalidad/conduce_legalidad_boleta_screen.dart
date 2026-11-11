@@ -152,8 +152,7 @@ class _ConduceLegalidadBoletaScreenState
     setState(() => _printing = true);
     try {
       if (ThermalPrinterService.supportsBluetoothPrinting) {
-        final paperSize = await _selectPaperSize();
-        if (!mounted || paperSize == null) return;
+        const paperSize = _ThermalPaperSize.paper80mm;
 
         final printer = await _selectBondedPrinter();
         if (!mounted || printer == null) return;
@@ -280,8 +279,7 @@ class _ConduceLegalidadBoletaScreenState
         return;
       }
 
-      final paperSize = await _selectPaperSize();
-      if (!mounted || paperSize == null) return;
+      const paperSize = _ThermalPaperSize.paper80mm;
 
       final printer = await _selectBondedPrinter();
       if (!mounted || printer == null) return;
@@ -341,35 +339,6 @@ class _ConduceLegalidadBoletaScreenState
                   title: Text(device.name),
                   subtitle: Text(device.address),
                   onTap: () => Navigator.of(context).pop(device),
-                ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  Future<_ThermalPaperSize?> _selectPaperSize() async {
-    return showModalBottomSheet<_ThermalPaperSize>(
-      context: context,
-      builder: (context) {
-        return SafeArea(
-          child: ListView(
-            shrinkWrap: true,
-            children: [
-              const ListTile(
-                title: Text(
-                  'Selecciona tamaño de ticket',
-                  style: TextStyle(fontWeight: FontWeight.w900),
-                ),
-                subtitle: Text('Elige el ancho del papel térmico.'),
-              ),
-              for (final size in _ThermalPaperSize.values)
-                ListTile(
-                  leading: const Icon(Icons.receipt_long_outlined),
-                  title: Text(size.label),
-                  subtitle: Text(size.description),
-                  onTap: () => Navigator.of(context).pop(size),
                 ),
             ],
           ),
@@ -1215,6 +1184,7 @@ Uint8List _buildEscPosTicket(
   final textBytes = _thermalEncode(text.replaceAll('\n', '\r\n'));
   return Uint8List.fromList(<int>[
     0x1B, 0x40, // Inicializa impresora.
+    ...ThermalPrinterService.escPos80mmPrintArea,
     0x1B, 0x21, 0x00, // Fuente A normal y legible.
     0x1B, 0x4D, 0x00, // Selecciona fuente A explícitamente.
     0x1D, 0x21, 0x00, // Tamaño normal.
@@ -1303,6 +1273,7 @@ Uint8List _buildEscPosInventory(
   return Uint8List.fromList(<int>[
     0x1B,
     0x40,
+    ...ThermalPrinterService.escPos80mmPrintArea,
     0x1B,
     0x21,
     0x00,
@@ -1353,6 +1324,7 @@ Uint8List _buildEscPosTestTicket(_ThermalPaperSize paperSize) {
   return Uint8List.fromList(<int>[
     0x1B,
     0x40,
+    ...ThermalPrinterService.escPos80mmPrintArea,
     0x1B,
     0x21,
     0x00,
@@ -1873,14 +1845,12 @@ class ThermalTicketRowFormatter {
 }
 
 enum _ThermalPaperSize {
-  paper80mm('80 mm', 'Letra normal, 48 columnas', 48),
-  paper58mm('58 mm', 'Letra normal, 32 columnas', 32);
+  paper80mm('80 mm', 48);
 
   final String label;
-  final String description;
   final int columns;
 
-  const _ThermalPaperSize(this.label, this.description, this.columns);
+  const _ThermalPaperSize(this.label, this.columns);
 }
 
 ConduceLegalidadPersona? _personaForTicket(

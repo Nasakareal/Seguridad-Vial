@@ -81,6 +81,11 @@ class ComunicacionAdjunto {
 
   bool get tieneUrl => url.trim().isNotEmpty;
 
+  bool get esAudio {
+    if (tipo == 'audio') return true;
+    return mimeType?.toLowerCase().startsWith('audio/') == true;
+  }
+
   bool get esHorizontal {
     if (ancho == null || alto == null) {
       return false;
@@ -118,7 +123,7 @@ class ComunicacionAdjunto {
       return nombreOriginal!.trim();
     }
 
-    return 'Imagen';
+    return esAudio ? 'Audio PTT' : 'Imagen';
   }
 
   String get tamanoLegible {

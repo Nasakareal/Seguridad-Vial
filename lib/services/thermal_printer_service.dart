@@ -89,6 +89,14 @@ class ThermalPrinterService {
     'seguridad_vial_app/thermal_printer',
   );
 
+  /// ESC/POS: margen izquierdo en cero y área imprimible de 576 puntos.
+  /// 576 puntos equivalen a 48 caracteres con la fuente A de una impresora
+  /// térmica de 80 mm a 203 dpi.
+  static const List<int> escPos80mmPrintArea = <int>[
+    0x1D, 0x4C, 0x00, 0x00, // GS L: margen izquierdo = 0.
+    0x1D, 0x57, 0x40, 0x02, // GS W: ancho imprimible = 576 puntos.
+  ];
+
   static bool get supportsBluetoothPrinting {
     return !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
   }

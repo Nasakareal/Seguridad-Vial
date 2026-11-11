@@ -5,18 +5,40 @@ import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothSocket
 import android.content.pm.PackageManager
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
+import android.media.MediaRecorder
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import io.flutter.embedding.android.FlutterFragmentActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
+import io.flutter.plugin.common.EventChannel
+import java.io.File
 import java.io.IOException
 import java.io.OutputStream
 import java.util.UUID
 
 class MainActivity : FlutterFragmentActivity() {
     private val mainHandler = Handler(Looper.getMainLooper())
+    private var pttEventSink: EventChannel.EventSink? = null
+    private var pttReceiverRegistered = false
+    private var mediaRecorder: MediaRecorder? = null
+    private var recordingFile: File? = null
+
+    private val pttReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            val event = when (intent?.action) {
+                PTT_DOWN_ACTION -> "down"
+                PTT_UP_ACTION -> "up"
+                else -> return
+            }
+            pttEventSink?.success(mapOf("event" to event, "source" to "ruggear"))
+        }
+    }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -43,6 +65,142 @@ class MainActivity : FlutterFragmentActivity() {
                 else -> result.notImplemented()
             }
         }
+
+        EventChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            "seguridad_vial_app/ptt_events"
+        ).setStreamHandler(object : EventChannel.StreamHandler {
+            override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {
+                pttEventSink = events
+            }
+
+            override fun onCancel(arguments: Any?) {
+                pttEventSink = null
+            }
+        })
+
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            "seguridad_vial_app/ptt_recorder"
+        ).setMethodCallHandler { call, result ->
+            when (call.method) {
+                "startRecording" -> startPttRecording(result)
+                "stopRecording" -> stopPttRecording(result)
+                "cancelRecording" -> cancelPttRecording(result)
+                else -> result.notImplemented()
+            }
+        }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        registerPttReceiver()
+    }
+
+    override fun onStop() {
+        unregisterPttReceiver()
+        super.onStop()
+    }
+
+    override fun onDestroy() {
+        releaseRecorder(deleteFile = true)
+        super.onDestroy()
+    }
+
+    private fun registerPttReceiver() {
+        if (pttReceiverRegistered) return
+        val filter = IntentFilter().apply {
+            addAction(PTT_DOWN_ACTION)
+            addAction(PTT_UP_ACTION)
+        }
+        registerReceiver(pttReceiver, filter)
+        pttReceiverRegistered = true
+    }
+
+    private fun unregisterPttReceiver() {
+        if (!pttReceiverRegistered) return
+        try {
+            unregisterReceiver(pttReceiver)
+        } catch (_: IllegalArgumentException) {
+        }
+        pttReceiverRegistered = false
+    }
+
+    private fun startPttRecording(result: MethodChannel.Result) {
+        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            result.error("PERMISSION_DENIED", "Permiso de microfono requerido.", null)
+            return
+        }
+        if (mediaRecorder != null) {
+            result.success(recordingFile?.absolutePath)
+            return
+        }
+
+        try {
+            val directory = File(cacheDir, "ptt").apply { mkdirs() }
+            val output = File(directory, "ptt_${System.currentTimeMillis()}.m4a")
+            @Suppress("DEPRECATION")
+            val recorder = MediaRecorder().apply {
+                setAudioSource(MediaRecorder.AudioSource.MIC)
+                setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
+                setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
+                setAudioSamplingRate(16000)
+                setAudioEncodingBitRate(32000)
+                setOutputFile(output.absolutePath)
+                prepare()
+                start()
+            }
+            mediaRecorder = recorder
+            recordingFile = output
+            result.success(output.absolutePath)
+        } catch (error: Exception) {
+            releaseRecorder(deleteFile = true)
+            result.error("RECORDING_FAILED", error.localizedMessage ?: "No se pudo iniciar la grabacion.", null)
+        }
+    }
+
+    private fun stopPttRecording(result: MethodChannel.Result) {
+        val recorder = mediaRecorder
+        val output = recordingFile
+        if (recorder == null || output == null) {
+            result.success(null)
+            return
+        }
+
+        try {
+            recorder.stop()
+            recorder.release()
+            mediaRecorder = null
+            recordingFile = null
+            if (output.exists() && output.length() > 0) {
+                result.success(output.absolutePath)
+            } else {
+                output.delete()
+                result.success(null)
+            }
+        } catch (error: RuntimeException) {
+            releaseRecorder(deleteFile = true)
+            result.error("RECORDING_TOO_SHORT", "Mantén presionado PTT un poco más.", null)
+        }
+    }
+
+    private fun cancelPttRecording(result: MethodChannel.Result) {
+        releaseRecorder(deleteFile = true)
+        result.success(true)
+    }
+
+    private fun releaseRecorder(deleteFile: Boolean) {
+        try {
+            mediaRecorder?.stop()
+        } catch (_: RuntimeException) {
+        }
+        try {
+            mediaRecorder?.release()
+        } catch (_: Exception) {
+        }
+        mediaRecorder = null
+        if (deleteFile) recordingFile?.delete()
+        recordingFile = null
     }
 
     private fun getBondedPrinters(result: MethodChannel.Result) {
@@ -232,5 +390,7 @@ class MainActivity : FlutterFragmentActivity() {
 
     companion object {
         private val SPP_UUID: UUID = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB")
+        private const val PTT_DOWN_ACTION = "android.intent.action.PTT.down"
+        private const val PTT_UP_ACTION = "android.intent.action.PTT.up"
     }
 }

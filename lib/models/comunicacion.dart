@@ -184,6 +184,8 @@ class Comunicacion {
 
   bool get tieneImagenes => adjuntos.any((adjunto) => adjunto.esImagen);
 
+  bool get tieneAudio => adjuntos.any((adjunto) => adjunto.esAudio);
+
   String get titulo {
     if (asunto != null && asunto!.trim().isNotEmpty) {
       return asunto!.trim();
