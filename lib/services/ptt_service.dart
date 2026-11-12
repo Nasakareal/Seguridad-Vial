@@ -16,6 +16,10 @@ class PttService {
 
   static Stream<PttHardwareEvent>? _eventStream;
 
+  static Future<bool> isSupported() async {
+    return await _recorder.invokeMethod<bool>('isSupported') ?? false;
+  }
+
   static Stream<PttHardwareEvent> get events {
     return _eventStream ??= _events.receiveBroadcastStream().map((raw) {
       final data = raw is Map ? raw : const <dynamic, dynamic>{};

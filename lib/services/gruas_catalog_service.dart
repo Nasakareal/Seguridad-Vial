@@ -6,19 +6,27 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'auth_service.dart';
 
 class GruasCatalogService {
-  static const String _cachePrefix = 'gruas_catalog_cache_v2';
+  static const String _cachePrefix = 'gruas_catalog_cache_v3';
   static const int _unidadSiniestrosId = 1;
 
-  static Future<List<Map<String, dynamic>>> fetchVisibleGruas() async {
+  static Future<List<Map<String, dynamic>>> fetchVisibleGruas({
+    bool forceRefresh = false,
+  }) async {
     final access = await _currentAccess();
     if (!access.hasFullAccess && access.unidadFiltroId == null) {
       return const <Map<String, dynamic>>[];
     }
 
-    return _fetchForAccess(access, cacheKey: _cacheKeyForAccess(access));
+    return _fetchForAccess(
+      access,
+      cacheKey: _cacheKeyForAccess(access),
+      forceRefresh: forceRefresh,
+    );
   }
 
-  static Future<List<Map<String, dynamic>>> fetchSiniestrosGruas() {
+  static Future<List<Map<String, dynamic>>> fetchSiniestrosGruas({
+    bool forceRefresh = false,
+  }) {
     const access = _GruasAccess(
       hasFullAccess: false,
       unidadFiltroId: _unidadSiniestrosId,
@@ -30,6 +38,7 @@ class GruasCatalogService {
       access,
       cacheKey: '${_cachePrefix}_siniestros',
       endpointPath: '/conduce-legalidad/gruas-siniestros',
+      forceRefresh: forceRefresh,
     );
   }
 
@@ -37,6 +46,7 @@ class GruasCatalogService {
     required int operativoId,
     required int unidadId,
     int? delegacionId,
+    bool forceRefresh = false,
   }) {
     if (operativoId <= 0 || unidadId <= 0) {
       return Future.value(const <Map<String, dynamic>>[]);
@@ -54,8 +64,9 @@ class GruasCatalogService {
     return _fetchForAccess(
       access,
       cacheKey:
-          '${_cachePrefix}_operativo_${operativoId}_unidad_${unidadId}_delegacion_${delegacionId ?? 0}',
+          '${_cachePrefix}_operativo_scope_unidad_${unidadId}_delegacion_${delegacionId ?? 0}',
       endpointPath: '/conduce-legalidad/operativos/$operativoId/gruas',
+      forceRefresh: forceRefresh,
     );
   }
 
@@ -63,7 +74,14 @@ class GruasCatalogService {
     _GruasAccess access, {
     required String cacheKey,
     String endpointPath = '/gruas',
+    bool forceRefresh = false,
   }) async {
+    final scopedCacheKey = await _cacheKeyForOwner(cacheKey);
+    if (!forceRefresh) {
+      final cached = await _loadCache(scopedCacheKey);
+      if (cached != null) return cached;
+    }
+
     final uri = Uri.parse('${AuthService.baseUrl}$endpointPath').replace(
       queryParameters: access.queryParameters.isEmpty
           ? null
@@ -77,13 +95,20 @@ class GruasCatalogService {
       }
 
       final gruas = _parseGruas(_decodeBody(res), access);
-      await _saveCache(cacheKey, gruas);
+      await _saveCache(scopedCacheKey, gruas);
       return gruas;
     } catch (_) {
-      final cached = await _loadCache(cacheKey);
-      if (cached.isNotEmpty) return cached;
+      if (forceRefresh) rethrow;
+      final cached = await _loadCache(scopedCacheKey);
+      if (cached != null) return cached;
       rethrow;
     }
+  }
+
+  static Future<String> _cacheKeyForOwner(String cacheKey) async {
+    final owner = (await AuthService.getSessionOwnerKey())?.trim();
+    final ownerKey = owner == null || owner.isEmpty ? 'anon' : owner;
+    return '$cacheKey:$ownerKey';
   }
 
   static List<Map<String, dynamic>> _parseGruas(
@@ -129,16 +154,16 @@ class GruasCatalogService {
     await prefs.setString(key, jsonEncode(gruas));
   }
 
-  static Future<List<Map<String, dynamic>>> _loadCache(String key) async {
+  static Future<List<Map<String, dynamic>>?> _loadCache(String key) async {
     final prefs = await SharedPreferences.getInstance();
     final raw = prefs.getString(key);
     if (raw == null || raw.trim().isEmpty) {
-      return const <Map<String, dynamic>>[];
+      return null;
     }
 
     try {
       final decoded = jsonDecode(raw);
-      if (decoded is! List) return const <Map<String, dynamic>>[];
+      if (decoded is! List) return null;
 
       final gruas = decoded
           .whereType<Map>()
@@ -151,7 +176,7 @@ class GruasCatalogService {
       });
       return gruas;
     } catch (_) {
-      return const <Map<String, dynamic>>[];
+      return null;
     }
   }
 

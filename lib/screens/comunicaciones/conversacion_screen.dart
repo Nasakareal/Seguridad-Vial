@@ -52,6 +52,7 @@ class _ConversacionScreenState extends State<ConversacionScreen> {
   bool _cargando = true;
   bool _enviando = false;
   bool _actualizando = false;
+  bool _pttDisponible = false;
   bool _pttPressed = false;
   bool _grabandoPtt = false;
 
@@ -66,7 +67,7 @@ class _ConversacionScreenState extends State<ConversacionScreen> {
     _cargarConversacion();
 
     _pushSubscription = _notificationService.eventos.listen(_procesarPush);
-    _pttSubscription = PttService.events.listen(_procesarPttHardware);
+    unawaited(_inicializarPtt());
 
     _refreshTimer = Timer.periodic(const Duration(seconds: 12), (_) {
       if (!_enviando && !_actualizando) {
@@ -96,8 +97,27 @@ class _ConversacionScreenState extends State<ConversacionScreen> {
     }
   }
 
+  Future<void> _inicializarPtt() async {
+    if (!Platform.isAndroid) return;
+
+    try {
+      if (!await PttService.isSupported() || !mounted) return;
+      _pttSubscription = PttService.events.listen(
+        _procesarPttHardware,
+        onError: (_) {},
+      );
+      setState(() => _pttDisponible = true);
+    } on PlatformException {
+      // PTT es una mejora exclusiva de RugGear y nunca debe afectar el chat.
+    }
+  }
+
   Future<void> _iniciarPtt() async {
-    if (_pttPressed || _grabandoPtt || _enviando || !_usuario.puedeEnviar) {
+    if (!_pttDisponible ||
+        _pttPressed ||
+        _grabandoPtt ||
+        _enviando ||
+        !_usuario.puedeEnviar) {
       return;
     }
     _pttPressed = true;
@@ -121,6 +141,7 @@ class _ConversacionScreenState extends State<ConversacionScreen> {
   }
 
   Future<void> _terminarPtt() async {
+    if (!_pttDisponible) return;
     _pttPressed = false;
     if (!_grabandoPtt) return;
 
@@ -698,6 +719,21 @@ class _ConversacionScreenState extends State<ConversacionScreen> {
     final habilitado = _usuario.puedeEnviar && !_enviando && tieneContenido;
 
     if (!tieneContenido) {
+      if (!_pttDisponible) {
+        return SizedBox(
+          width: 46,
+          height: 46,
+          child: FilledButton(
+            onPressed: null,
+            style: FilledButton.styleFrom(
+              padding: EdgeInsets.zero,
+              shape: const CircleBorder(),
+            ),
+            child: const Icon(Icons.send, size: 20),
+          ),
+        );
+      }
+
       return Listener(
         onPointerDown: (_) => _iniciarPtt(),
         onPointerUp: (_) => _terminarPtt(),

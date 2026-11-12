@@ -351,7 +351,7 @@ class _ConduceLegalidadOperativoFormHelpSheetState
               _tituloPaso('2', 'Captura la ubicación'),
               const SizedBox(height: 8),
               const Text(
-                'Captura los datos del lugar donde se instalará el punto. Puedes obtener las coordenadas en el sitio o escribir las del lugar correcto.',
+                'Captura los datos del lugar donde se instalará el punto y obtén las coordenadas con el GPS. Sólo superadmin puede corregirlas manualmente.',
                 style: TextStyle(fontSize: 15, height: 1.4),
               ),
               const SizedBox(height: 20),
@@ -552,9 +552,9 @@ class _ConduceLegalidadOperativoFormHelpSheetState
               const SizedBox(height: 12),
               _aviso(
                 icon: Icons.my_location,
-                titulo: 'Obtén o escribe las coordenadas',
+                titulo: 'Obtén las coordenadas en el sitio',
                 texto:
-                    'Pulsa “Obtener coordenadas” si estás en el lugar del operativo. Si lo creas desde otro sitio, escribe latitud y longitud separadas por una coma; por ejemplo: 19.7023456, -101.1923456.',
+                    'Pulsa “Obtener coordenadas” desde el lugar real del operativo. La edición manual de latitud y longitud está reservada exclusivamente a superadmin.',
               ),
               const SizedBox(height: 12),
               _avisoAdvertencia(

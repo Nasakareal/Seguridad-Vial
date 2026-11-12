@@ -892,7 +892,9 @@ class _ConduceLegalidadCapturaScreenState
     _draft.notifyChanged();
   }
 
-  Future<List<Map<String, dynamic>>> _cargarGruasDelOperativo() {
+  Future<List<Map<String, dynamic>>> _cargarGruasDelOperativo({
+    bool forceRefresh = false,
+  }) {
     final operativo = _operativo;
     if (operativo == null || operativo.unidadId == null) {
       return Future.value(const <Map<String, dynamic>>[]);
@@ -902,6 +904,7 @@ class _ConduceLegalidadCapturaScreenState
       operativoId: operativo.id,
       unidadId: operativo.unidadId!,
       delegacionId: operativo.delegacionId,
+      forceRefresh: forceRefresh,
     );
   }
 
@@ -1631,7 +1634,8 @@ Future<ConduceLegalidadVehiculo?> showConduceLegalidadVehiculoModal(
   bool onlyMotorcycles = false,
   ConduceLegalidadVehiculo? initialVehiculo,
   String? inventoryFolio,
-  @visibleForTesting Future<List<Map<String, dynamic>>> Function()? gruasLoader,
+  @visibleForTesting
+  Future<List<Map<String, dynamic>>> Function({bool forceRefresh})? gruasLoader,
 }) {
   return showModalBottomSheet<ConduceLegalidadVehiculo>(
     context: context,
@@ -1654,7 +1658,8 @@ class _VehiculoModal extends StatefulWidget {
   final bool onlyMotorcycles;
   final ConduceLegalidadVehiculo? initialVehiculo;
   final String? inventoryFolio;
-  final Future<List<Map<String, dynamic>>> Function()? gruasLoader;
+  final Future<List<Map<String, dynamic>>> Function({bool forceRefresh})?
+  gruasLoader;
 
   const _VehiculoModal({
     required this.fundamentos,
@@ -1690,6 +1695,7 @@ class _VehiculoModalState extends State<_VehiculoModal> {
   String? _tipoCarroceriaSeleccionada;
   String? _estadoPlacasSeleccionado;
   bool _cargandoGruas = true;
+  bool _sincronizandoGruas = false;
   List<Map<String, dynamic>> _gruas = [];
   int? _gruaIdSeleccionada;
   int? _corralonGruaIdSeleccionada;
@@ -1795,11 +1801,16 @@ class _VehiculoModalState extends State<_VehiculoModal> {
     _aseguradoraCtrl.text = value ?? '';
   }
 
-  Future<void> _cargarGruas() async {
+  Future<void> _cargarGruas({bool forceRefresh = false}) async {
+    if (_sincronizandoGruas || (forceRefresh && _cargandoGruas)) return;
+    if (forceRefresh && mounted) {
+      setState(() => _sincronizandoGruas = true);
+    }
+
     try {
-      final gruas =
-          await (widget.gruasLoader ??
-              GruasCatalogService.fetchSiniestrosGruas)();
+      final loader =
+          widget.gruasLoader ?? GruasCatalogService.fetchSiniestrosGruas;
+      final gruas = await loader(forceRefresh: forceRefresh);
       if (!mounted) return;
       setState(() {
         _gruas = gruas;
@@ -1813,12 +1824,31 @@ class _VehiculoModalState extends State<_VehiculoModal> {
           _corralonGruaIdSeleccionada = null;
         }
         _cargandoGruas = false;
+        _sincronizandoGruas = false;
       });
+      if (forceRefresh) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Catálogo actualizado: ${gruas.length} grúas y corralones disponibles.',
+            ),
+          ),
+        );
+      }
     } catch (e) {
       if (!mounted) return;
-      setState(() => _cargandoGruas = false);
+      setState(() {
+        _cargandoGruas = false;
+        _sincronizandoGruas = false;
+      });
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('No se pudieron cargar gruas: $e')),
+        SnackBar(
+          content: Text(
+            forceRefresh
+                ? 'No se pudo sincronizar el catálogo. Se conservaron los datos guardados: $e'
+                : 'No se pudieron cargar grúas y corralones: $e',
+          ),
+        ),
       );
     }
   }
@@ -2536,6 +2566,34 @@ class _VehiculoModalState extends State<_VehiculoModal> {
                       },
                     ),
                     _text(_tarjetaCtrl, 'Nombre en tarjeta', Icons.badge),
+                    ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: const Icon(Icons.storage_outlined),
+                      title: const Text(
+                        'Grúas y corralones',
+                        style: TextStyle(fontWeight: FontWeight.w700),
+                      ),
+                      subtitle: Text(
+                        _cargandoGruas
+                            ? 'Abriendo el catálogo guardado...'
+                            : '${_gruas.length} disponibles en este teléfono',
+                      ),
+                      trailing: IconButton(
+                        tooltip: 'Sincronizar grúas y corralones',
+                        onPressed: _cargandoGruas || _sincronizandoGruas
+                            ? null
+                            : () => _cargarGruas(forceRefresh: true),
+                        icon: _sincronizandoGruas
+                            ? const SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Icon(Icons.sync),
+                      ),
+                    ),
                     _cargandoGruas
                         ? const Padding(
                             padding: EdgeInsets.only(bottom: 10),

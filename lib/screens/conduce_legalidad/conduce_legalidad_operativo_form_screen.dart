@@ -45,6 +45,7 @@ class _ConduceLegalidadOperativoFormScreenState
   bool _canSetSchedule = false;
   bool _canAssignScope = false;
   bool _canCreate = false;
+  bool _isSuperadmin = false;
   bool _loadingAccess = true;
   String? _organizationError;
   List<ConduceLegalidadRef> _unidades = const <ConduceLegalidadRef>[];
@@ -202,6 +203,7 @@ class _ConduceLegalidadOperativoFormScreenState
       });
     }
 
+    final isSuperadmin = await AuthService.isSuperadmin();
     final canCreate = _editing || await AuthService.canCreateConduceLegalidad();
     if (!canCreate) {
       if (!mounted) return;
@@ -209,6 +211,7 @@ class _ConduceLegalidadOperativoFormScreenState
         _canCreate = false;
         _canSetSchedule = false;
         _canAssignScope = false;
+        _isSuperadmin = isSuperadmin;
         _loadingAccess = false;
       });
       return;
@@ -222,6 +225,7 @@ class _ConduceLegalidadOperativoFormScreenState
         _canCreate = canCreate;
         _canSetSchedule = canSetSchedule;
         _canAssignScope = false;
+        _isSuperadmin = isSuperadmin;
         _loadingAccess = false;
       });
       return;
@@ -257,6 +261,7 @@ class _ConduceLegalidadOperativoFormScreenState
         _canCreate = canCreate;
         _canSetSchedule = canSetSchedule;
         _canAssignScope = true;
+        _isSuperadmin = isSuperadmin;
         _unidades = meta.unidades;
         _delegaciones = meta.delegaciones;
         _unidadId = unidadId;
@@ -274,6 +279,7 @@ class _ConduceLegalidadOperativoFormScreenState
         _canCreate = canCreate;
         _canSetSchedule = canSetSchedule;
         _canAssignScope = true;
+        _isSuperadmin = isSuperadmin;
         _loadingAccess = false;
         _organizationError =
             'No se pudieron cargar las unidades y delegaciones: $e';
@@ -431,9 +437,13 @@ class _ConduceLegalidadOperativoFormScreenState
         return;
       }
     }
-    final manualCoordinates = CoordinatePairParser.parse(_coordenadasCtrl.text);
-    _lat = manualCoordinates?.latitude;
-    _lng = manualCoordinates?.longitude;
+    if (_isSuperadmin) {
+      final manualCoordinates = CoordinatePairParser.parse(
+        _coordenadasCtrl.text,
+      );
+      _lat = manualCoordinates?.latitude;
+      _lng = manualCoordinates?.longitude;
+    }
     if (!_formKey.currentState!.validate()) return;
 
     setState(() => _saving = true);
@@ -489,14 +499,47 @@ class _ConduceLegalidadOperativoFormScreenState
     } catch (e) {
       if (!mounted) return;
       final action = _editing ? 'actualizar' : 'activar';
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Error al $action: $e')));
+      final message = _displayError(e);
+      if (message.startsWith('Ya existe el operativo activo #')) {
+        await showDialog<void>(
+          context: context,
+          builder: (dialogContext) => AlertDialog(
+            icon: const Icon(
+              Icons.location_off_outlined,
+              color: Colors.red,
+              size: 40,
+            ),
+            title: const Text('Operativo activo cercano'),
+            content: Text(message),
+            actions: [
+              FilledButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: const Text('Entendido'),
+              ),
+            ],
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error al $action: $message')));
+      }
     } finally {
       if (mounted) {
         setState(() => _saving = false);
       }
     }
+  }
+
+  String _displayError(Object error) {
+    var message = error.toString().trim();
+    const prefixes = <String>['Exception: ', 'Error: '];
+    for (final prefix in prefixes) {
+      if (message.startsWith(prefix)) {
+        message = message.substring(prefix.length).trim();
+      }
+    }
+    return message;
   }
 
   @override
@@ -667,16 +710,22 @@ class _ConduceLegalidadOperativoFormScreenState
             TextFormField(
               controller: _coordenadasCtrl,
               enabled: !_saving && !_locating,
+              readOnly: !_isSuperadmin,
               keyboardType: TextInputType.text,
               autocorrect: false,
-              onChanged: _coordinatesChanged,
-              decoration: const InputDecoration(
+              enableInteractiveSelection: _isSuperadmin,
+              onChanged: _isSuperadmin ? _coordinatesChanged : null,
+              decoration: InputDecoration(
                 labelText: 'Coordenadas *',
                 hintText: '19.7023456, -101.1923456',
-                helperText:
-                    'Puedes escribirlas o usar el botón Obtener coordenadas.',
-                border: OutlineInputBorder(),
-                prefixIcon: Icon(Icons.pin_drop_outlined),
+                helperText: _isSuperadmin
+                    ? 'Superadmin: puedes corregirlas manualmente o usar el GPS.'
+                    : 'Se capturan únicamente con el botón Obtener coordenadas.',
+                border: const OutlineInputBorder(),
+                prefixIcon: const Icon(Icons.pin_drop_outlined),
+                suffixIcon: _isSuperadmin
+                    ? const Icon(Icons.admin_panel_settings_outlined)
+                    : const Icon(Icons.lock_outline),
               ),
               validator: _validateCoordinates,
             ),

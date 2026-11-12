@@ -72,6 +72,30 @@ void main() {
       expect(find.textContaining('2 mías'), findsOneWidget);
       expect(find.textContaining('5 resguardados'), findsNothing);
       expect(find.text('No debe aparecer'), findsNothing);
+      expect(find.byTooltip('Exportar boletas por usuario'), findsNothing);
+      expect(tester.takeException(), isNull);
+    }, () => MockClient(_response));
+  });
+
+  testWidgets('solo Superadmin ve la exportacion de boletas por usuario', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues(<String, Object>{
+      'auth_token': 'test-token',
+      'auth_role': 'Superadmin',
+      'auth_role_id': 1,
+      'auth_user_id': 1,
+    });
+
+    await http.runWithClient(() async {
+      await tester.pumpWidget(
+        const MaterialApp(home: ConduceLegalidadScreen()),
+      );
+      await tester.pumpAndSettle();
+      await tester.drag(find.byType(ListView), const Offset(0, -500));
+      await tester.pumpAndSettle();
+
+      expect(find.byTooltip('Exportar boletas por usuario'), findsOneWidget);
       expect(tester.takeException(), isNull);
     }, () => MockClient(_response));
   });

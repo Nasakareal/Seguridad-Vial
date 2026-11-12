@@ -84,6 +84,7 @@ class MainActivity : FlutterFragmentActivity() {
             "seguridad_vial_app/ptt_recorder"
         ).setMethodCallHandler { call, result ->
             when (call.method) {
+                "isSupported" -> result.success(isRugGearDevice())
                 "startRecording" -> startPttRecording(result)
                 "stopRecording" -> stopPttRecording(result)
                 "cancelRecording" -> cancelPttRecording(result)
@@ -94,7 +95,9 @@ class MainActivity : FlutterFragmentActivity() {
 
     override fun onStart() {
         super.onStart()
-        registerPttReceiver()
+        if (isRugGearDevice()) {
+            registerPttReceiver()
+        }
     }
 
     override fun onStop() {
@@ -113,8 +116,26 @@ class MainActivity : FlutterFragmentActivity() {
             addAction(PTT_DOWN_ACTION)
             addAction(PTT_UP_ACTION)
         }
-        registerReceiver(pttReceiver, filter)
-        pttReceiverRegistered = true
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                // RugGear emits these PTT intents from outside this app. Android 13+
+                // requires dynamically registered receivers to declare this explicitly.
+                registerReceiver(pttReceiver, filter, Context.RECEIVER_EXPORTED)
+            } else {
+                @Suppress("DEPRECATION")
+                registerReceiver(pttReceiver, filter)
+            }
+            pttReceiverRegistered = true
+        } catch (_: SecurityException) {
+            // PTT is optional. An OEM restriction must never prevent the app from
+            // starting; the on-screen PTT control remains available.
+            pttReceiverRegistered = false
+        }
+    }
+
+    private fun isRugGearDevice(): Boolean {
+        return Build.MANUFACTURER.equals(RUGGEAR, ignoreCase = true) ||
+            Build.BRAND.equals(RUGGEAR, ignoreCase = true)
     }
 
     private fun unregisterPttReceiver() {
@@ -322,18 +343,29 @@ class MainActivity : FlutterFragmentActivity() {
 
     private fun writeBytesInChunks(output: OutputStream, bytes: ByteArray) {
         var offset = 0
-        val chunkSize = 128
+        // Estas impresoras termicas reciben por SPP mas rapido de lo que
+        // alcanzan a vaciar su buffer. Si cerramos el socket con datos aun
+        // pendientes, el ultimo ticket queda truncado.
+        val chunkSize = 64
         while (offset < bytes.size) {
             val count = minOf(chunkSize, bytes.size - offset)
             output.write(bytes, offset, count)
             output.flush()
             offset += count
             if (offset < bytes.size) {
-                Thread.sleep(25)
+                Thread.sleep(60)
             }
         }
+
+        // El avance adicional protege el contenido util del ultimo documento
+        // y deja papel suficiente para desprenderlo aun al imprimir una copia.
+        output.write(TRAILING_FEED)
         output.flush()
-        Thread.sleep(400)
+
+        // OutputStream.flush() solo entrega los bytes a la pila Bluetooth; no
+        // garantiza que la impresora ya los haya consumido. Conservamos la
+        // conexion abierta para que termine de recibir su ultimo buffer.
+        Thread.sleep(2_000)
     }
 
     private fun createSocket(device: BluetoothDevice, insecure: Boolean): BluetoothSocket {
@@ -392,5 +424,7 @@ class MainActivity : FlutterFragmentActivity() {
         private val SPP_UUID: UUID = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB")
         private const val PTT_DOWN_ACTION = "android.intent.action.PTT.down"
         private const val PTT_UP_ACTION = "android.intent.action.PTT.up"
+        private const val RUGGEAR = "RugGear"
+        private val TRAILING_FEED = byteArrayOf(0x0A, 0x0A, 0x0A, 0x0A)
     }
 }

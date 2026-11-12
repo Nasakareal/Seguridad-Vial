@@ -7,6 +7,7 @@ void main() {
   testWidgets(
     'vehicle modal assigns a read-only inventory folio automatically',
     (tester) async {
+      final refreshRequests = <bool>[];
       await tester.binding.setSurfaceSize(const Size(900, 650));
       addTearDown(() => tester.binding.setSurfaceSize(null));
 
@@ -33,9 +34,12 @@ void main() {
                     partesDanadas: 'RAYÓN EN COSTADO DERECHO',
                     observaciones: 'CASCO BAJO EL ASIENTO',
                   ),
-                  gruasLoader: () async => const [
-                    {'id': 1, 'nombre': 'DANNYS'},
-                  ],
+                  gruasLoader: ({bool forceRefresh = false}) async {
+                    refreshRequests.add(forceRefresh);
+                    return const [
+                      {'id': 1, 'nombre': 'DANNYS'},
+                    ];
+                  },
                 ),
                 child: const Text('Abrir'),
               ),
@@ -49,6 +53,8 @@ void main() {
 
       expect(find.text('Editar vehículo'), findsOneWidget);
       expect(find.byType(ListView), findsOneWidget);
+      expect(refreshRequests, [false]);
+
       final inventoryDecorator = find.byWidgetPredicate(
         (widget) =>
             widget is InputDecorator &&

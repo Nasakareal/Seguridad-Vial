@@ -34,6 +34,7 @@ class _ConduceLegalidadScreenState extends State<ConduceLegalidadScreen>
   bool _loading = true;
   bool _canCreateLocal = false;
   bool _canRecoverDeleted = false;
+  bool _isSuperadmin = false;
   int? _deletingOperativoId;
   int? _sharingOperativoId;
   String? _error;
@@ -81,6 +82,7 @@ class _ConduceLegalidadScreenState extends State<ConduceLegalidadScreen>
 
     try {
       final canCreateLocal = await AuthService.canCreateConduceLegalidad();
+      final isSuperadmin = await AuthService.isSuperadmin();
       final canRecoverDeleted = await AuthService.getUserId() == 1;
       final rawMeta = await ConduceLegalidadService.fetchMeta(
         filterConduceLegalidadMotos: !widget.module.isAlcoholimetria,
@@ -124,6 +126,7 @@ class _ConduceLegalidadScreenState extends State<ConduceLegalidadScreen>
       if (!mounted) return;
       setState(() {
         _canCreateLocal = canCreateLocal;
+        _isSuperadmin = isSuperadmin;
         _canRecoverDeleted = canRecoverDeleted;
         _meta = meta;
         _listMode = effectiveMode;
@@ -242,6 +245,26 @@ class _ConduceLegalidadScreenState extends State<ConduceLegalidadScreen>
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text('No se pudo compartir: $e')));
+    } finally {
+      if (mounted) {
+        setState(() => _sharingOperativoId = null);
+      }
+    }
+  }
+
+  Future<void> _shareUserTotals(ConduceLegalidadOperativo operativo) async {
+    if (_sharingOperativoId != null) return;
+
+    setState(() => _sharingOperativoId = operativo.id);
+    try {
+      await ConduceLegalidadShareService.compartirTotalesPorUsuario(
+        operativoId: operativo.id,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('No se pudo exportar por usuario: $e')),
+      );
     } finally {
       if (mounted) {
         setState(() => _sharingOperativoId = null);
@@ -891,10 +914,13 @@ class _ConduceLegalidadScreenState extends State<ConduceLegalidadScreen>
                   operativo.canViewAllCapturas ||
                   (meta?.abilities.canViewAllCapturas ?? false),
               canShareTotals: meta?.abilities.canViewAllCapturas ?? false,
+              canExportUserTotals:
+                  _isSuperadmin && !widget.module.isAlcoholimetria,
               deleting: _deletingOperativoId == operativo.id,
               sharing: _sharingOperativoId == operativo.id,
               onTap: () => _openShow(operativo.id),
               onShareTotals: () => _shareTotals(operativo),
+              onExportUserTotals: () => _shareUserTotals(operativo),
               onEdit: () => _openEdit(operativo),
               onDelete: () => _confirmDeleteOperativo(operativo),
             ),
@@ -1145,10 +1171,12 @@ class _OperativoCard extends StatelessWidget {
   final ConduceLegalidadOperativo operativo;
   final bool canViewAll;
   final bool canShareTotals;
+  final bool canExportUserTotals;
   final bool deleting;
   final bool sharing;
   final VoidCallback onTap;
   final VoidCallback onShareTotals;
+  final VoidCallback onExportUserTotals;
   final VoidCallback onEdit;
   final VoidCallback onDelete;
 
@@ -1156,10 +1184,12 @@ class _OperativoCard extends StatelessWidget {
     required this.operativo,
     required this.canViewAll,
     required this.canShareTotals,
+    required this.canExportUserTotals,
     required this.deleting,
     required this.sharing,
     required this.onTap,
     required this.onShareTotals,
+    required this.onExportUserTotals,
     required this.onEdit,
     required this.onDelete,
   });
@@ -1236,6 +1266,13 @@ class _OperativoCard extends StatelessWidget {
                   onPressed: onShareTotals,
                   visualDensity: VisualDensity.compact,
                   icon: const Icon(Icons.share_outlined),
+                ),
+              if (canExportUserTotals)
+                IconButton(
+                  tooltip: 'Exportar boletas por usuario',
+                  onPressed: onExportUserTotals,
+                  visualDensity: VisualDensity.compact,
+                  icon: const Icon(Icons.summarize_outlined),
                 ),
               if (hasAdminActions)
                 PopupMenuButton<String>(

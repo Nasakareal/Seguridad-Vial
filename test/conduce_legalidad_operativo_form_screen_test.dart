@@ -49,6 +49,14 @@ void main() {
     expect(find.text('Nombre(s) del firmante *'), findsOneWidget);
     expect(find.text('Apellido paterno del firmante *'), findsOneWidget);
     expect(find.text('Apellido materno del firmante *'), findsOneWidget);
+
+    await tester.drag(find.byType(ListView), const Offset(0, -1400));
+    await tester.pumpAndSettle();
+    expect(
+      find.text('Se capturan únicamente con el botón Obtener coordenadas.'),
+      findsOneWidget,
+    );
+    expect(find.byIcon(Icons.lock_outline), findsOneWidget);
   });
 
   testWidgets(
@@ -163,6 +171,14 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.byType(DropdownButtonFormField<int>), findsOneWidget);
+
+      await tester.drag(find.byType(ListView), const Offset(0, -1400));
+      await tester.pumpAndSettle();
+      expect(
+        find.text('Superadmin: puedes corregirlas manualmente o usar el GPS.'),
+        findsOneWidget,
+      );
+      expect(find.byIcon(Icons.admin_panel_settings_outlined), findsOneWidget);
     },
   );
 }

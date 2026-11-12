@@ -5,6 +5,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../models/conduce_legalidad.dart';
 import 'auth_service.dart';
 import 'conduce_legalidad_service.dart';
 
@@ -20,6 +21,99 @@ class ConduceLegalidadShareService {
       operativoId: operativoId,
     );
     await _compartirPayload(payload);
+  }
+
+  static Future<void> compartirTotalesPorUsuario({
+    required int operativoId,
+  }) async {
+    if (!await AuthService.isSuperadmin()) {
+      throw Exception('Esta exportación es exclusiva para Superadmin.');
+    }
+
+    final operativo = await ConduceLegalidadService.fetchOperativo(operativoId);
+    if (operativo.isAlcoholimetria) {
+      throw Exception(
+        'El concentrado de folios CL sólo aplica a Conduce con Legalidad.',
+      );
+    }
+
+    final texto = construirTotalesPorUsuario(operativo);
+    await Share.share(
+      texto,
+      subject: 'Totales por usuario · Operativo CL-${operativo.id}',
+    );
+  }
+
+  static String construirTotalesPorUsuario(
+    ConduceLegalidadOperativo operativo,
+  ) {
+    final grupos = <String, _TotalesUsuario>{};
+    final capturas = List<ConduceLegalidadCaptura>.from(operativo.capturas)
+      ..sort((a, b) {
+        final aNumero = a.folioNumero ?? a.id;
+        final bNumero = b.folioNumero ?? b.id;
+        return aNumero.compareTo(bNumero);
+      });
+
+    for (final captura in capturas) {
+      final creador = captura.creador;
+      final userId = creador?.id ?? captura.createdBy;
+      final nombre = (creador?.nombre ?? captura.agenteNombre ?? '').trim();
+      final nombreVisible = nombre.isNotEmpty
+          ? nombre
+          : userId != null
+          ? 'Usuario #$userId'
+          : 'Usuario sin identificar';
+      final key = userId != null
+          ? 'id:$userId'
+          : 'nombre:${nombreVisible.toLowerCase()}';
+      final folio = captura.folioPara(operativoId: operativo.id, prefijo: 'CL');
+
+      grupos
+          .putIfAbsent(
+            key,
+            () => _TotalesUsuario(nombre: nombreVisible, folios: <String>[]),
+          )
+          .folios
+          .add(folio);
+    }
+
+    final usuarios = grupos.values.toList()
+      ..sort((a, b) {
+        final total = b.folios.length.compareTo(a.folios.length);
+        return total != 0
+            ? total
+            : a.nombre.toLowerCase().compareTo(b.nombre.toLowerCase());
+      });
+    final punto = operativo.lugarConNumero.trim().isNotEmpty
+        ? operativo.lugarConNumero.trim()
+        : operativo.nombre.trim();
+    final lines = <String>[
+      'CONDUCE CON LEGALIDAD',
+      'TOTALES DE BOLETAS POR USUARIO',
+      '',
+      'Operativo: CL-${operativo.id}',
+      if (punto.isNotEmpty) 'Punto: $punto',
+      if ((operativo.fecha ?? '').trim().isNotEmpty)
+        'Fecha: ${operativo.fecha!.trim()}',
+      'Total general: ${capturas.length} ${capturas.length == 1 ? 'boleta' : 'boletas'}',
+      '',
+    ];
+
+    if (usuarios.isEmpty) {
+      lines.add('Sin boletas registradas.');
+    } else {
+      for (var index = 0; index < usuarios.length; index++) {
+        final usuario = usuarios[index];
+        lines.add(
+          '${index + 1}. ${usuario.nombre} — ${usuario.folios.length} ${usuario.folios.length == 1 ? 'boleta' : 'boletas'}',
+        );
+        lines.add(usuario.folios.join(', '));
+        if (index < usuarios.length - 1) lines.add('');
+      }
+    }
+
+    return lines.join('\n').trim();
   }
 
   static Future<void> compartirCaptura({
@@ -187,4 +281,11 @@ class ConduceLegalidadShareService {
     if (cleanUrl.endsWith('.jpg')) return 'jpg';
     return 'jpg';
   }
+}
+
+class _TotalesUsuario {
+  final String nombre;
+  final List<String> folios;
+
+  const _TotalesUsuario({required this.nombre, required this.folios});
 }
