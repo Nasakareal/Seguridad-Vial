@@ -3,18 +3,22 @@ import 'auth_service.dart';
 class AdministrativeAccess {
   final bool canSeeUsers;
   final bool canSeePersonal;
+  final bool canSeeArchivoSiniestros;
   final bool canSeeSiniestrosFiles;
   final bool canSeeDelegacionesFiles;
   final bool canSeeVialidadesFiles;
   final bool canSeeFomentoFiles;
+  final bool canSeeConduceLegalidadReport;
 
   const AdministrativeAccess({
     required this.canSeeUsers,
     required this.canSeePersonal,
+    required this.canSeeArchivoSiniestros,
     required this.canSeeSiniestrosFiles,
     required this.canSeeDelegacionesFiles,
     required this.canSeeVialidadesFiles,
     required this.canSeeFomentoFiles,
+    required this.canSeeConduceLegalidadReport,
   });
 
   bool get canSeeAnyStatisticsFiles =>
@@ -24,7 +28,11 @@ class AdministrativeAccess {
       canSeeFomentoFiles;
 
   bool get canSeeConfigurationMenu =>
-      canSeeUsers || canSeePersonal || canSeeAnyStatisticsFiles;
+      canSeeUsers ||
+      canSeePersonal ||
+      canSeeArchivoSiniestros ||
+      canSeeAnyStatisticsFiles ||
+      canSeeConduceLegalidadReport;
 }
 
 class AdministrativeAccessService {
@@ -62,6 +70,8 @@ class AdministrativeAccessService {
         hasAdminRole && (isSuperadmin || hasPermission('ver usuarios'));
     final canSeePersonal =
         hasAdminRole && (isSuperadmin || hasPermission('ver personal'));
+    final canSeeArchivoSiniestros =
+        isSuperadmin || hasPermission('ver archivo siniestros');
 
     final canSeeSiniestrosFiles =
         hasAdminRole &&
@@ -81,14 +91,22 @@ class AdministrativeAccessService {
             hasFullOperationalAccess ||
             isSeguridadVial ||
             isFomento);
+    final canSeeConduceLegalidadReport =
+        hasAdminRole &&
+        (isSuperadmin ||
+            hasPermission('ver estadisticas globales') ||
+            (hasPermission('ver configuraciones') &&
+                hasPermission('ver estadisticas')));
 
     return AdministrativeAccess(
       canSeeUsers: canSeeUsers,
       canSeePersonal: canSeePersonal,
+      canSeeArchivoSiniestros: canSeeArchivoSiniestros,
       canSeeSiniestrosFiles: canSeeSiniestrosFiles,
       canSeeDelegacionesFiles: canSeeDelegacionesFiles,
       canSeeVialidadesFiles: canSeeVialidadesFiles,
       canSeeFomentoFiles: canSeeFomentoFiles,
+      canSeeConduceLegalidadReport: canSeeConduceLegalidadReport,
     );
   }
 

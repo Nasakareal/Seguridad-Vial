@@ -311,11 +311,16 @@ class TrackingService {
       return TrackingTaskHandler.kHourlyInterval;
     }
 
+    if (profile == AuthService.locationTrackingIntervalDefault) {
+      return TrackingTaskHandler.normalIntervalForSpeed(speedMps);
+    }
+
     return Duration.zero;
   }
 
   static bool _shouldTrackIosSentAt(String intervalProfile) {
-    return intervalProfile == AuthService.locationTrackingIntervalHourly ||
+    return intervalProfile == AuthService.locationTrackingIntervalDefault ||
+        intervalProfile == AuthService.locationTrackingIntervalHourly ||
         intervalProfile ==
             AuthService.locationTrackingIntervalVialidadesUrbanas;
   }

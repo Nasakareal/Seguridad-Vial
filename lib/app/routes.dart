@@ -31,6 +31,7 @@ class AppRoutes {
   static const String settingsPersonalIncidenciaCreate =
       '/settings/personal/incidencias/create';
   static const String settingsStatisticsFiles = '/settings/statistics-files';
+  static const String archivoSiniestros = '/settings/archivo-siniestros';
   static const String tutoriales = '/tutoriales';
   static const String directorioRedApoyo = '/directorio-red-apoyo';
   static const String directorioRedApoyoShow = '/directorio-red-apoyo/show';

@@ -26,14 +26,21 @@ class TrackingTaskHandler extends TaskHandler {
   DateTime? _enabledByCommanderCheckedAt;
 
   static const Duration kMinInterval = Duration(seconds: 32);
-  static const Duration kStillInterval = Duration(seconds: 70);
-  static const Duration kSlowInterval = Duration(seconds: 50);
+  static const Duration kStillInterval = Duration(minutes: 3);
+  static const Duration kSlowInterval = Duration(seconds: 90);
   static const Duration kMoveInterval = Duration(seconds: 40);
 
   static const Duration kExtendedMinInterval = Duration(minutes: 7);
   static const Duration kExtendedStillInterval = Duration(minutes: 10);
   static const Duration kExtendedSlowInterval = Duration(minutes: 9);
   static const Duration kHourlyInterval = Duration(hours: 1);
+
+  static Duration normalIntervalForSpeed(double speedMps) {
+    if (!speedMps.isFinite || speedMps < 0) return kSlowInterval;
+    if (speedMps <= 0.5) return kStillInterval;
+    if (speedMps <= 2.0) return kSlowInterval;
+    return kMoveInterval;
+  }
 
   Duration _intervalForSpeed(double speedMps, {required String profile}) {
     if (profile == AuthService.locationTrackingIntervalHourly ||
@@ -49,10 +56,7 @@ class TrackingTaskHandler extends TaskHandler {
       return kExtendedMinInterval;
     }
 
-    if (!speedMps.isFinite || speedMps < 0) return kSlowInterval;
-    if (speedMps <= 0.5) return kStillInterval;
-    if (speedMps <= 2.0) return kSlowInterval;
-    return kMoveInterval;
+    return normalIntervalForSpeed(speedMps);
   }
 
   Duration _minIntervalForProfile(String profile) {

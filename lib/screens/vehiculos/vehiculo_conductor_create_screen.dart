@@ -25,6 +25,15 @@ class VehiculoConductorCreateScreen extends StatefulWidget {
 
 class _VehiculoConductorCreateScreenState
     extends State<VehiculoConductorCreateScreen> {
+  static const _situacionPresente = 'PRESENTE';
+  static const _situacionesConductor = <String, String>{
+    _situacionPresente: 'Presente / proporcionó datos',
+    'NO_SE_ENCONTRABA': 'No se encontraba en el lugar',
+    'NO_PROPORCIONO_INFORMACION': 'No quiso proporcionar información',
+    'SE_DIO_A_LA_FUGA': 'Se dio a la fuga',
+    'SE_RETIRO_DEL_LUGAR': 'Se retiró del lugar',
+  };
+
   bool _cargando = true;
   bool _guardando = false;
 
@@ -47,6 +56,7 @@ class _VehiculoConductorCreateScreenState
   final _numeroLicenciaCtrl = TextEditingController();
   DateTime? _vigenciaLicencia;
   String? _sexo;
+  String _situacionConductor = _situacionPresente;
 
   bool _permanente = false;
   bool _cinturon = false;
@@ -146,6 +156,11 @@ class _VehiculoConductorCreateScreenState
 
     // ✅ Prefill SOLO una vez, y SOLO si el usuario no empezó a editar
     if (!_prefilledOnce && !_hasUserTypedSomething()) {
+      final situacion = _safeText(data['situacion_conductor']);
+      if (_situacionesConductor.containsKey(situacion)) {
+        _situacionConductor = situacion;
+      }
+
       final conductores = data['conductores'];
       if (conductores is List &&
           conductores.isNotEmpty &&
@@ -324,6 +339,7 @@ class _VehiculoConductorCreateScreenState
       tipoLicencia: _tipoLicenciaCtrl.text.trim(),
       estadoLicencia: _estadoLicenciaCtrl.text.trim(),
       numeroLicencia: _numeroLicenciaCtrl.text.trim(),
+      requireNombre: _situacionConductor == _situacionPresente,
     );
     if (validationError != null) {
       ScaffoldMessenger.of(
@@ -332,14 +348,15 @@ class _VehiculoConductorCreateScreenState
       return;
     }
 
-    final duplicateError =
-        await VehiculoFormService.validateConductorDuplicatesWithinHecho(
-          hechoId: hechoId,
-          hechoClientUuid: null,
-          existingVehiculos: _vehiculosSnapshot,
-          currentVehiculoId: vehiculoId,
-          conductorNombre: _nombreCtrl.text.trim(),
-        );
+    final duplicateError = _situacionConductor == _situacionPresente
+        ? await VehiculoFormService.validateConductorDuplicatesWithinHecho(
+            hechoId: hechoId,
+            hechoClientUuid: null,
+            existingVehiculos: _vehiculosSnapshot,
+            currentVehiculoId: vehiculoId,
+            conductorNombre: _nombreCtrl.text.trim(),
+          )
+        : null;
     if (duplicateError != null) {
       if (!mounted) return;
       ScaffoldMessenger.of(
@@ -377,6 +394,7 @@ class _VehiculoConductorCreateScreenState
         // vehículo. Conserva este valor para no perderlo ni provocar una
         // validación en las instalaciones que ya lo exigen.
         'reporte_robo': _toBool(_vehiculo['reporte_robo']),
+        'situacion_conductor': _situacionConductor,
 
         // ===== CONDUCTOR =====
         'conductor_nombre': _nombreCtrl.text.trim(),
@@ -516,6 +534,7 @@ class _VehiculoConductorCreateScreenState
       'numero_licencia': _numeroLicenciaCtrl.text,
       'vigencia_licencia': _vigenciaLicencia?.toIso8601String(),
       'sexo': _sexo,
+      'situacion_conductor': _situacionConductor,
       'permanente': _permanente,
       'cinturon': _cinturon,
       'antecedente_conductor': _antecedenteConductor,
@@ -549,6 +568,10 @@ class _VehiculoConductorCreateScreenState
     );
     final sexo = (draft['sexo'] ?? '').toString().trim();
     _sexo = sexo.isEmpty ? null : sexo;
+    final situacion = (draft['situacion_conductor'] ?? '').toString().trim();
+    _situacionConductor = _situacionesConductor.containsKey(situacion)
+        ? situacion
+        : _situacionPresente;
     _permanente = _toBool(draft['permanente']);
     _cinturon = _toBool(draft['cinturon']);
     _antecedenteConductor = _toBool(draft['antecedente_conductor']);
@@ -626,224 +649,259 @@ class _VehiculoConductorCreateScreenState
                 key: _formKey,
                 child: ListView(
                   children: [
-                    OutlinedButton.icon(
-                      onPressed: _guardando ? null : _scanLicencia,
-                      icon: const Icon(Icons.qr_code_scanner),
-                      label: const Text('Escanear licencia de conducir'),
+                    Text(
+                      'Situación del conductor',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                     const SizedBox(height: 8),
-                    OutlinedButton.icon(
-                      onPressed: _guardando ? null : _abrirPuntosLicencia,
-                      icon: const Icon(Icons.scoreboard_outlined),
-                      label: const Text('Consultar puntos de esta licencia'),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: _situacionesConductor.entries.map((entry) {
+                        return ChoiceChip(
+                          label: Text(entry.value),
+                          selected: _situacionConductor == entry.key,
+                          onSelected: _guardando
+                              ? null
+                              : (_) {
+                                  setState(
+                                    () => _situacionConductor = entry.key,
+                                  );
+                                  _markDraftChanged();
+                                },
+                        );
+                      }).toList(),
                     ),
-                    const SizedBox(height: 10),
-                    TextFormField(
-                      controller: _nombreCtrl,
-                      decoration: const InputDecoration(
-                        labelText: 'Nombre del conductor',
-                        prefixIcon: Icon(Icons.person),
-                      ),
-                      validator: (v) =>
-                          VehiculoFormService.validateRequiredText(
-                            v,
-                            max: 255,
-                            label: 'Nombre del conductor',
-                          ),
+                    const SizedBox(height: 8),
+                    Text(
+                      _situacionConductor == _situacionPresente
+                          ? 'Captura los datos disponibles del conductor.'
+                          : 'No es necesario inventar un nombre. Esta situación aparecerá en la tarjeta compartida.',
+                      style: Theme.of(context).textTheme.bodySmall,
                     ),
-                    const SizedBox(height: 10),
-
-                    TextFormField(
-                      controller: _telefonoCtrl,
-                      keyboardType: TextInputType.phone,
-                      inputFormatters: [
-                        FilteringTextInputFormatter.digitsOnly,
-                        LengthLimitingTextInputFormatter(13),
-                      ],
-                      decoration: const InputDecoration(
-                        labelText: 'Teléfono (10 dígitos)',
-                        helperText:
-                            'Puedes escribir 4434765057 o pegarlo con +52.',
-                        prefixIcon: Icon(Icons.phone),
+                    const Divider(height: 28),
+                    if (_situacionConductor == _situacionPresente) ...[
+                      OutlinedButton.icon(
+                        onPressed: _guardando ? null : _scanLicencia,
+                        icon: const Icon(Icons.qr_code_scanner),
+                        label: const Text('Escanear licencia de conducir'),
                       ),
-                      validator: VehiculoFormService.validateTelefono,
-                    ),
-                    const SizedBox(height: 10),
-
-                    TextFormField(
-                      controller: _domicilioCtrl,
-                      decoration: const InputDecoration(
-                        labelText: 'Domicilio',
-                        prefixIcon: Icon(Icons.home),
+                      const SizedBox(height: 8),
+                      OutlinedButton.icon(
+                        onPressed: _guardando ? null : _abrirPuntosLicencia,
+                        icon: const Icon(Icons.scoreboard_outlined),
+                        label: const Text('Consultar puntos de esta licencia'),
                       ),
-                      validator: (v) =>
-                          VehiculoFormService.validateOptionalText(
-                            v,
-                            max: 255,
-                            label: 'Domicilio',
-                          ),
-                    ),
-                    const SizedBox(height: 10),
-
-                    DropdownButtonFormField<String>(
-                      value: _sexo,
-                      isExpanded: true,
-                      decoration: const InputDecoration(
-                        labelText: 'Sexo',
-                        prefixIcon: Icon(Icons.badge),
-                      ),
-                      items: const [
-                        DropdownMenuItem(
-                          value: 'MASCULINO',
-                          child: Text('MASCULINO'),
+                      const SizedBox(height: 10),
+                      TextFormField(
+                        controller: _nombreCtrl,
+                        decoration: const InputDecoration(
+                          labelText: 'Nombre del conductor',
+                          prefixIcon: Icon(Icons.person),
                         ),
-                        DropdownMenuItem(
-                          value: 'FEMENINO',
-                          child: Text('FEMENINO'),
+                        validator: (v) =>
+                            VehiculoFormService.validateRequiredText(
+                              v,
+                              max: 255,
+                              label: 'Nombre del conductor',
+                            ),
+                      ),
+                      const SizedBox(height: 10),
+
+                      TextFormField(
+                        controller: _telefonoCtrl,
+                        keyboardType: TextInputType.phone,
+                        inputFormatters: [
+                          FilteringTextInputFormatter.digitsOnly,
+                          LengthLimitingTextInputFormatter(13),
+                        ],
+                        decoration: const InputDecoration(
+                          labelText: 'Teléfono (10 dígitos)',
+                          helperText:
+                              'Puedes escribir 4434765057 o pegarlo con +52.',
+                          prefixIcon: Icon(Icons.phone),
                         ),
-                        DropdownMenuItem(value: 'OTRO', child: Text('OTRO')),
-                      ],
-                      onChanged: (v) {
-                        // ✅ solo esto, sin recargar nada
-                        setState(() => _sexo = v);
-                        _markDraftChanged();
-                      },
-                    ),
-                    const SizedBox(height: 10),
-
-                    TextFormField(
-                      controller: _ocupacionCtrl,
-                      decoration: const InputDecoration(
-                        labelText: 'Ocupación',
-                        prefixIcon: Icon(Icons.work),
+                        validator: VehiculoFormService.validateTelefono,
                       ),
-                      validator: (v) =>
-                          VehiculoFormService.validateOptionalText(
-                            v,
-                            max: 255,
-                            label: 'Ocupación',
-                          ),
-                    ),
-                    const SizedBox(height: 10),
+                      const SizedBox(height: 10),
 
-                    TextFormField(
-                      controller: _edadCtrl,
-                      keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(
-                        labelText: 'Edad',
-                        prefixIcon: Icon(Icons.numbers),
-                      ),
-                      validator: VehiculoFormService.validateEdad,
-                    ),
-
-                    const Divider(height: 24),
-
-                    SwitchListTile(
-                      title: const Text('Licencia permanente'),
-                      value: _permanente,
-                      onChanged: (v) {
-                        setState(() => _permanente = v);
-                        _markDraftChanged();
-                      },
-                    ),
-                    const SizedBox(height: 6),
-
-                    if (!_permanente)
-                      ListTile(
-                        contentPadding: EdgeInsets.zero,
-                        title: const Text('Vigencia licencia'),
-                        subtitle: Text(
-                          _vigenciaLicencia == null
-                              ? '—'
-                              : _fmtDate(_vigenciaLicencia!),
+                      TextFormField(
+                        controller: _domicilioCtrl,
+                        decoration: const InputDecoration(
+                          labelText: 'Domicilio',
+                          prefixIcon: Icon(Icons.home),
                         ),
-                        trailing: IconButton(
-                          icon: const Icon(Icons.date_range),
-                          onPressed: _pickVigencia,
+                        validator: (v) =>
+                            VehiculoFormService.validateOptionalText(
+                              v,
+                              max: 255,
+                              label: 'Domicilio',
+                            ),
+                      ),
+                      const SizedBox(height: 10),
+
+                      DropdownButtonFormField<String>(
+                        value: _sexo,
+                        isExpanded: true,
+                        decoration: const InputDecoration(
+                          labelText: 'Sexo',
+                          prefixIcon: Icon(Icons.badge),
                         ),
+                        items: const [
+                          DropdownMenuItem(
+                            value: 'MASCULINO',
+                            child: Text('MASCULINO'),
+                          ),
+                          DropdownMenuItem(
+                            value: 'FEMENINO',
+                            child: Text('FEMENINO'),
+                          ),
+                          DropdownMenuItem(value: 'OTRO', child: Text('OTRO')),
+                        ],
+                        onChanged: (v) {
+                          // ✅ solo esto, sin recargar nada
+                          setState(() => _sexo = v);
+                          _markDraftChanged();
+                        },
+                      ),
+                      const SizedBox(height: 10),
+
+                      TextFormField(
+                        controller: _ocupacionCtrl,
+                        decoration: const InputDecoration(
+                          labelText: 'Ocupación',
+                          prefixIcon: Icon(Icons.work),
+                        ),
+                        validator: (v) =>
+                            VehiculoFormService.validateOptionalText(
+                              v,
+                              max: 255,
+                              label: 'Ocupación',
+                            ),
+                      ),
+                      const SizedBox(height: 10),
+
+                      TextFormField(
+                        controller: _edadCtrl,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(
+                          labelText: 'Edad',
+                          prefixIcon: Icon(Icons.numbers),
+                        ),
+                        validator: VehiculoFormService.validateEdad,
                       ),
 
-                    TextFormField(
-                      controller: _tipoLicenciaCtrl,
-                      decoration: const InputDecoration(
-                        labelText: 'Tipo de licencia',
-                      ),
-                      validator: (v) =>
-                          VehiculoFormService.validateOptionalText(
-                            v,
-                            max: 50,
-                            label: 'Tipo de licencia',
-                          ),
-                    ),
-                    const SizedBox(height: 10),
-                    TextFormField(
-                      controller: _estadoLicenciaCtrl,
-                      decoration: const InputDecoration(
-                        labelText: 'Estado de licencia',
-                      ),
-                      validator: (v) =>
-                          VehiculoFormService.validateOptionalText(
-                            v,
-                            max: 100,
-                            label: 'Estado de licencia',
-                          ),
-                    ),
-                    const SizedBox(height: 10),
-                    TextFormField(
-                      controller: _numeroLicenciaCtrl,
-                      decoration: const InputDecoration(
-                        labelText: 'Número de licencia',
-                      ),
-                      validator: (v) =>
-                          VehiculoFormService.validateOptionalText(
-                            v,
-                            max: 50,
-                            label: 'Número de licencia',
-                          ),
-                    ),
+                      const Divider(height: 24),
 
-                    const Divider(height: 24),
+                      SwitchListTile(
+                        title: const Text('Licencia permanente'),
+                        value: _permanente,
+                        onChanged: (v) {
+                          setState(() => _permanente = v);
+                          _markDraftChanged();
+                        },
+                      ),
+                      const SizedBox(height: 6),
 
-                    SwitchListTile(
-                      title: const Text('Cinturón'),
-                      value: _cinturon,
-                      onChanged: (v) {
-                        setState(() => _cinturon = v);
-                        _markDraftChanged();
-                      },
-                    ),
-                    AntecedenteHighlightTile(
-                      title: 'Antecedente conductor',
-                      value: _antecedenteConductor,
-                      onChanged: (v) {
-                        setState(() => _antecedenteConductor = v);
-                        _markDraftChanged();
-                      },
-                    ),
-                    SwitchListTile(
-                      title: const Text('Certificado lesiones'),
-                      value: _certificadoLesiones,
-                      onChanged: (v) {
-                        setState(() => _certificadoLesiones = v);
-                        _markDraftChanged();
-                      },
-                    ),
-                    SwitchListTile(
-                      title: const Text('Certificado alcoholemia'),
-                      value: _certificadoAlcoholemia,
-                      onChanged: (v) {
-                        setState(() => _certificadoAlcoholemia = v);
-                        _markDraftChanged();
-                      },
-                    ),
-                    SwitchListTile(
-                      title: const Text('Aliento etílico'),
-                      value: _alientoEtilico,
-                      onChanged: (v) {
-                        setState(() => _alientoEtilico = v);
-                        _markDraftChanged();
-                      },
-                    ),
+                      if (!_permanente)
+                        ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          title: const Text('Vigencia licencia'),
+                          subtitle: Text(
+                            _vigenciaLicencia == null
+                                ? '—'
+                                : _fmtDate(_vigenciaLicencia!),
+                          ),
+                          trailing: IconButton(
+                            icon: const Icon(Icons.date_range),
+                            onPressed: _pickVigencia,
+                          ),
+                        ),
+
+                      TextFormField(
+                        controller: _tipoLicenciaCtrl,
+                        decoration: const InputDecoration(
+                          labelText: 'Tipo de licencia',
+                        ),
+                        validator: (v) =>
+                            VehiculoFormService.validateOptionalText(
+                              v,
+                              max: 50,
+                              label: 'Tipo de licencia',
+                            ),
+                      ),
+                      const SizedBox(height: 10),
+                      TextFormField(
+                        controller: _estadoLicenciaCtrl,
+                        decoration: const InputDecoration(
+                          labelText: 'Estado de licencia',
+                        ),
+                        validator: (v) =>
+                            VehiculoFormService.validateOptionalText(
+                              v,
+                              max: 100,
+                              label: 'Estado de licencia',
+                            ),
+                      ),
+                      const SizedBox(height: 10),
+                      TextFormField(
+                        controller: _numeroLicenciaCtrl,
+                        decoration: const InputDecoration(
+                          labelText: 'Número de licencia',
+                        ),
+                        validator: (v) =>
+                            VehiculoFormService.validateOptionalText(
+                              v,
+                              max: 50,
+                              label: 'Número de licencia',
+                            ),
+                      ),
+
+                      const Divider(height: 24),
+
+                      SwitchListTile(
+                        title: const Text('Cinturón'),
+                        value: _cinturon,
+                        onChanged: (v) {
+                          setState(() => _cinturon = v);
+                          _markDraftChanged();
+                        },
+                      ),
+                      AntecedenteHighlightTile(
+                        title: 'Antecedente conductor',
+                        value: _antecedenteConductor,
+                        onChanged: (v) {
+                          setState(() => _antecedenteConductor = v);
+                          _markDraftChanged();
+                        },
+                      ),
+                      SwitchListTile(
+                        title: const Text('Certificado lesiones'),
+                        value: _certificadoLesiones,
+                        onChanged: (v) {
+                          setState(() => _certificadoLesiones = v);
+                          _markDraftChanged();
+                        },
+                      ),
+                      SwitchListTile(
+                        title: const Text('Certificado alcoholemia'),
+                        value: _certificadoAlcoholemia,
+                        onChanged: (v) {
+                          setState(() => _certificadoAlcoholemia = v);
+                          _markDraftChanged();
+                        },
+                      ),
+                      SwitchListTile(
+                        title: const Text('Aliento etílico'),
+                        value: _alientoEtilico,
+                        onChanged: (v) {
+                          setState(() => _alientoEtilico = v);
+                          _markDraftChanged();
+                        },
+                      ),
+                    ],
 
                     const SizedBox(height: 18),
 

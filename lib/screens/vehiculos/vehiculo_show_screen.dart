@@ -112,6 +112,20 @@ class _VehiculoShowScreenState extends State<VehiculoShowScreen> {
 
   String _boolText(dynamic value) => _toBool(value) ? 'Sí' : 'No';
 
+  String _situacionConductorText() {
+    const labels = <String, String>{
+      'PRESENTE': 'Presente / proporcionó datos',
+      'NO_SE_ENCONTRABA': 'No se encontraba en el lugar',
+      'NO_PROPORCIONO_INFORMACION': 'No quiso proporcionar información',
+      'SE_DIO_A_LA_FUGA': 'Se dio a la fuga',
+      'SE_RETIRO_DEL_LUGAR': 'Se retiró del lugar',
+    };
+    final value = (_vehiculo['situacion_conductor'] ?? 'PRESENTE')
+        .toString()
+        .trim();
+    return labels[value] ?? value.replaceAll('_', ' ');
+  }
+
   Future<void> _loadAll() async {
     setState(() {
       _loading = true;
@@ -345,6 +359,7 @@ class _VehiculoShowScreenState extends State<VehiculoShowScreen> {
                       _boolText(_vehiculo['reporte_robo']),
                     ),
                   _sectionTitle('Conductor(es)'),
+                  _kv('Situación', _situacionConductorText()),
                   if (_conductores.isEmpty)
                     const Text('Sin conductor registrado.')
                   else

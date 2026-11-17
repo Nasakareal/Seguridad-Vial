@@ -170,273 +170,282 @@ class AppAccountDrawer extends StatelessWidget {
                   child: ListView(
                     padding: drawerScrollablePadding(context),
                     children: [
-                      const DrawerSectionLabel(label: 'Cuenta'),
-                      DrawerSurface(
-                        child: Column(
-                          children: [
-                            DrawerActionTile(
-                              icon: Icons.person_outline,
-                              title: 'Perfil',
-                              subtitle: 'Ver mis datos y rol actual',
-                              onTap: () => _goTo(context, AppRoutes.profile),
-                            ),
-                            Divider(
-                              height: 1,
-                              color: Colors.grey.shade200,
-                              indent: 66,
-                            ),
-                            DrawerActionTile(
-                              icon: Icons.manage_search_outlined,
-                              title: 'Mis capturas',
-                              subtitle: 'Registros subidos por mi usuario',
-                              onTap: () =>
-                                  _goTo(context, AppRoutes.misCapturas),
-                            ),
-                            Divider(
-                              height: 1,
-                              color: Colors.grey.shade200,
-                              indent: 66,
-                            ),
-                            DrawerActionTile(
-                              icon: Icons.lock_outline,
-                              title: 'Cambiar contraseña',
-                              subtitle: 'Actualizar credenciales de acceso',
-                              onTap: () =>
-                                  _goTo(context, AppRoutes.changePassword),
-                            ),
-                          ],
-                        ),
+                      DrawerExpandableSection(
+                        icon: Icons.account_circle_outlined,
+                        title: 'Cuenta',
+                        subtitle: 'Perfil, capturas y contraseña',
+                        children: [
+                          DrawerActionTile(
+                            icon: Icons.person_outline,
+                            title: 'Perfil',
+                            subtitle: 'Ver mis datos y rol actual',
+                            onTap: () => _goTo(context, AppRoutes.profile),
+                          ),
+                          Divider(
+                            height: 1,
+                            color: Colors.grey.shade200,
+                            indent: 66,
+                          ),
+                          DrawerActionTile(
+                            icon: Icons.manage_search_outlined,
+                            title: 'Mis capturas',
+                            subtitle: 'Registros subidos por mi usuario',
+                            onTap: () => _goTo(context, AppRoutes.misCapturas),
+                          ),
+                          Divider(
+                            height: 1,
+                            color: Colors.grey.shade200,
+                            indent: 66,
+                          ),
+                          DrawerActionTile(
+                            icon: Icons.lock_outline,
+                            title: 'Cambiar contraseña',
+                            subtitle: 'Actualizar credenciales de acceso',
+                            onTap: () =>
+                                _goTo(context, AppRoutes.changePassword),
+                          ),
+                        ],
                       ),
                       const SizedBox(height: 12),
                       if (summary?.canUsePatrol == true) ...[
-                        const DrawerSectionLabel(label: 'Patrulla'),
-                        DrawerSurface(
-                          child: Column(
-                            children: _withDividers([
+                        DrawerExpandableSection(
+                          icon: Icons.local_police_outlined,
+                          title: 'Patrulla',
+                          subtitle: 'Turno, servicio e historial',
+                          children: _withDividers([
+                            DrawerActionTile(
+                              icon: Icons.key_rounded,
+                              title: 'Recibir patrulla',
+                              subtitle:
+                                  'Inspección, evidencia e inicio de turno',
+                              onTap: () => _goTo(
+                                context,
+                                AppRoutes.patrullaServicio,
+                                arguments: 'recibir',
+                              ),
+                            ),
+                            DrawerActionTile(
+                              icon: Icons.local_police_outlined,
+                              title: 'Mi servicio de patrulla',
+                              subtitle: 'Bitácora, kilometraje y entrega',
+                              onTap: () => _goTo(
+                                context,
+                                AppRoutes.patrullaServicio,
+                                arguments: 'servicio',
+                              ),
+                            ),
+                            DrawerActionTile(
+                              icon: Icons.history_rounded,
+                              title: 'Historial de patrullas',
+                              subtitle: 'Consultar servicios anteriores',
+                              onTap: () => _goTo(
+                                context,
+                                AppRoutes.patrullaServicio,
+                                arguments: 'historial',
+                              ),
+                            ),
+                            if (summary?.canViewDailyPatrolLog == true)
                               DrawerActionTile(
-                                icon: Icons.key_rounded,
-                                title: 'Recibir patrulla',
+                                icon: Icons.calendar_view_day_rounded,
+                                title: 'Bitácora diaria del equipo',
                                 subtitle:
-                                    'Inspección, evidencia e inicio de turno',
+                                    'Entrega, recepción y servicios por día',
                                 onTap: () => _goTo(
                                   context,
-                                  AppRoutes.patrullaServicio,
-                                  arguments: 'recibir',
+                                  AppRoutes.patrullaBitacoraDiaria,
                                 ),
                               ),
-                              DrawerActionTile(
-                                icon: Icons.local_police_outlined,
-                                title: 'Mi servicio de patrulla',
-                                subtitle: 'Bitácora, kilometraje y entrega',
-                                onTap: () => _goTo(
-                                  context,
-                                  AppRoutes.patrullaServicio,
-                                  arguments: 'servicio',
-                                ),
-                              ),
-                              DrawerActionTile(
-                                icon: Icons.history_rounded,
-                                title: 'Historial de patrullas',
-                                subtitle: 'Consultar servicios anteriores',
-                                onTap: () => _goTo(
-                                  context,
-                                  AppRoutes.patrullaServicio,
-                                  arguments: 'historial',
-                                ),
-                              ),
-                              if (summary?.canViewDailyPatrolLog == true)
-                                DrawerActionTile(
-                                  icon: Icons.calendar_view_day_rounded,
-                                  title: 'Bitácora diaria del equipo',
-                                  subtitle:
-                                      'Entrega, recepción y servicios por día',
-                                  onTap: () => _goTo(
-                                    context,
-                                    AppRoutes.patrullaBitacoraDiaria,
-                                  ),
-                                ),
-                            ]),
-                          ),
+                          ]),
                         ),
                         const SizedBox(height: 12),
                       ],
-                      const DrawerSectionLabel(label: 'Encuestas'),
-                      DrawerSurface(
-                        child: DrawerActionTile(
-                          icon: Icons.fact_check_outlined,
-                          title: 'Encuestas CALEA',
-                          subtitle: 'Pendientes, tiempo y resultados',
-                          onTap: () => _goTo(context, AppRoutes.caleaEncuestas),
-                        ),
+                      DrawerExpandableSection(
+                        icon: Icons.fact_check_outlined,
+                        title: 'Encuestas',
+                        subtitle: 'Pendientes y resultados CALEA',
+                        children: [
+                          DrawerActionTile(
+                            icon: Icons.fact_check_outlined,
+                            title: 'Encuestas CALEA',
+                            subtitle: 'Pendientes, tiempo y resultados',
+                            onTap: () =>
+                                _goTo(context, AppRoutes.caleaEncuestas),
+                          ),
+                        ],
                       ),
                       const SizedBox(height: 12),
-                      const DrawerSectionLabel(label: 'Herramientas'),
-                      DrawerSurface(
-                        child: Column(
-                          children: _withDividers([
+                      DrawerExpandableSection(
+                        icon: Icons.build_outlined,
+                        title: 'Herramientas',
+                        subtitle: 'Comunicaciones y utilidades',
+                        children: _withDividers([
+                          DrawerActionTile(
+                            icon: Icons.forum_outlined,
+                            title: 'Comunicaciones',
+                            subtitle: 'Mensajes, avisos y órdenes',
+                            onTap: () =>
+                                _goTo(context, AppRoutes.comunicaciones),
+                          ),
+                          if (summary?.canViewCalea == true)
                             DrawerActionTile(
-                              icon: Icons.forum_outlined,
-                              title: 'Comunicaciones',
-                              subtitle: 'Mensajes, avisos y órdenes',
+                              icon: Icons.policy_outlined,
+                              title: 'Directivas CALEA',
+                              subtitle: 'Consultar, buscar y estudiar',
+                              onTap: () => _goTo(context, AppRoutes.calea),
+                            ),
+                          if (summary?.canUseTrafficPriority == true)
+                            DrawerActionTile(
+                              icon: Icons.traffic_outlined,
+                              title: 'Prioridad semafórica',
+                              subtitle:
+                                  'Solicitar y confirmar paso prioritario',
                               onTap: () =>
-                                  _goTo(context, AppRoutes.comunicaciones),
+                                  _goTo(context, AppRoutes.controlSemaforico),
                             ),
-                            if (summary?.canViewCalea == true)
-                              DrawerActionTile(
-                                icon: Icons.policy_outlined,
-                                title: 'Directivas CALEA',
-                                subtitle: 'Consultar, buscar y estudiar',
-                                onTap: () => _goTo(context, AppRoutes.calea),
-                              ),
-                            if (summary?.canUseTrafficPriority == true)
-                              DrawerActionTile(
-                                icon: Icons.traffic_outlined,
-                                title: 'Prioridad semafórica',
-                                subtitle:
-                                    'Solicitar y confirmar paso prioritario',
-                                onTap: () =>
-                                    _goTo(context, AppRoutes.controlSemaforico),
-                              ),
-                            if (summary?.canUseWorkshopTrafficLights == true)
-                              DrawerActionTile(
-                                icon: Icons.construction_outlined,
-                                title: 'Semáforos de talleres',
-                                subtitle:
-                                    'Fases y tiempos de equipos de Fomento',
-                                onTap: () =>
-                                    _goTo(context, AppRoutes.semaforosTalleres),
-                              ),
+                          if (summary?.canUseWorkshopTrafficLights == true)
                             DrawerActionTile(
-                              icon: Icons.sticky_note_2_outlined,
-                              title: 'Mis notas',
-                              subtitle: 'Notas privadas, colores y marcatexto',
-                              onTap: () => _goTo(context, AppRoutes.notes),
+                              icon: Icons.construction_outlined,
+                              title: 'Semáforos de talleres',
+                              subtitle: 'Fases y tiempos de equipos de Fomento',
+                              onTap: () =>
+                                  _goTo(context, AppRoutes.semaforosTalleres),
                             ),
-                          ]),
-                        ),
+                          DrawerActionTile(
+                            icon: Icons.sticky_note_2_outlined,
+                            title: 'Mis notas',
+                            subtitle: 'Notas privadas, colores y marcatexto',
+                            onTap: () => _goTo(context, AppRoutes.notes),
+                          ),
+                        ]),
                       ),
                       const SizedBox(height: 12),
-                      const DrawerSectionLabel(label: 'Ayuda'),
-                      DrawerSurface(
-                        child: Column(
-                          children: [
-                            DrawerActionTile(
-                              icon: Icons.play_circle_outline,
-                              title: 'Tutoriales',
-                              subtitle: 'Videos de ayuda de la app movil',
-                              onTap: () => _goTo(context, AppRoutes.tutoriales),
-                            ),
-                            Divider(
-                              height: 1,
-                              color: Colors.grey.shade200,
-                              indent: 66,
-                            ),
-                            DrawerActionTile(
-                              icon: Icons.support_agent_outlined,
-                              title: 'Red de apoyo',
-                              subtitle: 'Contactos regionales para pedir apoyo',
-                              onTap: () =>
-                                  _goTo(context, AppRoutes.directorioRedApoyo),
-                            ),
-                          ],
-                        ),
+                      DrawerExpandableSection(
+                        icon: Icons.help_outline,
+                        title: 'Ayuda',
+                        subtitle: 'Tutoriales y red de apoyo',
+                        children: [
+                          DrawerActionTile(
+                            icon: Icons.play_circle_outline,
+                            title: 'Tutoriales',
+                            subtitle: 'Videos de ayuda de la app movil',
+                            onTap: () => _goTo(context, AppRoutes.tutoriales),
+                          ),
+                          Divider(
+                            height: 1,
+                            color: Colors.grey.shade200,
+                            indent: 66,
+                          ),
+                          DrawerActionTile(
+                            icon: Icons.support_agent_outlined,
+                            title: 'Red de apoyo',
+                            subtitle: 'Contactos regionales para pedir apoyo',
+                            onTap: () =>
+                                _goTo(context, AppRoutes.directorioRedApoyo),
+                          ),
+                        ],
                       ),
                       if (summary?.access.canSeeConfigurationMenu == true) ...[
                         const SizedBox(height: 12),
-                        const DrawerSectionLabel(label: 'Configuración'),
-                        DrawerSurface(
-                          child: Column(
-                            children: _withDividers([
+                        DrawerExpandableSection(
+                          icon: Icons.settings_outlined,
+                          title: 'Configuración',
+                          subtitle: 'Administración y archivos',
+                          children: _withDividers([
+                            DrawerActionTile(
+                              icon: Icons.settings_outlined,
+                              title: 'Configuraciones',
+                              subtitle: 'Usuarios, personal y archivos',
+                              onTap: () => _goTo(context, AppRoutes.settings),
+                            ),
+                            if (summary?.access.canSeeSiniestrosFiles == true)
                               DrawerActionTile(
-                                icon: Icons.settings_outlined,
-                                title: 'Configuraciones',
-                                subtitle: 'Usuarios, personal y archivos',
-                                onTap: () => _goTo(context, AppRoutes.settings),
+                                icon: Icons.car_crash_outlined,
+                                title: 'Archivos Siniestros',
+                                subtitle:
+                                    'Patrullas, partes, bitácoras y Excel',
+                                onTap: () => _goTo(
+                                  context,
+                                  AppRoutes.settingsStatisticsFiles,
+                                  arguments: 'siniestros',
+                                ),
                               ),
-                              if (summary?.access.canSeeSiniestrosFiles == true)
-                                DrawerActionTile(
-                                  icon: Icons.car_crash_outlined,
-                                  title: 'Archivos Siniestros',
-                                  subtitle:
-                                      'Patrullas, partes, bitácoras y Excel',
-                                  onTap: () => _goTo(
-                                    context,
-                                    AppRoutes.settingsStatisticsFiles,
-                                    arguments: 'siniestros',
-                                  ),
+                            if (summary?.access.canSeeDelegacionesFiles == true)
+                              DrawerActionTile(
+                                icon: Icons.rule_folder_outlined,
+                                title: 'Revisión Excel Delegaciones',
+                                subtitle:
+                                    'Ver registros contemplados y alertas',
+                                onTap: () => _goTo(
+                                  context,
+                                  AppRoutes.delegacionesExcelRevision,
                                 ),
-                              if (summary?.access.canSeeDelegacionesFiles ==
-                                  true)
-                                DrawerActionTile(
-                                  icon: Icons.rule_folder_outlined,
-                                  title: 'Revisión Excel Delegaciones',
-                                  subtitle:
-                                      'Ver registros contemplados y alertas',
-                                  onTap: () => _goTo(
-                                    context,
-                                    AppRoutes.delegacionesExcelRevision,
-                                  ),
+                              ),
+                            if (summary?.access.canSeeDelegacionesFiles == true)
+                              DrawerActionTile(
+                                icon: Icons.fact_check_outlined,
+                                title: 'Archivos Delegaciones',
+                                subtitle: 'Excel diario y mensual',
+                                onTap: () => _goTo(
+                                  context,
+                                  AppRoutes.settingsStatisticsFiles,
+                                  arguments: 'delegaciones',
                                 ),
-                              if (summary?.access.canSeeDelegacionesFiles ==
-                                  true)
-                                DrawerActionTile(
-                                  icon: Icons.fact_check_outlined,
-                                  title: 'Archivos Delegaciones',
-                                  subtitle: 'Excel diario y mensual',
-                                  onTap: () => _goTo(
-                                    context,
-                                    AppRoutes.settingsStatisticsFiles,
-                                    arguments: 'delegaciones',
-                                  ),
+                              ),
+                            if (summary?.access.canSeeVialidadesFiles == true)
+                              DrawerActionTile(
+                                icon: Icons.traffic_outlined,
+                                title: 'Archivos Vialidades',
+                                subtitle: 'Excel diario de Vialidades Urbanas',
+                                onTap: () => _goTo(
+                                  context,
+                                  AppRoutes.settingsStatisticsFiles,
+                                  arguments: 'vialidades',
                                 ),
-                              if (summary?.access.canSeeVialidadesFiles == true)
-                                DrawerActionTile(
-                                  icon: Icons.traffic_outlined,
-                                  title: 'Archivos Vialidades',
-                                  subtitle:
-                                      'Excel diario de Vialidades Urbanas',
-                                  onTap: () => _goTo(
-                                    context,
-                                    AppRoutes.settingsStatisticsFiles,
-                                    arguments: 'vialidades',
-                                  ),
+                              ),
+                            if (summary?.access.canSeeFomentoFiles == true)
+                              DrawerActionTile(
+                                icon: Icons.school_outlined,
+                                title: 'Archivos Fomento',
+                                subtitle: 'Excel diario de Fomento',
+                                onTap: () => _goTo(
+                                  context,
+                                  AppRoutes.settingsStatisticsFiles,
+                                  arguments: 'fomento',
                                 ),
-                              if (summary?.access.canSeeFomentoFiles == true)
-                                DrawerActionTile(
-                                  icon: Icons.school_outlined,
-                                  title: 'Archivos Fomento',
-                                  subtitle: 'Excel diario de Fomento',
-                                  onTap: () => _goTo(
-                                    context,
-                                    AppRoutes.settingsStatisticsFiles,
-                                    arguments: 'fomento',
-                                  ),
-                                ),
-                            ]),
-                          ),
+                              ),
+                          ]),
                         ),
                       ],
                       const SizedBox(height: 12),
-                      const DrawerSectionLabel(label: 'Ajustes'),
-                      DrawerSurface(
-                        child: DrawerActionTile(
-                          icon: Icons.tune_outlined,
-                          title: 'Ajustes',
-                          subtitle: 'Preferencias de alertas y notificaciones',
-                          onTap: () =>
-                              _goTo(context, AppRoutes.accountSettings),
-                        ),
+                      DrawerExpandableSection(
+                        icon: Icons.tune_outlined,
+                        title: 'Ajustes',
+                        subtitle: 'Alertas y notificaciones',
+                        children: [
+                          DrawerActionTile(
+                            icon: Icons.tune_outlined,
+                            title: 'Ajustes',
+                            subtitle:
+                                'Preferencias de alertas y notificaciones',
+                            onTap: () =>
+                                _goTo(context, AppRoutes.accountSettings),
+                          ),
+                        ],
                       ),
                       const SizedBox(height: 12),
-                      const DrawerSectionLabel(label: 'Sesión'),
-                      DrawerSurface(
-                        child: DrawerActionTile(
-                          icon: Icons.logout,
-                          title: 'Cerrar sesión',
-                          subtitle: 'Salir de la cuenta actual',
-                          danger: true,
-                          onTap: () => _handleLogout(context),
-                        ),
+                      DrawerExpandableSection(
+                        icon: Icons.logout,
+                        title: 'Sesión',
+                        subtitle: 'Opciones de la cuenta actual',
+                        children: [
+                          DrawerActionTile(
+                            icon: Icons.logout,
+                            title: 'Cerrar sesión',
+                            subtitle: 'Salir de la cuenta actual',
+                            danger: true,
+                            onTap: () => _handleLogout(context),
+                          ),
+                        ],
                       ),
                     ],
                   ),

@@ -7,6 +7,8 @@ import '../../services/tracking_service.dart';
 import '../../widgets/account_drawer.dart';
 import '../login_screen.dart';
 import 'settings_statistics_files_screen.dart';
+import 'conduce_legalidad_reporte_screen.dart';
+import 'depositos_vehiculares_reporte_screen.dart';
 
 class SettingsHomeScreen extends StatefulWidget {
   const SettingsHomeScreen({super.key});
@@ -35,10 +37,12 @@ class _SettingsHomeScreenState extends State<SettingsHomeScreen> {
     return _SettingsAccess(
       canSeeUsers: access.canSeeUsers,
       canSeePersonal: access.canSeePersonal,
+      canSeeArchivoSiniestros: access.canSeeArchivoSiniestros,
       canSeeSiniestrosFiles: access.canSeeSiniestrosFiles,
       canSeeDelegacionesFiles: access.canSeeDelegacionesFiles,
       canSeeVialidadesFiles: access.canSeeVialidadesFiles,
       canSeeFomentoFiles: access.canSeeFomentoFiles,
+      canSeeConduceLegalidadReport: access.canSeeConduceLegalidadReport,
     );
   }
 
@@ -112,6 +116,14 @@ class _SettingsHomeScreenState extends State<SettingsHomeScreen> {
                   subtitle: 'Expedientes e incidencias del personal',
                   onTap: () => _goTo(AppRoutes.settingsPersonal),
                 ),
+              if (access.canSeeArchivoSiniestros)
+                _SettingsTile(
+                  icon: Icons.inventory_2_outlined,
+                  title: 'Archivo de Siniestros',
+                  subtitle:
+                      'Libros, anaqueles, bloques, documentos y movimientos',
+                  onTap: () => _goTo(AppRoutes.archivoSiniestros),
+                ),
               if (access.canSeeSiniestrosFiles)
                 _SettingsTile(
                   icon: Icons.car_crash_outlined,
@@ -139,6 +151,32 @@ class _SettingsHomeScreenState extends State<SettingsHomeScreen> {
                   title: 'Estadísticas Fomento',
                   subtitle: 'Excel diario de Fomento a la Cultura Vial',
                   onTap: () => _goToFiles('fomento'),
+                ),
+              if (access.canSeeConduceLegalidadReport)
+                _SettingsTile(
+                  icon: Icons.two_wheeler_outlined,
+                  title: 'Conduce con Legalidad',
+                  subtitle:
+                      'Consulta vehículos, aplica filtros y descarga el Excel',
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const ConduceLegalidadReporteScreen(),
+                    ),
+                  ),
+                ),
+              if (access.canSeeConduceLegalidadReport)
+                _SettingsTile(
+                  icon: Icons.warehouse_outlined,
+                  title: 'Depósitos vehiculares',
+                  subtitle:
+                      'Consulta vehículos resguardados, liberaciones y descarga el Excel',
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const DepositosVehicularesReporteScreen(),
+                    ),
+                  ),
                 ),
             ];
 
@@ -203,18 +241,22 @@ class _SettingsHomeScreenState extends State<SettingsHomeScreen> {
 class _SettingsAccess {
   final bool canSeeUsers;
   final bool canSeePersonal;
+  final bool canSeeArchivoSiniestros;
   final bool canSeeSiniestrosFiles;
   final bool canSeeDelegacionesFiles;
   final bool canSeeVialidadesFiles;
   final bool canSeeFomentoFiles;
+  final bool canSeeConduceLegalidadReport;
 
   const _SettingsAccess({
     required this.canSeeUsers,
     required this.canSeePersonal,
+    required this.canSeeArchivoSiniestros,
     required this.canSeeSiniestrosFiles,
     required this.canSeeDelegacionesFiles,
     required this.canSeeVialidadesFiles,
     required this.canSeeFomentoFiles,
+    required this.canSeeConduceLegalidadReport,
   });
 }
 

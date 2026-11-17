@@ -126,4 +126,37 @@ void main() {
     );
     expect(VehiculoFormService.validateTelefono('+52 354 123 4567'), isNull);
   });
+
+  test('permite guardar una situación sin inventar nombre de conductor', () {
+    expect(
+      VehiculoFormService.validateConductorBeforeSubmit(
+        nombre: '',
+        telefono: '',
+        domicilio: '',
+        sexo: null,
+        ocupacion: '',
+        edad: '',
+        tipoLicencia: '',
+        estadoLicencia: '',
+        numeroLicencia: '',
+        requireNombre: false,
+      ),
+      isNull,
+    );
+
+    expect(
+      VehiculoFormService.validateConductorBeforeSubmit(
+        nombre: '',
+        telefono: '',
+        domicilio: '',
+        sexo: null,
+        ocupacion: '',
+        edad: '',
+        tipoLicencia: '',
+        estadoLicencia: '',
+        numeroLicencia: '',
+      ),
+      'Requerido',
+    );
+  });
 }

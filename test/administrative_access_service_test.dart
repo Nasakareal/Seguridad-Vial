@@ -70,6 +70,18 @@ void main() {
     expect(access.canSeeConfigurationMenu, isTrue);
   });
 
+  test('archivo permission exposes Archivo de Siniestros', () async {
+    SharedPreferences.setMockInitialValues(<String, Object>{
+      'auth_role': 'Administrador',
+      'auth_perms': <String>['ver archivo siniestros'],
+    });
+
+    final access = await AdministrativeAccessService.loadAccess();
+
+    expect(access.canSeeArchivoSiniestros, isTrue);
+    expect(access.canSeeConfigurationMenu, isTrue);
+  });
+
   test('vialidades administrative user only sees vialidades files', () async {
     SharedPreferences.setMockInitialValues(<String, Object>{
       'auth_role': 'Administrativo',
@@ -97,6 +109,7 @@ void main() {
     expect(access.canSeeDelegacionesFiles, isFalse);
     expect(access.canSeeVialidadesFiles, isTrue);
     expect(access.canSeeFomentoFiles, isFalse);
+    expect(access.canSeeConduceLegalidadReport, isTrue);
     expect(access.canSeeConfigurationMenu, isTrue);
   });
 
@@ -123,6 +136,7 @@ void main() {
     expect(access.canSeeDelegacionesFiles, isFalse);
     expect(access.canSeeVialidadesFiles, isFalse);
     expect(access.canSeeFomentoFiles, isFalse);
+    expect(access.canSeeConduceLegalidadReport, isFalse);
     expect(access.canSeeConfigurationMenu, isFalse);
   });
 

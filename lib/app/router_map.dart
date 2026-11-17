@@ -9,6 +9,7 @@ import '../screens/comunicaciones/conversacion_screen.dart';
 import '../screens/comunicaciones/comunicacion_detalle_screen.dart';
 import '../screens/comunicaciones/comunicacion_create_screen.dart';
 import '../services/auth_service.dart';
+import '../services/archivo_siniestros_service.dart';
 import '../services/comunicacion_service.dart';
 
 import '../models/conduce_legalidad.dart';
@@ -36,6 +37,7 @@ import '../screens/settings/personal_show_screen.dart';
 import '../screens/settings/settings_home_screen.dart';
 import '../screens/settings/settings_personal_screen.dart';
 import '../screens/settings/settings_statistics_files_screen.dart';
+import '../screens/settings/archivo_siniestros/archivo_home_screen.dart';
 import '../screens/settings/user_form_screen.dart';
 import '../screens/settings/user_show_screen.dart';
 import '../screens/settings/users_screen.dart';
@@ -191,6 +193,12 @@ final Map<String, WidgetBuilder> appRoutesMap = {
       initialModuleId: args is String ? args : null,
     );
   },
+  AppRoutes.archivoSiniestros: (context) => ArchivoHomeScreen(
+    service: ArchivoSiniestrosService(
+      baseUrl: AuthService.baseUrl,
+      tokenProvider: AuthService.getToken,
+    ),
+  ),
   AppRoutes.tutoriales: (context) => const TutorialesScreen(),
   AppRoutes.directorioRedApoyo: (context) => const DirectorioRedApoyoScreen(),
   AppRoutes.directorioRedApoyoShow: (context) =>

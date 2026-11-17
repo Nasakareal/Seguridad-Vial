@@ -580,12 +580,11 @@ class VehiculoFormService {
     required String tipoLicencia,
     required String estadoLicencia,
     required String numeroLicencia,
+    bool requireNombre = true,
   }) {
-    final nombreError = validateRequiredText(
-      nombre,
-      max: 255,
-      label: 'Nombre del conductor',
-    );
+    final nombreError = requireNombre
+        ? validateRequiredText(nombre, max: 255, label: 'Nombre del conductor')
+        : validateOptionalText(nombre, max: 255, label: 'Nombre del conductor');
     if (nombreError != null) return nombreError;
 
     final telefonoError = validateTelefono(telefono);

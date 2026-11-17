@@ -183,6 +183,64 @@ class DrawerSurface extends StatelessWidget {
   }
 }
 
+class DrawerExpandableSection extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String? subtitle;
+  final List<Widget> children;
+  final bool initiallyExpanded;
+
+  const DrawerExpandableSection({
+    super.key,
+    required this.icon,
+    required this.title,
+    required this.children,
+    this.subtitle,
+    this.initiallyExpanded = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return DrawerSurface(
+      child: Theme(
+        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+        child: ExpansionTile(
+          initiallyExpanded: initiallyExpanded,
+          tilePadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+          childrenPadding: EdgeInsets.zero,
+          leading: Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: const Color(0xFF2563EB).withValues(alpha: .12),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(icon, color: const Color(0xFF2563EB), size: 20),
+          ),
+          title: Text(
+            title,
+            style: const TextStyle(
+              color: Color(0xFF0F172A),
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          subtitle: (subtitle ?? '').trim().isEmpty
+              ? null
+              : Text(
+                  subtitle!,
+                  style: TextStyle(
+                    color: Colors.grey.shade700,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+          children: children,
+        ),
+      ),
+    );
+  }
+}
+
 class DrawerActionTile extends StatelessWidget {
   final IconData icon;
   final String title;
