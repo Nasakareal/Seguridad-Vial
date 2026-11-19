@@ -53,7 +53,10 @@ class GruasCatalogService {
     }
 
     final access = _GruasAccess(
-      hasFullAccess: false,
+      // Este endpoint ya valida el operativo y devuelve únicamente su
+      // catálogo permitido. No se debe volver a filtrar por la adscripción
+      // original de la grúa en el teléfono.
+      hasFullAccess: true,
       unidadFiltroId: unidadId,
       delegacionFiltroId: unidadId == AuthService.unidadDelegacionesId
           ? delegacionId
@@ -66,6 +69,7 @@ class GruasCatalogService {
       cacheKey:
           '${_cachePrefix}_operativo_scope_unidad_${unidadId}_delegacion_${delegacionId ?? 0}',
       endpointPath: '/conduce-legalidad/operativos/$operativoId/gruas',
+      refreshEmptyCache: true,
       forceRefresh: forceRefresh,
     );
   }
@@ -74,12 +78,15 @@ class GruasCatalogService {
     _GruasAccess access, {
     required String cacheKey,
     String endpointPath = '/gruas',
+    bool refreshEmptyCache = false,
     bool forceRefresh = false,
   }) async {
     final scopedCacheKey = await _cacheKeyForOwner(cacheKey);
     if (!forceRefresh) {
       final cached = await _loadCache(scopedCacheKey);
-      if (cached != null) return cached;
+      if (cached != null && (!refreshEmptyCache || cached.isNotEmpty)) {
+        return cached;
+      }
     }
 
     final uri = Uri.parse('${AuthService.baseUrl}$endpointPath').replace(

@@ -44,12 +44,18 @@ void main() {
   );
 
   test(
-    'an empty catalog is cached and does not query on every opening',
+    'an empty operational catalog is retried instead of staying frozen',
     () async {
       var requests = 0;
       final client = MockClient((request) async {
         requests++;
-        return _catalogResponse(const []);
+        return _catalogResponse(
+          requests == 1
+              ? const []
+              : [
+                  _grua(12, 'GRÚA RECUPERADA', unidadIds: [1]),
+                ],
+        );
       });
 
       await http.runWithClient(() async {
@@ -61,17 +67,15 @@ void main() {
           ),
           isEmpty,
         );
-        expect(
-          await GruasCatalogService.fetchOperativoGruas(
-            operativoId: 201,
-            unidadId: 2,
-            delegacionId: 30,
-          ),
-          isEmpty,
+        final recovered = await GruasCatalogService.fetchOperativoGruas(
+          operativoId: 201,
+          unidadId: 2,
+          delegacionId: 30,
         );
+        expect(recovered.single['nombre'], 'GRÚA RECUPERADA');
       }, () => client);
 
-      expect(requests, 1);
+      expect(requests, 2);
     },
   );
 
@@ -115,7 +119,7 @@ void main() {
   );
 
   test(
-    'delegation catalog keeps only gruas assigned to that delegation',
+    'operational endpoint is trusted even when crane origin differs',
     () async {
       final client = MockClient((request) async {
         return _catalogResponse([
@@ -131,7 +135,7 @@ void main() {
           delegacionId: 30,
         );
 
-        expect(gruas.map((item) => item['id']), [10]);
+        expect(gruas.map((item) => item['id']), unorderedEquals([10, 11]));
       }, () => client);
     },
   );
