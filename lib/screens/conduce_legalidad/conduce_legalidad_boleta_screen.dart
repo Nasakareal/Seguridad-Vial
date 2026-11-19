@@ -13,11 +13,33 @@ import 'conduce_legalidad_module.dart';
 
 const String _vialidadesUrbanasTicketAdscripcion =
     'UNIDAD DE PROTECCIÓN EN VIALIDADES URBANAS';
+const String _delegacionesTicketAdscripcion = 'UNIDAD DE DELEGACIONES';
+
+bool _esUnidadDelegaciones(
+  ConduceLegalidadOperativo operativo,
+  ConduceLegalidadCaptura captura,
+) {
+  return operativo.unidadId == 2 || captura.unidad?.id == 2;
+}
+
+bool _esOperativoDelegacionesMorelia(
+  ConduceLegalidadOperativo operativo,
+  ConduceLegalidadCaptura captura,
+) {
+  if (!_esUnidadDelegaciones(operativo, captura)) return false;
+  final delegacion = operativo.delegacion ?? captura.delegacion;
+  return delegacion?.id == 5 ||
+      (delegacion?.nombre.trim().toUpperCase() ?? '') == 'MORELIA';
+}
 
 String _ticketAdscripcionAgente(
   ConduceLegalidadOperativo operativo,
   ConduceLegalidadCaptura captura,
 ) {
+  if (_esUnidadDelegaciones(operativo, captura)) {
+    return _delegacionesTicketAdscripcion;
+  }
+
   final adscripcionGuardada = captura.agenteAdscripcion?.trim() ?? '';
   final esVialidadesUrbanas =
       operativo.unidadId == 5 ||
@@ -950,7 +972,9 @@ class _BoletaPaper extends StatelessWidget {
   String get _informacionLiberacionVehiculo {
     return ConduceLegalidadBoletaLegalText.informacionLiberacion(
       vehiculo,
-      esDelegaciones: operativo.unidadId == 2 || captura.unidad?.id == 2,
+      esDelegaciones:
+          _esUnidadDelegaciones(operativo, captura) &&
+          !_esOperativoDelegacionesMorelia(operativo, captura),
       delegacion: operativo.delegacion ?? captura.delegacion,
     );
   }
@@ -1726,7 +1750,9 @@ class _BoletaTicketData {
     final delegacion = operativo.delegacion ?? captura.delegacion;
     return ConduceLegalidadBoletaLegalText.informacionLiberacion(
       vehiculo,
-      esDelegaciones: operativo.unidadId == 2 || captura.unidad?.id == 2,
+      esDelegaciones:
+          _esUnidadDelegaciones(operativo, captura) &&
+          !_esOperativoDelegacionesMorelia(operativo, captura),
       delegacion: delegacion,
     );
   }

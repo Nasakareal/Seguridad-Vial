@@ -109,6 +109,55 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('Delegaciones omite la delegación específica en adscripción', (
+    tester,
+  ) async {
+    final item = ConduceLegalidadOperativo(
+      id: 21,
+      nombre: 'Operativo conduce con legalidad',
+      tipoOperativo: 'conduce_legalidad',
+      unidadId: 2,
+      delegacionId: 5,
+      delegacion: const ConduceLegalidadRef(id: 5, nombre: 'Morelia'),
+      estado: 'activo',
+      totalCapturas: 1,
+      misCapturas: 1,
+    );
+    const captura = ConduceLegalidadCaptura(
+      id: 22,
+      operativoId: 21,
+      agenteNombre: 'Agente de prueba',
+      agenteAdscripcion: 'Unidad de Delegaciones · Delegación Morelia',
+      unidad: ConduceLegalidadRef(id: 2, nombre: 'Unidad de Delegaciones'),
+      delegacion: ConduceLegalidadRef(id: 5, nombre: 'Morelia'),
+      canEdit: true,
+      vehiculos: <ConduceLegalidadVehiculo>[
+        ConduceLegalidadVehiculo(
+          retencionVehiculo: true,
+          corralon: 'CORRALÓN MORELIA',
+        ),
+      ],
+      personas: <ConduceLegalidadPersona>[],
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ConduceLegalidadBoletaScreen(
+          initialOperativo: item,
+          initialCaptura: captura,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('UNIDAD DE DELEGACIONES'), findsOneWidget);
+    expect(
+      find.text('Unidad de Delegaciones · Delegación Morelia'),
+      findsNothing,
+    );
+    expect(find.textContaining('Dirección de Justicia Cívica'), findsOneWidget);
+  });
+
   testWidgets('el inventario se previsualiza separado de la boleta', (
     tester,
   ) async {
