@@ -80,7 +80,9 @@ class _UnitBrandingBackdropState extends State<UnitBrandingBackdrop> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _reloadScheduled = false;
       if (!mounted) return;
-      setState(() => _branding = _resolveBranding());
+      setState(() {
+        _branding = _resolveBranding();
+      });
     });
   }
 

@@ -504,7 +504,8 @@ void main() {
 
     expect(texto, contains('Dirección de Justicia Cívica'));
     expect(texto, contains('Periférico Paseo de la República #5000'));
-    expect(texto, contains('9:00 a. m. a 4:00 p. m.'));
+    expect(texto, contains('9:00 a. m. a 3:00 p. m.'));
+    expect(texto, isNot(contains('4:00 p. m.')));
     expect(texto, contains('4433163728'));
     expect(texto, isNot(contains('18:00')));
     expect(texto, isNot(contains('Unidad de Atención a Siniestros')));
@@ -543,7 +544,8 @@ void main() {
 
       expect(textoContinuo, contains('Direccion de Justicia Civica'));
       expect(textoContinuo, contains('Periferico Paseo de la Republica #5000'));
-      expect(textoContinuo, contains('9:00 a. m. a 4:00 p. m.'));
+      expect(textoContinuo, contains('9:00 a. m. a 3:00 p. m.'));
+      expect(textoContinuo, isNot(contains('4:00 p. m.')));
       expect(textoContinuo, isNot(contains('18:00')));
       expect(textoContinuo, isNot(contains('Unidad de Atencion a Siniestros')));
       expect(
@@ -556,6 +558,38 @@ void main() {
       );
     },
   );
+
+  test('ticket térmico de Siniestros en Morelia usa Justicia Cívica', () {
+    final item = ConduceLegalidadOperativo.fromJson({
+      'id': 12,
+      'nombre': 'Operativo conduce con legalidad',
+      'tipo_operativo': 'conduce_legalidad',
+      'unidad_id': 1,
+      'estado': 'activo',
+    });
+    const captura = ConduceLegalidadCaptura(
+      id: 13,
+      operativoId: 12,
+      municipio: 'Morelia',
+      unidad: ConduceLegalidadRef(id: 1, nombre: 'Siniestros'),
+      vehiculos: <ConduceLegalidadVehiculo>[
+        ConduceLegalidadVehiculo(retencionVehiculo: true),
+      ],
+      personas: <ConduceLegalidadPersona>[],
+      canEdit: true,
+    );
+
+    final texto = buildConduceLegalidadTicketText(
+      operativo: item,
+      captura: captura,
+    ).replaceAll(RegExp(r'\s+'), ' ');
+
+    expect(texto, contains('Direccion de Justicia Civica'));
+    expect(texto, contains('Periferico Paseo de la Republica #5000'));
+    expect(texto, contains('9:00 a. m. a 3:00 p. m.'));
+    expect(texto, isNot(contains('4:00 p. m.')));
+    expect(texto, isNot(contains('Unidad de Atencion a Siniestros')));
+  });
 
   test('el operativo conserva el supervisor enviado por el backend', () {
     final item = ConduceLegalidadOperativo.fromJson({

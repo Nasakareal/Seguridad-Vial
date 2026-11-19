@@ -288,20 +288,21 @@ class ConduceLegalidadController extends Controller
             });
         }
 
-        $filteredIds = (clone $query)
+        $estadisticaIds = (clone $query)
+            ->where('estado', '<>', 'standby')
             ->getQuery()
             ->cloneWithout(['columns', 'orders'])
             ->cloneWithoutBindings(['select', 'order'])
             ->select('conduce_legalidad_operativos.id');
         $capturasFiltradasIds = DB::table('conduce_legalidad_capturas')
-            ->whereIn('operativo_id', clone $filteredIds)
+            ->whereIn('operativo_id', clone $estadisticaIds)
             ->select('id');
         $resumen = [
             'operativos' => DB::query()
-                ->fromSub(clone $filteredIds, 'operativos_filtrados')
+                ->fromSub(clone $estadisticaIds, 'operativos_estadistica')
                 ->count(),
             'registros' => DB::table('conduce_legalidad_capturas')
-                ->whereIn('operativo_id', clone $filteredIds)
+                ->whereIn('operativo_id', clone $estadisticaIds)
                 ->count(),
             'personas' => DB::table('conduce_legalidad_personas')
                 ->whereIn('captura_id', clone $capturasFiltradasIds)
@@ -702,6 +703,7 @@ class ConduceLegalidadController extends Controller
         }
 
         $operativo->forceFill([
+            'estado' => 'standby',
             'hora_cierre' => $operativo->hora_cierre ?: now()->format('H:i:s'),
             'closed_by' => $user->id,
             'updated_by' => $user->id,
@@ -1687,10 +1689,12 @@ class ConduceLegalidadController extends Controller
         string $retiro
     ): string {
         if ((int) ($adscripcion['unidad_id'] ?? 0) !== self::UNIDAD_DELEGACIONES) {
-            return 'Puede recoger su vehículo en la Unidad de Atención a Siniestros, '
-                . 'ubicada en Periférico Independencia #5000, col. Sentimientos de la Nación, '
-                . 'Morelia, Michoacán, en un horario de 9:00 a. m. a 4:00 p. m., '
-                . 'de lunes a viernes. ' . $retiro;
+            return 'Para iniciar el trámite de liberación del vehículo, la persona interesada '
+                . 'deberá acudir a la Dirección de Justicia Cívica y Mediación Administrativa, '
+                . 'ubicada en Periférico Paseo de la República #5000, Colonia Sentimientos de la '
+                . 'Nación (C.P. 58178), en Morelia, Mich., de lunes a viernes de 9:00 a. m. a '
+                . '3:00 p. m., con identificación oficial y documentación que acredite propiedad '
+                . 'o legítima posesión. Informes: 4433163728. ' . $retiro;
         }
 
         $delegacionId = (int) ($adscripcion['delegacion_id'] ?? 0);
@@ -2978,6 +2982,7 @@ class ConduceLegalidadController extends Controller
 
         $query = ConduceLegalidadOperativo::query()
             ->where('estado', 'activo')
+            ->whereDate('fecha', today())
             ->whereNotNull('lat')
             ->whereNotNull('lng')
             ->whereBetween('lat', [$lat - $latDelta, $lat + $latDelta])
@@ -3987,13 +3992,18 @@ class ConduceLegalidadController extends Controller
             return $query->whereRaw('1 = 0');
         }
 
-        $unidadGruasId = $unidadId === self::UNIDAD_VIALIDADES_URBANAS
-            ? self::UNIDAD_SINIESTROS
-            : $unidadId;
+        $unidadGruasId = $this->unidadCatalogoGruasOperativo($unidadId);
 
         return $query->whereHas('unidades', function ($unidades) use ($unidadGruasId) {
             $unidades->where('unidades.id', $unidadGruasId);
         });
+    }
+
+    private function unidadCatalogoGruasOperativo(int $unidadId): int
+    {
+        return $unidadId === self::UNIDAD_VIALIDADES_URBANAS
+            ? self::UNIDAD_SINIESTROS
+            : $unidadId;
     }
 
     private function aplicarUbicacionCorralonAlCatalogo($gruas, int $unidadId, ?int $delegacionId): void

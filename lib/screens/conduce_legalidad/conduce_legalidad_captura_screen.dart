@@ -3838,9 +3838,13 @@ class _FundamentoPickerFormField extends FormField<ConduceLegalidadFundamento> {
              onTap: enabled ? select : null,
              borderRadius: BorderRadius.circular(4),
              child: InputDecorator(
-               isEmpty: state.value == null,
+               // El campo siempre muestra contenido: la selección actual o el
+               // llamado a buscar. Mantenerlo como no vacío evita que la
+               // etiqueta se dibuje encima de ese texto.
+               isEmpty: false,
                decoration: InputDecoration(
                  labelText: label,
+                 floatingLabelBehavior: FloatingLabelBehavior.always,
                  helperText: helper,
                  errorText: state.errorText,
                  border: const OutlineInputBorder(),

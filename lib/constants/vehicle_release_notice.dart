@@ -9,6 +9,6 @@ const String justiciaCivicaVehicleReleaseNotice =
     'deberá acudir a la Dirección de Justicia Cívica y Mediación '
     'Administrativa, ubicada en Periférico Paseo de la República #5000, '
     'Colonia Sentimientos de la Nación (C.P. 58178), en Morelia, Mich., de '
-    'lunes a viernes de 9:00 a. m. a 4:00 p. m., con identificación oficial y '
+    'lunes a viernes de 9:00 a. m. a 3:00 p. m., con identificación oficial y '
     'documentación que acredite propiedad o legítima posesión. Informes: '
     '4433163728.';

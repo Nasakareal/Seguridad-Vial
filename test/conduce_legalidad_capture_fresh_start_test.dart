@@ -227,6 +227,23 @@ void main() {
           500,
           scrollable: find.byType(Scrollable).first,
         );
+        await tester.pumpAndSettle();
+
+        final label = find.descendant(
+          of: primary,
+          matching: find.text('Fundamento del operativo *'),
+        );
+        final placeholder = find.descendant(
+          of: primary,
+          matching: find.text('Toca para buscar y seleccionar'),
+        );
+        expect(label, findsOneWidget);
+        expect(placeholder, findsOneWidget);
+        expect(
+          tester.getCenter(label).dy,
+          lessThan(tester.getCenter(placeholder).dy),
+        );
+
         await tester.tap(primary);
         await tester.pumpAndSettle();
         expect(
