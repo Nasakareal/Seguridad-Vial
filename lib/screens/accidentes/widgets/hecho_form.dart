@@ -76,6 +76,7 @@ class _HechoFormState extends State<HechoForm> {
   bool _hideDelegacionesAdminFields = false;
   bool _canUseDictamenes = false;
   bool _canCaptureMpTurnado = false;
+  bool _canUseAbanderamiento = false;
   bool _canEditCaptureTimestamp = false;
   bool _usesSiniestrosPatrolSelect = false;
   bool _loadingSiniestrosPatrols = false;
@@ -194,6 +195,7 @@ class _HechoFormState extends State<HechoForm> {
       _hideDelegacionesAdminFields = hideDelegacionesAdminFields;
       _canUseDictamenes = canUseDictamenes;
       _canCaptureMpTurnado = canCaptureMpTurnado;
+      _canUseAbanderamiento = isDelegaciones;
       _canEditCaptureTimestamp = canEditCaptureTimestamp;
       _usesSiniestrosPatrolSelect = usesSiniestrosPatrolSelect;
       if (_usesRelaxedHechosRules) {
@@ -1029,10 +1031,10 @@ class _HechoFormState extends State<HechoForm> {
       d.responsable,
       HechosCatalogos.responsablesUi,
     );
-    final situacionValue = _safeDropdownValue(
-      d.situacion,
-      HechosCatalogos.situaciones,
-    );
+    final situaciones = _canUseAbanderamiento
+        ? HechosCatalogos.situacionesDelegaciones
+        : HechosCatalogos.situaciones;
+    final situacionValue = _safeDropdownValue(d.situacion, situaciones);
 
     return Form(
       key: _formKey,
@@ -1471,7 +1473,7 @@ class _HechoFormState extends State<HechoForm> {
             isExpanded: true,
             decoration: _dec('Situación *'),
             value: situacionValue,
-            items: HechosCatalogos.situaciones
+            items: situaciones
                 .map((v) => DropdownMenuItem(value: v, child: Text(v)))
                 .toList(),
             onChanged: _submitting

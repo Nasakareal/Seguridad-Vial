@@ -25,6 +25,13 @@ class HechosCatalogos {
     'REPORTE',
   ];
 
+  static const String situacionAbanderamiento = 'ABANDERAMIENTO';
+
+  static const List<String> situacionesDelegaciones = [
+    ...situaciones,
+    situacionAbanderamiento,
+  ];
+
   static const List<String> tiposHecho = [
     'VOLCADURA',
     'INCIDENTE DE TRÁNSITO',

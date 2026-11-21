@@ -8,8 +8,28 @@ abstract final class ConduceLegalidadCapturaLimits {
 
 class ConduceLegalidadMeta {
   static const Set<String> fundamentosExcluidosOperativoCodigos = <String>{
+    'ART420_FIII_I_MOTO_PASAJERO_MENOR',
+    'ART421_FI_I_PARTICULAR_MENOR_SIN_PERMISO',
+    'ART421_FI_IA_PARTICULAR_MENOR_SIN_PERMISO',
+    'ART402_LICENCIA_FORANEA_REINCIDENCIA',
     'ART420_FIV_IA_B_TRANSPORTE_PUBLICO_ESCOLAR',
+    'ART432_FVII_REBASAR_IZQUIERDA_SEPARACION',
+    'ART432_FVIII_ALINEARSE_DERECHA',
+    'ART432_FIX_DISTANCIA_RAZONABLE',
+    'ART432_FX_DIRECCIONALES',
+    'ART432_FXI_PERMITIR_INCORPORACION',
+    'ART432_FXII_CEDER_SERVICIO_SOCIAL',
+    'ART432_FXV_VIAS_FERREAS',
+    'ART432_FXVI_ASCENSO_CARRIL_ACERA',
+    'ART432_FXVII_PORTAR_REGLAMENTO',
+    'ART432_FXIX_CARAVANA_ESPACIO',
+    'ART437_SERVICIO_SOCIAL_USO_INDEBIDO_SENALES',
+    'ART439_FII_MOTO_REBASE_IZQUIERDA',
+    'ART440_FIV_MOTO_PUENTE_PEATONAL',
     'ART465_FXI_POLARIZADO_MAYOR_20',
+    'ART459_FII_I_MOTORIZADO_CINTURONES_SEGURIDAD',
+    'ART459_FII_I_MOTORIZADO_LIMPIAPARABRISAS',
+    'ART459_FII_I_MOTORIZADO_HERRAMIENTA_LLANTAS',
     'ART519_FIV_IA_NO_MOVER_SINIESTRO_DANOS',
   };
   static const List<String> fundamentosExcluidosOperativoTexto = <String>[
@@ -58,17 +78,22 @@ class ConduceLegalidadMeta {
     bool filterConduceLegalidadMotos = true,
   }) {
     final data = _map(json['data'] ?? json);
-    final fundamentosCorralonRaw =
-        filterConduceLegalidadMotos &&
-            _list(data['fundamentos_conduce_legalidad']).isNotEmpty
-        ? data['fundamentos_conduce_legalidad']
+    final fundamentosConduceRaw = _list(data['fundamentos_conduce_legalidad']);
+    final usaCatalogoEspecificoConduce =
+        filterConduceLegalidadMotos && fundamentosConduceRaw.isNotEmpty;
+    final fundamentosCorralonRaw = usaCatalogoEspecificoConduce
+        ? fundamentosConduceRaw
         : data['fundamentos_corralon'];
     final fundamentosExpanded = _expandirFundamentosOperativos(
       _list(
         fundamentosCorralonRaw,
       ).map((item) => ConduceLegalidadFundamento.fromJson(_map(item))),
     );
-    final fundamentos = filterConduceLegalidadMotos
+    // El endpoint ya entrega un catálogo específico y validado para Conduce
+    // con Legalidad. No se vuelve a reducir a puras retenciones porque también
+    // contiene causas visibles, como menor conduciendo, que deben documentarse.
+    final fundamentos =
+        filterConduceLegalidadMotos && !usaCatalogoEspecificoConduce
         ? fundamentosExpanded
               .where((item) => item.aplicaConduceLegalidadMotos)
               .toList()
@@ -386,7 +411,11 @@ class ConduceLegalidadFundamento {
   }
 
   bool get aplicaConduceLegalidadMotos {
-    if (!retencionVehiculo && !depositoSiSinPersonaHabilitada) return false;
+    if (!retencionVehiculo &&
+        !depositoSiSinPersonaHabilitada &&
+        !arrestoPersona) {
+      return false;
+    }
 
     final ambito = (ambitoVehiculo ?? '').trim().toLowerCase();
     if (ambito.isNotEmpty && ambito != 'general' && ambito != 'motocicleta') {

@@ -4,6 +4,22 @@ import '../../../screens/accidentes/widgets/photo_block.dart';
 import '../../../screens/accidentes/widgets/photos_strip.dart';
 import 'hecho_photos_carousel.dart';
 
+class HechoCardMenuAction {
+  final String id;
+  final String label;
+  final IconData icon;
+  final VoidCallback? onTap;
+  final bool loading;
+
+  const HechoCardMenuAction({
+    required this.id,
+    required this.label,
+    required this.icon,
+    required this.onTap,
+    this.loading = false,
+  });
+}
+
 class HechoCard extends StatelessWidget {
   final Map<String, dynamic> hecho;
 
@@ -30,6 +46,8 @@ class HechoCard extends StatelessWidget {
   final bool delegacionesIncompleto;
   final String? delegacionLabel;
   final List<String> capturaFaltanteDetalles;
+  final List<HechoCardMenuAction> additionalMenuActions;
+  final bool showViewAction;
 
   const HechoCard({
     super.key,
@@ -54,6 +72,8 @@ class HechoCard extends StatelessWidget {
     this.delegacionesIncompleto = false,
     this.delegacionLabel,
     this.capturaFaltanteDetalles = const [],
+    this.additionalMenuActions = const [],
+    this.showViewAction = true,
   });
 
   @override
@@ -64,6 +84,31 @@ class HechoCard extends StatelessWidget {
         .map((item) => item.trim())
         .where((item) => item.isNotEmpty)
         .toList();
+    final menuActions = <HechoCardMenuAction>[
+      if (showViewAction)
+        HechoCardMenuAction(
+          id: 'show',
+          label: 'Ver detalles',
+          icon: Icons.visibility_outlined,
+          onTap: onTapShow,
+        ),
+      if (onDownload != null || isDownloading)
+        HechoCardMenuAction(
+          id: 'download-report',
+          label: 'Descargar informe',
+          icon: Icons.download_outlined,
+          onTap: isDownloading ? null : onDownload,
+          loading: isDownloading,
+        ),
+      ...additionalMenuActions,
+      if (onTapEdit != null)
+        HechoCardMenuAction(
+          id: 'edit',
+          label: 'Editar',
+          icon: Icons.edit_outlined,
+          onTap: onTapEdit,
+        ),
+    ];
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
@@ -163,7 +208,7 @@ class HechoCard extends StatelessWidget {
               ),
               const SizedBox(width: 12),
               SizedBox(
-                width: 112,
+                width: 54,
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -207,40 +252,47 @@ class HechoCard extends StatelessWidget {
                       ),
                       const SizedBox(height: 6),
                     ],
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.end,
-                      children: [
-                        IconButton(
-                          icon: isDownloading
-                              ? const SizedBox(
-                                  height: 22,
-                                  width: 22,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
+                    if (menuActions.isNotEmpty)
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: PopupMenuButton<String>(
+                          tooltip: 'Más opciones',
+                          icon: const Icon(Icons.more_vert),
+                          onSelected: (id) {
+                            for (final action in menuActions) {
+                              if (action.id == id) {
+                                action.onTap?.call();
+                                return;
+                              }
+                            }
+                          },
+                          itemBuilder: (context) => menuActions
+                              .map(
+                                (action) => PopupMenuItem<String>(
+                                  value: action.id,
+                                  enabled:
+                                      action.onTap != null && !action.loading,
+                                  child: Row(
+                                    children: [
+                                      if (action.loading)
+                                        const SizedBox(
+                                          width: 20,
+                                          height: 20,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                          ),
+                                        )
+                                      else
+                                        Icon(action.icon, size: 20),
+                                      const SizedBox(width: 10),
+                                      Expanded(child: Text(action.label)),
+                                    ],
                                   ),
-                                )
-                              : const Icon(Icons.download),
-                          tooltip: 'Descargar informe',
-                          onPressed: onDownload,
-                          constraints: const BoxConstraints(
-                            minWidth: 40,
-                            minHeight: 40,
-                          ),
-                          padding: EdgeInsets.zero,
+                                ),
+                              )
+                              .toList(),
                         ),
-                        if (onTapEdit != null)
-                          IconButton(
-                            icon: const Icon(Icons.edit),
-                            tooltip: 'Editar',
-                            onPressed: onTapEdit,
-                            constraints: const BoxConstraints(
-                              minWidth: 40,
-                              minHeight: 40,
-                            ),
-                            padding: EdgeInsets.zero,
-                          ),
-                      ],
-                    ),
+                      ),
                   ],
                 ),
               ),

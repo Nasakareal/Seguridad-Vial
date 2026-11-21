@@ -17,7 +17,8 @@ class CaleaSurveysScreen extends StatefulWidget {
 
 class _CaleaSurveysScreenState extends State<CaleaSurveysScreen> {
   List<Map<String, dynamic>> _active = [], _managed = [];
-  bool _loading = true, _admin = false;
+  bool _loading = true, _admin = false, _superadmin = false;
+  final Set<int> _deletingSurveyIds = <int>{};
   String? _error;
   @override
   void initState() {
@@ -31,15 +32,17 @@ class _CaleaSurveysScreenState extends State<CaleaSurveysScreen> {
       _error = null;
     });
     try {
-      _admin =
-          await AuthService.isSuperadmin() ||
-          await AuthService.hasRoleName('administrador');
+      final superadmin = await AuthService.isSuperadmin();
+      final admin =
+          superadmin || await AuthService.hasRoleName('administrador');
       final active = await CaleaSurveyService.active();
-      final managed = _admin
+      final managed = admin
           ? await CaleaSurveyService.managed()
           : <Map<String, dynamic>>[];
       if (mounted) {
         setState(() {
+          _superadmin = superadmin;
+          _admin = admin;
           _active = active;
           _managed = managed;
           _loading = false;
@@ -121,6 +124,60 @@ class _CaleaSurveysScreenState extends State<CaleaSurveysScreen> {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text('Código $code copiado.')));
+    }
+  }
+
+  Future<void> _deleteSurvey(Map<String, dynamic> survey) async {
+    if (!_superadmin) return;
+    final id = int.tryParse('${survey['id']}');
+    if (id == null || _deletingSurveyIds.contains(id)) return;
+    final title = '${survey['titulo'] ?? 'Encuesta CALEA'}';
+    final attempts = int.tryParse('${survey['intentos_count'] ?? 0}') ?? 0;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Eliminar encuesta CALEA'),
+        content: Text(
+          '¿Eliminar definitivamente “$title”?\n\n'
+          'También se eliminarán sus preguntas, asignaciones, $attempts '
+          '${attempts == 1 ? 'intento' : 'intentos'} y todas las respuestas. '
+          'Esta acción no se puede deshacer.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton.icon(
+            key: const Key('confirmar-eliminar-encuesta-calea'),
+            style: FilledButton.styleFrom(backgroundColor: Colors.red.shade700),
+            onPressed: () => Navigator.pop(dialogContext, true),
+            icon: const Icon(Icons.delete_forever_outlined),
+            label: const Text('Eliminar definitivamente'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _deletingSurveyIds.add(id));
+    try {
+      await CaleaSurveyService.delete(id);
+      if (!mounted) return;
+      setState(() {
+        _managed.removeWhere((item) => '${item['id']}' == '$id');
+        _active.removeWhere((item) => '${item['id']}' == '$id');
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Encuesta CALEA eliminada.')),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(CaleaSurveyService.clean(error))));
+    } finally {
+      if (mounted) setState(() => _deletingSurveyIds.remove(id));
     }
   }
 
@@ -243,6 +300,8 @@ class _CaleaSurveysScreenState extends State<CaleaSurveysScreen> {
         ? Map<String, dynamic>.from(e['ultimo_intento'] as Map)
         : null;
     final status = '${attempt?['estado'] ?? ''}';
+    final surveyId = int.tryParse('${e['id']}');
+    final deleting = surveyId != null && _deletingSurveyIds.contains(surveyId);
     return Card(
       elevation: 0,
       margin: const EdgeInsets.only(bottom: 12),
@@ -365,15 +424,33 @@ class _CaleaSurveysScreenState extends State<CaleaSurveysScreen> {
                     style: TextStyle(color: Colors.blueGrey),
                   ),
                 const SizedBox(height: 8),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
+                Wrap(
+                  alignment: WrapAlignment.end,
+                  spacing: 6,
+                  runSpacing: 6,
                   children: [
+                    if (_superadmin)
+                      TextButton.icon(
+                        key: Key('eliminar-encuesta-calea-${e['id']}'),
+                        onPressed: deleting ? null : () => _deleteSurvey(e),
+                        style: TextButton.styleFrom(
+                          foregroundColor: Colors.red.shade700,
+                        ),
+                        icon: deleting
+                            ? const SizedBox.square(
+                                dimension: 16,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Icon(Icons.delete_outline),
+                        label: Text(deleting ? 'Eliminando...' : 'Eliminar'),
+                      ),
                     TextButton.icon(
                       onPressed: () => _edit(e),
                       icon: const Icon(Icons.edit_outlined),
                       label: const Text('Editar'),
                     ),
-                    const SizedBox(width: 6),
                     FilledButton.tonalIcon(
                       onPressed: () => _openResults(e),
                       icon: const Icon(Icons.visibility_outlined),

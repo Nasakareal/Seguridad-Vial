@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../services/auth_service.dart';
 import '../../services/tracking_service.dart';
@@ -6,6 +7,7 @@ import '../../services/users_service.dart';
 import '../../widgets/account_drawer.dart';
 import '../../widgets/permission_guard.dart';
 import '../login_screen.dart';
+import 'widgets/user_password_field.dart';
 
 class UserCreateScreen extends StatelessWidget {
   const UserCreateScreen({super.key});
@@ -37,10 +39,13 @@ class UserFormScreen extends StatefulWidget {
 class _UserFormScreenState extends State<UserFormScreen> {
   final _formKey = GlobalKey<FormState>();
 
-  final _nameCtrl = TextEditingController();
+  final _nombresCtrl = TextEditingController();
+  final _apellidoPaternoCtrl = TextEditingController();
+  final _apellidoMaternoCtrl = TextEditingController();
   final _emailCtrl = TextEditingController();
   final _telefonoCtrl = TextEditingController();
-  final _areaCtrl = TextEditingController();
+  final _telefonoOperativoCtrl = TextEditingController();
+  final _telefonoOperativoSecundarioCtrl = TextEditingController();
   final _passwordCtrl = TextEditingController();
   final _passwordConfirmCtrl = TextEditingController();
 
@@ -48,7 +53,7 @@ class _UserFormScreenState extends State<UserFormScreen> {
   bool _loading = true;
   bool _saving = false;
   bool _busy = false;
-  bool _compartirUbicacion = true;
+  bool _isSuperadmin = false;
   String? _error;
 
   UsersMeta _meta = const UsersMeta.empty();
@@ -61,8 +66,6 @@ class _UserFormScreenState extends State<UserFormScreen> {
   int? _delegacionId;
   int? _constanciaModuloId;
   int? _destacamentoId;
-  String _estado = 'Activo';
-  Set<int> _unidadesExtra = <int>{};
 
   @override
   void didChangeDependencies() {
@@ -74,10 +77,13 @@ class _UserFormScreenState extends State<UserFormScreen> {
 
   @override
   void dispose() {
-    _nameCtrl.dispose();
+    _nombresCtrl.dispose();
+    _apellidoPaternoCtrl.dispose();
+    _apellidoMaternoCtrl.dispose();
     _emailCtrl.dispose();
     _telefonoCtrl.dispose();
-    _areaCtrl.dispose();
+    _telefonoOperativoCtrl.dispose();
+    _telefonoOperativoSecundarioCtrl.dispose();
     _passwordCtrl.dispose();
     _passwordConfirmCtrl.dispose();
     super.dispose();
@@ -102,6 +108,7 @@ class _UserFormScreenState extends State<UserFormScreen> {
 
     try {
       final meta = await UsersService.meta();
+      final isSuperadmin = await AuthService.isSuperadmin();
       Map<String, dynamic>? user;
 
       if (widget.isEditing) {
@@ -114,6 +121,7 @@ class _UserFormScreenState extends State<UserFormScreen> {
 
       if (!mounted) return;
       _meta = meta;
+      _isSuperadmin = isSuperadmin;
       if (user != null) {
         _fillFromUser(user);
       }
@@ -132,11 +140,15 @@ class _UserFormScreenState extends State<UserFormScreen> {
   }
 
   void _fillFromUser(Map<String, dynamic> user) {
-    _nameCtrl.text = _text(user['name']);
+    _nombresCtrl.text = _text(user['nombres'], _text(user['name']));
+    _apellidoPaternoCtrl.text = _text(user['apellido_paterno']);
+    _apellidoMaternoCtrl.text = _text(user['apellido_materno']);
     _emailCtrl.text = _text(user['email']);
     _telefonoCtrl.text = _text(user['telefono']);
-    _areaCtrl.text = _text(user['area']);
-    _estado = _text(user['estado'], 'Activo');
+    _telefonoOperativoCtrl.text = _text(user['telefono_whatsapp_operativo']);
+    _telefonoOperativoSecundarioCtrl.text = _text(
+      user['telefono_whatsapp_operativo_secundario'],
+    );
     _roleId = _readInt(user['role_id']) ?? _nestedId(user['role']);
     _unidadId = _readInt(user['unidad_id']) ?? _nestedId(user['unidad']);
     _turnoId = _readInt(user['turno_id']) ?? _nestedId(user['turno']);
@@ -148,11 +160,6 @@ class _UserFormScreenState extends State<UserFormScreen> {
         _nestedId(user['constancia_modulo']);
     _destacamentoId =
         _readInt(user['destacamento_id']) ?? _nestedId(user['destacamento']);
-    _compartirUbicacion = _readBool(
-      user['compartir_ubicacion'],
-      fallback: true,
-    );
-    _unidadesExtra = _idsFromList(user['unidades']);
   }
 
   Future<void> _logout(BuildContext context) async {
@@ -190,26 +197,6 @@ class _UserFormScreenState extends State<UserFormScreen> {
   int? _nestedId(dynamic raw) {
     if (raw is Map) return _readInt(raw['id']);
     return null;
-  }
-
-  bool _readBool(dynamic value, {bool fallback = false}) {
-    if (value is bool) return value;
-    final text = value?.toString().trim().toLowerCase() ?? '';
-    if (text == '1' || text == 'true' || text == 'si' || text == 'sí') {
-      return true;
-    }
-    if (text == '0' || text == 'false' || text == 'no') return false;
-    return fallback;
-  }
-
-  Set<int> _idsFromList(dynamic raw) {
-    if (raw is! List) return <int>{};
-    return raw
-        .whereType<Map>()
-        .map((item) => _readInt(item['id']))
-        .whereType<int>()
-        .where((id) => id > 0)
-        .toSet();
   }
 
   UserCatalogItem? _find(List<UserCatalogItem> items, int? id) {
@@ -285,7 +272,7 @@ class _UserFormScreenState extends State<UserFormScreen> {
   }
 
   String? _passwordValidator(String? value) {
-    final text = value?.trim() ?? '';
+    final text = value ?? '';
     if (!widget.isEditing && text.isEmpty) return 'Campo requerido';
     if (text.isNotEmpty && text.length < 6) {
       return 'Minimo 6 caracteres';
@@ -294,8 +281,8 @@ class _UserFormScreenState extends State<UserFormScreen> {
   }
 
   String? _passwordConfirmValidator(String? value) {
-    final text = value?.trim() ?? '';
-    final pass = _passwordCtrl.text.trim();
+    final text = value ?? '';
+    final pass = _passwordCtrl.text;
     if (!widget.isEditing && text.isEmpty) return 'Campo requerido';
     if (pass.isNotEmpty && text != pass) {
       return 'La confirmacion no coincide';
@@ -312,13 +299,11 @@ class _UserFormScreenState extends State<UserFormScreen> {
       _error = null;
     });
 
-    final unidadesExtra = _unidadesExtra.toList()..sort();
     final payload = <String, dynamic>{
-      'name': _nameCtrl.text.trim(),
+      'nombres': _nombresCtrl.text.trim(),
+      'apellido_paterno': _emptyToNull(_apellidoPaternoCtrl.text),
+      'apellido_materno': _emptyToNull(_apellidoMaternoCtrl.text),
       'email': _emailCtrl.text.trim(),
-      'telefono': _emptyToNull(_telefonoCtrl.text),
-      'area': _emptyToNull(_areaCtrl.text),
-      'estado': _estado,
       'role_id': _roleId,
       'unidad_id': _unidadId,
       'turno_id': _turnoId,
@@ -326,14 +311,22 @@ class _UserFormScreenState extends State<UserFormScreen> {
       'delegacion_id': _delegacionId,
       'constancia_modulo_id': _constanciaModuloId,
       'destacamento_id': _destacamentoId,
-      'unidades_ids': unidadesExtra,
-      'compartir_ubicacion': _compartirUbicacion,
     };
 
-    final password = _passwordCtrl.text.trim();
+    if (_isSuperadmin) {
+      payload['telefono'] = _emptyToNull(_telefonoCtrl.text);
+      payload['telefono_whatsapp_operativo'] = _emptyToNull(
+        _telefonoOperativoCtrl.text,
+      );
+      payload['telefono_whatsapp_operativo_secundario'] = _emptyToNull(
+        _telefonoOperativoSecundarioCtrl.text,
+      );
+    }
+
+    final password = _passwordCtrl.text;
     if (password.isNotEmpty || !widget.isEditing) {
       payload['password'] = password;
-      payload['password_confirmation'] = _passwordConfirmCtrl.text.trim();
+      payload['password_confirmation'] = _passwordConfirmCtrl.text;
     }
 
     try {
@@ -387,15 +380,15 @@ class _UserFormScreenState extends State<UserFormScreen> {
     TextEditingController controller,
     String label, {
     FormFieldValidator<String>? validator,
-    bool obscureText = false,
     TextInputType? keyboardType,
+    List<TextInputFormatter>? inputFormatters,
   }) {
     return TextFormField(
       controller: controller,
       decoration: _dec(label),
       validator: validator,
-      obscureText: obscureText,
       keyboardType: keyboardType,
+      inputFormatters: inputFormatters,
     );
   }
 
@@ -450,33 +443,6 @@ class _UserFormScreenState extends State<UserFormScreen> {
           ...children,
         ],
       ),
-    );
-  }
-
-  Widget _unidadesExtraSelector() {
-    if (_meta.unidades.isEmpty) {
-      return const Text('No hay unidades disponibles.');
-    }
-
-    return Column(
-      children: _meta.unidades.map((unidad) {
-        return CheckboxListTile(
-          contentPadding: EdgeInsets.zero,
-          value: _unidadesExtra.contains(unidad.id),
-          title: Text(unidad.nombre),
-          onChanged: _saving
-              ? null
-              : (selected) {
-                  setState(() {
-                    if (selected == true) {
-                      _unidadesExtra.add(unidad.id);
-                    } else {
-                      _unidadesExtra.remove(unidad.id);
-                    }
-                  });
-                },
-        );
-      }).toList(),
     );
   }
 
@@ -557,41 +523,60 @@ class _UserFormScreenState extends State<UserFormScreen> {
                     _section(
                       title: 'Datos principales',
                       children: [
-                        _textField(_nameCtrl, 'Nombre', validator: _required),
+                        _textField(
+                          _apellidoPaternoCtrl,
+                          'Apellido paterno',
+                          keyboardType: TextInputType.name,
+                        ),
+                        const SizedBox(height: 12),
+                        _textField(
+                          _apellidoMaternoCtrl,
+                          'Apellido materno',
+                          keyboardType: TextInputType.name,
+                        ),
+                        const SizedBox(height: 12),
+                        _textField(
+                          _nombresCtrl,
+                          'Nombre(s)',
+                          validator: _required,
+                          keyboardType: TextInputType.name,
+                        ),
                         const SizedBox(height: 12),
                         _textField(
                           _emailCtrl,
-                          'Correo',
+                          'Email',
                           validator: _emailValidator,
                           keyboardType: TextInputType.emailAddress,
                         ),
-                        const SizedBox(height: 12),
-                        _textField(
-                          _telefonoCtrl,
-                          'Telefono',
-                          keyboardType: TextInputType.phone,
-                        ),
-                        const SizedBox(height: 12),
-                        _textField(_areaCtrl, 'Area'),
-                        const SizedBox(height: 12),
-                        DropdownButtonFormField<String>(
-                          value: _estado,
-                          decoration: _dec('Estado'),
-                          items: const [
-                            DropdownMenuItem(
-                              value: 'Activo',
-                              child: Text('Activo'),
-                            ),
-                            DropdownMenuItem(
-                              value: 'Inactivo',
-                              child: Text('Inactivo'),
-                            ),
-                          ],
-                          onChanged: _saving
-                              ? null
-                              : (value) =>
-                                    setState(() => _estado = value ?? 'Activo'),
-                        ),
+                        if (_isSuperadmin) ...[
+                          const SizedBox(height: 12),
+                          _textField(
+                            _telefonoCtrl,
+                            'WhatsApp autorizado para respuestas de la API',
+                            keyboardType: TextInputType.phone,
+                            inputFormatters: [
+                              FilteringTextInputFormatter.digitsOnly,
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          _textField(
+                            _telefonoOperativoCtrl,
+                            'WhatsApp operativo principal',
+                            keyboardType: TextInputType.phone,
+                            inputFormatters: [
+                              FilteringTextInputFormatter.digitsOnly,
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          _textField(
+                            _telefonoOperativoSecundarioCtrl,
+                            'WhatsApp operativo secundario',
+                            keyboardType: TextInputType.phone,
+                            inputFormatters: [
+                              FilteringTextInputFormatter.digitsOnly,
+                            ],
+                          ),
+                        ],
                       ],
                     ),
                     const SizedBox(height: 14),
@@ -618,20 +603,20 @@ class _UserFormScreenState extends State<UserFormScreen> {
                           ),
                         ],
                         const SizedBox(height: 12),
-                        _textField(
-                          _passwordCtrl,
-                          widget.isEditing ? 'Nueva contraseña' : 'Contraseña',
+                        UserPasswordField(
+                          controller: _passwordCtrl,
+                          label: widget.isEditing
+                              ? 'Nueva contraseña'
+                              : 'Contraseña',
                           validator: _passwordValidator,
-                          obscureText: true,
                         ),
                         const SizedBox(height: 12),
-                        _textField(
-                          _passwordConfirmCtrl,
-                          widget.isEditing
+                        UserPasswordField(
+                          controller: _passwordConfirmCtrl,
+                          label: widget.isEditing
                               ? 'Confirmar nueva contraseña'
                               : 'Confirmar contraseña',
                           validator: _passwordConfirmValidator,
-                          obscureText: true,
                         ),
                       ],
                     ),
@@ -708,22 +693,7 @@ class _UserFormScreenState extends State<UserFormScreen> {
                                 setState(() => _destacamentoId = value),
                           ),
                         ],
-                        const SizedBox(height: 12),
-                        SwitchListTile(
-                          contentPadding: EdgeInsets.zero,
-                          value: _compartirUbicacion,
-                          title: const Text('Compartir ubicacion'),
-                          onChanged: _saving
-                              ? null
-                              : (value) =>
-                                    setState(() => _compartirUbicacion = value),
-                        ),
                       ],
-                    ),
-                    const SizedBox(height: 14),
-                    _section(
-                      title: 'Unidades extra',
-                      children: [_unidadesExtraSelector()],
                     ),
                     const SizedBox(height: 18),
                     ElevatedButton.icon(

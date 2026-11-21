@@ -850,6 +850,36 @@ class AuthService {
     return belongsToFomento;
   }
 
+  static Future<bool> canAccessFomentoPersonnelStatistics({
+    bool refresh = false,
+  }) async {
+    if (refresh) {
+      await refreshCurrentUserAccess();
+    }
+
+    if (await isSuperadmin()) {
+      return true;
+    }
+
+    final unidadId = await getUnidadId();
+    final payload = await getCurrentUserPayload(refresh: false);
+    final belongsToFomento =
+        unidadId == unidadCulturaVialId ||
+        _payloadMatchesFomentoCulturaVial(payload);
+    if (!belongsToFomento) {
+      return false;
+    }
+
+    final roleId = await getRoleId();
+    if (roleId == 2 || roleId == 3 || roleId == 5) {
+      return true;
+    }
+
+    return await _hasExactRoleName('subdirector') ||
+        await _hasExactRoleName('administrador') ||
+        await _hasExactRoleName('administrativo');
+  }
+
   static Future<bool> canSeeFullDelegacionesFeed() async {
     if (!await isDelegacionesUser()) {
       return false;
@@ -1104,6 +1134,16 @@ class AuthService {
 
     final payload = await getCurrentUserPayload(refresh: false);
     return _payloadMatchesDelegaciones(payload);
+  }
+
+  static Future<bool> canGenerateIphPuestaDisposicion({
+    bool refresh = false,
+  }) async {
+    if (refresh) {
+      await refreshCurrentUserAccess();
+    }
+    if (await isSuperadmin()) return true;
+    return isDelegacionesUser();
   }
 
   static Future<bool> canUseDelegacionesActividadesFisicas({

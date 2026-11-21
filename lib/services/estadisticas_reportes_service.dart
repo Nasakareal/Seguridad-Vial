@@ -9,6 +9,11 @@ class EstadisticasReportesService {
     String reporte, {
     Map<String, dynamic>? params,
   }) async {
+    if (_isFomentoPersonnelReport(reporte) &&
+        !await AuthService.canAccessFomentoPersonnelStatistics()) {
+      throw Exception('No tienes acceso a las estadísticas de Fomento.');
+    }
+
     final token = await AuthService.getToken();
     final query = <String, String>{};
     params?.forEach((key, value) {
@@ -36,5 +41,17 @@ class EstadisticasReportesService {
       throw Exception(message);
     }
     return (jsonDecode(response.body) as Map).cast<String, dynamic>();
+  }
+
+  static bool _isFomentoPersonnelReport(String reporte) {
+    final normalized = reporte.trim().toLowerCase();
+    return const <String>{
+      'fomento-panel',
+      'fomento-personal',
+      'fomento-rendimiento-personal',
+      'fomento-incapacidades-personal',
+      'fomento-disciplina-personal',
+      'fomento-servicios-personal',
+    }.contains(normalized);
   }
 }

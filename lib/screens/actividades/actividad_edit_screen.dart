@@ -455,9 +455,13 @@ class _ActividadEditScreenState extends State<ActividadEditScreen> {
   }
 
   bool get _isConduceLegalidad {
-    return ActividadesService.isConduceLegalidadSubcategoria(
-      _selectedSubcategoria()?.nombre,
-    );
+    // Solo las actividades originadas por una captura del operativo conservan
+    // sus reglas especiales. Una actividad informativa con la misma
+    // subcategoria se edita como cualquier otra actividad.
+    return _actividad?.conduceLegalidadCapturaId != null &&
+        ActividadesService.isConduceLegalidadSubcategoria(
+          _selectedSubcategoria()?.nombre,
+        );
   }
 
   bool get _isAlCorralon {

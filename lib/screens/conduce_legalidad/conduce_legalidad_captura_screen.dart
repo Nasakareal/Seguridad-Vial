@@ -14,6 +14,7 @@ import '../../core/vehiculos/vehiculo_taxonomia.dart';
 import '../../core/licencias/licencia_barcode_payload.dart';
 import '../../models/conduce_legalidad.dart';
 import '../../services/auth_service.dart';
+import '../../services/conduce_legalidad_fundamento_catalog_service.dart';
 import '../../services/conduce_legalidad_persona_descriptor.dart';
 import '../../services/conduce_legalidad_narrativa_service.dart';
 import '../../services/conduce_legalidad_service.dart';
@@ -51,6 +52,7 @@ class _ConduceLegalidadCapturaScreenState
     extends State<ConduceLegalidadCapturaScreen> {
   final _formKey = GlobalKey<FormState>();
   final _contentErrorKey = GlobalKey();
+  final _formScrollCtrl = ScrollController();
   final _agenteBusquedaCtrl = TextEditingController();
   final _agenteBusquedaFocus = FocusNode();
   final _agenteNombresCtrl = TextEditingController();
@@ -244,7 +246,33 @@ class _ConduceLegalidadCapturaScreenState
     _agentePlacaCtrl.dispose();
     _narrativaCtrl.dispose();
     _observacionesCtrl.dispose();
+    _formScrollCtrl.dispose();
     super.dispose();
+  }
+
+  void _scrollToContentError() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_formScrollCtrl.hasClients) return;
+      unawaited(
+        _formScrollCtrl
+            .animateTo(
+              _formScrollCtrl.position.minScrollExtent,
+              duration: const Duration(milliseconds: 360),
+              curve: Curves.easeOutCubic,
+            )
+            .then((_) {
+              if (!mounted) return;
+              final target = _contentErrorKey.currentContext;
+              if (target == null || !target.mounted) return;
+              Scrollable.ensureVisible(
+                target,
+                duration: const Duration(milliseconds: 180),
+                curve: Curves.easeOutCubic,
+                alignment: 0.08,
+              );
+            }),
+      );
+    });
   }
 
   void _hydrateInitialCaptura() {
@@ -951,6 +979,7 @@ class _ConduceLegalidadCapturaScreenState
   List<ConduceLegalidadFundamento> _opcionesFundamento(
     List<ConduceLegalidadFundamento> catalogo,
     ConduceLegalidadFundamento? actual,
+    int posicion,
   ) {
     final seleccionados = _fundamentosSeleccionados
         .where(
@@ -960,9 +989,29 @@ class _ConduceLegalidadCapturaScreenState
         )
         .map(_fundamentoSelectionKey)
         .toSet();
-    return catalogo
+    final disponibles = catalogo
         .where((item) => !seleccionados.contains(_fundamentoSelectionKey(item)))
         .toList();
+    if (widget.module.isAlcoholimetria) return disponibles;
+
+    if (posicion == 0) {
+      final visibles = ConduceLegalidadFundamentoCatalogService.causasVisibles(
+        disponibles,
+      );
+      if (actual != null &&
+          !visibles.any(
+            (item) =>
+                _fundamentoSelectionKey(item) ==
+                _fundamentoSelectionKey(actual),
+          )) {
+        visibles.insert(0, actual);
+      }
+      return visibles;
+    }
+
+    return ConduceLegalidadFundamentoCatalogService.fundamentosAdicionales(
+      disponibles,
+    );
   }
 
   void _sincronizarNarrativaAutomatica({bool forzar = false}) {
@@ -1034,7 +1083,22 @@ class _ConduceLegalidadCapturaScreenState
     setState(() => _contentError = null);
     final valid = _formKey.currentState!.validate();
     if (!valid) {
-      _scrollToFirstFormError(_formKey);
+      _scrollToFirstFormError(
+        _formKey,
+        fallbackScrollController: _formScrollCtrl,
+      );
+      return;
+    }
+
+    if (!widget.module.isAlcoholimetria &&
+        !ConduceLegalidadFundamentoCatalogService.seleccionAmeritaResguardo(
+          _fundamentosSeleccionados,
+        )) {
+      setState(() {
+        _contentError =
+            ConduceLegalidadFundamentoCatalogService.resguardoRequeridoMensaje;
+      });
+      _scrollToContentError();
       return;
     }
 
@@ -1044,14 +1108,14 @@ class _ConduceLegalidadCapturaScreenState
     );
     if (vehiculoError != null) {
       setState(() => _contentError = vehiculoError);
-      _scrollToKey(_contentErrorKey);
+      _scrollToContentError();
       return;
     }
 
     final fundamentosError = _fundamentosVehiculoError();
     if (fundamentosError != null) {
       setState(() => _contentError = fundamentosError);
-      _scrollToKey(_contentErrorKey);
+      _scrollToContentError();
       return;
     }
 
@@ -1065,7 +1129,7 @@ class _ConduceLegalidadCapturaScreenState
         _contentError =
             'Captura una narrativa o agrega vehiculos, personas o fotos.';
       });
-      _scrollToKey(_contentErrorKey);
+      _scrollToContentError();
       return;
     }
 
@@ -1075,7 +1139,7 @@ class _ConduceLegalidadCapturaScreenState
             'Cada alimentación admite únicamente un vehículo. '
             'Quita los vehículos adicionales antes de guardar.';
       });
-      _scrollToKey(_contentErrorKey);
+      _scrollToContentError();
       return;
     }
 
@@ -1266,6 +1330,7 @@ class _ConduceLegalidadCapturaScreenState
           : Form(
               key: _formKey,
               child: ListView(
+                controller: _formScrollCtrl,
                 padding: const EdgeInsets.fromLTRB(16, 16, 16, 92),
                 children: [
                   if (!_editing) ...[
@@ -1368,11 +1433,15 @@ class _ConduceLegalidadCapturaScreenState
                     opciones: _opcionesFundamento(
                       fundamentosCaptura,
                       _fundamento,
+                      0,
                     ),
                     enabled: !_saving,
-                    label: 'Fundamento del operativo *',
-                    helper:
-                        'Toca y escribe para buscar por conducta, artículo o palabra clave.',
+                    label: widget.module.isAlcoholimetria
+                        ? 'Fundamento del operativo *'
+                        : 'Primera causa visible *',
+                    helper: widget.module.isAlcoholimetria
+                        ? 'Toca y escribe para buscar por conducta, artículo o palabra clave.'
+                        : 'Elige lo que observaste a simple vista: casco, menor conduciendo, menor de 12 años, etc.',
                     onChanged: _setFundamento,
                     validator: (value) => value == null
                         ? 'Selecciona al menos un fundamento'
@@ -1392,6 +1461,7 @@ class _ConduceLegalidadCapturaScreenState
                     final opciones = _opcionesFundamento(
                       fundamentosCaptura,
                       fundamento,
+                      index + 1,
                     );
                     return <Widget>[
                       const SizedBox(height: 12),
@@ -1404,8 +1474,17 @@ class _ConduceLegalidadCapturaScreenState
                               value: fundamento,
                               opciones: opciones,
                               enabled: !_saving,
-                              label: 'Fundamento adicional ${index + 1}',
-                              helper: 'Toca y escribe para buscar.',
+                              label:
+                                  !widget.module.isAlcoholimetria && index == 0
+                                  ? 'Segundo fundamento (documental)'
+                                  : 'Fundamento adicional ${index + 1}',
+                              helper: !widget.module.isAlcoholimetria
+                                  ? 'Licencia, documentos y demás causas agrupadas.'
+                                  : 'Toca y escribe para buscar.',
+                              groupBuilder: widget.module.isAlcoholimetria
+                                  ? null
+                                  : ConduceLegalidadFundamentoCatalogService
+                                        .grupo,
                               onChanged: (value) =>
                                   _setFundamentoAdicional(index, value),
                               validator: (value) => value == null
@@ -1450,6 +1529,17 @@ class _ConduceLegalidadCapturaScreenState
                       label: const Text('Añadir otro fundamento'),
                     ),
                   ),
+                  if (!widget.module.isAlcoholimetria &&
+                      _fundamentosSeleccionados.isNotEmpty &&
+                      !ConduceLegalidadFundamentoCatalogService.seleccionAmeritaResguardo(
+                        _fundamentosSeleccionados,
+                      )) ...[
+                    const SizedBox(height: 10),
+                    const _AttentionPanel(
+                      text: ConduceLegalidadFundamentoCatalogService
+                          .resguardoRequeridoMensaje,
+                    ),
+                  ],
                   const SizedBox(height: 14),
                   TextFormField(
                     controller: _narrativaCtrl,
@@ -2015,7 +2105,8 @@ class _VehiculoModalState extends State<_VehiculoModal> {
 
   bool _fundamentoRetieneVehiculo(ConduceLegalidadFundamento? fundamento) {
     return fundamento?.retencionVehiculo == true ||
-        fundamento?.depositoSiSinPersonaHabilitada == true;
+        fundamento?.depositoSiSinPersonaHabilitada == true ||
+        fundamento?.arrestoPersona == true;
   }
 
   bool _fundamentosRetienenVehiculo(
@@ -3811,6 +3902,7 @@ class _FundamentoPickerFormField extends FormField<ConduceLegalidadFundamento> {
     required bool enabled,
     required String label,
     required String helper,
+    String Function(ConduceLegalidadFundamento)? groupBuilder,
     required ValueChanged<ConduceLegalidadFundamento?> onChanged,
     required FormFieldValidator<ConduceLegalidadFundamento> validator,
   }) : super(
@@ -3827,6 +3919,7 @@ class _FundamentoPickerFormField extends FormField<ConduceLegalidadFundamento> {
                    builder: (_) => _FundamentoPickerSheet(
                      opciones: opciones,
                      seleccionado: state.value,
+                     groupBuilder: groupBuilder,
                    ),
                  );
              if (selected == null) return;
@@ -3869,10 +3962,12 @@ class _FundamentoPickerFormField extends FormField<ConduceLegalidadFundamento> {
 class _FundamentoPickerSheet extends StatefulWidget {
   final List<ConduceLegalidadFundamento> opciones;
   final ConduceLegalidadFundamento? seleccionado;
+  final String Function(ConduceLegalidadFundamento)? groupBuilder;
 
   const _FundamentoPickerSheet({
     required this.opciones,
     required this.seleccionado,
+    this.groupBuilder,
   });
 
   @override
@@ -3884,7 +3979,23 @@ class _FundamentoPickerSheetState extends State<_FundamentoPickerSheet> {
   String _query = '';
 
   @override
+  void initState() {
+    super.initState();
+    _searchCtrl.addListener(_actualizarBusqueda);
+  }
+
+  void _actualizarBusqueda() {
+    _actualizarBusquedaDesdeTexto(_searchCtrl.text);
+  }
+
+  void _actualizarBusquedaDesdeTexto(String value) {
+    if (!mounted || value == _query) return;
+    setState(() => _query = value);
+  }
+
+  @override
   void dispose() {
+    _searchCtrl.removeListener(_actualizarBusqueda);
     _searchCtrl.dispose();
     super.dispose();
   }
@@ -3915,9 +4026,12 @@ class _FundamentoPickerSheetState extends State<_FundamentoPickerSheet> {
           item.codigo,
           item.articulo,
           item.fraccion,
+          item.inciso,
           item.descripcion,
-          item.fundamentoLegal,
           item.referenciaLegalCorta,
+          item.etiquetaOperativa,
+          item.textoOperativo,
+          item.ambitoVehiculoTexto,
         ].whereType<String>().join(' '),
       );
       return tokens.every(text.contains);
@@ -3962,11 +4076,26 @@ class _FundamentoPickerSheetState extends State<_FundamentoPickerSheet> {
                 autofocus: true,
                 textInputAction: TextInputAction.search,
                 decoration: const InputDecoration(
-                  hintText: 'Escribe: puente, casco, placas, 440…',
+                  hintText: 'Escribe: licencia, casco, placas, 440…',
                   border: OutlineInputBorder(),
                   prefixIcon: Icon(Icons.search),
                 ),
-                onChanged: (value) => setState(() => _query = value),
+                onChanged: _actualizarBusquedaDesdeTexto,
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 6),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  '${results.length} ${results.length == 1 ? 'coincidencia' : 'coincidencias'}',
+                  key: const Key('fundamento-resultados'),
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF475569),
+                  ),
+                ),
               ),
             ),
             Expanded(
@@ -3974,13 +4103,20 @@ class _FundamentoPickerSheetState extends State<_FundamentoPickerSheet> {
                   ? const Center(
                       child: Text('No hay fundamentos que coincidan.'),
                     )
-                  : ListView.separated(
+                  : ListView.builder(
                       keyboardDismissBehavior:
                           ScrollViewKeyboardDismissBehavior.onDrag,
                       itemCount: results.length,
-                      separatorBuilder: (_, _) => const Divider(height: 1),
                       itemBuilder: (context, index) {
                         final item = results[index];
+                        final group = widget.groupBuilder?.call(item);
+                        final previousGroup = index == 0
+                            ? null
+                            : widget.groupBuilder?.call(results[index - 1]);
+                        final showGroup =
+                            group != null &&
+                            group.isNotEmpty &&
+                            group != previousGroup;
                         final selected =
                             widget.seleccionado?.codigo == item.codigo &&
                             widget.seleccionado?.id == item.id;
@@ -3991,19 +4127,43 @@ class _FundamentoPickerSheetState extends State<_FundamentoPickerSheet> {
                             'fr. ${item.fraccion}',
                           item.sancionResumen,
                         ].join(' · ');
-                        return ListTile(
-                          key: Key(
-                            'fundamento-opcion-${item.codigo ?? item.id}',
-                          ),
-                          leading: Icon(
-                            selected
-                                ? Icons.check_circle
-                                : Icons.gavel_outlined,
-                          ),
-                          title: Text(item.display),
-                          subtitle: Text(reference),
-                          selected: selected,
-                          onTap: () => Navigator.pop(context, item),
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            if (showGroup)
+                              Container(
+                                color: const Color(0xFFF1F5F9),
+                                padding: const EdgeInsets.fromLTRB(
+                                  16,
+                                  12,
+                                  16,
+                                  8,
+                                ),
+                                child: Text(
+                                  group,
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w900,
+                                    color: Color(0xFF334155),
+                                  ),
+                                ),
+                              ),
+                            ListTile(
+                              key: Key(
+                                'fundamento-opcion-${item.codigo ?? item.id}',
+                              ),
+                              leading: Icon(
+                                selected
+                                    ? Icons.check_circle
+                                    : Icons.gavel_outlined,
+                              ),
+                              title: Text(item.display),
+                              subtitle: Text(reference),
+                              selected: selected,
+                              onTap: () => Navigator.pop(context, item),
+                            ),
+                            const Divider(height: 1),
+                          ],
                         );
                       },
                     ),
@@ -4399,10 +4559,24 @@ class _WarningPanel extends StatelessWidget {
   }
 }
 
-void _scrollToFirstFormError(GlobalKey<FormState> formKey) {
+void _scrollToFirstFormError(
+  GlobalKey<FormState> formKey, {
+  ScrollController? fallbackScrollController,
+}) {
   WidgetsBinding.instance.addPostFrameCallback((_) {
     final target = _firstFormValidationError(formKey)?.context;
-    if (target == null) return;
+    if (target == null) {
+      if (fallbackScrollController?.hasClients ?? false) {
+        unawaited(
+          fallbackScrollController!.animateTo(
+            fallbackScrollController.position.minScrollExtent,
+            duration: const Duration(milliseconds: 320),
+            curve: Curves.easeOutCubic,
+          ),
+        );
+      }
+      return;
+    }
 
     Scrollable.ensureVisible(
       target,
@@ -4443,20 +4617,6 @@ _FormValidationError? _firstFormValidationError(GlobalKey<FormState> formKey) {
   final element = formContext;
   if (element is Element) visit(element);
   return firstError;
-}
-
-void _scrollToKey(GlobalKey key) {
-  WidgetsBinding.instance.addPostFrameCallback((_) {
-    final target = key.currentContext;
-    if (target == null) return;
-
-    Scrollable.ensureVisible(
-      target,
-      duration: const Duration(milliseconds: 280),
-      curve: Curves.easeOutCubic,
-      alignment: 0.12,
-    );
-  });
 }
 
 class _ModalHeader extends StatelessWidget {

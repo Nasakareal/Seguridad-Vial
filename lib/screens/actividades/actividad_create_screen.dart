@@ -826,19 +826,13 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
     return _isFomentoUser && _showFomentoPanel;
   }
 
-  bool get _isConduceLegalidad {
-    return ActividadesService.isConduceLegalidadSubcategoria(
-      _selectedSubcategoria()?.nombre,
-    );
-  }
-
   bool get _isAlCorralon {
     return ActividadesService.isAlCorralonCategoria(
       _selectedCategoria()?.nombre,
     );
   }
 
-  bool get _usesInfraccionSelector => _isConduceLegalidad || _isAlCorralon;
+  bool get _usesInfraccionSelector => _isAlCorralon;
 
   List<ConduceLegalidadFundamento> get _fundamentosConduceSeleccionados => [
     if (_fundamentoConduce != null) _fundamentoConduce!,
@@ -1385,10 +1379,10 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
       elementosParticipantesTexto: _trim(_elementosCtrl),
       patrullasParticipantesTexto: _trim(_patrullasCtrl),
       fomento: fomento,
-      isConduceLegalidad: _isConduceLegalidad,
-      conduceLegalidadFundamentos: _isConduceLegalidad
-          ? _fundamentosConduceSeleccionados
-          : const <ConduceLegalidadFundamento>[],
+      // Las actividades capturadas aqui son informativas. Las alimentaciones
+      // del operativo Conduce con Legalidad se registran en su propio modulo.
+      isConduceLegalidad: false,
+      conduceLegalidadFundamentos: const <ConduceLegalidadFundamento>[],
       isAlCorralon: _isAlCorralon,
       actividadInfracciones: _isAlCorralon
           ? _fundamentosConduceSeleccionados
@@ -1400,16 +1394,6 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
   }
 
   Future<void> _agregarVehiculo() async {
-    if (_isConduceLegalidad && _vehiculos.isNotEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Cada alimentación de Conduce con Legalidad admite únicamente un vehículo.',
-          ),
-        ),
-      );
-      return;
-    }
     final vehiculo = await showActividadVehiculoModal(context);
     if (vehiculo == null || !mounted) return;
 
@@ -2439,11 +2423,7 @@ class _ActividadCreateScreenState extends State<ActividadCreateScreen> {
                           ),
                         ),
                         ElevatedButton.icon(
-                          onPressed:
-                              _saving ||
-                                  (_isConduceLegalidad && _vehiculos.isNotEmpty)
-                              ? null
-                              : _agregarVehiculo,
+                          onPressed: _saving ? null : _agregarVehiculo,
                           icon: const Icon(Icons.add),
                           label: const Text('Agregar vehiculo'),
                         ),

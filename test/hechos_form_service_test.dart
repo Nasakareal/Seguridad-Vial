@@ -191,6 +191,48 @@ void main() {
     expect(error, isNull);
   });
 
+  test('delegaciones can save a hecho as abanderamiento', () async {
+    SharedPreferences.setMockInitialValues(<String, Object>{
+      'auth_unidad_id': AuthService.unidadDelegacionesId,
+      'auth_role': 'Policia',
+    });
+
+    final data = validDelegacionesData()
+      ..situacion = HechosCatalogos.situacionAbanderamiento
+      ..vehiculosMp = ''
+      ..personasMp = '';
+
+    final error = await HechosFormService.validateBeforeSubmit(
+      data: data,
+      dictamenSelected: null,
+    );
+
+    expect(error, isNull);
+  });
+
+  test('users outside delegaciones cannot send abanderamiento', () async {
+    SharedPreferences.setMockInitialValues(<String, Object>{
+      'auth_unidad_id': AuthService.unidadSiniestrosId,
+      'auth_role': 'Policia',
+    });
+
+    final data = validDelegacionesData()
+      ..sector = HechosCatalogos.sectoresUi.first
+      ..situacion = HechosCatalogos.situacionAbanderamiento
+      ..vehiculosMp = ''
+      ..personasMp = '';
+
+    final error = await HechosFormService.validateBeforeSubmit(
+      data: data,
+      dictamenSelected: null,
+    );
+
+    expect(
+      error,
+      'La situación ABANDERAMIENTO solo está disponible para Delegaciones.',
+    );
+  });
+
   test(
     'delegaciones pending keeps expected totals validation separate',
     () async {

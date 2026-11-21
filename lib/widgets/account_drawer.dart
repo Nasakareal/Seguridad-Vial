@@ -82,6 +82,11 @@ class AppAccountDrawer extends StatelessWidget {
     final canUseWorkshopTrafficLights =
         await AuthService.isSuperadmin() ||
         unitId == AuthService.unidadCulturaVialId;
+    final canSeePuestas =
+        await AuthService.isSuperadmin() ||
+        await AuthService.hasFullOperationalAccess() ||
+        unitId == AuthService.unidadDelegacionesId ||
+        permissions.contains('ver puestas a disposicion');
 
     var access = await AdministrativeAccessService.loadAccess();
     if (!access.canSeeConfigurationMenu) {
@@ -100,6 +105,7 @@ class AppAccountDrawer extends StatelessWidget {
       canViewCalea: canViewCalea,
       canUsePatrol: canUsePatrol,
       canViewDailyPatrolLog: canViewDailyPatrolLog,
+      canSeePuestas: canSeePuestas,
     );
   }
 
@@ -391,6 +397,16 @@ class AppAccountDrawer extends StatelessWidget {
                                   arguments: 'delegaciones',
                                 ),
                               ),
+                            if (summary?.canSeePuestas == true)
+                              DrawerActionTile(
+                                icon: Icons.folder_open_outlined,
+                                title: 'Puestas a disposición',
+                                subtitle: 'Consultar y descargar puestas',
+                                onTap: () => _goTo(
+                                  context,
+                                  AppRoutes.puestasDisposicion,
+                                ),
+                              ),
                             if (summary?.access.canSeeVialidadesFiles == true)
                               DrawerActionTile(
                                 icon: Icons.traffic_outlined,
@@ -471,6 +487,7 @@ class _AccountSummary {
   final bool canViewCalea;
   final bool canUsePatrol;
   final bool canViewDailyPatrolLog;
+  final bool canSeePuestas;
 
   const _AccountSummary({
     required this.name,
@@ -484,6 +501,7 @@ class _AccountSummary {
     required this.canViewCalea,
     required this.canUsePatrol,
     required this.canViewDailyPatrolLog,
+    required this.canSeePuestas,
   });
 }
 

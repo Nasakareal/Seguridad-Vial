@@ -34,6 +34,8 @@ class CaleaSurveyService {
     int surveyId,
     Map<String, dynamic> body,
   ) async => _map(_data(await _send('PUT', '$_base/$surveyId', body: body)));
+  static Future<void> delete(int surveyId) async =>
+      _send('DELETE', '$_base/$surveyId');
   static Future<Map<String, dynamic>> start(int id) async =>
       _map(_data(await _send('POST', '$_base/$id/iniciar')));
   static Future<Map<String, dynamic>> attempt(
@@ -113,6 +115,7 @@ class CaleaSurveyService {
     final response = switch (method) {
       'POST' => await http.post(uri, headers: headers, body: encoded),
       'PUT' => await http.put(uri, headers: headers, body: encoded),
+      'DELETE' => await http.delete(uri, headers: headers),
       _ => await http.get(uri, headers: headers),
     };
     Map<String, dynamic> json = {};

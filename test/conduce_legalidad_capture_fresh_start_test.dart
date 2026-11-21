@@ -48,6 +48,23 @@ void main() {
           ),
           findsNothing,
         );
+
+        final mainScroll = find.byType(Scrollable).first;
+        await tester.scrollUntilVisible(
+          find.text('Guardar captura'),
+          700,
+          scrollable: mainScroll,
+        );
+        await tester.pumpAndSettle();
+        final scrollState = tester.state<ScrollableState>(mainScroll);
+        expect(scrollState.position.pixels, greaterThan(0));
+        final beforeSubmitOffset = scrollState.position.pixels;
+
+        await tester.tap(find.text('Guardar captura'));
+        await tester.pumpAndSettle();
+
+        expect(scrollState.position.pixels, lessThan(beforeSubmitOffset));
+        expect(scrollState.position.pixels, lessThan(300));
       },
       () => MockClient((request) async {
         if (request.method == 'POST' &&
@@ -231,7 +248,7 @@ void main() {
 
         final label = find.descendant(
           of: primary,
-          matching: find.text('Fundamento del operativo *'),
+          matching: find.text('Primera causa visible *'),
         );
         final placeholder = find.descendant(
           of: primary,
@@ -256,6 +273,16 @@ void main() {
         );
 
         final search = find.byKey(const Key('buscar-fundamento'));
+        await tester.enterText(search, 'puente');
+        await tester.pump();
+        expect(
+          find.byKey(const Key('fundamento-opcion-FUNDAMENTO_A')),
+          findsOneWidget,
+        );
+        expect(
+          find.byKey(const Key('fundamento-opcion-FUNDAMENTO_B')),
+          findsNothing,
+        );
         await tester.enterText(search, 'Fundamento B');
         await tester.pump();
         expect(
@@ -285,6 +312,20 @@ void main() {
         final additional = find.byKey(const Key('fundamento-adicional-0'));
         await tester.tap(additional);
         await tester.pumpAndSettle();
+        final additionalSearch = find.byKey(const Key('buscar-fundamento'));
+        await tester.enterText(additionalSearch, 'licencia');
+        await tester.pump();
+        expect(find.text('1 coincidencia'), findsOneWidget);
+        expect(
+          find.byKey(const Key('fundamento-opcion-FUNDAMENTO_C')),
+          findsOneWidget,
+        );
+        expect(
+          find.byKey(const Key('fundamento-opcion-FUNDAMENTO_B')),
+          findsNothing,
+        );
+        await tester.enterText(additionalSearch, '');
+        await tester.pump();
         expect(
           find.byKey(const Key('fundamento-opcion-FUNDAMENTO_A')),
           findsNothing,
@@ -315,6 +356,8 @@ void main() {
                   'id': 101,
                   'codigo': 'FUNDAMENTO_A',
                   'nombre': 'Fundamento A',
+                  'descripcion':
+                      'Moto circula por carriles centrales o puentes',
                   'ambito_vehiculo': 'motocicleta',
                   'retencion_vehiculo': true,
                 },
@@ -322,6 +365,15 @@ void main() {
                   'id': 102,
                   'codigo': 'FUNDAMENTO_B',
                   'nombre': 'Fundamento B',
+                  'descripcion': 'Menor conduciendo motocicleta',
+                  'ambito_vehiculo': 'motocicleta',
+                  'retencion_vehiculo': true,
+                },
+                <String, dynamic>{
+                  'id': 103,
+                  'codigo': 'FUNDAMENTO_C',
+                  'nombre': 'Conductor sin licencia vigente',
+                  'descripcion': 'La persona no presenta licencia',
                   'ambito_vehiculo': 'motocicleta',
                   'retencion_vehiculo': true,
                 },
@@ -331,6 +383,8 @@ void main() {
                   'id': 101,
                   'codigo': 'FUNDAMENTO_A',
                   'nombre': 'Fundamento A',
+                  'descripcion':
+                      'Moto circula por carriles centrales o puentes',
                   'ambito_vehiculo': 'motocicleta',
                   'retencion_vehiculo': true,
                 },
@@ -338,6 +392,15 @@ void main() {
                   'id': 102,
                   'codigo': 'FUNDAMENTO_B',
                   'nombre': 'Fundamento B',
+                  'descripcion': 'Menor conduciendo motocicleta',
+                  'ambito_vehiculo': 'motocicleta',
+                  'retencion_vehiculo': true,
+                },
+                <String, dynamic>{
+                  'id': 103,
+                  'codigo': 'FUNDAMENTO_C',
+                  'nombre': 'Conductor sin licencia vigente',
+                  'descripcion': 'La persona no presenta licencia',
                   'ambito_vehiculo': 'motocicleta',
                   'retencion_vehiculo': true,
                 },

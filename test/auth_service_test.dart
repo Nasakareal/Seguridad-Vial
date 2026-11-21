@@ -211,6 +211,26 @@ void main() {
     expect(await AuthService.canManageDelegacionesActividadesFisicas(), isTrue);
   });
 
+  test('only Unidad 2 and superadmin can generate IPH Word packages', () async {
+    SharedPreferences.setMockInitialValues(<String, Object>{
+      'auth_role': 'Policia',
+      'auth_unidad_id': AuthService.unidadDelegacionesId,
+    });
+    expect(await AuthService.canGenerateIphPuestaDisposicion(), isTrue);
+
+    SharedPreferences.setMockInitialValues(<String, Object>{
+      'auth_role': 'Superadmin',
+      'auth_unidad_id': AuthService.unidadCulturaVialId,
+    });
+    expect(await AuthService.canGenerateIphPuestaDisposicion(), isTrue);
+
+    SharedPreferences.setMockInitialValues(<String, Object>{
+      'auth_role': 'Administrador',
+      'auth_unidad_id': AuthService.unidadSiniestrosId,
+    });
+    expect(await AuthService.canGenerateIphPuestaDisposicion(), isFalse);
+  });
+
   test('non delegaciones users cannot upload physical activities', () async {
     SharedPreferences.setMockInitialValues(<String, Object>{
       'auth_role': 'Administrador',
@@ -1234,6 +1254,71 @@ void main() {
     expect(await AuthService.isFomentoCulturaVialUser(), isTrue);
     expect(await AuthService.canUseLicensePointsModule(), isTrue);
   });
+
+  test('only authorized Fomento roles can see personnel statistics', () async {
+    for (final entry in <(String, int)>[
+      ('Subdirector', 2),
+      ('Administrador', 3),
+      ('Administrativo', 5),
+    ]) {
+      SharedPreferences.setMockInitialValues(<String, Object>{
+        'auth_role': entry.$1,
+        'auth_role_id': entry.$2,
+        'auth_unidad_id': AuthService.unidadCulturaVialId,
+        'auth_user_payload': jsonEncode(<String, Object>{
+          'role': <String, Object>{'id': entry.$2, 'name': entry.$1},
+          'unidad_id': AuthService.unidadCulturaVialId,
+        }),
+      });
+
+      expect(
+        await AuthService.canAccessFomentoPersonnelStatistics(),
+        isTrue,
+        reason: entry.$1,
+      );
+    }
+  });
+
+  test('ordinary Fomento roles cannot see personnel statistics', () async {
+    SharedPreferences.setMockInitialValues(<String, Object>{
+      'auth_role': 'Instructor',
+      'auth_role_id': 9,
+      'auth_unidad_id': AuthService.unidadCulturaVialId,
+      'auth_user_payload': jsonEncode(<String, Object>{
+        'role': <String, Object>{'id': 9, 'name': 'Instructor'},
+        'unidad_id': AuthService.unidadCulturaVialId,
+      }),
+    });
+
+    expect(await AuthService.canAccessFomentoPersonnelStatistics(), isFalse);
+  });
+
+  test('Fomento role names do not grant access from another unit', () async {
+    SharedPreferences.setMockInitialValues(<String, Object>{
+      'auth_role': 'Administrador',
+      'auth_role_id': 3,
+      'auth_unidad_id': AuthService.unidadSeguridadVialId,
+      'auth_user_payload': jsonEncode(<String, Object>{
+        'role': <String, Object>{'id': 3, 'name': 'Administrador'},
+        'unidad_id': AuthService.unidadSeguridadVialId,
+      }),
+    });
+
+    expect(await AuthService.canAccessFomentoPersonnelStatistics(), isFalse);
+  });
+
+  test(
+    'superadmin can see Fomento personnel statistics from any unit',
+    () async {
+      SharedPreferences.setMockInitialValues(<String, Object>{
+        'auth_role': 'Superadmin',
+        'auth_role_id': 1,
+        'auth_unidad_id': AuthService.unidadSeguridadVialId,
+      });
+
+      expect(await AuthService.canAccessFomentoPersonnelStatistics(), isTrue);
+    },
+  );
 
   test(
     'single mobile session scope only applies to perito from siniestros',

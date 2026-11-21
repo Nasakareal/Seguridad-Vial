@@ -28,8 +28,9 @@ void main() {
 
     expect(
       ConduceLegalidadNarrativaService.build([primero, repetido, segundo]),
-      'Se detecta motocicleta sin casco protector.\n\n'
-      'La persona conductora no presenta licencia vigente.',
+      'Al encontrarse en labores de vigilancia, el agente observó una motocicleta sin casco protector, motivo por el cual le indicó el alto a la persona conductora y realizó la intervención correspondiente.\n\n'
+      'Durante la revisión derivada de la intervención, también se constató que la persona conductora no presenta licencia vigente.\n\n'
+      'Se informó a la persona conductora el motivo de la intervención y los fundamentos aplicables, y se continuó con el procedimiento correspondiente.',
     );
   });
 
@@ -43,7 +44,8 @@ void main() {
 
     expect(
       ConduceLegalidadNarrativaService.build([fundamento]),
-      'Durante la intervención se detecta la conducta: Placas no vigentes.',
+      'Al encontrarse en labores de vigilancia, el agente observó la conducta consistente en placas no vigentes, motivo por el cual le indicó el alto a la persona conductora y realizó la intervención correspondiente.\n\n'
+      'Se informó a la persona conductora el motivo de la intervención y los fundamentos aplicables, y se continuó con el procedimiento correspondiente.',
     );
   });
 
@@ -58,7 +60,7 @@ void main() {
 
     expect(
       ConduceLegalidadNarrativaService.matchesSelection(
-        'Narrativa automática.',
+        ConduceLegalidadNarrativaService.build([fundamento]),
         [fundamento],
       ),
       isTrue,

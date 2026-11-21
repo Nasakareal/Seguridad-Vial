@@ -77,8 +77,7 @@ class AdministrativeAccessService {
         hasAdminRole &&
         (isSuperadmin || hasFullOperationalAccess || isSiniestros);
     final canSeeDelegacionesFiles =
-        hasAdminRole &&
-        (isSuperadmin || hasFullOperationalAccess || isDelegaciones);
+        isSuperadmin || hasFullOperationalAccess || isDelegaciones;
     final canSeeVialidadesFiles =
         hasAdminRole &&
         (isSuperadmin ||

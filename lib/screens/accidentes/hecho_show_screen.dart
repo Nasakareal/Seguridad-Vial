@@ -885,6 +885,7 @@ class _HechoShowScreenState extends State<HechoShowScreen>
                       onEnviarWhatsapp: hechoId > 0
                           ? () => _compartirWhatsapp(hechoId)
                           : null,
+                      showViewAction: false,
                     ),
                     if (esHechoDelegaciones) ...[
                       const SizedBox(height: 12),

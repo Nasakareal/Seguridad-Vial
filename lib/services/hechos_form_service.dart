@@ -258,14 +258,19 @@ class HechosFormService {
       return 'El responsable no puede exceder 255 caracteres.';
     }
 
-    if (await AuthService.isDelegacionesUser()) {
+    final isDelegaciones = await AuthService.isDelegacionesUser();
+    if (isDelegaciones) {
       final totalsError = _validateExpectedCaptureTotals(data);
       if (totalsError != null) return totalsError;
     }
 
     final situacion = (data.situacion ?? '').trim().toUpperCase();
+    if (situacion == HechosCatalogos.situacionAbanderamiento &&
+        !isDelegaciones) {
+      return 'La situación ABANDERAMIENTO solo está disponible para Delegaciones.';
+    }
     final canUseDictamenes = await _canUseDictamenes();
-    final canUsePuestasDisposicion = await AuthService.isDelegacionesUser();
+    final canUsePuestasDisposicion = isDelegaciones;
     final canCaptureMpTurnado = canUseDictamenes || canUsePuestasDisposicion;
 
     if (canUseDictamenes &&

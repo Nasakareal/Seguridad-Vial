@@ -192,6 +192,8 @@ class AppDrawer extends StatelessWidget {
     var canUseCulturaVial = await AuthService.isFomentoCulturaVialUser();
     var canUseDelegacionesActividadesFisicas =
         await AuthService.canUseDelegacionesActividadesFisicas();
+    var canAccessFomentoPersonnelStatistics =
+        await AuthService.canAccessFomentoPersonnelStatistics();
     var canAccessConduceLegalidad =
         await AuthService.canAccessConduceLegalidad();
     var constanciasOnly = await AuthService.isEvaluadorTeoricoConstanciasOnly();
@@ -212,6 +214,8 @@ class AppDrawer extends StatelessWidget {
       canUseCulturaVial = await AuthService.isFomentoCulturaVialUser();
       canUseDelegacionesActividadesFisicas =
           await AuthService.canUseDelegacionesActividadesFisicas();
+      canAccessFomentoPersonnelStatistics =
+          await AuthService.canAccessFomentoPersonnelStatistics();
       canAccessConduceLegalidad = await AuthService.canAccessConduceLegalidad();
       constanciasOnly = await AuthService.isEvaluadorTeoricoConstanciasOnly();
     }
@@ -230,6 +234,7 @@ class AppDrawer extends StatelessWidget {
       canUseCulturaVial: canUseCulturaVial,
       canUseDelegacionesActividadesFisicas:
           canUseDelegacionesActividadesFisicas,
+      canAccessFomentoPersonnelStatistics: canAccessFomentoPersonnelStatistics,
       canAccessConduceLegalidad: canAccessConduceLegalidad,
       constanciasOnly: constanciasOnly,
     );
@@ -303,6 +308,7 @@ class AppDrawer extends StatelessWidget {
     required bool showActividades,
     required bool showAseguramientos,
     required bool showCarreteras,
+    required bool showFomentoPersonnelStatistics,
     required bool bypassHechosPermission,
     required bool bypassActividadesPermission,
   }) {
@@ -380,20 +386,50 @@ class AppDrawer extends StatelessWidget {
 
     if (unidadId == AuthService.unidadCulturaVialId) {
       return <Widget>[
-        _statisticsReportLink(
-          context,
-          icon: Icons.dashboard,
-          label: 'Panel General de Estadísticas',
-          report: 'fomento-panel',
-        ),
+        if (showFomentoPersonnelStatistics)
+          _statisticsReportLink(
+            context,
+            icon: Icons.dashboard,
+            label: 'Panel General de Estadísticas',
+            report: 'fomento-panel',
+          ),
+        if (showFomentoPersonnelStatistics)
+          _statisticsReportLink(
+            context,
+            icon: Icons.groups_outlined,
+            label: 'Concentrado de personal',
+            report: 'fomento-personal',
+          ),
+        if (showFomentoPersonnelStatistics)
+          _statisticsReportLink(
+            context,
+            icon: Icons.balance_outlined,
+            label: 'Equidad de servicios',
+            report: 'fomento-rendimiento-personal',
+          ),
+        if (showFomentoPersonnelStatistics)
+          _statisticsReportLink(
+            context,
+            icon: Icons.medical_information_outlined,
+            label: 'Incapacidades del personal',
+            report: 'fomento-incapacidades-personal',
+          ),
+        if (showFomentoPersonnelStatistics)
+          _statisticsReportLink(
+            context,
+            icon: Icons.gavel_outlined,
+            label: 'Disciplina del personal',
+            report: 'fomento-disciplina-personal',
+          ),
         if (showActividades) actividades,
         if (showAseguramientos) aseguramientos,
-        _statisticsReportLink(
-          context,
-          icon: Icons.leaderboard,
-          label: 'Servicios por personal',
-          report: 'fomento-servicios-personal',
-        ),
+        if (showFomentoPersonnelStatistics)
+          _statisticsReportLink(
+            context,
+            icon: Icons.leaderboard,
+            label: 'Servicios por personal',
+            report: 'fomento-servicios-personal',
+          ),
       ];
     }
 
@@ -502,6 +538,7 @@ class AppDrawer extends StatelessWidget {
                   final canSeePuestas =
                       canSeeAllButtons ||
                       isSuperadmin ||
+                      unidadId == AuthService.unidadDelegacionesId ||
                       _allowed(perms, permPuestasDisposicion);
                   final canCreatePuestas =
                       canSeeAllButtons ||
@@ -552,6 +589,8 @@ class AppDrawer extends StatelessWidget {
                       snap.data?.canUseLicensePointsModule ?? false;
                   final canUseDelegacionesActividadesFisicas =
                       snap.data?.canUseDelegacionesActividadesFisicas ?? false;
+                  final canAccessFomentoPersonnelStatistics =
+                      snap.data?.canAccessFomentoPersonnelStatistics ?? false;
                   final canSeeConduceLegalidad =
                       snap.data?.canAccessConduceLegalidad ??
                       _allowed(perms, permConduceLegalidad, all: isSuperadmin);
@@ -672,7 +711,8 @@ class AppDrawer extends StatelessWidget {
 
                       if (canSeeEstadisticasGlobales ||
                           canSeeEstadisticasActividades ||
-                          canSeeAseguramientos)
+                          canSeeAseguramientos ||
+                          canAccessFomentoPersonnelStatistics)
                         _DrawerGroup(
                           icon: Icons.insights,
                           label: 'Estadísticas',
@@ -692,6 +732,8 @@ class AppDrawer extends StatelessWidget {
                                       showAseguramientos: canSeeAseguramientos,
                                       showCarreteras:
                                           canSeeEstadisticasCarreteras,
+                                      showFomentoPersonnelStatistics:
+                                          canAccessFomentoPersonnelStatistics,
                                       bypassHechosPermission:
                                           canBypassEstadisticasPerm ||
                                           _allowed(perms, permEstadisticas),
@@ -713,6 +755,8 @@ class AppDrawer extends StatelessWidget {
                                       showAseguramientos: canSeeAseguramientos,
                                       showCarreteras:
                                           canSeeEstadisticasCarreteras,
+                                      showFomentoPersonnelStatistics:
+                                          canAccessFomentoPersonnelStatistics,
                                       bypassHechosPermission:
                                           canBypassEstadisticasPerm ||
                                           _allowed(perms, permEstadisticas),
@@ -734,6 +778,8 @@ class AppDrawer extends StatelessWidget {
                                       showAseguramientos: canSeeAseguramientos,
                                       showCarreteras:
                                           canSeeEstadisticasCarreteras,
+                                      showFomentoPersonnelStatistics:
+                                          canAccessFomentoPersonnelStatistics,
                                       bypassHechosPermission:
                                           canBypassEstadisticasPerm ||
                                           _allowed(perms, permEstadisticas),
@@ -755,6 +801,8 @@ class AppDrawer extends StatelessWidget {
                                       showAseguramientos: canSeeAseguramientos,
                                       showCarreteras:
                                           canSeeEstadisticasCarreteras,
+                                      showFomentoPersonnelStatistics:
+                                          canAccessFomentoPersonnelStatistics,
                                       bypassHechosPermission:
                                           canBypassEstadisticasPerm ||
                                           _allowed(perms, permEstadisticas),
@@ -764,17 +812,19 @@ class AppDrawer extends StatelessWidget {
                                   ),
                                   _DrawerGroup(
                                     icon: Icons.school,
-                                    label: 'Unidad Cultura Vial',
+                                    label: 'Unidad Fomento',
                                     children: _statisticsForUnit(
                                       context,
                                       unidadId: AuthService.unidadCulturaVialId,
-                                      unidadNombre: 'Cultura Vial',
+                                      unidadNombre: 'Fomento a la Cultura Vial',
                                       showHechos: false,
                                       showActividades:
                                           canSeeEstadisticasActividades,
                                       showAseguramientos: canSeeAseguramientos,
                                       showCarreteras:
                                           canSeeEstadisticasCarreteras,
+                                      showFomentoPersonnelStatistics:
+                                          canAccessFomentoPersonnelStatistics,
                                       bypassHechosPermission:
                                           canBypassEstadisticasPerm ||
                                           _allowed(perms, permEstadisticas),
@@ -796,7 +846,7 @@ class AppDrawer extends StatelessWidget {
                                     AuthService.unidadVialidadesUrbanasId =>
                                       'Vialidades Urbanas',
                                     AuthService.unidadCulturaVialId =>
-                                      'Cultura Vial',
+                                      'Fomento a la Cultura Vial',
                                     _ => 'tu unidad',
                                   },
                                   showHechos:
@@ -809,6 +859,8 @@ class AppDrawer extends StatelessWidget {
                                       canSeeEstadisticasActividades,
                                   showAseguramientos: canSeeAseguramientos,
                                   showCarreteras: canSeeEstadisticasCarreteras,
+                                  showFomentoPersonnelStatistics:
+                                      canAccessFomentoPersonnelStatistics,
                                   bypassHechosPermission:
                                       canBypassEstadisticasPerm ||
                                       _allowed(perms, permEstadisticas),
@@ -834,7 +886,13 @@ class AppDrawer extends StatelessWidget {
                                 onTap: () => _nav(
                                   context,
                                   AppRoutes.puestasDisposicion,
-                                  requiredPerm: permPuestasDisposicion,
+                                  requiredPerm:
+                                      (canSeeAllButtons ||
+                                          isSuperadmin ||
+                                          unidadId ==
+                                              AuthService.unidadDelegacionesId)
+                                      ? null
+                                      : permPuestasDisposicion,
                                 ),
                               ),
                             if (canCreatePuestas)
@@ -1222,6 +1280,7 @@ class _DrawerAccess {
   final bool canUseLicensePointsModule;
   final bool canUseCulturaVial;
   final bool canUseDelegacionesActividadesFisicas;
+  final bool canAccessFomentoPersonnelStatistics;
   final bool canAccessConduceLegalidad;
   final bool constanciasOnly;
 
@@ -1238,6 +1297,7 @@ class _DrawerAccess {
     required this.canUseLicensePointsModule,
     required this.canUseCulturaVial,
     required this.canUseDelegacionesActividadesFisicas,
+    required this.canAccessFomentoPersonnelStatistics,
     required this.canAccessConduceLegalidad,
     required this.constanciasOnly,
   });

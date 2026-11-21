@@ -1915,8 +1915,11 @@ class LiberacionRequisito {
 }
 
 class ConduceLegalidadBoletaLegalText {
-  static const String _normativa =
+  static const String _reglamento =
       'del Reglamento de la Ley de Movilidad y Seguridad Vial del Estado de Michoacán';
+  static const String _ley =
+      'de la Ley de Movilidad y Seguridad Vial del Estado de Michoacán de Ocampo';
+  static const Set<String> _articulosLey = {'328', '333', '352'};
 
   static const List<LiberacionRequisito>
   requisitosLiberacion = <LiberacionRequisito>[
@@ -2155,7 +2158,7 @@ class ConduceLegalidadBoletaLegalText {
             final partes = <String>['Artículo $articulo'];
             if (fraccion != null) partes.add(fraccion);
             if (inciso != null) partes.add(inciso);
-            return '${partes.join(', ')} $_normativa.';
+            return '${partes.join(', ')} ${_normativaPara(infraccion, articulo)}.';
           })
           .toList(growable: false);
     }
@@ -2169,7 +2172,23 @@ class ConduceLegalidadBoletaLegalText {
         .replaceAll(RegExp(r'\bArticulo\b'), 'Artículo')
         .replaceAll(RegExp(r'\bfracc\.\s*'), 'fracción ')
         .replaceAll(RegExp(r'\bfraccion\b'), 'fracción');
-    return <String>[_sentence('$normalizada $_normativa')];
+    return <String>[_sentence('$normalizada ${_normativaPara(infraccion)}')];
+  }
+
+  static String _normativaPara(
+    ConduceLegalidadFundamento infraccion, [
+    String? articulo,
+  ]) {
+    final fundamento = _cleanValue(infraccion.fundamentoLegal)?.toLowerCase();
+    if (fundamento != null) {
+      if (fundamento.contains('reglamento de la ley')) return _reglamento;
+      if (fundamento.contains('ley de movilidad y seguridad vial')) return _ley;
+    }
+
+    final numeros = articulo == null
+        ? _numbers(infraccion.articulo)
+        : <String>[articulo];
+    return numeros.any(_articulosLey.contains) ? _ley : _reglamento;
   }
 
   static String? _sancionAplicable(

@@ -31,6 +31,34 @@ class ReporteHechoService {
     ], text: 'Informe del hecho $hechoId');
   }
 
+  static Future<void> descargarYCompartirIphPuesta({
+    required int hechoId,
+  }) async {
+    final bytes = await AccidentesService.downloadIphPuestaDisposicion(
+      hechoId: hechoId,
+    );
+    final fileNameBase = 'iph_puesta_disposicion_hecho_$hechoId';
+
+    await FileSaver.instance.saveFile(
+      name: fileNameBase,
+      bytes: bytes,
+      ext: 'docx',
+      mimeType: MimeType.microsoftWord,
+    );
+
+    final tmpDir = await getTemporaryDirectory();
+    final tmpFile = File('${tmpDir.path}/$fileNameBase.docx');
+    await tmpFile.writeAsBytes(bytes, flush: true);
+
+    await Share.shareXFiles([
+      XFile(
+        tmpFile.path,
+        mimeType:
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      ),
+    ], text: 'IPH y puesta a disposición del hecho $hechoId');
+  }
+
   static MimeType _mimeByExt(String ext) {
     final e = ext.toLowerCase().trim();
     if (e == 'pdf') return MimeType.pdf;

@@ -200,7 +200,7 @@ class _EditHechoScreenState extends State<EditHechoScreen> {
 
     d.situacion = _pickMatchingValue(
       _asString(raw['situacion']),
-      HechosCatalogos.situaciones,
+      HechosCatalogos.situacionesDelegaciones,
     );
 
     d.vehiculosMp = _asString(raw['vehiculos_mp']) ?? '0';

@@ -373,6 +373,37 @@ class AccidentesService {
     return resp.bodyBytes;
   }
 
+  static Future<Uint8List> downloadIphPuestaDisposicion({
+    required int hechoId,
+  }) async {
+    final token = await AuthService.getToken();
+    if (token == null || token.isEmpty) {
+      throw Exception('Sesión inválida. Vuelve a iniciar sesión.');
+    }
+
+    final uri = Uri.parse(
+      '${AuthService.baseUrl}/hechos/$hechoId/iph-puesta-disposicion',
+    );
+    final response = await http
+        .get(
+          uri,
+          headers: <String, String>{
+            'Accept':
+                'application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/octet-stream',
+            'Authorization': 'Bearer $token',
+          },
+        )
+        .timeout(NetworkErrorHelper.interactiveRequestTimeout);
+
+    if (response.statusCode != 200) {
+      throw Exception(_parseBackendError(response.body, response.statusCode));
+    }
+    if (response.bodyBytes.isEmpty) {
+      throw Exception('El documento generado está vacío.');
+    }
+    return response.bodyBytes;
+  }
+
   static Future<void> deleteHecho({required int hechoId}) async {
     final token = await AuthService.getToken();
     if (token == null || token.isEmpty) {

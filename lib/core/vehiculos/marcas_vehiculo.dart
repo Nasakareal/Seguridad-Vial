@@ -149,7 +149,7 @@ class MarcasVehiculo {
     MarcaVehiculoOption('JAECOO', tipos: [automovil, camioneta]),
     MarcaVehiculoOption('JAGUAR', tipos: [automovil, camioneta]),
     MarcaVehiculoOption('JCB', tipos: [maquinaria]),
-    MarcaVehiculoOption('JEEP', tipos: [automovil]),
+    MarcaVehiculoOption('JEEP', tipos: [automovil, camioneta]),
     MarcaVehiculoOption('JETOUR', tipos: [automovil, camioneta]),
     MarcaVehiculoOption('JIALING', tipos: [motocicleta]),
     MarcaVehiculoOption('JMC', tipos: [camioneta, camion]),

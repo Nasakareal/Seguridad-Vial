@@ -11,6 +11,8 @@ import '../../services/app_version_service.dart';
 import '../../services/accidentes_service.dart';
 import '../../services/hecho_access_service.dart';
 import '../../services/hecho_share_service.dart';
+import '../../services/hecho_linked_documents_service.dart';
+import '../../services/pdf_document_service.dart';
 import '../../services/reportes_service.dart';
 
 import '../../widgets/app_drawer.dart';
@@ -43,12 +45,15 @@ class _AccidentesScreenState extends State<AccidentesScreen>
   late String _fechaSeleccionada;
 
   final Set<int> _descargando = <int>{};
+  final Set<int> _generandoIphPuesta = <int>{};
+  final Set<String> _descargandoDocumentos = <String>{};
   final Set<int> _enviandoWhatsapp = <int>{};
 
   bool _trackingOn = false;
   bool _bootstrapped = false;
   bool _busy = false;
   bool _canCreateHechos = false;
+  bool _canGenerateIphPuesta = false;
   bool _canChooseUnidadFiltro = false;
   bool _showTodasUnidadFiltro = false;
   int _unidadFiltroId = 1;
@@ -151,11 +156,14 @@ class _AccidentesScreenState extends State<AccidentesScreen>
 
   Future<void> _loadCreateAccess({bool refresh = false}) async {
     final canCreate = await AuthService.canCreateHechos(refresh: refresh);
+    final canGenerateIphPuesta =
+        await AuthService.canGenerateIphPuestaDisposicion();
     final editAccess = await HechoAccessService.loadEditAccess();
 
     if (!mounted) return;
     setState(() {
       _canCreateHechos = canCreate;
+      _canGenerateIphPuesta = canGenerateIphPuesta;
       _editAccess = editAccess;
     });
   }
@@ -311,7 +319,9 @@ class _AccidentesScreenState extends State<AccidentesScreen>
 
     final situacion = _situacionNormalizada(hecho);
     if (_estadoFiltro == _estadoResuelto) {
-      return situacion == 'RESUELTO' || situacion == 'RESUELTA';
+      return situacion == 'RESUELTO' ||
+          situacion == 'RESUELTA' ||
+          situacion == 'ABANDERAMIENTO';
     }
     if (_estadoFiltro == _estadoPendiente) {
       return situacion == 'PENDIENTE' || situacion == 'PENDIENTES';
@@ -793,6 +803,76 @@ class _AccidentesScreenState extends State<AccidentesScreen>
     }
   }
 
+  Future<void> _descargarDocumento(HechoLinkedDocument document) async {
+    if (_descargandoDocumentos.contains(document.key)) return;
+    setState(() => _descargandoDocumentos.add(document.key));
+
+    try {
+      await PdfDocumentService.saveAndShareFromUrl(
+        url: document.url,
+        fileName: document.fileName,
+        shareText: document.shareText,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('PDF guardado y listo para compartir')),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      final message = AccidentesService.cleanExceptionMessage(error);
+      showDialog(
+        context: context,
+        builder: (_) => AlertDialog(
+          title: const Text('Error'),
+          content: Text('No se pudo descargar el documento.\n\n$message'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Cerrar'),
+            ),
+          ],
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _descargandoDocumentos.remove(document.key));
+      }
+    }
+  }
+
+  Future<void> _generarIphPuesta(int hechoId) async {
+    if (_generandoIphPuesta.contains(hechoId)) return;
+    setState(() => _generandoIphPuesta.add(hechoId));
+
+    try {
+      await ReporteHechoService.descargarYCompartirIphPuesta(hechoId: hechoId);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('IPH y puesta en Word generados correctamente'),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      final message = AccidentesService.cleanExceptionMessage(error);
+      showDialog(
+        context: context,
+        builder: (_) => AlertDialog(
+          title: const Text('Error'),
+          content: Text('No se pudo generar el documento Word.\n\n$message'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Cerrar'),
+            ),
+          ],
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _generandoIphPuesta.remove(hechoId));
+    }
+  }
+
   Future<void> _compartirWhatsapp(int hechoId) async {
     if (_enviandoWhatsapp.contains(hechoId)) return;
 
@@ -1170,6 +1250,12 @@ class _AccidentesScreenState extends State<AccidentesScreen>
 
                     final isSending =
                         hechoId != null && _enviandoWhatsapp.contains(hechoId);
+                    final linkedDocuments = hechoId == null
+                        ? const <HechoLinkedDocument>[]
+                        : HechoLinkedDocumentsService.fromHecho(
+                            hecho,
+                            hechoId: hechoId,
+                          );
 
                     return HechoCard(
                       hecho: hecho,
@@ -1190,7 +1276,7 @@ class _AccidentesScreenState extends State<AccidentesScreen>
                       onTapEdit: _puedeEditarHecho(hecho)
                           ? () => _abrirEdit(hecho)
                           : null,
-                      onDownload: (hechoId == null || isDownloading)
+                      onDownload: hechoId == null
                           ? null
                           : () => _descargarReporte(hechoId),
                       onEnviarWhatsapp: (hechoId == null || isSending)
@@ -1203,6 +1289,35 @@ class _AccidentesScreenState extends State<AccidentesScreen>
                       delegacionLabel: _esHechoDelegaciones(hecho)
                           ? delegacionLabel
                           : null,
+                      additionalMenuActions: <HechoCardMenuAction>[
+                        if (_canGenerateIphPuesta && hechoId != null)
+                          HechoCardMenuAction(
+                            id: 'iph-puesta:$hechoId',
+                            label: 'Generar IPH y puesta (Word)',
+                            icon: Icons.description_outlined,
+                            onTap: _generandoIphPuesta.contains(hechoId)
+                                ? null
+                                : () => _generarIphPuesta(hechoId),
+                            loading: _generandoIphPuesta.contains(hechoId),
+                          ),
+                        ...linkedDocuments.map(
+                          (document) => HechoCardMenuAction(
+                            id: document.key,
+                            label: document.label,
+                            icon:
+                                document.type ==
+                                    HechoLinkedDocumentType.dictamen
+                                ? Icons.description_outlined
+                                : Icons.gavel_outlined,
+                            onTap: _descargandoDocumentos.contains(document.key)
+                                ? null
+                                : () => _descargarDocumento(document),
+                            loading: _descargandoDocumentos.contains(
+                              document.key,
+                            ),
+                          ),
+                        ),
+                      ],
                     );
                   },
                 ),

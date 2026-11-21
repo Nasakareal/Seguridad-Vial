@@ -8,11 +8,14 @@ import '../../services/app_version_service.dart';
 import '../../services/auth_service.dart';
 import '../../services/hecho_access_service.dart';
 import '../../services/hecho_share_service.dart';
+import '../../services/hecho_linked_documents_service.dart';
+import '../../services/pdf_document_service.dart';
 import '../../services/reportes_service.dart';
 import '../../services/tracking_service.dart';
 import '../../widgets/account_drawer.dart';
 import '../../widgets/app_drawer.dart';
 import '../../widgets/safe_network_image.dart';
+import 'widgets/hecho_card.dart';
 import '../login_screen.dart';
 
 class SeguimientoHechosScreen extends StatefulWidget {
@@ -37,9 +40,12 @@ class _SeguimientoHechosScreenState extends State<SeguimientoHechosScreen>
   final Set<int> _descargando = <int>{};
   final Set<int> _enviandoWhatsapp = <int>{};
   final Set<int> _eliminando = <int>{};
+  final Set<int> _generandoIphPuesta = <int>{};
+  final Set<String> _descargandoDocumentos = <String>{};
 
   SeguimientoHechosResponse? _response;
   HechoEditAccess _editAccess = HechoEditAccess.none;
+  bool _canGenerateIphPuesta = false;
   bool _loading = true;
   bool _trackingOn = false;
   bool _busy = false;
@@ -125,6 +131,8 @@ class _SeguimientoHechosScreenState extends State<SeguimientoHechosScreen>
 
     try {
       final editAccess = await HechoAccessService.loadEditAccess();
+      final canGenerateIphPuesta =
+          await AuthService.canGenerateIphPuestaDisposicion();
       final response = await AccidentesService.fetchSeguimientoHechos(
         periodo: _periodo,
         situacion: _situacion,
@@ -137,6 +145,7 @@ class _SeguimientoHechosScreenState extends State<SeguimientoHechosScreen>
       setState(() {
         _response = response;
         _editAccess = editAccess;
+        _canGenerateIphPuesta = canGenerateIphPuesta;
         _periodo = response.filters.periodo;
         _situacion = response.filters.situacion;
         _unidadFiltro = response.filters.puedeFiltrarUnidad
@@ -238,6 +247,50 @@ class _SeguimientoHechosScreenState extends State<SeguimientoHechosScreen>
       _showError('No se pudo descargar el reporte.', e);
     } finally {
       if (mounted) setState(() => _descargando.remove(hechoId));
+    }
+  }
+
+  Future<void> _descargarDocumento(HechoLinkedDocument document) async {
+    if (_descargandoDocumentos.contains(document.key)) return;
+    setState(() => _descargandoDocumentos.add(document.key));
+
+    try {
+      await PdfDocumentService.saveAndShareFromUrl(
+        url: document.url,
+        fileName: document.fileName,
+        shareText: document.shareText,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('PDF guardado y listo para compartir')),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      _showError('No se pudo descargar el documento.', error);
+    } finally {
+      if (mounted) {
+        setState(() => _descargandoDocumentos.remove(document.key));
+      }
+    }
+  }
+
+  Future<void> _generarIphPuesta(int hechoId) async {
+    if (_generandoIphPuesta.contains(hechoId)) return;
+    setState(() => _generandoIphPuesta.add(hechoId));
+
+    try {
+      await ReporteHechoService.descargarYCompartirIphPuesta(hechoId: hechoId);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('IPH y puesta en Word generados correctamente'),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      _showError('No se pudo generar el documento Word.', error);
+    } finally {
+      if (mounted) setState(() => _generandoIphPuesta.remove(hechoId));
     }
   }
 
@@ -746,6 +799,21 @@ class _SeguimientoHechosScreenState extends State<SeguimientoHechosScreen>
                 _asBool(hecho['puede_eliminar']) && _hechoId(hecho) != null
                 ? () => _eliminarHecho(_hechoId(hecho)!)
                 : null,
+            linkedDocuments: _hechoId(hecho) == null
+                ? const <HechoLinkedDocument>[]
+                : HechoLinkedDocumentsService.fromHecho(
+                    hecho,
+                    hechoId: _hechoId(hecho)!,
+                  ),
+            downloadingDocumentKeys: _descargandoDocumentos,
+            onDownloadDocument: _descargarDocumento,
+            canGenerateIphPuesta: _canGenerateIphPuesta,
+            generatingIphPuesta:
+                _hechoId(hecho) != null &&
+                _generandoIphPuesta.contains(_hechoId(hecho)),
+            onGenerateIphPuesta: _hechoId(hecho) == null
+                ? null
+                : () => _generarIphPuesta(_hechoId(hecho)!),
           ),
         _buildPagination(),
       ],
@@ -954,6 +1022,12 @@ class _SeguimientoHechoCard extends StatelessWidget {
   final VoidCallback? onDownload;
   final VoidCallback? onWhatsapp;
   final VoidCallback? onDelete;
+  final List<HechoLinkedDocument> linkedDocuments;
+  final Set<String> downloadingDocumentKeys;
+  final ValueChanged<HechoLinkedDocument> onDownloadDocument;
+  final bool canGenerateIphPuesta;
+  final bool generatingIphPuesta;
+  final VoidCallback? onGenerateIphPuesta;
 
   const _SeguimientoHechoCard({
     required this.id,
@@ -977,6 +1051,12 @@ class _SeguimientoHechoCard extends StatelessWidget {
     required this.onDownload,
     required this.onWhatsapp,
     required this.onDelete,
+    required this.linkedDocuments,
+    required this.downloadingDocumentKeys,
+    required this.onDownloadDocument,
+    required this.canGenerateIphPuesta,
+    required this.generatingIphPuesta,
+    required this.onGenerateIphPuesta,
   });
 
   @override
@@ -985,6 +1065,58 @@ class _SeguimientoHechoCard extends StatelessWidget {
         ? const Color(0xFFDC2626)
         : const Color(0xFFE5E7EB);
     final bg = incomplete ? const Color(0xFFFFF1F2) : Colors.white;
+    final menuActions = <HechoCardMenuAction>[
+      HechoCardMenuAction(
+        id: 'show',
+        label: 'Ver detalles',
+        icon: Icons.visibility_outlined,
+        onTap: onShow,
+      ),
+      if (onDownload != null || downloading)
+        HechoCardMenuAction(
+          id: 'download-report',
+          label: 'Descargar informe',
+          icon: Icons.download_outlined,
+          onTap: downloading ? null : onDownload,
+          loading: downloading,
+        ),
+      if (canGenerateIphPuesta && onGenerateIphPuesta != null)
+        HechoCardMenuAction(
+          id: 'iph-puesta',
+          label: 'Generar IPH y puesta (Word)',
+          icon: Icons.description_outlined,
+          onTap: generatingIphPuesta ? null : onGenerateIphPuesta,
+          loading: generatingIphPuesta,
+        ),
+      ...linkedDocuments.map(
+        (document) => HechoCardMenuAction(
+          id: document.key,
+          label: document.label,
+          icon: document.type == HechoLinkedDocumentType.dictamen
+              ? Icons.description_outlined
+              : Icons.gavel_outlined,
+          onTap: downloadingDocumentKeys.contains(document.key)
+              ? null
+              : () => onDownloadDocument(document),
+          loading: downloadingDocumentKeys.contains(document.key),
+        ),
+      ),
+      if (canEdit)
+        HechoCardMenuAction(
+          id: 'edit',
+          label: 'Editar',
+          icon: Icons.edit_outlined,
+          onTap: onEdit,
+        ),
+      if (canDelete)
+        HechoCardMenuAction(
+          id: 'delete',
+          label: 'Eliminar',
+          icon: Icons.delete_outline,
+          onTap: deleting ? null : onDelete,
+          loading: deleting,
+        ),
+    ];
 
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
@@ -1085,66 +1217,81 @@ class _SeguimientoHechoCard extends StatelessWidget {
                     const SizedBox(height: 8),
                     Row(
                       children: [
-                        IconButton.filledTonal(
-                          tooltip: 'Ver',
-                          onPressed: onShow,
-                          icon: const Icon(Icons.visibility_outlined),
-                        ),
-                        const SizedBox(width: 4),
-                        IconButton.filledTonal(
-                          tooltip: 'Descargar informe',
-                          onPressed: downloading ? null : onDownload,
-                          icon: downloading
-                              ? const SizedBox(
-                                  width: 18,
-                                  height: 18,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                  ),
-                                )
-                              : const Icon(Icons.download),
-                        ),
-                        const SizedBox(width: 4),
-                        IconButton.filledTonal(
-                          tooltip: 'WhatsApp',
-                          onPressed: sending ? null : onWhatsapp,
-                          icon: sending
-                              ? const SizedBox(
-                                  width: 18,
-                                  height: 18,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                  ),
-                                )
-                              : const Icon(Icons.chat_bubble_outline),
-                        ),
-                        if (canEdit) ...[
-                          const SizedBox(width: 4),
-                          IconButton.filledTonal(
-                            tooltip: 'Editar',
-                            onPressed: onEdit,
-                            icon: const Icon(Icons.edit_outlined),
-                          ),
-                        ],
-                        if (canDelete) ...[
-                          const SizedBox(width: 4),
-                          IconButton.filledTonal(
-                            tooltip: 'Eliminar',
-                            onPressed: deleting ? null : onDelete,
-                            style: IconButton.styleFrom(
-                              foregroundColor: const Color(0xFFDC2626),
+                        Container(
+                          width: 44,
+                          height: 44,
+                          decoration: BoxDecoration(
+                            color: const Color(0x1425D366),
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(
+                              color: const Color(0xFF25D366),
+                              width: 1.1,
                             ),
-                            icon: deleting
-                                ? const SizedBox(
+                          ),
+                          child: sending
+                              ? const Center(
+                                  child: SizedBox(
                                     width: 18,
                                     height: 18,
                                     child: CircularProgressIndicator(
                                       strokeWidth: 2,
+                                      color: Color(0xFF25D366),
                                     ),
-                                  )
-                                : const Icon(Icons.delete_outline),
-                          ),
-                        ],
+                                  ),
+                                )
+                              : IconButton(
+                                  tooltip: 'Compartir por WhatsApp',
+                                  onPressed: onWhatsapp,
+                                  icon: const Icon(
+                                    Icons.chat_bubble_rounded,
+                                    color: Color(0xFF25D366),
+                                  ),
+                                ),
+                        ),
+                        const SizedBox(width: 6),
+                        PopupMenuButton<String>(
+                          tooltip: 'Más opciones',
+                          icon: const Icon(Icons.more_vert),
+                          onSelected: (selected) {
+                            for (final action in menuActions) {
+                              if (action.id == selected) {
+                                action.onTap?.call();
+                                return;
+                              }
+                            }
+                          },
+                          itemBuilder: (context) => menuActions
+                              .map(
+                                (action) => PopupMenuItem<String>(
+                                  value: action.id,
+                                  enabled:
+                                      action.onTap != null && !action.loading,
+                                  child: Row(
+                                    children: [
+                                      if (action.loading)
+                                        const SizedBox(
+                                          width: 20,
+                                          height: 20,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                          ),
+                                        )
+                                      else
+                                        Icon(
+                                          action.icon,
+                                          size: 20,
+                                          color: action.id == 'delete'
+                                              ? const Color(0xFFDC2626)
+                                              : null,
+                                        ),
+                                      const SizedBox(width: 10),
+                                      Expanded(child: Text(action.label)),
+                                    ],
+                                  ),
+                                ),
+                              )
+                              .toList(),
+                        ),
                       ],
                     ),
                   ],

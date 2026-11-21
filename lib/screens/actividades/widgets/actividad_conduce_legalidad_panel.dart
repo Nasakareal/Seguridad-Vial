@@ -272,7 +272,23 @@ class _FundamentoSearchSheetState extends State<_FundamentoSearchSheet> {
   String _query = '';
 
   @override
+  void initState() {
+    super.initState();
+    _searchCtrl.addListener(_actualizarBusqueda);
+  }
+
+  void _actualizarBusqueda() {
+    _actualizarBusquedaDesdeTexto(_searchCtrl.text);
+  }
+
+  void _actualizarBusquedaDesdeTexto(String value) {
+    if (!mounted || value == _query) return;
+    setState(() => _query = value);
+  }
+
+  @override
   void dispose() {
+    _searchCtrl.removeListener(_actualizarBusqueda);
     _searchCtrl.dispose();
     super.dispose();
   }
@@ -294,6 +310,7 @@ class _FundamentoSearchSheetState extends State<_FundamentoSearchSheet> {
   String _searchText(ConduceLegalidadFundamento item) {
     return _normalize(
       [
+        item.display,
         item.codigo,
         item.nombre,
         item.articulo,
@@ -303,7 +320,6 @@ class _FundamentoSearchSheetState extends State<_FundamentoSearchSheet> {
         item.etiquetaOperativa,
         item.textoOperativo,
         item.descripcion,
-        item.fundamentoLegal,
         item.ambitoVehiculoTexto,
       ].whereType<String>().join(' '),
     );
@@ -351,9 +367,10 @@ class _FundamentoSearchSheetState extends State<_FundamentoSearchSheet> {
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
               child: TextField(
+                key: const Key('actividad-buscar-fundamento'),
                 controller: _searchCtrl,
                 autofocus: true,
-                onChanged: (value) => setState(() => _query = value),
+                onChanged: _actualizarBusquedaDesdeTexto,
                 decoration: InputDecoration(
                   hintText: 'Ej. placas, abandono, artículo 420...',
                   prefixIcon: const Icon(Icons.search),
@@ -387,6 +404,9 @@ class _FundamentoSearchSheetState extends State<_FundamentoSearchSheet> {
                       itemBuilder: (context, index) {
                         final item = items[index];
                         return ListTile(
+                          key: Key(
+                            'actividad-fundamento-opcion-${item.codigo ?? item.id}',
+                          ),
                           title: Text(
                             item.display,
                             maxLines: 3,

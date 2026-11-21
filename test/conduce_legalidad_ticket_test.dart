@@ -748,6 +748,56 @@ void main() {
     expect(legal, contains('Vehículo'));
   });
 
+  test('el ticket distingue los artículos de la Ley y del Reglamento', () {
+    const ley = ConduceLegalidadFundamento(
+      id: 41,
+      nombre: 'Retiro por falta de placas',
+      articulo: '328',
+      fraccion: 'I',
+      puntos: 0,
+      retencionVehiculo: true,
+      fundamentoLegal:
+          'Ley de Movilidad y Seguridad Vial del Estado de Michoacán de Ocampo, artículo 328, fracción I.',
+    );
+    const reglamento = ConduceLegalidadFundamento(
+      id: 42,
+      nombre: 'Motocicleta sin casco',
+      articulo: '419',
+      fraccion: 'II',
+      puntos: 1,
+      retencionVehiculo: false,
+      fundamentoLegal:
+          'Reglamento de la Ley de Movilidad y Seguridad Vial, artículo 419, fracción II.',
+    );
+    const captura = ConduceLegalidadCaptura(
+      id: 15,
+      operativoId: 11,
+      fundamentos: [ley, reglamento],
+      canEdit: true,
+      vehiculos: [],
+      personas: [],
+    );
+
+    final legal = ConduceLegalidadBoletaLegalText.fundamentoInfraccion(
+      captura,
+      null,
+      null,
+    );
+
+    expect(
+      legal,
+      contains(
+        'Artículo 328, fracción I de la Ley de Movilidad y Seguridad Vial',
+      ),
+    );
+    expect(
+      legal,
+      contains(
+        'Artículo 419, fracción II del Reglamento de la Ley de Movilidad',
+      ),
+    );
+  });
+
   test(
     'el ticket imprime todos los fundamentos unificados sin duplicarlos',
     () {

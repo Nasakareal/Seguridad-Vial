@@ -392,6 +392,47 @@ void main() {
     );
   });
 
+  test('allows Conduce as a normal informational activity', () async {
+    const vehiculo = ActividadVehiculo(
+      marca: 'HONDA',
+      tipo: 'MOTOCICLETA',
+      linea: 'CARGO',
+      color: 'ROJO',
+      capacidadPersonas: 2,
+      tipoServicio: 'PARTICULAR',
+      antecedenteVehiculo: false,
+    );
+    const data = ActividadUpsertData(
+      actividadCategoriaId: 4,
+      actividadSubcategoriaId: 95,
+      personasAlcanzadas: '1',
+      personasParticipantes: '0',
+      personasDetenidas: '0',
+      vehiculos: <ActividadVehiculo>[vehiculo, vehiculo],
+    );
+
+    final issues = await ActividadesService.validateBeforeSubmitIssues(
+      data: data,
+      fotos: const <File>[],
+      requirePhotos: false,
+      requireCoords: false,
+      requireTimestamp: false,
+    );
+
+    expect(
+      issues.where(
+        (issue) =>
+            issue.message.contains('Conduce con Legalidad') ||
+            issue.message.contains('alimentación'),
+      ),
+      isEmpty,
+    );
+    expect(
+      data.toFields().keys.any((key) => key.startsWith('conduce_legalidad_')),
+      isFalse,
+    );
+  });
+
   test('normalizes activity integer inputs while typing', () {
     const formatter = NormalizedIntegerInputFormatter();
 

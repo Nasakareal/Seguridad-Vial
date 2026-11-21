@@ -1,4 +1,9 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../../app/routes.dart';
 import '../../services/auth_service.dart';
@@ -49,7 +54,118 @@ class _EstadisticasReporteScreenState extends State<EstadisticasReporteScreen> {
     final today = DateTime.now();
     _hasta = DateTime(today.year, today.month, today.day);
     _desde = _hasta!.subtract(const Duration(days: 29));
-    _load();
+    _initialize();
+  }
+
+  bool get _isFomentoPersonnelReport {
+    final report = widget.reporte.trim().toLowerCase();
+    return const <String>{
+      'fomento-panel',
+      'fomento-personal',
+      'fomento-rendimiento-personal',
+      'fomento-incapacidades-personal',
+      'fomento-disciplina-personal',
+      'fomento-servicios-personal',
+    }.contains(report);
+  }
+
+  bool get _isFomentoServicesReport =>
+      widget.reporte.trim().toLowerCase() == 'fomento-servicios-personal';
+
+  List<Map<String, dynamic>> _reportRows(String key) {
+    final raw = _data[key];
+    if (raw is! List) return const [];
+    return raw
+        .whereType<Map>()
+        .map((item) => Map<String, dynamic>.from(item))
+        .toList();
+  }
+
+  String _tabularText(
+    List<Map<String, dynamic>> rows, {
+    String separator = '\t',
+  }) {
+    if (rows.isEmpty) return '';
+    final columns = <String>[];
+    for (final row in rows) {
+      for (final key in row.keys) {
+        if (!columns.contains(key)) columns.add(key);
+      }
+    }
+
+    String clean(dynamic value) => (value ?? '')
+        .toString()
+        .replaceAll('\r', ' ')
+        .replaceAll('\n', ' ')
+        .trim();
+    String cell(dynamic value) {
+      final text = clean(value);
+      if (separator != ',' || (!text.contains(',') && !text.contains('"'))) {
+        return text;
+      }
+      return '"${text.replaceAll('"', '""')}"';
+    }
+
+    return <String>[
+      columns.map((column) => cell(_label(column))).join(separator),
+      ...rows.map(
+        (row) => columns.map((column) => cell(row[column])).join(separator),
+      ),
+    ].join('\n');
+  }
+
+  String _servicesExportText({String separator = '\t'}) {
+    final ranking = _tabularText(_reportRows('rows'), separator: separator);
+    final services = _tabularText(
+      _reportRows('servicios'),
+      separator: separator,
+    );
+    return <String>[
+      if (ranking.isNotEmpty) 'RANKING DE PERSONAL\n$ranking',
+      if (services.isNotEmpty) 'LISTADO DE SERVICIOS\n$services',
+    ].join('\n\n');
+  }
+
+  Future<void> _copyServices() async {
+    final text = _servicesExportText();
+    if (text.isEmpty) return;
+    await Clipboard.setData(ClipboardData(text: text));
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Listado copiado.')));
+  }
+
+  Future<void> _exportServicesCsv() async {
+    final text = _servicesExportText(separator: ',');
+    if (text.isEmpty) return;
+    final dir = await getApplicationDocumentsDirectory();
+    final file = File(
+      '${dir.path}/servicios_personal_fomento_${_date(_desde)}_${_date(_hasta)}.csv',
+    );
+    await file.writeAsString('\uFEFF$text', flush: true);
+    await Share.shareXFiles([
+      XFile(file.path, mimeType: 'text/csv'),
+    ], text: 'Servicios por personal de Fomento');
+  }
+
+  Future<void> _shareServices() async {
+    final text = _servicesExportText();
+    if (text.isEmpty) return;
+    await Share.share(text, subject: 'Servicios por personal de Fomento');
+  }
+
+  Future<void> _initialize() async {
+    if (_isFomentoPersonnelReport &&
+        !await AuthService.canAccessFomentoPersonnelStatistics()) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _error = 'No tienes acceso a las estadísticas de Fomento.';
+      });
+      return;
+    }
+    await _load();
   }
 
   @override
@@ -161,6 +277,10 @@ class _EstadisticasReporteScreenState extends State<EstadisticasReporteScreen> {
                 padding: const EdgeInsets.all(16),
                 children: [
                   _filters(),
+                  if (_isFomentoServicesReport) ...[
+                    const SizedBox(height: 12),
+                    _servicesActions(),
+                  ],
                   const SizedBox(height: 16),
                   ..._data.entries
                       .where((entry) => !_hiddenKeys.contains(entry.key))
@@ -217,6 +337,35 @@ class _EstadisticasReporteScreenState extends State<EstadisticasReporteScreen> {
       ],
     ),
   );
+
+  Widget _servicesActions() {
+    final hasData =
+        _reportRows('rows').isNotEmpty || _reportRows('servicios').isNotEmpty;
+    return _card(
+      'Exportar listado',
+      Wrap(
+        spacing: 10,
+        runSpacing: 10,
+        children: [
+          OutlinedButton.icon(
+            onPressed: hasData ? _copyServices : null,
+            icon: const Icon(Icons.copy_all_outlined),
+            label: const Text('Copiar'),
+          ),
+          OutlinedButton.icon(
+            onPressed: hasData ? _exportServicesCsv : null,
+            icon: const Icon(Icons.table_view_outlined),
+            label: const Text('CSV / Excel'),
+          ),
+          OutlinedButton.icon(
+            onPressed: hasData ? _shareServices : null,
+            icon: const Icon(Icons.share_outlined),
+            label: const Text('Compartir'),
+          ),
+        ],
+      ),
+    );
+  }
 
   Widget _dateField(String label, DateTime? value, VoidCallback tap) => InkWell(
     onTap: tap,

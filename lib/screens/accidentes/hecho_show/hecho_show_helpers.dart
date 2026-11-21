@@ -16,6 +16,7 @@ class HechoShowHelpers {
     'PENDIENTE',
     'TURNADO',
     'REPORTE',
+    'ABANDERAMIENTO',
   ];
 
   static int hechoIdFromArgs(BuildContext context) {

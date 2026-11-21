@@ -100,6 +100,82 @@ void main() {
     expect(data.personasMp, '0');
   });
 
+  testWidgets('Unidad 2 sees abanderamiento in the situation selector', (
+    tester,
+  ) async {
+    final data = validDelegacionesData()..situacion = 'PENDIENTE';
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: HechoForm(
+              mode: HechoFormMode.edit,
+              data: data,
+              onSubmit:
+                  ({
+                    required data,
+                    required dictamenSelected,
+                    required fotoLugar,
+                    required fotoLugar2,
+                    required fotoSituacion,
+                  }) async => const OfflineActionResult.synced(),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('PENDIENTE').last);
+    await tester.tap(find.text('PENDIENTE').last);
+    await tester.pumpAndSettle();
+
+    expect(find.text(HechosCatalogos.situacionAbanderamiento), findsOneWidget);
+  });
+
+  testWidgets('users outside Unidad 2 do not see abanderamiento', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues(<String, Object>{
+      'auth_session_owner_key': 'user:1',
+      'auth_unidad_id': AuthService.unidadSiniestrosId,
+      'auth_role': 'Policia',
+    });
+    final data = validDelegacionesData()
+      ..sector = HechosCatalogos.sectoresUi.first
+      ..situacion = 'PENDIENTE';
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: HechoForm(
+              mode: HechoFormMode.edit,
+              data: data,
+              siniestrosPatrolNumbersLoader: () async => const <String>[],
+              onSubmit:
+                  ({
+                    required data,
+                    required dictamenSelected,
+                    required fotoLugar,
+                    required fotoLugar2,
+                    required fotoSituacion,
+                  }) async => const OfflineActionResult.synced(),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('PENDIENTE').last);
+    await tester.tap(find.text('PENDIENTE').last);
+    await tester.pumpAndSettle();
+
+    expect(find.text(HechosCatalogos.situacionAbanderamiento), findsNothing);
+  });
+
   testWidgets('Unidad 1 uses a patrol number select for unidad', (
     tester,
   ) async {

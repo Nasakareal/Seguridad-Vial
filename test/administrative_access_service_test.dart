@@ -163,6 +163,34 @@ void main() {
     expect(access.canSeeFomentoFiles, isFalse);
   });
 
+  test('delegaciones operative user can download delegaciones files', () async {
+    SharedPreferences.setMockInitialValues(<String, Object>{
+      'auth_role': 'Policia',
+      'auth_role_id': 12,
+      'auth_unidad_id': AuthService.unidadDelegacionesId,
+      'auth_user_payload': jsonEncode(<String, Object>{
+        'role': <String, Object>{'id': 12, 'name': 'Policia'},
+        'unidad_id': AuthService.unidadDelegacionesId,
+      }),
+    });
+
+    final access = await AdministrativeAccessService.loadAccess();
+
+    expect(access.canSeeDelegacionesFiles, isTrue);
+    expect(access.canSeeConfigurationMenu, isTrue);
+  });
+
+  test('superadmin can download delegaciones files from any unit', () async {
+    SharedPreferences.setMockInitialValues(<String, Object>{
+      'auth_role': 'Superadmin',
+      'auth_unidad_id': AuthService.unidadSeguridadVialId,
+    });
+
+    final access = await AdministrativeAccessService.loadAccess();
+
+    expect(access.canSeeDelegacionesFiles, isTrue);
+  });
+
   test('reads administrative role from stored payload', () async {
     SharedPreferences.setMockInitialValues(<String, Object>{
       'auth_user_payload': jsonEncode(<String, Object>{
